@@ -61,10 +61,6 @@ const title = computed(() => `تمثيل بياني للدالة ${props.graph.l
         <text :x="view.sx(view.xMax) + 6" :y="view.sy(0) - 8" class="axis-name">x</text>
         <text :x="view.sx(0) + 8" :y="view.sy(view.yMax) - 4" class="axis-name">y</text>
       </g>
-      <g class="ticks">
-        <text v-for="v in view.xTicks" :key="`tx${v}`" :x="view.sx(v)" :y="view.sy(0) + 15" text-anchor="middle">{{ v }}</text>
-        <text v-for="v in view.yTicks" :key="`ty${v}`" :x="view.sx(0) - 6" :y="view.sy(v) + 4" text-anchor="end">{{ v }}</text>
-      </g>
       <line
         v-for="v in graph.asymptotes"
         :key="`as${v}`"
@@ -76,6 +72,11 @@ const title = computed(() => `تمثيل بياني للدالة ${props.graph.l
       />
       <path v-for="(d, i) in view.lines" :key="`l${i}`" :d="d" class="helper" />
       <path v-for="(d, i) in view.curves" :key="`c${i}`" :d="d" class="curve" />
+      <!-- الأرقام فوق المنحنى بهالة بلون الخلفية، فلا يخفيها منحنى يمر قرب الأصل -->
+      <g class="ticks">
+        <text v-for="v in view.xTicks" :key="`tx${v}`" :x="view.sx(v)" :y="view.sy(0) + 15" text-anchor="middle">{{ v }}</text>
+        <text v-for="v in view.yTicks" :key="`ty${v}`" :x="view.sx(0) - 6" :y="view.sy(v) + 4" text-anchor="end">{{ v }}</text>
+      </g>
       <circle
         v-for="([px, py, closed], i) in graph.dots"
         :key="`d${i}`"
@@ -125,6 +126,10 @@ svg {
 .ticks text {
   fill: var(--muted);
   font-size: 12px;
+  stroke: var(--surface);
+  stroke-width: 3.5px;
+  stroke-linejoin: round;
+  paint-order: stroke;
 }
 .curve {
   fill: none;
@@ -163,6 +168,7 @@ svg {
   }
   .ticks text {
     fill: #000;
+    stroke: #fff;
   }
   .dot.open {
     fill: #fff;
