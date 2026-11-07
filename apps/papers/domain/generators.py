@@ -44,7 +44,11 @@ class Problem:
     @property
     def key(self) -> str:
         """هوية المسألة لمنع التكرار في الورقة: النص، ومعه الرسم لأن أسئلة الرسوم تتشابه نصًا."""
-        return self.stem if self.graph is None else f"{self.stem}|{self.graph['curves'][:1]}|{self.graph['dots']}"
+        return (
+            self.stem
+            if self.graph is None
+            else f"{self.stem}|{self.graph['curves'][:1]}|{self.graph['dots']}"
+        )
 
 
 Generator = Callable[[random.Random], Problem]
