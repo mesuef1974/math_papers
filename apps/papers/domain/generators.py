@@ -1031,5 +1031,5 @@ def minimum_sum_of_squares(rng: random.Random) -> Problem:
     )
 
 
-# مولّدات أسئلة الرسوم في وحدة مستقلة تسجّل نفسها في REGISTRY عند الاستيراد.
-from . import graph_problems  # noqa: E402, F401
+# مولّدات الرسوم والمستويات في وحدتين مستقلتين تسجّلان نفسيهما في REGISTRY عند الاستيراد.
+from . import graph_problems, level_problems  # noqa: E402, F401, I001

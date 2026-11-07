@@ -228,7 +228,73 @@ def assert_graph_options(c):
     assert not any(agrees(option) for option in others)
 
 
+def assert_continuity_bool(c):
+    at = c["at"]
+    left, right = c["left"].subs(x, at), c["right"].subs(x, at)
+    assert (left == right) == c["continuous"]
+
+
+def assert_continuity2(c):
+    p, q = c["p"], c["q"]
+    assert c["left"].subs(x, p) == c["mid"].subs(x, p)
+    assert c["mid"].subs(x, q) == c["right"].subs(x, q)
+
+
+def assert_differentiable(c):
+    at = c["at"]
+    assert c["left"].subs(x, at) == c["right"].subs(x, at)
+    mpmath.mp.dps = 30
+    h = mpmath.mpf(10) ** -10
+    left_d = (fn(c["left"])(at) - fn(c["left"])(at - h)) / h
+    right_d = (fn(c["right"])(at + h) - fn(c["right"])(at)) / h
+    assert (abs(left_d - right_d) < 1e-6) == c["answer"]
+
+
+def assert_avg_instant(c):
+    f = sp.lambdify(x, c["f"])
+    average = (f(c["b"]) - f(c["a"])) / (c["b"] - c["a"])
+    assert float(mpmath.diff(fn(c["f"]), float(c["point"]))) == pytest.approx(average)
+    assert c["a"] < c["point"] < c["b"]
+
+
+def assert_tangent(c):
+    mpmath.mp.dps = 30
+    at = c["at"]
+    assert float(mpmath.diff(fn(c["f"]), at)) == pytest.approx(float(c["slope"]), abs=TOL)
+    assert number(c["f"], at) == pytest.approx(float(c["slope"] * at + c["intercept"]))
+
+
+def assert_zeros(c):
+    """المشتقة تنعدم عند النقاط المعطاة، ولا تتغير إشارتها في الفترة إلا عندها."""
+    mpmath.mp.dps = 30
+    d = fn(sp.diff(c["f"], x))
+    for point in c["points"]:
+        assert abs(float(d(float(point)))) < 1e-9
+    xs = samples(c["low"], c["high"], 3001)
+    signs = [float(d(v)) > 0 for v in xs if abs(float(d(v))) > 1e-9]
+    changes = sum(a != b for a, b in zip(signs, signs[1:], strict=False))
+    assert changes == len(c["points"])
+
+
+def assert_implicit_expr(c):
+    """نقطة على المنحنى عدديًا، ثم ميل المنحنى بالفروق مقارنة بالعبارة."""
+    a, b, k = c["a"], c["b"], c["c"]
+    x0 = mpmath.sqrt(k / a) / 3
+    upper = lambda v: mpmath.sqrt((k - a * v**2) / b)  # noqa: E731
+    y0 = upper(x0)
+    h = mpmath.mpf(10) ** -8
+    slope = (upper(x0 + h) - upper(x0 - h)) / (2 * h)
+    assert float(c["expr"].subs({x: x0, y: y0})) == pytest.approx(float(slope), abs=1e-6)
+
+
 CHECKS = {
+    "continuity_bool": assert_continuity_bool,
+    "continuity2": assert_continuity2,
+    "differentiable": assert_differentiable,
+    "avg_instant": assert_avg_instant,
+    "tangent": assert_tangent,
+    "zeros": assert_zeros,
+    "implicit_expr": assert_implicit_expr,
     "graph_limit": assert_graph_limit,
     "graph_discontinuity": assert_graph_discontinuity,
     "graph_tangent": assert_graph_tangent,
@@ -290,6 +356,27 @@ def assert_graph_in_window(graph):
         assert x_min <= px <= x_max and y_min <= py <= y_max
 
 
+def test_every_lesson_has_easy_and_higher_order_variants():
+    from apps.papers.domain.generators import lesson_levels
+
+    for lesson in available_lessons():
+        levels = set(lesson_levels(lesson)) | set(lesson_levels(lesson, "mcq"))
+        expected = {"A", "R"} if lesson == "3.5" else {"K", "A", "R"}
+        assert expected <= levels, (lesson, levels)
+
+
 def test_every_tested_lesson_has_a_generator():
     tested = "1.1 1.2 1.3 1.4 2.1 2.2 2.3 2.4 2.5 2.6 2.7 2.8 2.9 3.1 3.2 3.3 3.5"
     assert available_lessons() == set(tested.split())
+
+
+def test_twenty_question_worksheet_for_every_lesson_and_level():
+    """ورقة عمل من 20 مسألة بلا تكرار ممكنة لكل درس وكل مستوى متاح."""
+    from apps.papers.domain.generators import generate, lesson_levels
+
+    for lesson in available_lessons():
+        for level in lesson_levels(lesson):
+            rng, used = random.Random(0), set()
+            for _ in range(20):
+                used.add(generate(lesson, rng, "essay", used, level).key)
+            assert len(used) == 20, (lesson, level)
