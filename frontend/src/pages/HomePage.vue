@@ -2,7 +2,7 @@
 import { computed, onMounted, ref, watch } from "vue";
 import PaperSheet from "@/components/PaperSheet.vue";
 import { useAuthStore } from "@/stores/auth";
-import { usePapersStore } from "@/stores/papers";
+import { LEVEL_NAMES, usePapersStore, type Level } from "@/stores/papers";
 
 const store = usePapersStore();
 const auth = useAuthStore();
@@ -12,8 +12,13 @@ const lesson = ref("");
 const count = ref(8);
 const seedText = ref("");
 const showKey = ref(false);
+const level = ref<Level | "">("");
 
-const LEVELS: Record<string, string> = { K: "معرفة", A: "تطبيق", R: "استدلال" };
+const LEVELS = LEVEL_NAMES as Record<string, string>;
+const lessonLevels = computed(() => store.lessons.find((item) => item.code === lesson.value)?.levels ?? []);
+watch(lesson, () => {
+  if (level.value && !lessonLevels.value.includes(level.value)) level.value = "";
+});
 const seed = computed(() => (/^\d+$/.test(seedText.value.trim()) ? Number(seedText.value.trim()) : null));
 const seedInvalid = computed(() => seedText.value.trim() !== "" && seed.value === null);
 const ready = computed(() => !seedInvalid.value && (mode.value === "exam" ? blueprint.value : lesson.value));
@@ -31,7 +36,7 @@ watch(
 
 async function generate() {
   if (mode.value === "exam") await store.generateExam(blueprint.value, seed.value);
-  else await store.generateWorksheet(lesson.value, count.value, seed.value);
+  else await store.generateWorksheet(lesson.value, count.value, seed.value, level.value);
 }
 
 function print() {
@@ -59,6 +64,15 @@ function print() {
         <select v-model="lesson">
           <option v-for="item in store.worksheetLessons" :key="item.code" :value="item.code">
             {{ item.code }} {{ item.title }}
+          </option>
+        </select>
+      </label>
+      <label v-if="mode === 'worksheet'" class="field narrow">
+        المستوى
+        <select v-model="level">
+          <option value="">كل المستويات</option>
+          <option v-for="(name, code) in LEVEL_NAMES" :key="code" :value="code" :disabled="!lessonLevels.includes(code)">
+            {{ name }}{{ lessonLevels.includes(code) ? "" : " (غير متاح)" }}
           </option>
         </select>
       </label>

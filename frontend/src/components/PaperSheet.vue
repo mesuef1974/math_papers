@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import GraphPlot from "@/components/GraphPlot.vue";
 import MathText from "@/components/MathText.vue";
-import type { Paper } from "@/stores/papers";
+import { LEVEL_NAMES, type Level, type Paper } from "@/stores/papers";
 
 defineProps<{ paper: Paper; showKey: boolean }>();
 
@@ -57,7 +57,7 @@ function marksLabel(marks: number): string {
         <p class="stem">
           <strong><bdi>{{ question.number }}{{ part.label ? ` ${part.label}` : "" }}</bdi> :</strong>
           <MathText :text="part.answer" />
-          <span class="lesson-tag">الدرس {{ part.lesson }}</span>
+          <span class="lesson-tag">الدرس {{ part.lesson }}، {{ LEVEL_NAMES[part.level as Level] }}</span>
         </p>
         <ol class="steps">
           <li v-for="step in part.steps" :key="step"><MathText :text="step" /></li>

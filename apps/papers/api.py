@@ -1,6 +1,6 @@
 """مسارات التوليد. قراءة فقط: GET يعطي الورقة نفسها لكل بذرة، وكلها للمعلمين المسجّلين."""
 
-from typing import Annotated
+from typing import Annotated, Literal
 
 from django.http import HttpRequest
 from ninja import Field, Query, Router, Schema
@@ -10,7 +10,7 @@ from apps.curriculum import selectors
 
 from . import services
 from .access import TeacherAuth
-from .domain.generators import available_lessons
+from .domain.generators import available_lessons, lesson_levels
 
 router = Router(tags=["الأوراق"], auth=TeacherAuth())
 Seed = Annotated[int, Field(ge=0, le=services.MAX_SEED)]
@@ -22,6 +22,7 @@ class LessonOut(Schema):
     unit: int
     examinable: bool
     has_generator: bool
+    levels: list[str]
 
 
 class BlueprintOut(Schema):
@@ -68,6 +69,7 @@ class PaperOut(Schema):
     is_forecast: bool
     level_marks: dict[str, int]
     questions: list[QuestionOut]
+    level: str = ""
 
 
 class ExamQuery(Schema):
@@ -79,6 +81,7 @@ class WorksheetQuery(Schema):
     lesson: str
     count: Annotated[int, Field(ge=1, le=20)] = 8
     seed: Seed | None = None
+    level: Literal["K", "A", "R"] | None = None
 
 
 @router.get("/lessons", response=list[LessonOut])
@@ -91,6 +94,7 @@ def lessons(request: HttpRequest):
             "unit": row.unit,
             "examinable": row.examinable,
             "has_generator": row.code in ready,
+            "levels": lesson_levels(row.code) if row.code in ready else [],
         }
         for row in selectors.lessons()
     ]
@@ -112,6 +116,6 @@ def exam(request: HttpRequest, query: Query[ExamQuery]):
 @router.get("/papers/worksheet", response=PaperOut)
 def worksheet(request: HttpRequest, query: Query[WorksheetQuery]):
     try:
-        return services.build_worksheet(query.lesson, query.count, query.seed)
+        return services.build_worksheet(query.lesson, query.count, query.seed, query.level)
     except services.UnknownLessonError as error:
-        raise HttpError(404, "الدرس غير متاح") from error
+        raise HttpError(404, "الدرس غير متاح بهذا المستوى") from error

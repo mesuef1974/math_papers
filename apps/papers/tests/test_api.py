@@ -65,7 +65,7 @@ def test_same_seed_same_paper_and_new_seed_differs(client):
 @pytest.mark.parametrize("seed", range(40))
 def test_exam_has_no_repeated_stem(client, seed):
     data = client.get("/api/papers/exam", {"blueprint": SLUG, "seed": seed}).json()
-    stems = [p["stem"] for q in data["questions"] for p in q["parts"]]
+    stems = [(p["stem"], str(p["graph"])) for q in data["questions"] for p in q["parts"]]
     assert len(stems) == len(set(stems))
 
 
@@ -122,3 +122,23 @@ def test_graph_options_are_shuffled_with_their_answer(client):
         assert part["option_graphs"][index] == problem.option_graphs[0]
         seen.add(index)
     assert len(seen) > 1
+
+
+@pytest.mark.django_db
+def test_worksheet_respects_requested_level(client):
+    rows = {row["code"]: row for row in client.get("/api/lessons").json()}
+    for code, row in rows.items():
+        for level in row["levels"]:
+            data = client.get(
+                "/api/papers/worksheet", {"lesson": code, "count": 6, "seed": 2, "level": level}
+            ).json()
+            assert {q["parts"][0]["level"] for q in data["questions"]} == {level}, (code, level)
+            assert data["level"] == level
+        for level in {"K", "A", "R"} - set(row["levels"]):
+            res = client.get("/api/papers/worksheet", {"lesson": code, "level": level})
+            assert res.status_code == 404
+
+
+@pytest.mark.django_db
+def test_worksheet_rejects_unknown_level(client):
+    assert client.get("/api/papers/worksheet", {"lesson": "2.4", "level": "X"}).status_code == 422

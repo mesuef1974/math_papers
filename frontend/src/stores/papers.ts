@@ -9,7 +9,13 @@ export interface Lesson {
   unit: number;
   examinable: boolean;
   has_generator: boolean;
+  levels: Level[];
 }
+
+export type Level = "K" | "A" | "R";
+
+// أسماء المستويات كما يراها المعلم؛ الرموز للخادم فقط.
+export const LEVEL_NAMES: Record<Level, string> = { K: "سهل", A: "متوسط", R: "مهارات عليا" };
 
 export interface Blueprint {
   slug: string;
@@ -55,6 +61,7 @@ export interface Paper {
   is_forecast: boolean;
   level_marks: Record<string, number>;
   questions: Question[];
+  level: Level | "";
 }
 
 function query(params: Record<string, string | number | null>): string {
@@ -113,8 +120,8 @@ export const usePapersStore = defineStore("papers", {
     generateExam(blueprint: string, seed: number | null) {
       return this.fetchPaper(`/api/papers/exam?${query({ blueprint, seed })}`);
     },
-    generateWorksheet(lesson: string, count: number, seed: number | null) {
-      return this.fetchPaper(`/api/papers/worksheet?${query({ lesson, count, seed })}`);
+    generateWorksheet(lesson: string, count: number, seed: number | null, level: Level | "" = "") {
+      return this.fetchPaper(`/api/papers/worksheet?${query({ lesson, count, seed, level })}`);
     },
   },
 });

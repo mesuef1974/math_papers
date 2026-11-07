@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from apps.curriculum import selectors
 from apps.curriculum.models import BlueprintItem
 
-from .domain.generators import Problem, available_lessons, generate
+from .domain.generators import LEVEL_NAMES, LevelUnavailableError, Problem, available_lessons, generate
 
 MAX_SEED = 2**31 - 1
 PART_LABELS = "ABCDEFGH"
@@ -86,7 +86,7 @@ def build_exam(slug: str, seed: int | None = None) -> dict:
             label = PART_LABELS[position] if len(items) > 1 else ""
             slot = PartSlot(label, item.lesson.code, item.lesson.title, item.kind, item.marks)
             problem = generate(item.lesson.code, rng, item.kind, used)
-            used.add(problem.stem)
+            used.add(problem.key)
             level_marks[problem.level] += item.marks
             parts.append(render_part(problem, slot, rng))
         questions.append(
@@ -99,10 +99,11 @@ def build_exam(slug: str, seed: int | None = None) -> dict:
         "is_forecast": blueprint.is_forecast,
         "level_marks": dict(level_marks),
         "questions": questions,
+        "level": "",
     }
 
 
-def build_worksheet(lesson_code: str, count: int, seed: int | None = None) -> dict:
+def build_worksheet(lesson_code: str, count: int, seed: int | None = None, level: str | None = None) -> dict:
     lesson = selectors.lessons().filter(code=lesson_code).first()
     if lesson is None or lesson_code not in available_lessons():
         raise UnknownLessonError(lesson_code)
@@ -111,17 +112,21 @@ def build_worksheet(lesson_code: str, count: int, seed: int | None = None) -> di
     used: set[str] = set()
     questions = []
     for number in range(1, count + 1):
-        problem = generate(lesson.code, rng, BlueprintItem.Kind.ESSAY, used)
-        used.add(problem.stem)
+        try:
+            problem = generate(lesson.code, rng, BlueprintItem.Kind.ESSAY, used, level)
+        except LevelUnavailableError as error:
+            raise UnknownLessonError(lesson_code) from error
+        used.add(problem.key)
         slot = PartSlot("", lesson.code, lesson.title, BlueprintItem.Kind.ESSAY, 0)
         questions.append(
             {"number": number, "kind": slot.kind, "marks": 0, "parts": [render_part(problem, slot, rng)]}
         )
     return {
-        "title": f"ورقة عمل: {lesson.title}",
+        "title": f"ورقة عمل: {lesson.title}" + (f" ({LEVEL_NAMES[level]})" if level else ""),
         "seed": seed,
         "total_marks": 0,
         "is_forecast": False,
         "level_marks": {},
         "questions": questions,
+        "level": level or "",
     }
