@@ -54,3 +54,17 @@ def test_stop_closes_a_running_server_from_pid_file(tmp_path, monkeypatch):
     assert child.wait(timeout=10) is not None
     assert not pid_path.exists()
     assert ps.stop(59999) is False
+
+
+def test_running_reflects_pid_file(tmp_path, monkeypatch):
+    monkeypatch.setattr(ps, "STATE_DIR", tmp_path)
+    pid_path, _ = ps.state_paths(59998)
+    assert ps.running(59998) is False
+    child = subprocess.Popen(SLEEPER)  # noqa: S603
+    try:
+        pid_path.write_text(str(child.pid))
+        assert ps.running(59998) is True
+    finally:
+        ps.kill_tree(child.pid)
+        child.wait(timeout=10)
+    assert ps.running(59998) is False

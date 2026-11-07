@@ -129,6 +129,14 @@ def supervise(
     return reason
 
 
+def running(port: int) -> bool:
+    pid_path, _ = state_paths(port)
+    try:
+        return alive(int(pid_path.read_text(encoding="utf-8")))
+    except (OSError, ValueError):
+        return False
+
+
 def stop(port: int) -> bool:
     pid_path, _ = state_paths(port)
     if not pid_path.exists():
@@ -149,6 +157,9 @@ def main() -> int:
     start.add_argument("--port", type=int, default=8047)
     start.add_argument("--ttl", type=float, default=900)
     start.add_argument("--max-life", type=float, default=7200)
+    start.add_argument(
+        "--if-not-running", action="store_true", help="لا تبدأ نسخة ثانية إن كان خادم المنفذ يعمل"
+    )
     stopper = sub.add_parser("stop")
     stopper.add_argument("--port", type=int, default=8047)
     args = parser.parse_args()
@@ -158,6 +169,9 @@ def main() -> int:
         return 0
 
     pid_path, log_path = state_paths(args.port)
+    if args.if_not_running and running(args.port):
+        print("الخادم يعمل، لا نسخة ثانية")
+        return 0
     stop(args.port)  # لا يتراكم خادم قديم على المنفذ نفسه
     log_path.write_bytes(b"")
     env = {
@@ -166,6 +180,9 @@ def main() -> int:
         "SECRET_KEY": os.environ.get("SECRET_KEY", "preview-only-key"),
         "ALLOWED_HOSTS": "127.0.0.1,localhost",
         "SECURE_SSL_REDIRECT": "0",
+        "DATABASE_URL": os.environ.get(
+            "DATABASE_URL", f"sqlite:///{Path.home().as_posix()}/.cache/math_papers_preview.db"
+        ),
     }
     cmd = [sys.executable, "manage.py", "runserver", f"127.0.0.1:{args.port}", "--noreload", "--insecure"]
     print(f"السجل: {log_path}  | يُغلق بعد {args.ttl:.0f}ث خمول أو {args.max_life:.0f}ث عمرًا")
