@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from django.conf import settings
 from django.http import HttpRequest
 from ninja import Field, NinjaAPI, Schema, Status
 from ninja.errors import HttpError
@@ -17,6 +18,7 @@ class MeOut(Schema):
     id: int
     username: str
     is_staff: bool
+    admin_url: str = ""  # يظهر للطاقم فقط
     permissions: list[str]
 
 
@@ -39,13 +41,12 @@ class PingOut(Schema):
 
 @api.get("/ping", response=PingOut)
 def ping(request: HttpRequest):
-    from django.conf import settings
-
     return {"ok": True, "site": settings.SITE_TITLE}
 
 
 def me_payload(user) -> dict:
     return {
+        "admin_url": f"/{settings.ADMIN_URL}" if user.is_staff else "",
         "id": user.pk,
         "username": user.get_username(),
         "is_staff": user.is_staff,

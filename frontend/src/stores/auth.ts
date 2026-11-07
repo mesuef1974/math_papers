@@ -5,6 +5,7 @@ export interface Me {
   id: number;
   username: string;
   is_staff: boolean;
+  admin_url: string;
   permissions: string[];
 }
 

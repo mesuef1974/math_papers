@@ -1,0 +1,162 @@
+/*
+  هوية «ورقة المربعات» على لوحة إدارة Django. تُحمَّل بعد أنماط الإدارة فتعيد ربط متغيراتها بمتغيرات المنصة،
+  فتتبع اللوحة الألوان والخطوط والوضع الداكن من tokens.css نفسه ولا يتكرر لون هنا.
+  السمة تتبع نظام المستخدم كالمنصة، فزر تبديل سمة الإدارة مخفي.
+*/
+@import "./tokens.css";
+
+:root,
+html[data-theme="light"],
+html[data-theme="dark"] {
+  --primary: var(--color-brand);
+  --secondary: var(--color-brand-strong);
+  --accent: var(--color-sand);
+  --primary-fg: var(--color-on-brand);
+
+  --body-fg: var(--color-ink);
+  --body-bg: var(--color-paper);
+  --body-quiet-color: var(--color-ink-soft);
+  --body-loud-color: var(--color-ink);
+
+  --header-color: var(--color-on-brand);
+  --header-branding-color: var(--color-on-brand);
+  --header-bg: var(--color-brand);
+  --header-link-color: var(--color-on-brand);
+
+  --breadcrumbs-fg: var(--color-ink-soft);
+  --breadcrumbs-link-fg: var(--color-brand);
+  --breadcrumbs-bg: var(--color-surface-sunken);
+
+  --link-fg: var(--color-brand);
+  --link-hover-color: var(--color-brand-strong);
+  --link-selected-fg: var(--color-brand-strong);
+
+  --hairline-color: var(--color-line);
+  --border-color: var(--color-line-strong);
+  --darkened-bg: var(--color-surface-sunken);
+  --selected-bg: var(--color-brand-soft);
+  --selected-row: var(--color-sand-soft);
+
+  --error-fg: var(--color-danger);
+  --message-success-bg: var(--color-success-soft);
+  --message-warning-bg: var(--color-sand-soft);
+  --message-error-bg: var(--color-danger-soft);
+
+  --button-fg: var(--color-on-brand);
+  --button-bg: var(--color-brand);
+  --button-hover-bg: var(--color-brand-strong);
+  --default-button-bg: var(--color-brand);
+  --default-button-hover-bg: var(--color-brand-strong);
+  --close-button-bg: var(--color-ink-soft);
+  --close-button-hover-bg: var(--color-ink);
+  --delete-button-bg: var(--color-danger);
+  --delete-button-hover-bg: var(--color-danger);
+  --object-tools-fg: var(--color-on-brand);
+  --object-tools-bg: var(--color-ink-soft);
+  --object-tools-hover-bg: var(--color-ink);
+
+  --font-family-primary: var(--font-sans);
+  --font-family-monospace: var(--font-mono);
+}
+
+body {
+  background-color: var(--color-paper);
+  background-image:
+    linear-gradient(var(--color-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--color-grid) 1px, transparent 1px);
+  background-size: var(--grid-size) var(--grid-size);
+  font-family: var(--font-sans);
+}
+
+#header {
+  box-shadow: var(--shadow-sm);
+}
+
+#site-name a:link,
+#site-name a:visited {
+  font-weight: var(--weight-bold);
+  letter-spacing: 0;
+}
+
+.module,
+#changelist .paginator,
+.inline-group,
+.login #content-main {
+  border-radius: var(--radius-md);
+}
+
+.module {
+  background: var(--color-surface);
+  border: var(--border);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.module h2,
+.module caption,
+.inline-group h2 {
+  background: var(--color-surface-sunken);
+  color: var(--color-ink);
+  border-block-end: var(--border);
+  font-weight: var(--weight-bold);
+}
+
+input[type="text"],
+input[type="password"],
+input[type="number"],
+input[type="email"],
+input[type="url"],
+textarea,
+select {
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  border-color: var(--color-line-strong);
+}
+
+:is(a, button, input, select, textarea):focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.button,
+input[type="submit"],
+input[type="button"],
+.submit-row input {
+  border-radius: var(--radius-sm);
+  font-weight: var(--weight-medium);
+}
+
+/* بطاقة الدخول بصياغة المنصة */
+.login #container {
+  border-radius: var(--radius-lg);
+  border: var(--border);
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
+}
+
+/* أسماء الأقسام وسجلات القوائم تقرأ عربية صرفة، فلا تباعد حروف */
+th,
+td,
+caption {
+  letter-spacing: 0;
+}
+
+.theme-toggle {
+  display: none;
+}
+
+@media print {
+  body {
+    background-image: none;
+  }
+}
+
+#header h1,
+#header h1 a:link,
+#header h1 a:visited,
+#header #branding h1,
+#header #site-name a:link,
+#header #site-name a:visited {
+  color: var(--color-on-brand);
+}

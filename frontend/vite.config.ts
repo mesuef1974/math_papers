@@ -19,7 +19,7 @@ export default defineConfig({
     manifest: true,
     outDir: "../frontend_dist",
     emptyOutDir: true,
-    rollupOptions: { input: "src/main.ts" },
+    rollupOptions: { input: ["src/main.ts", "src/styles/admin.css"] },
   },
   test: {
     environment: "jsdom",

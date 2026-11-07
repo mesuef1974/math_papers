@@ -2,6 +2,10 @@ from django.contrib import admin
 
 from .models import AuditLog
 
+admin.site.site_header = "إدارة مولّد أوراق الرياضيات"
+admin.site.site_title = "إدارة المنصة"
+admin.site.index_title = "البيانات والمنهج"
+
 
 @admin.register(AuditLog)
 class AuditLogAdmin(admin.ModelAdmin):

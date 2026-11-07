@@ -1,3 +1,5 @@
+import re
+
 import pytest
 
 from apps.core import services
@@ -55,3 +57,28 @@ def test_static_storage_has_no_django_manifest():
     assert "Manifest" not in base.STORAGES["staticfiles"]["BACKEND"]
     assert base.WHITENOISE_IMMUTABLE_FILE_TEST("", "/static/assets/main-BAm3HWoC.js")
     assert not base.WHITENOISE_IMMUTABLE_FILE_TEST("", "/static/admin/css/base.css")
+
+
+@pytest.mark.django_db
+def test_me_exposes_admin_url_only_to_staff(client, django_user_model):
+    staff = django_user_model.objects.create_user("st", password="x-Pass-12345", is_staff=True)
+    plain = django_user_model.objects.create_user("pl", password="x-Pass-12345")
+    client.force_login(plain)
+    assert client.get("/api/me").json()["admin_url"] == ""
+    client.force_login(staff)
+    assert client.get("/api/me").json()["admin_url"] == "/admin/"
+
+
+@pytest.mark.django_db
+def test_admin_links_back_to_platform(client, django_user_model):
+    client.force_login(django_user_model.objects.create_superuser("su", password="x-Pass-12345"))
+    html = client.get("/admin/").content.decode()
+    assert 'href="/"' in html and "العودة إلى المنصة" in html
+
+
+@pytest.mark.django_db
+def test_admin_loads_platform_identity_stylesheet(client, django_user_model):
+    client.force_login(django_user_model.objects.create_superuser("su2", password="x-Pass-12345"))
+    assert re.search(
+        r'<link rel="stylesheet" href="[^"]*admin[.-][^"]*css"', client.get("/admin/").content.decode()
+    )

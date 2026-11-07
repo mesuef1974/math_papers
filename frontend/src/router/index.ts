@@ -19,6 +19,8 @@ export function safeNext(value: unknown): string {
 router.beforeEach(async (to) => {
   const auth = useAuthStore();
   if (!auth.checked) await auth.loadMe().catch(() => undefined);
+  // من له جلسة لا يرى بطاقة الدخول: يعود إلى وجهته أو الرئيسية.
+  if (to.name === "login" && auth.user) return safeNext(to.query.next);
   if (to.meta.public) return true;
   if (!auth.user) return { name: "login", query: { next: to.fullPath } };
   return true;
