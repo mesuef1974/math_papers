@@ -138,8 +138,104 @@ def assert_graph_limit(c):
     assert c["answer"] == expected
 
 
+def one(graph, px):
+    values = value_at(graph, px)
+    return values[0] if len(values) == 1 else None
+
+
+def assert_graph_discontinuity(c):
+    graph, at = c["graph"], c["at"]
+    if c["kind"] == "infinite":
+        assert at in graph["asymptotes"]
+        near = [v for s in (-0.03, 0.03) for v in value_at(graph, at + s)]
+        assert all(abs(v) > 3 for v in near)
+        return
+    left, right = one(graph, at - 1e-3), one(graph, at + 1e-3)
+    assert left == pytest.approx(c["left"], abs=0.01) and right == pytest.approx(c["right"], abs=0.01)
+    if c["kind"] == "jump":
+        assert c["left"] != c["right"]
+    else:
+        assert c["left"] == c["right"]
+        assert [at, c["left"], False] in [list(d) for d in graph["dots"]]
+        assert not any(closed and py == c["left"] for px, py, closed in graph["dots"] if px == at)
+
+
+def assert_graph_tangent(c):
+    graph, at = c["graph"], c["at"]
+    (x0, y0), (x1, y1) = graph["lines"][0]
+    assert (y1 - y0) / (x1 - x0) == pytest.approx(c["value"])
+    h = 0.5
+    slope = (one(graph, at + h) - one(graph, at - h)) / (2 * h)
+    assert slope == pytest.approx(c["value"], abs=0.02)
+    assert one(graph, at) == pytest.approx(c["y"], abs=0.01)
+
+
+def sign_at(graph, px):
+    value = one(graph, px)
+    assert value is not None and abs(value) > 1e-6
+    return value > 0
+
+
+def assert_graph_sign(c):
+    graph, p, q = c["graph"], c["p"], c["q"]
+    inner = sign_at(graph, (p + q) / 2)
+    assert sign_at(graph, q + 0.5) != inner and sign_at(graph, p - 0.5) != inner
+    assert c["answer_inner"] == (c["positive"] == inner)
+
+
+def sign_changes(graph):
+    xs = [-4.93 + 0.05 * i for i in range(197)]
+    signs = [(px, v > 0) for px in xs if (v := one(graph, px)) is not None and abs(v) > 1e-4]
+    found = {"max": [], "min": []}
+    for (xa, sa), (xb, sb) in zip(signs, signs[1:], strict=False):
+        if sa != sb:
+            found["max" if sa else "min"].append(round((xa + xb) / 2))
+    return found
+
+
+def assert_graph_extremum(c):
+    found = sign_changes(c["graph"])["max" if c["max"] else "min"]
+    assert c["answer"] == (f"$x={found[0]}$" if found else "لا توجد")
+
+
+def assert_graph_concavity(c):
+    graph, h = c["graph"], c["h"]
+    assert one(graph, h - 1) == pytest.approx(one(graph, h + 1), abs=0.01)
+    rising_right = one(graph, h + 1) > one(graph, h + 0.5)
+    expected = {
+        "inflection": f"$x={h}$",
+        "up": rf"$({h},\infty)$" if rising_right else rf"$(-\infty,{h})$",
+        "down": rf"$(-\infty,{h})$" if rising_right else rf"$({h},\infty)$",
+    }[c["ask"]]
+    assert c["answer"] == expected
+
+
+def assert_graph_options(c):
+    """الخيار الأول يوافق إشارة f′ المرسومة في كل نقطة، وكل خيار آخر يخالفها في نقطة على الأقل."""
+    xs = [-4.5 + 0.25 * i for i in range(37)]
+
+    def agrees(option):
+        mismatches = 0
+        for px in xs:
+            d, a, b = one(c["graph"], px), one(option, px - 0.05), one(option, px + 0.05)
+            if None in (d, a, b) or abs(d) < 0.3:
+                continue
+            mismatches += (b > a) != (d > 0)
+        return mismatches == 0
+
+    first, *others = c["options"]
+    assert agrees(first)
+    assert not any(agrees(option) for option in others)
+
+
 CHECKS = {
     "graph_limit": assert_graph_limit,
+    "graph_discontinuity": assert_graph_discontinuity,
+    "graph_tangent": assert_graph_tangent,
+    "graph_sign": assert_graph_sign,
+    "graph_extremum": assert_graph_extremum,
+    "graph_concavity": assert_graph_concavity,
+    "graph_options": assert_graph_options,
     "limit": assert_limit,
     "derivative": assert_derivative,
     "function": assert_function,
@@ -178,6 +274,9 @@ def test_problem_shape(lesson, generator):
             assert problem.answer not in problem.wrong
         if problem.graph is not None:
             assert_graph_in_window(problem.graph)
+        for option in problem.option_graphs:
+            assert_graph_in_window(option)
+        assert problem.mcq_ok or problem.essay_ok
 
 
 def assert_graph_in_window(graph):

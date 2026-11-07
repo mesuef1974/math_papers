@@ -1,3 +1,5 @@
+import random
+
 import pytest
 
 from apps.curriculum.models import Blueprint, BlueprintItem
@@ -101,3 +103,22 @@ def test_graph_is_served_with_the_part(client):
             assert set(graphs[0]) == {"window", "label", "curves", "dots", "asymptotes", "lines"}
             return
     pytest.fail("لم يظهر رسم في 30 ورقة لدرس 1.1")
+
+
+@pytest.mark.django_db
+def test_graph_options_are_shuffled_with_their_answer(client):
+    from apps.papers import services
+    from apps.papers.domain.generators import REGISTRY
+
+    builder = next(fn for fn in REGISTRY["3.1"] if fn.__name__ == "function_from_derivative_graph")
+    seen = set()
+    for seed in range(40):
+        rng = random.Random(seed)
+        problem = builder(rng)
+        slot = services.PartSlot("", "3.1", "", "mcq", 1)
+        part = services.render_part(problem, slot, rng)
+        assert len(part["option_graphs"]) == 4 and part["options"] == ["", "", "", ""]
+        index = services.OPTION_LABELS.index(part["answer"][-2])
+        assert part["option_graphs"][index] == problem.option_graphs[0]
+        seen.add(index)
+    assert len(seen) > 1

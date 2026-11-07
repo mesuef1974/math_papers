@@ -33,6 +33,10 @@ class Problem:
     check: dict[str, Any] = field(default_factory=dict, compare=False)
     mcq_ok: bool = True
     graph: dict[str, Any] | None = field(default=None, compare=False)  # وصف رسم من graphs.Graph
+    option_graphs: tuple[dict[str, Any], ...] = field(
+        default=(), compare=False
+    )  # خيارات رسوم، الأول هو الصحيح
+    essay_ok: bool = True
 
 
 Generator = Callable[[random.Random], Problem]
@@ -56,7 +60,8 @@ def generate(lesson: str, rng: random.Random, kind: str = "essay", avoid: set[st
     avoid = avoid if avoid is not None else set()
     for _ in range(MAX_ATTEMPTS):
         problem = rng.choice(REGISTRY[lesson])(rng)
-        if (kind != "mcq" or problem.mcq_ok) and problem.stem not in avoid:
+        fits = problem.mcq_ok if kind == "mcq" else problem.essay_ok
+        if fits and problem.stem not in avoid:
             return problem
     raise ValueError(f"تعذر توليد مسألة جديدة للدرس {lesson}")
 
@@ -972,3 +977,7 @@ def minimum_sum_of_squares(rng: random.Random) -> Problem:
             "max": False,
         },
     )
+
+
+# مولّدات أسئلة الرسوم في وحدة مستقلة تسجّل نفسها في REGISTRY عند الاستيراد.
+from . import graph_problems  # noqa: E402, F401

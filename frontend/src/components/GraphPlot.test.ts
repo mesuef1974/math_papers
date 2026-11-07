@@ -36,3 +36,12 @@ describe("GraphPlot", () => {
     expect(open.attributes("cx")).toBe(closed.attributes("cx"));
   });
 });
+
+describe("GraphPlot compact", () => {
+  it("يصغّر الرسم ويخفي التسمية في خيارات الرسوم", () => {
+    const full = mount(GraphPlot, { props: { graph } });
+    const small = mount(GraphPlot, { props: { graph, compact: true } });
+    expect(Number(small.find("svg").attributes("width"))).toBeLessThan(Number(full.find("svg").attributes("width")));
+    expect(small.find("figcaption").exists()).toBe(false);
+  });
+});

@@ -4,13 +4,13 @@ import type { Graph } from "@/stores/papers";
 
 // رسم متجه بأسلوب الكتاب: شبكة على الأعداد الصحيحة، محوران بسهمين، نقاط مفتوحة ومغلقة.
 // الإحداثيات رياضية (y للأعلى) وتُحوَّل هنا. الرسم دائمًا من اليسار لليمين مهما كان اتجاه الصفحة.
-const props = defineProps<{ graph: Graph }>();
+const props = withDefaults(defineProps<{ graph: Graph; compact?: boolean }>(), { compact: false });
 
-const UNIT = 26;
 const PAD = 22;
 
 const view = computed(() => {
   const [xMin, xMax, yMin, yMax] = props.graph.window;
+  const UNIT = props.compact ? 17 : 26; // خيارات الرسوم أصغر حتى يتسع خياران في السطر
   const sx = (v: number) => PAD + (v - xMin) * UNIT;
   const sy = (v: number) => PAD + (yMax - v) * UNIT;
   const step = Math.max(xMax - xMin, yMax - yMin) > 12 ? 2 : 1;
@@ -85,7 +85,7 @@ const title = computed(() => `تمثيل بياني للدالة ${props.graph.l
         :class="closed ? 'dot closed' : 'dot open'"
       />
     </svg>
-    <figcaption class="caption">
+    <figcaption v-if="!compact" class="caption">
       <i>y</i> = <i>{{ graph.label }}</i>(<i>x</i>)
     </figcaption>
   </figure>

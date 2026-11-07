@@ -14,6 +14,7 @@ from .domain.generators import Problem, available_lessons, generate
 
 MAX_SEED = 2**31 - 1
 PART_LABELS = "ABCDEFGH"
+OPTION_LABELS = "أبجد"  # تطابق ترتيب عرض الخيارات في الواجهة
 
 
 class UnknownBlueprintError(LookupError):
@@ -39,7 +40,16 @@ def new_seed() -> int:
 
 def render_part(problem: Problem, slot: PartSlot, rng: random.Random) -> dict:
     options: list[str] = []
-    if slot.kind == BlueprintItem.Kind.MCQ:
+    option_graphs: list[dict] = []
+    answer = problem.answer
+    if problem.option_graphs:
+        # خيارات رسوم: يُخلط الترتيب، والجواب اسم الخيار الصحيح بعد الخلط.
+        order = list(range(len(problem.option_graphs)))
+        rng.shuffle(order)
+        option_graphs = [problem.option_graphs[i] for i in order]
+        options = ["" for _ in order]
+        answer = f"الخيار ({OPTION_LABELS[order.index(0)]})"
+    elif slot.kind == BlueprintItem.Kind.MCQ:
         options = [problem.answer, *problem.wrong]
         rng.shuffle(options)
     return {
@@ -50,9 +60,10 @@ def render_part(problem: Problem, slot: PartSlot, rng: random.Random) -> dict:
         "level": problem.level,
         "stem": problem.stem,
         "options": options,
-        "answer": problem.answer,
+        "answer": answer,
         "steps": list(problem.steps),
         "graph": problem.graph,
+        "option_graphs": option_graphs,
     }
 
 

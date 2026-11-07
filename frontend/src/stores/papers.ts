@@ -38,6 +38,7 @@ export interface Part {
   answer: string;
   steps: string[];
   graph: Graph | null;
+  option_graphs: Graph[];
 }
 
 export interface Question {

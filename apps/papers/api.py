@@ -51,6 +51,7 @@ class PartOut(Schema):
     answer: str
     steps: list[str]
     graph: GraphOut | None = None
+    option_graphs: list[GraphOut] = []
 
 
 class QuestionOut(Schema):

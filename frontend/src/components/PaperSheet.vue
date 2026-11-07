@@ -38,9 +38,10 @@ function marksLabel(marks: number): string {
         </p>
         <GraphPlot v-if="part.graph" :graph="part.graph" />
         <ol v-if="part.options.length" class="options">
-          <li v-for="(option, index) in part.options" :key="option">
+          <li v-for="(option, index) in part.options" :key="index" :class="{ 'graph-option': part.option_graphs.length }">
             <span class="option-label">{{ OPTION_LABELS[index] }})</span>
-            <MathText :text="option" />
+            <GraphPlot v-if="part.option_graphs[index]" :graph="part.option_graphs[index]" compact />
+            <MathText v-else :text="option" />
           </li>
         </ol>
         <div v-else class="work-space" :style="{ minBlockSize: `${Math.max(part.marks, 2) * 34}px` }" />
@@ -120,6 +121,12 @@ function marksLabel(marks: number): string {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 6px 16px;
+}
+.graph-option {
+  display: flex;
+  align-items: start;
+  gap: 4px;
+  break-inside: avoid;
 }
 .option-label {
   margin-inline-end: 6px;
