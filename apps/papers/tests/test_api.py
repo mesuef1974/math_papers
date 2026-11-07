@@ -48,7 +48,8 @@ def test_exam_shape_and_marks(client):
     assert sum(data["level_marks"].values()) == 40
     assert [q["marks"] for q in questions[10:]] == [10, 10, 10]
     assert all(len(q["parts"][0]["options"]) == 4 for q in questions[:10])
-    assert all(q["parts"][0]["answer"] in q["parts"][0]["options"] for q in questions[:10])
+    text_parts = [q["parts"][0] for q in questions[:10] if not q["parts"][0]["option_graphs"]]
+    assert all(part["answer"] in part["options"] for part in text_parts)
 
 
 @pytest.mark.django_db
@@ -142,3 +143,26 @@ def test_worksheet_respects_requested_level(client):
 @pytest.mark.django_db
 def test_worksheet_rejects_unknown_level(client):
     assert client.get("/api/papers/worksheet", {"lesson": "2.4", "level": "X"}).status_code == 422
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("seed", range(12))
+def test_exam_levels_and_graphs_follow_blueprint(client, seed):
+    data = client.get("/api/papers/exam", {"blueprint": SLUG, "seed": seed}).json()
+    assert data["level_marks"] == {"K": 4, "A": 26, "R": 10}
+    parts = [part for q in data["questions"] for part in q["parts"]]
+    graphs = [part for part in parts if part["graph"] or part["option_graphs"]]
+    assert len(graphs) >= 3
+    units: dict[str, int] = {}
+    for part in parts:
+        units[part["lesson"][0]] = units.get(part["lesson"][0], 0) + part["marks"]
+    assert units == {"1": 9, "2": 18, "3": 13}
+
+
+@pytest.mark.django_db
+def test_every_blueprint_slot_has_a_matching_variant():
+    from apps.papers.domain.generators import variants
+
+    for item in BlueprintItem.objects.filter(blueprint__slug=SLUG).select_related("lesson"):
+        assert item.level, item
+        assert variants(item.lesson.code, item.kind, item.level, item.needs_graph), item

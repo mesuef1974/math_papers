@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import random
 import secrets
 from collections import defaultdict
@@ -11,6 +12,8 @@ from apps.curriculum import selectors
 from apps.curriculum.models import BlueprintItem
 
 from .domain.generators import LEVEL_NAMES, LevelUnavailableError, Problem, available_lessons, generate
+
+logger = logging.getLogger(__name__)
 
 MAX_SEED = 2**31 - 1
 PART_LABELS = "ABCDEFGH"
@@ -67,6 +70,15 @@ def render_part(problem: Problem, slot: PartSlot, rng: random.Random) -> dict:
     }
 
 
+def generate_for_slot(item: BlueprintItem, rng: random.Random, used: set[str]) -> Problem:
+    """مسألة بمستوى الخانة ورسمها. خانة لا صيغة لها (عُدّلت من لوحة الإدارة) تُملأ بلا قيد بدل إسقاط الاختبار."""
+    try:
+        return generate(item.lesson.code, rng, item.kind, used, item.level or None, item.needs_graph)
+    except LevelUnavailableError:
+        logger.warning("blueprint slot %s has no matching variant; generating unconstrained", item.pk)
+        return generate(item.lesson.code, rng, item.kind, used)
+
+
 def build_exam(slug: str, seed: int | None = None) -> dict:
     blueprint = selectors.blueprint_with_items(slug)
     if blueprint is None:
@@ -85,7 +97,7 @@ def build_exam(slug: str, seed: int | None = None) -> dict:
         for position, item in enumerate(items):
             label = PART_LABELS[position] if len(items) > 1 else ""
             slot = PartSlot(label, item.lesson.code, item.lesson.title, item.kind, item.marks)
-            problem = generate(item.lesson.code, rng, item.kind, used)
+            problem = generate_for_slot(item, rng, used)
             used.add(problem.key)
             level_marks[problem.level] += item.marks
             parts.append(render_part(problem, slot, rng))

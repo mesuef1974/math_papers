@@ -72,21 +72,29 @@ def available_lessons() -> set[str]:
 
 
 @cache
-def variant_profile(fn: Generator) -> tuple[frozenset[str], bool, bool]:
-    """(المستويات، يصلح للموضوعي، يصلح للمقالي) لصيغة واحدة، من عينات ثابتة."""
+def variant_profile(fn: Generator) -> tuple[frozenset[str], bool, bool, bool]:
+    """(المستويات، يصلح للموضوعي، يصلح للمقالي، فيه رسم) لصيغة واحدة، من عينات ثابتة."""
     samples = [fn(random.Random(seed)) for seed in range(LEVEL_SAMPLES)]  # noqa: S311 — عينات ثابتة لا أمنية
     return (
         frozenset(p.level for p in samples),
         all(p.mcq_ok for p in samples),
         all(p.essay_ok for p in samples),
+        all(p.graph is not None or bool(p.option_graphs) for p in samples),
     )
 
 
-def variants(lesson: str, kind: str = "essay", level: str | None = None) -> list[Generator]:
+def variants(
+    lesson: str, kind: str = "essay", level: str | None = None, graph: bool = False
+) -> list[Generator]:
+    """graph=True يحصر الصيغ في أسئلة الرسم؛ False لا يقيّد."""
     pool = []
     for fn in REGISTRY.get(lesson, []):
-        levels, mcq_ok, essay_ok = variant_profile(fn)
-        if (mcq_ok if kind == "mcq" else essay_ok) and (level is None or level in levels):
+        levels, mcq_ok, essay_ok, has_graph = variant_profile(fn)
+        if (
+            (mcq_ok if kind == "mcq" else essay_ok)
+            and (level is None or level in levels)
+            and (has_graph or not graph)
+        ):
             pool.append(fn)
     return pool
 
@@ -104,12 +112,13 @@ def generate(
     kind: str = "essay",
     avoid: set[str] | None = None,
     level: str | None = None,
+    graph: bool = False,
 ) -> Problem:
-    """يختار صيغة من مولّدات الدرس بالمستوى المطلوب إن حُدد، ويتفادى ما ظهر في الورقة نفسها."""
+    """يختار صيغة من مولّدات الدرس بالمستوى المطلوب (وبرسم إن طُلب)، ويتفادى ما ظهر في الورقة نفسها."""
     avoid = avoid if avoid is not None else set()
-    pool = variants(lesson, kind, level)
+    pool = variants(lesson, kind, level, graph)
     if not pool:
-        raise LevelUnavailableError(f"{lesson}/{kind}/{level}")
+        raise LevelUnavailableError(f"{lesson}/{kind}/{level}/{'graph' if graph else ''}")
     for _ in range(MAX_ATTEMPTS):
         problem = rng.choice(pool)(rng)
         fits = problem.mcq_ok if kind == "mcq" else problem.essay_ok

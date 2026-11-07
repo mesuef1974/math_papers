@@ -41,12 +41,20 @@ class BlueprintItem(models.Model):
         MCQ = "mcq", "موضوعي"
         ESSAY = "essay", "مقالي"
 
+    class Level(models.TextChoices):
+        EASY = "K", "سهل"
+        MEDIUM = "A", "متوسط"
+        HIGHER = "R", "مهارات عليا"
+
     blueprint = models.ForeignKey(Blueprint, on_delete=models.CASCADE, related_name="items")
     lesson = models.ForeignKey(Lesson, on_delete=models.PROTECT, related_name="+")
     question_number = models.PositiveSmallIntegerField()
     position = models.PositiveSmallIntegerField(default=1)
     kind = models.CharField(max_length=5, choices=Kind.choices)
     marks = models.PositiveSmallIntegerField()
+    # فارغ = أي مستوى. التوسعة nullable حتى تعمل النسخة السابقة أثناء النشر.
+    level = models.CharField(max_length=1, choices=Level.choices, null=True, blank=True)
+    needs_graph = models.BooleanField(default=False, db_default=False)
 
     class Meta:
         ordering = ["question_number", "position"]
