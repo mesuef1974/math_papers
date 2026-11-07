@@ -56,6 +56,8 @@ PROMPT = """أنت تنفّذ بطاقة عمل واحدة في مستودع Dja
 
 
 def sh(cmd: list[str], cwd: Path = ROOT, check: bool = True, **kw) -> subprocess.CompletedProcess:
+    # على ويندوز لا تظهر نافذة طرفية لأي أمر فرعي (قرار المالك)
+    kw.setdefault("creationflags", getattr(subprocess, "CREATE_NO_WINDOW", 0))
     return subprocess.run(cmd, cwd=cwd, text=True, encoding="utf-8", errors="replace", check=check, **kw)
 
 
