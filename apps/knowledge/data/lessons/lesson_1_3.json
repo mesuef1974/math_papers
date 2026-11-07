@@ -1,0 +1,280 @@
+{
+ "lesson": "1.3",
+ "title_en": "",
+ "standards": [
+  "12A.2.3"
+ ],
+ "objective": "إيجاد نهايات الدوال المثلثية الأساسية وقواعدها",
+ "rationale": "تطبيقات هندسية (محركات، محولات) سياقًا للدافعية",
+ "motivation": "",
+ "self_assessment": [
+  6,
+  13,
+  15,
+  23,
+  30,
+  31
+ ],
+ "terms": [],
+ "items": [
+  {
+   "kind": "guide_step",
+   "text": "نهاية الدوال المثلثية الأساسية بالتعويض المباشر حيث تكون معرفة",
+   "label": ""
+  },
+  {
+   "kind": "guide_step",
+   "text": "النهاية الخاصة sin x / x عند الصفر ونتائجها",
+   "label": ""
+  },
+  {
+   "kind": "concept_step",
+   "text": "قراءة رسوم sin وcos وtan الأساسية، ونهاية tan عند π/2 من الجهتين لا نهائية",
+   "label": ""
+  },
+  {
+   "kind": "concept_step",
+   "text": "قواعد النهايات المثلثية بالتعويض المباشر (صندوق قاعدة)",
+   "label": ""
+  },
+  {
+   "kind": "concept_step",
+   "text": "sin x / x غير قابلة للاختزال جبريًا؛ تُقدَّر من رسم وجدول قيم ثم تُعتمد قاعدة = 1",
+   "label": ""
+  },
+  {
+   "kind": "concept_step",
+   "text": "تعميم: sin(ax)/(bx) = a/b",
+   "label": ""
+  },
+  {
+   "kind": "concept_step",
+   "text": "(cos x − 1)/x = 0 بالضرب في المرافق ومتطابقة فيثاغورس",
+   "label": ""
+  },
+  {
+   "kind": "concept_step",
+   "text": "tan x / x = 1 من الرسم ثم جبريًا، وتعميم tan(ax)/(bx) = a/b",
+   "label": ""
+  },
+  {
+   "kind": "think_question",
+   "text": "هل الدالة معرفة عند الصفر قبل التعويض",
+   "label": ""
+  },
+  {
+   "kind": "think_question",
+   "text": "تغيير المتغير t = x − a لتعميم sin(x − a)/(x − a)",
+   "label": ""
+  },
+  {
+   "kind": "think_question",
+   "text": "هل تفيد المتطابقات في التبسيط",
+   "label": ""
+  },
+  {
+   "kind": "think_question",
+   "text": "اشتقاق قاعدة sin(ax)/sin(bx) وtan(ax)/tan(bx) وsin(ax)/tan(bx)",
+   "label": ""
+  },
+  {
+   "kind": "think_question",
+   "text": "استعمال متطابقة ضعف الزاوية بديلًا للمرافق في (cos x − 1)/x",
+   "label": ""
+  },
+  {
+   "kind": "struggling",
+   "text": "إرباك وجود الدوال المثلثية في عبارة التعويض المباشر؛ تدريب إضافي على التعويض في كسور مثلثية",
+   "label": ""
+  },
+  {
+   "kind": "fast_finisher",
+   "text": "متطابقات مثلثية مع اختزال جبري عند x → π/4 (cos 2x، sin x − cos x)",
+   "label": ""
+  },
+  {
+   "kind": "follow_up",
+   "text": "نهايات مثل sin³x/x وsin(x²)/x بالقواعد",
+   "label": ""
+  },
+  {
+   "kind": "note",
+   "text": "التعويض المباشر أولًا قبل البحث عن قاعدة؛ صيغة 0/0 تعني تبسيطًا لا عدم وجود",
+   "label": ""
+  }
+ ],
+ "examples": [
+  {
+   "number": 1,
+   "skill": "تعويض مباشر في كسر مثلثي وأسي",
+   "representation": "",
+   "methods": [
+    "قواعد النهايات",
+    "تعويض"
+   ]
+  },
+  {
+   "number": 2,
+   "skill": "استعمال sin x/x = 1 مع تفكيك المجموع، ومتطابقة فيثاغورس، وجذر تكعيبي",
+   "representation": "",
+   "methods": [
+    "قاعدة الجمع",
+    "متطابقة",
+    "قاعدة القوى"
+   ]
+  },
+  {
+   "number": 3,
+   "skill": "(cos x − 1)/x",
+   "representation": "",
+   "methods": [
+    "الضرب في المرافق",
+    "متطابقة فيثاغورس"
+   ]
+  },
+  {
+   "number": 4,
+   "skill": "tan(ax)/(bx)، ومجموع بسطه tan وخطي، وtan² على x·sin",
+   "representation": "",
+   "methods": [
+    "تقسيم البسط والمقام على x",
+    "قاعدة القسمة",
+    "قاعدة الضرب"
+   ]
+  }
+ ],
+ "templates": [
+  {
+   "label": "مراجعة سريعة 1-4",
+   "directive_template": "",
+   "skill": "تبسيط دالة بالمتطابقات (ضعف الزاوية، فيثاغورس)",
+   "representation": "",
+   "level": "K",
+   "bloom": "",
+   "inference_note": "",
+   "count": 4,
+   "category": "practice"
+  },
+  {
+   "label": "1-5",
+   "directive_template": "",
+   "skill": "تعويض مباشر عند 0 أو π/4 أو π/2، ومنها ln وجذر",
+   "representation": "جبري",
+   "level": "K",
+   "bloom": "",
+   "inference_note": "",
+   "count": 5,
+   "category": "practice"
+  },
+  {
+   "label": "6-12",
+   "directive_template": "",
+   "skill": "sin x/x مع: تفكيك مجموع، ضرب، عامل مشترك في المقام",
+   "representation": "جبري",
+   "level": "A",
+   "bloom": "",
+   "inference_note": "",
+   "count": 7,
+   "category": "practice"
+  },
+  {
+   "label": "13-23",
+   "directive_template": "",
+   "skill": "sin(ax)/sin(bx)، قوى sin²، نهاية غير موجودة (sin x/x²)",
+   "representation": "جبري",
+   "level": "A",
+   "bloom": "",
+   "inference_note": "",
+   "count": 11,
+   "category": "practice"
+  },
+  {
+   "label": "24-31",
+   "directive_template": "",
+   "skill": "1 − cos، مرافق، tan، sec²، ونهاية غير موجودة من الجهتين",
+   "representation": "جبري",
+   "level": "R",
+   "bloom": "",
+   "inference_note": "",
+   "count": 8,
+   "category": "practice"
+  },
+  {
+   "label": "32-33",
+   "directive_template": "",
+   "skill": "دالة مثلثية متعددة التعريف: رسمها، وأين توجد النهاية، ومن أي جهة",
+   "representation": "رسم",
+   "level": "A",
+   "bloom": "",
+   "inference_note": "",
+   "count": 2,
+   "category": "practice"
+  },
+  {
+   "label": "34-35",
+   "directive_template": "",
+   "skill": "تقدير نهاية من جدول قيم",
+   "representation": "جدول",
+   "level": "K",
+   "bloom": "",
+   "inference_note": "",
+   "count": 2,
+   "category": "practice"
+  },
+  {
+   "label": "36-37",
+   "directive_template": "",
+   "skill": "صواب أم خطأ مع تبرير",
+   "representation": "لفظي/جبري",
+   "level": "A",
+   "bloom": "",
+   "inference_note": "",
+   "count": 2,
+   "category": "standard_test"
+  },
+  {
+   "label": "38, 40, 41",
+   "directive_template": "",
+   "skill": "اختيار من متعدد: تعويض، ومجموع خطي ومثلثي على خطي",
+   "representation": "جبري",
+   "level": "A",
+   "bloom": "",
+   "inference_note": "",
+   "count": 3,
+   "category": "standard_test"
+  },
+  {
+   "label": "39",
+   "directive_template": "",
+   "skill": "اختيار من متعدد: نهاية من جهة واحدة عند π/2 مع رسم (لا نهائية)",
+   "representation": "رسم",
+   "level": "R",
+   "bloom": "",
+   "inference_note": "",
+   "count": 1,
+   "category": "standard_test"
+  },
+  {
+   "label": "42 استكشاف",
+   "directive_template": "",
+   "skill": "التحكم بالنتائج: فترة حول نقطة تجعل قيمة الدالة في مدى معطى، من رسم",
+   "representation": "رسم",
+   "level": "R",
+   "bloom": "",
+   "inference_note": "",
+   "count": 1,
+   "category": "exploration"
+  },
+  {
+   "label": "43 توسيع الأفكار",
+   "directive_template": "",
+   "skill": "برهان sin θ/θ = 1 بالمساحات ونظرية الحصر، عمل جماعي",
+   "representation": "هندسي",
+   "level": "R",
+   "bloom": "",
+   "inference_note": "",
+   "count": 1,
+   "category": "extension"
+  }
+ ]
+}

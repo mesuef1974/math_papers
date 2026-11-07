@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     "axes",
     "apps.core",
     "apps.curriculum",
+    "apps.knowledge",
     "apps.papers",
 ]
 
