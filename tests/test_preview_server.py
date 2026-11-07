@@ -68,3 +68,13 @@ def test_running_reflects_pid_file(tmp_path, monkeypatch):
         ps.kill_tree(child.pid)
         child.wait(timeout=10)
     assert ps.running(59998) is False
+
+
+def test_running_true_when_port_is_busy_without_pid_file(tmp_path, monkeypatch):
+    import socket
+
+    monkeypatch.setattr(ps, "STATE_DIR", tmp_path)
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        sock.listen()
+        assert ps.running(sock.getsockname()[1]) is True

@@ -17,14 +17,15 @@ import argparse
 import atexit
 import os
 import signal
+import socket
 import subprocess
 import sys
-import tempfile
 import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-STATE_DIR = Path(tempfile.gettempdir()) / "math_papers_preview"
+# مسار ثابت لا يتبع TEMP، فتراه كل سياقات التشغيل (المهمة المجدولة والجلسة والطرفية) فلا تتكرر النسخة
+STATE_DIR = Path.home() / ".cache" / "math_papers_preview"
 NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 NEW_GROUP = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
 
@@ -129,12 +130,21 @@ def supervise(
     return reason
 
 
+def port_busy(port: int) -> bool:
+    with socket.socket() as sock:
+        sock.settimeout(0.5)
+        return sock.connect_ex(("127.0.0.1", port)) == 0
+
+
 def running(port: int) -> bool:
+    """يعمل خادمنا (pid حي) أو المنفذ مشغول بأي شيء."""
     pid_path, _ = state_paths(port)
     try:
-        return alive(int(pid_path.read_text(encoding="utf-8")))
+        if alive(int(pid_path.read_text(encoding="utf-8"))):
+            return True
     except (OSError, ValueError):
-        return False
+        pass
+    return port_busy(port)
 
 
 def stop(port: int) -> bool:
