@@ -1,0 +1,249 @@
+/* مكونات الواجهة المشتركة. أي زر أو حقل أو تنبيه في التطبيق يأخذ شكله من هنا. */
+
+/* رأس الصفحة */
+.page-head {
+  margin-block-end: var(--space-6);
+}
+.eyebrow {
+  display: inline-block;
+  color: var(--color-brand);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-bold);
+  letter-spacing: 0;
+  margin-block-end: var(--space-2);
+}
+.lead {
+  color: var(--color-ink-soft);
+  font-size: var(--text-lg);
+  max-inline-size: 62ch;
+}
+
+/* اللوحة: سطح أبيض على ورقة المربعات */
+.panel {
+  background: var(--color-surface);
+  border: var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  padding: var(--space-6);
+}
+@media (max-width: 560px) {
+  .panel {
+    padding: var(--space-4);
+  }
+}
+
+/* الأزرار */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  line-height: 1.4;
+  min-block-size: 42px;
+  padding-block: var(--space-2);
+  padding-inline: var(--space-5);
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background-color var(--duration) var(--ease), border-color var(--duration) var(--ease),
+    color var(--duration) var(--ease);
+}
+.btn-primary {
+  background: var(--color-brand);
+  color: var(--color-on-brand);
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--color-brand-strong);
+}
+.btn-secondary {
+  background: var(--color-surface);
+  color: var(--color-brand);
+  border-color: var(--color-line-strong);
+}
+.btn-secondary:hover:not(:disabled) {
+  border-color: var(--color-brand);
+  background: var(--color-brand-soft);
+}
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.btn-block {
+  inline-size: 100%;
+}
+
+/* الحقول */
+.field {
+  display: grid;
+  gap: var(--space-1);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--color-ink-soft);
+}
+.input,
+.select {
+  font: inherit;
+  font-weight: var(--weight-regular);
+  font-size: var(--text-md);
+  color: var(--color-ink);
+  background: var(--color-surface);
+  border: 1px solid var(--color-line-strong);
+  border-radius: var(--radius-sm);
+  min-block-size: 42px;
+  padding-block: var(--space-1);
+  padding-inline: var(--space-3);
+  inline-size: 100%;
+  transition: border-color var(--duration) var(--ease), box-shadow var(--duration) var(--ease);
+}
+.input:hover,
+.select:hover {
+  border-color: var(--color-ink-soft);
+}
+.input:focus-visible,
+.select:focus-visible {
+  border-color: var(--color-brand);
+  border-radius: var(--radius-sm);
+}
+.input[aria-invalid="true"] {
+  border-color: var(--color-danger);
+}
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--color-ink);
+  font-size: var(--text-sm);
+  cursor: pointer;
+}
+.check input {
+  accent-color: var(--color-brand);
+  inline-size: 18px;
+  block-size: 18px;
+  margin: 0;
+}
+
+/* اختيار مقطعي: أزرار متجاورة لخيار واحد */
+.segmented {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  padding: var(--space-1);
+  background: var(--color-surface-sunken);
+  border: var(--border);
+  border-radius: var(--radius-md);
+}
+.segmented label {
+  position: relative;
+  cursor: pointer;
+}
+.segmented input {
+  position: absolute;
+  opacity: 0;
+  inset: 0;
+  cursor: pointer;
+}
+.segmented span {
+  display: block;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--color-ink-soft);
+  padding-block: var(--space-1);
+  padding-inline: var(--space-4);
+  border-radius: var(--radius-sm);
+  transition: background-color var(--duration) var(--ease), color var(--duration) var(--ease);
+}
+.segmented input:checked + span {
+  background: var(--color-surface);
+  color: var(--color-brand);
+  box-shadow: var(--shadow-sm);
+}
+.segmented input:focus-visible + span {
+  box-shadow: var(--focus-ring);
+}
+
+/* التنبيهات */
+.alert {
+  border-radius: var(--radius-md);
+  border: 1px solid;
+  border-inline-start-width: 4px;
+  padding-block: var(--space-3);
+  padding-inline: var(--space-4);
+  font-size: var(--text-sm);
+  margin: 0;
+}
+.alert-error {
+  color: var(--color-danger);
+  background: var(--color-danger-soft);
+  border-color: var(--color-danger);
+}
+.alert-info {
+  color: var(--color-ink);
+  background: var(--color-info-soft);
+  border-color: var(--color-info);
+}
+
+/* الشارات: المستويات والدروس */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  line-height: 1.6;
+  white-space: nowrap;
+  padding-inline: var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-sunken);
+  color: var(--color-ink-soft);
+  border: var(--border);
+}
+.badge-k {
+  color: var(--color-level-k);
+  background: var(--color-level-k-soft);
+  border-color: transparent;
+}
+.badge-a {
+  color: var(--color-level-a);
+  background: var(--color-level-a-soft);
+  border-color: transparent;
+}
+.badge-r {
+  color: var(--color-level-r);
+  background: var(--color-level-r-soft);
+  border-color: transparent;
+}
+
+/* بطاقة حالة */
+.status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-ink-soft);
+}
+.status::before {
+  content: "";
+  inline-size: 8px;
+  block-size: 8px;
+  border-radius: var(--radius-pill);
+  background: var(--color-line-strong);
+}
+.status.ok::before {
+  background: var(--color-success);
+}
+.status.bad::before {
+  background: var(--color-danger);
+}
+
+.visually-hidden {
+  position: absolute !important;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

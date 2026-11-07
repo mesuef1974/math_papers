@@ -1,0 +1,138 @@
+/*
+  مصدر الهوية الوحيد. المكونات تستعمل هذه المتغيرات ولا تكتب لونًا أو حجمًا خامًا
+  (يفرض ذلك styles/designTokens.test.ts).
+
+  الفكرة: «ورقة المربعات». ورق دافئ، وحبر داكن، وشبكة خفيفة كدفتر الرياضيات،
+  وعنابي بلون قلم التصحيح للفعل الأساسي، وذهبي رملي للتمييز.
+*/
+:root {
+  /* الألوان الأساسية */
+  --color-paper: #f7f4ee;
+  --color-surface: #ffffff;
+  --color-surface-sunken: #f1ede5;
+  --color-ink: #1b1e23;
+  --color-ink-soft: #4d545c;
+  --color-line: #e2dcd0;
+  --color-line-strong: #c9c0b0;
+  --color-grid: rgb(27 30 35 / 5%);
+
+  /* العلامة */
+  --color-brand: #7a1c3e;
+  --color-brand-strong: #5e1430;
+  --color-brand-soft: #f6e8ed;
+  --color-on-brand: #ffffff;
+  --color-sand: #a87b26;
+  --color-sand-soft: #f6eedc;
+  /* الشعار ثابت في الوضعين: هو العلامة، لا يتبع السمة */
+  --color-mark-tile: #7a1c3e;
+  --color-mark-ink: #ffffff;
+  --color-mark-dot: #d9a441;
+
+  /* الحالات */
+  --color-danger: #a3312a;
+  --color-danger-soft: #fbeceb;
+  --color-success: #2d7046;
+  --color-success-soft: #e7f3eb;
+  --color-info: #285e8a;
+  --color-info-soft: #e7f0f8;
+
+  /* المستويات الثلاثة: لون لكل مستوى يُستعمل في الشارات فقط */
+  --color-level-k: #2d7046;
+  --color-level-k-soft: #e7f3eb;
+  --color-level-a: #285e8a;
+  --color-level-a-soft: #e7f0f8;
+  --color-level-r: #7a1c3e;
+  --color-level-r-soft: #f6e8ed;
+
+  --color-focus: #c58a1c;
+
+  /* الخطوط: خطوط النظام العربية، بلا طلب خارجي (خصوصية وسرعة) */
+  --font-sans: "Segoe UI", "Noto Sans Arabic", "Geeza Pro", "Dubai", Tahoma, Arial, sans-serif;
+  --font-math: "Times New Roman", "Cambria Math", serif;
+  --font-mono: Consolas, "Cascadia Mono", monospace;
+
+  --text-xs: 0.8125rem;
+  --text-sm: 0.9375rem;
+  --text-md: 1.0625rem;
+  --text-lg: 1.1875rem;
+  --text-xl: 1.375rem;
+  --text-2xl: clamp(1.625rem, 1.2rem + 1.8vw, 2.25rem);
+  --weight-regular: 400;
+  --weight-medium: 600;
+  --weight-bold: 700;
+  --leading-tight: 1.35;
+  --leading-body: 1.8;
+
+  /* المسافات على شبكة 4px */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-pill: 999px;
+
+  --shadow-sm: 0 1px 2px rgb(27 30 35 / 6%);
+  --shadow-md: 0 1px 2px rgb(27 30 35 / 5%), 0 6px 20px rgb(27 30 35 / 6%);
+
+  --border: 1px solid var(--color-line);
+  --focus-ring: 0 0 0 3px color-mix(in srgb, var(--color-focus) 45%, transparent);
+
+  --duration: 160ms;
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+
+  --container: 1000px;
+  --container-narrow: 440px;
+  --topbar-height: 60px;
+  --grid-size: 24px;
+
+  color-scheme: light;
+}
+
+/* الوضع الداكن على الشاشة فقط؛ الطباعة دائمًا بالأبيض والأسود من print.css */
+@media screen and (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --color-paper: #15171a;
+    --color-surface: #1d2024;
+    --color-surface-sunken: #181b1e;
+    --color-ink: #eceae6;
+    --color-ink-soft: #a8adb3;
+    --color-line: #31353a;
+    --color-line-strong: #454a50;
+    --color-grid: rgb(236 234 230 / 4%);
+
+    --color-brand: #e48aa8;
+    --color-brand-strong: #f0a9c0;
+    --color-brand-soft: #3a1d28;
+    --color-on-brand: #1b0d13;
+    --color-sand: #dcb468;
+    --color-sand-soft: #352b18;
+
+    --color-danger: #f09a92;
+    --color-danger-soft: #3b1f1d;
+    --color-success: #8fd1a6;
+    --color-success-soft: #1b3123;
+    --color-info: #94c2ea;
+    --color-info-soft: #1a2a38;
+
+    --color-level-k: #8fd1a6;
+    --color-level-k-soft: #1b3123;
+    --color-level-a: #94c2ea;
+    --color-level-a-soft: #1a2a38;
+    --color-level-r: #e48aa8;
+    --color-level-r-soft: #3a1d28;
+
+    --color-focus: #e0b45c;
+    --shadow-sm: none;
+    --shadow-md: 0 0 0 1px var(--color-line);
+    color-scheme: dark;
+  }
+}

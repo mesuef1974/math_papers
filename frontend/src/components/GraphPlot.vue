@@ -104,11 +104,11 @@ const title = computed(() => `تمثيل بياني للدالة ${props.graph.l
 svg {
   max-inline-size: 100%;
   block-size: auto;
-  color: var(--ink);
-  font-family: "Times New Roman", serif;
+  color: var(--color-ink);
+  font-family: var(--font-math);
 }
 .grid line {
-  stroke: var(--line);
+  stroke: var(--color-line-strong);
   stroke-width: 1;
 }
 .axes line {
@@ -124,9 +124,9 @@ svg {
   font-size: 15px;
 }
 .ticks text {
-  fill: var(--muted);
+  fill: var(--color-ink-soft);
   font-size: 12px;
-  stroke: var(--surface);
+  stroke: var(--color-surface);
   stroke-width: 3.5px;
   stroke-linejoin: round;
   paint-order: stroke;
@@ -153,25 +153,10 @@ svg {
   fill: currentColor;
 }
 .dot.open {
-  fill: var(--surface);
+  fill: var(--color-surface);
 }
 .caption {
-  font-family: "Times New Roman", serif;
+  font-family: var(--font-math);
   font-size: 15px;
-}
-@media print {
-  svg {
-    color: #000;
-  }
-  .grid line {
-    stroke: #bbb;
-  }
-  .ticks text {
-    fill: #000;
-    stroke: #fff;
-  }
-  .dot.open {
-    fill: #fff;
-  }
 }
 </style>

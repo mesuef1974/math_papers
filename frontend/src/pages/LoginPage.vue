@@ -30,70 +30,35 @@ async function submit() {
 </script>
 
 <template>
-  <section class="login">
-    <h1>تسجيل الدخول</h1>
-    <p class="lead">المولّد للمعلمين المسجّلين. يُنشئ المشرف حسابك.</p>
-    <form class="panel" @submit.prevent="submit">
+  <section class="container-narrow login">
+    <header class="page-head">
+      <span class="eyebrow">للمعلمين</span>
+      <h1>تسجيل الدخول</h1>
+      <p class="lead">المولّد للمعلمين المسجّلين، ويُنشئ المشرف حسابك.</p>
+    </header>
+    <form class="panel stack" @submit.prevent="submit">
       <label class="field">
         اسم المستخدم
-        <input v-model="username" autocomplete="username" dir="ltr" required maxlength="150" />
+        <input v-model="username" class="input" autocomplete="username" dir="ltr" required maxlength="150" />
       </label>
       <label class="field">
         كلمة المرور
-        <input v-model="password" type="password" autocomplete="current-password" dir="ltr" required />
+        <input v-model="password" class="input" type="password" autocomplete="current-password" dir="ltr" required />
       </label>
-      <button type="submit" :disabled="busy || !username || !password">
+      <button type="submit" class="btn btn-primary btn-block" :disabled="busy || !username || !password">
         {{ busy ? "جارٍ الدخول" : "دخول" }}
       </button>
-      <p v-if="error" class="error" role="alert">{{ error }}</p>
+      <p v-if="error" class="alert alert-error" role="alert">{{ error }}</p>
     </form>
   </section>
 </template>
 
 <style scoped>
 .login {
-  max-inline-size: 420px;
-  margin-inline: auto;
+  padding-block-start: var(--space-6);
 }
-.panel {
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 20px;
+.stack {
   display: grid;
-  gap: 14px;
-}
-.field {
-  display: grid;
-  gap: 4px;
-  color: var(--muted);
-  font-size: 15px;
-}
-input {
-  font: inherit;
-  color: var(--ink);
-  background: var(--bg);
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  padding: 6px 10px;
-  inline-size: 100%;
-}
-button {
-  font: inherit;
-  font-weight: 600;
-  background: var(--accent);
-  color: var(--surface);
-  border: 1px solid var(--accent);
-  border-radius: 6px;
-  padding: 8px 18px;
-  cursor: pointer;
-}
-button:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-}
-.error {
-  color: var(--risk);
-  margin: 0;
+  gap: var(--space-4);
 }
 </style>

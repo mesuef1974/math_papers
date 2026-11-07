@@ -1,0 +1,6 @@
+/* نقطة الدخول الوحيدة للأنماط العامة. الترتيب مقصود: المتغيرات، ثم الأساس، ثم الهيكل، ثم المكونات، ثم الطباعة. */
+@import "./tokens.css";
+@import "./base.css";
+@import "./layout.css";
+@import "./components.css";
+@import "./print.css";

@@ -2,6 +2,7 @@
 import GraphPlot from "@/components/GraphPlot.vue";
 import MathText from "@/components/MathText.vue";
 import { LEVEL_NAMES, type Level, type Paper } from "@/stores/papers";
+import { isolateNumberRanges } from "@/utils/bidi";
 
 defineProps<{ paper: Paper; showKey: boolean }>();
 
@@ -17,7 +18,7 @@ function marksLabel(marks: number): string {
 <template>
   <article class="sheet">
     <header class="sheet-head">
-      <h2>{{ paper.title }}</h2>
+      <h2>{{ isolateNumberRanges(paper.title) }}</h2>
       <div class="fields">
         <span>الاسم: ........................................</span>
         <span>الصف: ..............</span>
@@ -57,7 +58,8 @@ function marksLabel(marks: number): string {
         <p class="stem">
           <strong><bdi>{{ question.number }}{{ part.label ? ` ${part.label}` : "" }}</bdi> :</strong>
           <MathText :text="part.answer" />
-          <span class="lesson-tag">الدرس {{ part.lesson }}، {{ LEVEL_NAMES[part.level as Level] }}</span>
+          <span class="lesson-tag">الدرس {{ part.lesson }}</span>
+          <span class="badge" :class="`badge-${part.level.toLowerCase()}`">{{ LEVEL_NAMES[part.level as Level] }}</span>
         </p>
         <ol class="steps">
           <li v-for="step in part.steps" :key="step"><MathText :text="step" /></li>
@@ -69,50 +71,59 @@ function marksLabel(marks: number): string {
 
 <style scoped>
 .sheet {
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 24px;
-  margin-block-start: 20px;
+  background: var(--color-surface);
+  border: var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  padding: var(--space-8);
+  margin-block-start: var(--space-6);
 }
 .sheet-head {
-  border-block-end: 2px solid var(--ink);
-  padding-block-end: 8px;
-  margin-block-end: 12px;
+  border-block-end: 2px solid var(--color-ink);
+  padding-block-end: var(--space-3);
+  margin-block-end: var(--space-2);
 }
 .sheet-head h2 {
-  font-size: 20px;
-  margin-block: 0 8px;
+  font-size: var(--text-xl);
+  margin-block: 0 var(--space-2);
 }
 .fields {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px 24px;
+  gap: var(--space-2) var(--space-6);
 }
 .question {
   break-inside: avoid;
-  margin-block-end: 14px;
+  padding-block: var(--space-3);
+  border-block-end: 1px solid var(--color-line);
+}
+.question:last-of-type {
+  border-block-end: 0;
 }
 .question-head {
   display: flex;
   justify-content: space-between;
-  gap: 12px;
+  align-items: baseline;
+  gap: var(--space-3);
+}
+.question-head strong {
+  color: var(--color-brand);
 }
 .marks {
-  color: var(--muted);
-  font-size: 15px;
+  color: var(--color-ink-soft);
+  font-size: var(--text-sm);
 }
 .part {
   overflow-y: hidden;
   overflow-x: auto;
 }
 .stem {
-  margin-block: 6px;
+  margin-block: var(--space-2);
 }
 .part-label {
   display: inline-block;
-  font-weight: 700;
-  margin-inline-end: 8px;
+  font-weight: var(--weight-bold);
+  margin-inline-end: var(--space-2);
 }
 .options {
   list-style: none;
@@ -120,38 +131,39 @@ function marksLabel(marks: number): string {
   padding: 0;
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 6px 16px;
+  gap: var(--space-2) var(--space-4);
 }
 .graph-option {
   display: flex;
   align-items: start;
-  gap: 4px;
+  gap: var(--space-1);
   break-inside: avoid;
 }
 .option-label {
-  margin-inline-end: 6px;
+  font-weight: var(--weight-medium);
+  margin-inline-end: var(--space-2);
 }
 .work-space {
-  border-block-end: 1px dashed var(--line);
+  border-block-end: 1px dashed var(--color-line-strong);
 }
 .steps {
-  margin-block: 4px;
-  padding-inline-start: 24px;
-  color: var(--muted);
+  margin-block: var(--space-1);
+  padding-inline-start: var(--space-6);
+  color: var(--color-ink-soft);
 }
 .lesson-tag {
-  color: var(--muted);
-  font-size: 14px;
-  margin-inline-start: 10px;
+  color: var(--color-ink-soft);
+  font-size: var(--text-xs);
+  margin-inline: var(--space-3) var(--space-2);
 }
 .sheet-foot {
-  color: var(--muted);
-  font-size: 14px;
-  margin-block-start: 12px;
+  color: var(--color-ink-soft);
+  font-size: var(--text-xs);
+  margin-block-start: var(--space-4);
 }
 @media (max-width: 560px) {
   .sheet {
-    padding: 16px;
+    padding: var(--space-4);
   }
   .options {
     grid-template-columns: minmax(0, 1fr);
@@ -160,19 +172,12 @@ function marksLabel(marks: number): string {
 @media print {
   .sheet {
     border: 0;
+    box-shadow: none;
     padding: 0;
     margin: 0;
-    background: #fff;
-    color: #000;
   }
   .answer-key {
     break-before: page;
-  }
-  .marks,
-  .steps,
-  .sheet-foot,
-  .lesson-tag {
-    color: #000;
   }
 }
 </style>

@@ -1,0 +1,36 @@
+/*
+  الطباعة: تُعاد المتغيرات نفسها إلى أبيض وأسود، فلا يحتاج أي مكون قواعد طباعة للألوان.
+  الوضع الداكن معرّف للشاشة فقط، فلا يتسرب إلى الورق.
+*/
+@page {
+  size: A4;
+  margin: 15mm;
+}
+@media print {
+  :root {
+    --color-paper: #ffffff;
+    --color-surface: #ffffff;
+    --color-surface-sunken: #ffffff;
+    --color-ink: #000000;
+    --color-ink-soft: #000000;
+    --color-line: #bbbbbb;
+    --color-line-strong: #888888;
+    --color-brand: #000000;
+    --shadow-sm: none;
+    --shadow-md: none;
+  }
+  body {
+    background: none;
+    font-size: 13pt;
+  }
+  .no-print {
+    display: none !important;
+  }
+  .page {
+    padding: 0;
+  }
+  .container {
+    max-inline-size: none;
+    padding: 0;
+  }
+}

@@ -31,6 +31,12 @@ PostgreSQL + Redis. النشر على Railway (`railway.toml`).
 - الدخول `POST /api/auth/login` يفحص CSRF صراحة ويبدّل الجلسة ويُسجَّل في AuditLog؛ axes يقفل بعد 5 محاولات.
 - `TRUSTED_PROXY_COUNT` (الإنتاج 1 لـ Railway) يحدد عنوان العميل الحقيقي للقفل؛ لا تجعله صفرًا خلف وكيل.
 
+## الهوية البصرية
+- «ورقة المربعات»: ورق دافئ وشبكة خافتة، وحبر داكن، وعنابي للفعل الأساسي، ورملي للتمييز. الشعار `BrandMark.vue` (ونسخته `public/favicon.svg`) ثابت في الوضعين.
+- الأنماط مركزية في `frontend/src/styles/` عبر `index.css`: `tokens.css` (المصدر الوحيد للألوان والخطوط والمسافات)، `base.css`، `layout.css`، `components.css` (`.btn`، `.field`، `.input`، `.panel`، `.alert`، `.badge-k/a/r`، `.segmented`)، `print.css` (يعيد المتغيرات إلى أبيض وأسود).
+- المكونات تستعمل الأصناف المشتركة والمتغيرات فقط؛ لا لون خام ولا متغير غير معرّف (يفرضه `styles/designTokens.test.ts`).
+- المدى الرقمي في نص عربي (السنوات) يُعرض عبر `isolateNumberRanges` من `utils/bidi.ts`.
+
 ## أوامر
 ```bash
 python manage.py runserver            # 8000
