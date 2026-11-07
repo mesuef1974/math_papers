@@ -31,6 +31,15 @@ class BlueprintOut(Schema):
     is_forecast: bool
 
 
+class GraphOut(Schema):
+    window: list[int]
+    label: str
+    curves: list[list[list[float]]]
+    dots: list[tuple[float, float, bool]]
+    asymptotes: list[float]
+    lines: list[list[list[float]]]
+
+
 class PartOut(Schema):
     label: str
     lesson: str
@@ -41,6 +50,7 @@ class PartOut(Schema):
     options: list[str]
     answer: str
     steps: list[str]
+    graph: GraphOut | None = None
 
 
 class QuestionOut(Schema):

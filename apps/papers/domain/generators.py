@@ -13,6 +13,8 @@ from typing import Any
 
 import sympy as sp
 
+from .graphs import Graph, Window
+
 x = sp.Symbol("x", real=True)
 y = sp.Symbol("y", real=True)
 NO_LIMIT = "غير موجودة"
@@ -30,6 +32,7 @@ class Problem:
     level: str  # K معرفة، A تطبيق، R استدلال
     check: dict[str, Any] = field(default_factory=dict, compare=False)
     mcq_ok: bool = True
+    graph: dict[str, Any] | None = field(default=None, compare=False)  # وصف رسم من graphs.Graph
 
 
 Generator = Callable[[random.Random], Problem]
@@ -134,6 +137,79 @@ def limit_from_piecewise(rng: random.Random) -> Problem:
         (f"${lim(f'{c}^-', 'f(x)')}={value}$", f"${lim(f'{c}^+', 'f(x)')}={value + jump}$", verdict),
         "A",
         {"type": "one_sided", "left": left, "right": right, "at": c, "value": value if jump == 0 else None},
+    )
+
+
+@variant("1.1")
+def limit_from_graph(rng: random.Random) -> Problem:
+    """قراءة نهاية من رسم دالة مقسمة: نقطتان مفتوحتان عند c، وقيمة f(c) نقطة مغلقة أو غير معرفة."""
+    c = rng.randint(-2, 2)
+    left_value = rng.randint(-3, 3)
+    right_value = rng.choice(
+        [left_value, left_value, rng.choice([v for v in range(-3, 4) if v != left_value])]
+    )
+    defined = rng.random() < 0.7
+    f_c = (
+        rng.choice([v for v in range(-4, 5) if v not in (left_value, right_value) and (c, v) != (0, 0)])
+        if defined
+        else None
+    )
+    left = (
+        left_value + rng.choice([1, -1]) * sp.Rational(rng.choice([1, 2]), 2) * (x - c) ** 2
+        if rng.random() < 0.5
+        else left_value + rng.choice([-1, 1, 2]) * (x - c)
+    )
+    right = right_value + rng.choice([-1, 1]) * sp.Rational(1, rng.choice([1, 2])) * (x - c)
+
+    graph = Graph(Window(-5, 5, -5, 5)).add_curve(left, -5, c).add_curve(right, c, 5)
+    graph.add_dot(c, left_value, closed=False)
+    if right_value != left_value:
+        graph.add_dot(c, right_value, closed=False)
+    if f_c is not None:
+        graph.add_dot(c, f_c, closed=True)
+
+    ask = rng.choice(["both", "both", "left", "right", "value"])
+    target = {
+        "both": (lim(c, "f(x)"), m(left_value) if left_value == right_value else NO_LIMIT),
+        "left": (lim(f"{c}^-", "f(x)"), m(left_value)),
+        "right": (lim(f"{c}^+", "f(x)"), m(right_value)),
+        "value": (f"f({c})", m(f_c) if f_c is not None else "غير معرفة"),
+    }[ask]
+    expression, answer = target
+    pool = [
+        m(left_value),
+        m(right_value),
+        m(f_c) if f_c is not None else "غير معرفة",
+        NO_LIMIT,
+        m(left_value + 1),
+        m(right_value - 1),
+        m(c),
+    ]
+    steps = (
+        f"عند الاقتراب من ${c}$ من اليسار يقترب المنحنى من $y={left_value}$.",
+        f"وعند الاقتراب من اليمين يقترب من $y={right_value}$.",
+        f"النقطة المغلقة تعطي $f({c})={f_c}$."
+        if f_c is not None
+        else f"لا توجد نقطة مغلقة عند $x={c}$، فالدالة غير معرفة عندها.",
+    )
+    return Problem(
+        "1.1",
+        f"يبيّن الشكل التمثيل البياني للدالة $f$. أوجد ${expression}$.",
+        answer,
+        wrongs(answer, *pool),
+        steps,
+        "K",
+        {
+            "type": "graph_limit",
+            "graph": graph.as_dict(),
+            "at": c,
+            "ask": ask,
+            "answer": answer,
+            "left": left_value,
+            "right": right_value,
+            "f_c": f_c,
+        },
+        graph=graph.as_dict(),
     )
 
 

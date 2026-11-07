@@ -18,6 +18,15 @@ export interface Blueprint {
   is_forecast: boolean;
 }
 
+export interface Graph {
+  window: [number, number, number, number];
+  label: string;
+  curves: number[][][];
+  dots: [number, number, boolean][];
+  asymptotes: number[];
+  lines: number[][][];
+}
+
 export interface Part {
   label: string;
   lesson: string;
@@ -28,6 +37,7 @@ export interface Part {
   options: string[];
   answer: string;
   steps: string[];
+  graph: Graph | null;
 }
 
 export interface Question {

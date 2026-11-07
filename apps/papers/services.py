@@ -52,6 +52,7 @@ def render_part(problem: Problem, slot: PartSlot, rng: random.Random) -> dict:
         "options": options,
         "answer": problem.answer,
         "steps": list(problem.steps),
+        "graph": problem.graph,
     }
 
 

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import GraphPlot from "@/components/GraphPlot.vue";
 import MathText from "@/components/MathText.vue";
 import type { Paper } from "@/stores/papers";
 
@@ -35,6 +36,7 @@ function marksLabel(marks: number): string {
           <MathText :text="part.stem" />
           <span v-if="part.label" class="marks">({{ part.marks }})</span>
         </p>
+        <GraphPlot v-if="part.graph" :graph="part.graph" />
         <ol v-if="part.options.length" class="options">
           <li v-for="(option, index) in part.options" :key="option">
             <span class="option-label">{{ OPTION_LABELS[index] }})</span>

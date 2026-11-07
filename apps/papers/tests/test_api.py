@@ -90,3 +90,14 @@ def test_lessons_flag_missing_generator(client):
     rows = {row["code"]: row for row in client.get("/api/lessons").json()}
     assert rows["3.4"]["has_generator"] is False
     assert rows["3.3"]["has_generator"] is True
+
+
+@pytest.mark.django_db
+def test_graph_is_served_with_the_part(client):
+    for seed in range(30):
+        data = client.get("/api/papers/worksheet", {"lesson": "1.1", "count": 6, "seed": seed}).json()
+        graphs = [p["graph"] for q in data["questions"] for p in q["parts"] if p["graph"]]
+        if graphs:
+            assert set(graphs[0]) == {"window", "label", "curves", "dots", "asymptotes", "lines"}
+            return
+    pytest.fail("لم يظهر رسم في 30 ورقة لدرس 1.1")

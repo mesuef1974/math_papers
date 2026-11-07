@@ -6,7 +6,8 @@ import mpmath
 import pytest
 import sympy as sp
 
-from apps.papers.domain.generators import REGISTRY, available_lessons, x, y
+from apps.papers.domain.generators import NO_LIMIT, REGISTRY, available_lessons, x, y
+from apps.papers.domain.graphs import value_at
 
 SEEDS = range(120)
 ALL = [(lesson, fn) for lesson, fns in REGISTRY.items() for fn in fns]
@@ -120,7 +121,25 @@ def assert_average(c):
     assert (f(c["b"]) - f(c["a"])) / (c["b"] - c["a"]) == pytest.approx(float(c["value"]))
 
 
+def assert_graph_limit(c):
+    """الجواب يُقرأ من الرسم المرسوم فعلًا: المنحنيات قرب c والنقاط المغلقة."""
+    graph, at, eps = c["graph"], c["at"], 1e-3
+    left = value_at(graph, at - eps)
+    right = value_at(graph, at + eps)
+    assert len(left) == 1 and len(right) == 1
+    assert left[0] == pytest.approx(c["left"], abs=0.01) and right[0] == pytest.approx(c["right"], abs=0.01)
+    closed = [py for px, py, is_closed in graph["dots"] if is_closed and px == at]
+    expected = {
+        "both": f"${c['left']}$" if c["left"] == c["right"] else NO_LIMIT,
+        "left": f"${c['left']}$",
+        "right": f"${c['right']}$",
+        "value": f"${int(closed[0])}$" if closed else "غير معرفة",
+    }[c["ask"]]
+    assert c["answer"] == expected
+
+
 CHECKS = {
+    "graph_limit": assert_graph_limit,
     "limit": assert_limit,
     "derivative": assert_derivative,
     "function": assert_function,
@@ -157,6 +176,19 @@ def test_problem_shape(lesson, generator):
         if problem.mcq_ok:
             assert len(set(problem.wrong)) == 3, (seed, problem.answer, problem.wrong)
             assert problem.answer not in problem.wrong
+        if problem.graph is not None:
+            assert_graph_in_window(problem.graph)
+
+
+def assert_graph_in_window(graph):
+    x_min, x_max, y_min, y_max = graph["window"]
+    margin = (y_max - y_min) * 0.021
+    assert graph["curves"], "رسم بلا منحنى"
+    for curve in graph["curves"]:
+        for px, py in curve:
+            assert x_min <= px <= x_max and y_min - margin <= py <= y_max + margin
+    for px, py, _ in graph["dots"]:
+        assert x_min <= px <= x_max and y_min <= py <= y_max
 
 
 def test_every_tested_lesson_has_a_generator():
