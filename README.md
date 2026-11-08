@@ -20,6 +20,9 @@ python manage.py migrate && python manage.py createsuperuser
 1. مشروع جديد → أضف PostgreSQL وRedis.
 2. خدمة من هذا المستودع: Railway يقرأ `railway.toml` (Dockerfile، preDeploy للهجرات، start للثابت + gunicorn، healthcheck `/health/`).
 3. المتغيرات: `SECRET_KEY`، `ALLOWED_HOSTS`، `CSRF_TRUSTED_ORIGINS`، و`DATABASE_URL=${{Postgres.DATABASE_URL}}`، `REDIS_URL=${{Redis.REDIS_URL}}`.
+4. PDF الخادمي: Chromium يأتي من بطاقة Dockerfile (فرع `card/pdf-chromium`)؛ بدونه يرد المسار 503 والطباعة من المتصفح تبقى.
+   يحتاج `REDIS_URL` (حالة المهمة مشتركة بين عمّال gunicorn) و`localhost` في `ALLOWED_HOSTS` (كما يحتاجه فحص الصحة)؛
+   `PDF_RENDER_BASE_URL` اختياري إن لم يكن الخادم على `http://localhost:$PORT`.
 ## الأتمتة
 
 انظر `automation/README.md`. الخلاصة: بطاقة في الدفتر → المشغّل ينشئ worktree ويشغّل النموذج بصلاحيات مخفَّضة → فحص محلي →

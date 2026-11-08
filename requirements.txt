@@ -8,3 +8,4 @@ dj-database-url>=2.3
 gunicorn>=23.0
 redis>=5.2
 sympy>=1.13
+playwright>=1.49  # PDF خادمي: Chromium يطبع صفحة الطباعة؛ المتصفح نفسه يُثبَّت في صورة النشر

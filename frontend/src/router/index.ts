@@ -14,6 +14,13 @@ export const router = createRouter({
       meta: { public: true, title: "عن المنصة" },
     },
     {
+      // للمتصفح الخادمي فقط: الرمز الموقّع في المسار هو الإذن، فلا جلسة ولا تنقل.
+      path: "/print/:token",
+      name: "print",
+      component: () => import("@/pages/PrintPage.vue"),
+      meta: { public: true, title: "طباعة" },
+    },
+    {
       path: "/login",
       name: "login",
       component: () => import("@/pages/LoginPage.vue"),

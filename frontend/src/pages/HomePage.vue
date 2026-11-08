@@ -6,6 +6,7 @@ import PaperSet from "@/components/PaperSet.vue";
 import PrintSettings from "@/components/PrintSettings.vue";
 import { useAuthStore } from "@/stores/auth";
 import { LEVEL_NAMES, PURPOSE_LEVEL, PURPOSE_NAMES, usePapersStore, type Level, type Purpose } from "@/stores/papers";
+import { usePdfStore } from "@/stores/pdf";
 import { usePrintStore } from "@/stores/print";
 import { useSavedStore } from "@/stores/saved";
 
@@ -13,6 +14,7 @@ const store = usePapersStore();
 const auth = useAuthStore();
 const print = usePrintStore();
 const saved = useSavedStore();
+const pdf = usePdfStore();
 const route = useRoute();
 const router = useRouter();
 const saveTitle = ref("");
@@ -117,6 +119,19 @@ async function generate() {
 function printPaper() {
   window.print();
 }
+
+// PDF من الخادم: النماذج المعروضة كما هي مع ترويسة المعلم وحقول هذه الطباعة وخياراتها.
+function downloadPdf() {
+  if (!store.paper) return;
+  void pdf.download({
+    papers: forms.value,
+    profile: print.profile,
+    date: print.date,
+    section: print.section,
+    show_key: print.showKey,
+    bubble: print.bubble && hasMcq.value,
+  });
+}
 </script>
 
 <template>
@@ -220,6 +235,9 @@ function printPaper() {
         <button v-if="store.paper || store.bundle" type="button" class="btn btn-secondary" @click="printPaper">
           طباعة أو حفظ PDF
         </button>
+        <button v-if="store.paper" type="button" class="btn btn-secondary" :disabled="pdf.busy" @click="downloadPdf">
+          {{ pdf.busy ? pdf.statusText : "تنزيل PDF من الخادم" }}
+        </button>
         <label v-if="store.paper || store.bundle" class="check">
           <input v-model="print.showKey" type="checkbox" /> {{ store.bundle ? "المفاتيح في آخر الحزمة" : "مفتاح الحل في صفحة أخيرة" }}
         </label>
@@ -232,6 +250,8 @@ function printPaper() {
       </p>
       <p v-if="seedInvalid" id="seed-error" class="alert alert-error">رقم النموذج يجب أن يكون أرقامًا فقط.</p>
       <p v-if="store.error" class="alert alert-error" role="alert" aria-live="assertive">{{ store.error }}</p>
+      <p v-if="pdf.error" class="alert alert-error" role="alert">{{ pdf.error }}</p>
+      <p v-else-if="pdf.status === 'done'" class="hint" role="status">{{ pdf.statusText }}.</p>
     </form>
     <form v-if="store.paper && store.recipe" class="panel save" :aria-busy="saved.saving" @submit.prevent="savePaper">
       <label class="field grow">

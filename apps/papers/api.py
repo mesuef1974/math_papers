@@ -1,17 +1,20 @@
 """مسارات التوليد. قراءة فقط: GET يعطي الورقة نفسها لكل بذرة، وكلها للمعلمين المسجّلين، بمعدل محدود لكل مستخدم."""
 
+import io
 from datetime import datetime
 from typing import Annotated, Literal
 
-from django.http import HttpRequest
+from django.http import FileResponse, HttpRequest
 from ninja import Field, Query, Router, Schema, Status
 from ninja.errors import HttpError
 from ninja.throttling import UserRateThrottle
 
+from apps.core.middleware import request_id_of
+from apps.core.services import record_audit
 from apps.curriculum import selectors
 
+from . import pdf, services
 from . import selectors as paper_selectors
-from . import services
 from .access import TeacherAuth
 from .domain.generators import ExhaustedError, available_lessons, lesson_levels
 from .models import SavedPaper
@@ -400,3 +403,69 @@ def put_print_profile(request: HttpRequest, payload: PrintProfileIn):
         key: value.strip() if isinstance(value, str) else value for key, value in payload.dict().items()
     }
     return services.save_print_profile(request.user, cleaned)
+
+
+# ---------- PDF خادمي ----------
+
+
+class PdfIn(Schema):
+    """ما يُطبع كما هو على الشاشة: النماذج (أ، وب إن وُجد) وترويسة المعلم وحقول هذه الطباعة وخياراتها."""
+
+    papers: list[PaperOut] = Field(min_length=1, max_length=2)
+    profile: PrintProfileIn
+    date: str = Field("", max_length=20)
+    section: str = Field("", max_length=40)
+    show_key: bool = False
+    bubble: bool = False
+
+
+class PdfJobOut(Schema):
+    id: str
+    status: Literal["queued", "running", "done", "error"]
+    error: str = ""
+    filename: str = ""
+
+
+JobId = Annotated[str, Field(pattern=r"^[0-9a-f]{32}$")]
+
+
+@router.post("/pdf", response={202: PdfJobOut})
+def pdf_create(request: HttpRequest, payload: PdfIn):
+    try:
+        meta = pdf.create_job(request.user.pk, payload.dict(), payload.papers[0].title)
+    except pdf.UnavailableError as error:
+        raise HttpError(503, str(error)) from error
+    except pdf.BusyError as error:
+        raise HttpError(429, str(error)) from error
+    record_audit(
+        action="pdf.create", actor=request.user, target=meta["id"], request_id=request_id_of(request)
+    )
+    return Status(202, meta)
+
+
+@router.get("/pdf/print/{token}", response=PdfIn, auth=None)
+def pdf_print_payload(request: HttpRequest, token: str):
+    """حمولة صفحة الطباعة للمتصفح الخادمي: الرمز الموقّع قصير العمر هو الإذن، بلا جلسة."""
+    data = pdf.payload_for_token(token)
+    if data is None:
+        raise HttpError(404, "صفحة الطباعة غير متاحة")
+    return data
+
+
+@router.get("/pdf/{job_id}", response=PdfJobOut)
+def pdf_status(request: HttpRequest, job_id: JobId):
+    meta = pdf.job_status(request.user.pk, job_id)
+    if meta is None:
+        raise HttpError(404, "المهمة غير موجودة أو انتهت مهلتها")
+    return meta
+
+
+@router.get("/pdf/{job_id}/file")
+def pdf_file(request: HttpRequest, job_id: JobId):
+    found = pdf.job_file(request.user.pk, job_id)
+    if found is None:
+        raise HttpError(404, "الملف غير جاهز أو انتهت مهلته")
+    data, filename = found
+    return FileResponse(
+        io.BytesIO(data), as_attachment=True, filename=filename, content_type="application/pdf"
+    )
