@@ -1,40 +1,16 @@
 <script setup lang="ts">
-// شعار المنصة: مربع عنابي فيه محوران ومنحنى بنقطة قصوى، أي «ورقة المربعات» في رمز واحد.
-// النسخة نفسها في public/favicon.svg؛ أي تعديل هنا يُنقل إليها.
+// شعار مولّد أوراق الرياضيات: كلمة «أوراق» بالكوفي الحديث (Reem Kufi 700) على سطر سميك، وإلى يمينها رزمة ثلاث أوراق متراجعة، الورقة الأمامية مطوية الزاوية.
+// مُولَّد بأداة سِمة (المفهوم w1)؛ النسخة نفسها في public/favicon.svg. أي تعديل يُنقل إليها.
 withDefaults(defineProps<{ size?: number }>(), { size: 36 });
 </script>
 
 <template>
-  <svg class="brand-mark" :width="size" :height="size" viewBox="0 0 40 40" aria-hidden="true" focusable="false">
-    <rect width="40" height="40" rx="10" class="tile" />
-    <path d="M9 30.5H32M12 33V8" class="axes" />
-    <path d="M10 27C15 27 16 12 21.5 12S28 22 32 24" class="curve" />
-    <circle cx="21.5" cy="12" r="2.4" class="dot" />
-  </svg>
+  <svg class="brand-mark" :width="size" :height="size" aria-hidden="true" focusable="false" viewBox="0 0 256 256"><path fill="var(--color-mark-ink, #7A1C3E)" d="M144.0 96.0V240.0H32.0V136.0L72.0 96.0ZM72.0 56.0H184.0V200.0H158.0V82.0H72.0Z" /><path fill="var(--color-mark-accent, #D9A441)" d="M112.0 16.0H224.0V160.0H198.0V42.0H112.0Z" /></svg>
 </template>
 
 <style scoped>
 .brand-mark {
   flex: none;
   display: block;
-}
-.tile {
-  fill: var(--color-mark-tile);
-}
-.axes {
-  fill: none;
-  stroke: var(--color-mark-ink);
-  stroke-opacity: 0.55;
-  stroke-width: 1.6;
-  stroke-linecap: round;
-}
-.curve {
-  fill: none;
-  stroke: var(--color-mark-ink);
-  stroke-width: 2.6;
-  stroke-linecap: round;
-}
-.dot {
-  fill: var(--color-mark-dot);
 }
 </style>

@@ -1,0 +1,12 @@
+/* سِمة: رموز هوية مولّد أوراق الرياضيات (math_papers). المصدر الوحيد لألوان العلامة؛ يُستورد في tokens.css للمشروع. */
+:root {
+  --brand-paper: #F7F4EE;
+  --brand-ink: #1B1E23;
+  --brand-primary: #7A1C3E;
+  --brand-accent: #D9A441;
+  /* الشعار ثابت في الوضعين: هو العلامة، لا يتبع السمة */
+  --color-mark-ink: #7A1C3E;
+  --color-mark-accent: #D9A441;
+  --color-mark-paper: #F7F4EE;
+  --color-mark-on-dark: #FFFFFF;
+}
