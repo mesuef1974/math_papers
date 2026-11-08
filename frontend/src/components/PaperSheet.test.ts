@@ -98,6 +98,22 @@ describe("PaperSheet", () => {
     expect(wrapper.findAll(".section-note")).toHaveLength(0);
   });
 
+  it("زر الاستبدال يظهر عند الطلب فقط، ويبعث رقم السؤال وتسمية الجزء، ويعطّل أثناء الاستبدال", async () => {
+    const plain = mount(PaperSheet, { props: { paper, header, showKey: false } });
+    expect(plain.findAll(".part-tools")).toHaveLength(0);
+    const wrapper = mount(PaperSheet, { props: { paper, header, showKey: false, replaceable: true, modified: true } });
+    const buttons = wrapper.findAll(".part-tools button");
+    expect(buttons).toHaveLength(3);
+    expect(buttons[0].classes()).toContain("btn-small");
+    expect(wrapper.find(".part-tools").classes()).toContain("no-print");
+    await buttons[2].trigger("click");
+    expect(wrapper.emitted("replace")).toEqual([[3, ""]]);
+    expect(wrapper.text()).toContain("رقم النموذج 7 (معدّل)");
+    await wrapper.setProps({ replacing: "q2" });
+    expect(wrapper.findAll(".part-tools button")[1].text()).toBe("جارٍ الاستبدال");
+    expect(wrapper.findAll(".part-tools button")[0].attributes("disabled")).toBeDefined();
+  });
+
   it("يجمع الدرجات بالعربية الصحيحة", () => {
     expect(marksLabel(1)).toBe("درجة واحدة");
     expect(marksLabel(2)).toBe("درجتان");

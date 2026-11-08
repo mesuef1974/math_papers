@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 import random
 import secrets
@@ -26,8 +28,8 @@ from .domain.generators import (
     generator_version,
     lesson_levels,
 )
-from .models import PrintProfile
-from .selectors import PROFILE_FIELDS, print_profile
+from .models import PrintProfile, SavedPaper
+from .selectors import PROFILE_FIELDS, print_profile, saved_paper
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +44,14 @@ class UnknownBlueprintError(LookupError):
 
 class UnknownLessonError(LookupError):
     pass
+
+
+class SavedLimitError(ValueError):
+    """بلغ المعلم الحد الأقصى من الأوراق المحفوظة."""
+
+
+class SavedConflictError(ValueError):
+    """التعديل يجعل الورقة نسخة من ورقة محفوظة أخرى."""
 
 
 @dataclass(frozen=True)
@@ -195,6 +205,114 @@ def save_print_profile(user: AbstractBaseUser, data: dict[str, Any]) -> dict[str
             action="print_profile.save", actor=user, target=user.get_username(), payload={"fields": changed}
         )
     return print_profile(user)
+
+
+def replacement_part(lesson_code: str, slot: PartSlot, exclude: set[str], seed: int | None = None) -> dict:
+    """جزء جديد للخانة نفسها (النوع والمستوى والرسم) يخالف بصمات ما في الورقة. البذرة تعيد الجزء نفسه."""
+    lesson = selectors.lessons().filter(code=lesson_code).first()
+    if lesson is None or lesson_code not in available_lessons():
+        raise UnknownLessonError(lesson_code)
+    seed = new_seed() if seed is None else seed
+    rng = random.Random(seed)  # noqa: S311 — بذرة قابلة للإعادة، لا استعمال أمني
+    try:
+        problem = generate(lesson_code, rng, slot.kind, exclude, slot.level or None, slot.needs_graph)
+    except LevelUnavailableError:
+        logger.warning("خانة الاستبدال %s/%s بلا صيغة مطابقة؛ تُملأ بلا قيد", lesson_code, slot.level)
+        problem = generate(lesson_code, rng, slot.kind, exclude)
+    full = PartSlot(
+        slot.label, lesson.code, lesson.title, slot.kind, slot.marks, slot.level, slot.needs_graph
+    )
+    return {**render_part(problem, full, rng), "seed": seed}
+
+
+# الأوراق المحفوظة: لقطة كاملة (تُطبع كما كانت) ووصفة (كيف وُلّدت وما استُبدل)، والوصفة هي هوية الورقة.
+MAX_SAVED_PER_USER = 200
+
+
+def recipe_hash(recipe: dict) -> str:
+    canonical = json.dumps(recipe, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+    return hashlib.sha1(canonical.encode("utf-8"), usedforsecurity=False).hexdigest()
+
+
+def _summary(snapshot: dict, recipe: dict) -> dict:
+    return {
+        "kind": snapshot["kind"],
+        "blueprint": snapshot.get("blueprint", ""),
+        "lesson_code": snapshot.get("lesson_code", ""),
+        "seed": snapshot["seed"],
+        "total_marks": snapshot.get("total_marks", 0),
+        "question_count": len(snapshot["questions"]),
+        "replacement_count": len(recipe.get("replacements", [])),
+        "generator_version": snapshot.get("generator_version", ""),
+    }
+
+
+@transaction.atomic
+def save_paper(user: AbstractBaseUser, title: str, snapshot: dict, recipe: dict) -> tuple[SavedPaper, bool]:
+    """يحفظ ورقة. idempotent: الوصفة نفسها لا تُحفظ مرتين (تُعاد الموجودة وcreated=False)."""
+    digest = recipe_hash(recipe)
+    existing = SavedPaper.objects.filter(owner=user, recipe_hash=digest).first()
+    if existing is not None:
+        return existing, False
+    if SavedPaper.objects.filter(owner=user).count() >= MAX_SAVED_PER_USER:
+        raise SavedLimitError(str(MAX_SAVED_PER_USER))
+    row = SavedPaper.objects.create(
+        owner=user,
+        title=(title or snapshot["title"])[:200],
+        recipe_hash=digest,
+        snapshot=snapshot,
+        recipe=recipe,
+        **_summary(snapshot, recipe),
+    )
+    record_audit(
+        action="saved_paper.create",
+        actor=user,
+        target=str(row.pk),
+        payload={"kind": row.kind, "seed": row.seed},
+    )
+    return row, True
+
+
+@transaction.atomic
+def update_saved_paper(
+    user: AbstractBaseUser,
+    pk: int,
+    *,
+    title: str | None = None,
+    snapshot: dict | None = None,
+    recipe: dict | None = None,
+) -> SavedPaper | None:
+    """يعيد التسمية أو يحدّث اللقطة بعد استبدال. idempotent: ما لم يتغيّر لا يُكتب ولا يُسجَّل."""
+    row = saved_paper(user, pk)
+    if row is None:
+        return None
+    changed: list[str] = []
+    if title is not None and title.strip() and title.strip()[:200] != row.title:
+        row.title = title.strip()[:200]
+        changed.append("title")
+    if snapshot is not None and recipe is not None and (snapshot != row.snapshot or recipe != row.recipe):
+        digest = recipe_hash(recipe)
+        if SavedPaper.objects.filter(owner=user, recipe_hash=digest).exclude(pk=row.pk).exists():
+            raise SavedConflictError(digest)
+        row.snapshot, row.recipe, row.recipe_hash = snapshot, recipe, digest
+        for name, value in _summary(snapshot, recipe).items():
+            setattr(row, name, value)
+        changed.append("snapshot")
+    if changed:
+        row.save()
+        record_audit(action="saved_paper.update", actor=user, target=str(row.pk), payload={"fields": changed})
+    return row
+
+
+@transaction.atomic
+def delete_saved_paper(user: AbstractBaseUser, pk: int) -> bool:
+    """idempotent: حذف ما ليس موجودًا (أو ليس للمعلم) لا يفعل شيئًا ولا يكشف شيئًا."""
+    row = saved_paper(user, pk)
+    if row is None:
+        return False
+    row.delete()
+    record_audit(action="saved_paper.delete", actor=user, target=str(pk))
+    return True
 
 
 # حزمة كل أوراق العمل: عدد كل درس من وزنه في جدول المواصفات (4 + 2×الدرجات، بين 6 و12)،

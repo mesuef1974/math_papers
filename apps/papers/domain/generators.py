@@ -154,7 +154,13 @@ def generate(
         fn = rng.choice(pool)
         problem = replace(fn(rng), variant=fn.__name__)
         fits = problem.mcq_ok if kind == "mcq" else problem.essay_ok
-        if fits and problem.key not in avoid and (level is None or problem.level == level):
+        # avoid يقبل مفاتيح المسائل (داخل التوليد) وبصماتها (من ورقة محفوظة عند الاستبدال)
+        if (
+            fits
+            and problem.key not in avoid
+            and problem.fingerprint not in avoid
+            and (level is None or problem.level == level)
+        ):
             return problem
     raise ExhaustedError(f"تعذر توليد مسألة جديدة للدرس {lesson}")
 

@@ -1,15 +1,22 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import PaperBundle from "@/components/PaperBundle.vue";
 import PaperSheet from "@/components/PaperSheet.vue";
 import PrintSettings from "@/components/PrintSettings.vue";
 import { useAuthStore } from "@/stores/auth";
 import { LEVEL_NAMES, usePapersStore, type Level } from "@/stores/papers";
 import { usePrintStore } from "@/stores/print";
+import { useSavedStore } from "@/stores/saved";
 
 const store = usePapersStore();
 const auth = useAuthStore();
 const print = usePrintStore();
+const saved = useSavedStore();
+const route = useRoute();
+const router = useRouter();
+const saveTitle = ref("");
+const savedNow = ref(false);
 const mode = ref<"exam" | "worksheet" | "bundle">("exam");
 const blueprint = ref("");
 const lesson = ref("");
@@ -27,9 +34,43 @@ const seedInvalid = computed(() => seedText.value.trim() !== "" && seed.value ==
 const ready = computed(() => !seedInvalid.value && (mode.value === "worksheet" ? lesson.value : blueprint.value));
 const levelEntries = Object.entries(LEVEL_NAMES) as [Level, string][];
 
-onMounted(() => {
-  if (auth.canGenerate) void store.loadOptions();
+onMounted(async () => {
+  if (!auth.canGenerate) return;
+  void store.loadOptions();
+  // رابط مباشر إلى ورقة محفوظة: /?saved=ID
+  const id = Number(route.query.saved);
+  if (Number.isInteger(id) && id > 0 && store.savedId !== id) {
+    const row = await saved.open(id);
+    if (row) store.openSaved(row);
+    await router.replace({ query: {} });
+  }
 });
+// اسم الحفظ يتبع الورقة الحالية حتى يكتب المعلم اسمًا
+watch(
+  () => store.paper,
+  (paper) => {
+    saveTitle.value = store.savedTitle || paper?.title || "";
+    savedNow.value = false;
+  },
+  { immediate: true },
+);
+
+async function replace(question: number, label: string) {
+  await store.replacePart(question, label);
+  savedNow.value = false;
+}
+
+async function savePaper() {
+  if (!store.paper || !store.recipe) return;
+  const row = store.savedId
+    ? await saved.update(store.savedId, { title: saveTitle.value, paper: store.paper, recipe: store.recipe })
+    : await saved.save(saveTitle.value, store.paper, store.recipe);
+  if (row) {
+    store.savedId = row.id;
+    store.savedTitle = row.title;
+    savedNow.value = true;
+  }
+}
 watch(
   () => [store.blueprints, store.worksheetLessons] as const,
   ([blueprints, lessons]) => {
@@ -138,6 +179,18 @@ function printPaper() {
       <p v-if="seedInvalid" id="seed-error" class="alert alert-error">رقم النموذج يجب أن يكون أرقامًا فقط.</p>
       <p v-if="store.error" class="alert alert-error" role="alert" aria-live="assertive">{{ store.error }}</p>
     </form>
+    <form v-if="store.paper && store.recipe" class="panel save" :aria-busy="saved.saving" @submit.prevent="savePaper">
+      <label class="field grow">
+        اسم الورقة في أوراقي
+        <input v-model="saveTitle" class="input" maxlength="200" required />
+      </label>
+      <button type="submit" class="btn btn-secondary" :disabled="saved.saving || !saveTitle.trim()">
+        {{ saved.saving ? "جارٍ الحفظ" : store.savedId ? "تحديث الورقة المحفوظة" : "حفظ في أوراقي" }}
+      </button>
+      <span v-if="savedNow" class="hint" role="status">حُفظت. <RouterLink to="/saved">أوراقي</RouterLink></span>
+      <span v-else-if="store.modified" class="hint">استُبدلت مسائل، فرقم النموذج وحده لا يعيد هذه الورقة؛ احفظها.</span>
+      <p v-if="saved.error" class="alert alert-error wide" role="alert">{{ saved.error }}</p>
+    </form>
     <PrintSettings v-if="auth.canGenerate" />
 
     <div v-if="store.paper?.is_forecast" class="alert alert-info notice">
@@ -164,7 +217,16 @@ function printPaper() {
     aria-live="polite"
     :aria-label="store.paper?.title ?? 'حزمة أوراق العمل'"
   >
-    <PaperSheet v-if="store.paper" :paper="store.paper" :header="print.header(store.paper)" :show-key="print.showKey" />
+    <PaperSheet
+      v-if="store.paper"
+      :paper="store.paper"
+      :header="print.header(store.paper)"
+      :show-key="print.showKey"
+      :modified="store.modified"
+      :replacing="store.replacing"
+      replaceable
+      @replace="replace"
+    />
     <PaperBundle
       v-else-if="store.bundle"
       :papers="store.bundle"
@@ -216,6 +278,23 @@ function printPaper() {
 }
 .sheet-focus:focus-visible {
   box-shadow: none;
+}
+.save {
+  margin-block-start: var(--space-4);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3) var(--space-4);
+}
+.save .grow {
+  flex: 1 1 240px;
+}
+.save .wide {
+  flex-basis: 100%;
+}
+.hint {
+  color: var(--color-ink-soft);
+  font-size: var(--text-sm);
 }
 .print-hint,
 .mode-hint {

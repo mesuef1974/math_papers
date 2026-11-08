@@ -80,6 +80,24 @@ export interface Paper {
   level: Level | "";
 }
 
+export interface Replacement {
+  question: number;
+  label: string;
+  seed: number;
+  fingerprint: string;
+}
+
+// كيف وُلّدت الورقة وما استُبدل فيها: تُحفظ مع اللقطة وهي هوية الورقة المحفوظة.
+export interface Recipe {
+  kind: "exam" | "worksheet";
+  blueprint: string;
+  lesson_code: string;
+  count: number;
+  level: Level | "";
+  seed: number;
+  replacements: Replacement[];
+}
+
 export interface BundleEntry {
   lesson: string;
   title: string;
@@ -112,6 +130,10 @@ export const usePapersStore = defineStore("papers", {
     lessons: [] as Lesson[],
     blueprints: [] as Blueprint[],
     paper: null as Paper | null,
+    recipe: null as Recipe | null,
+    savedId: null as number | null,
+    savedTitle: "",
+    replacing: "", // بصمة الجزء الذي يُستبدل الآن
     bundle: null as Paper[] | null,
     bundlePlan: [] as BundleEntry[],
     bundleSeed: 0,
@@ -122,6 +144,8 @@ export const usePapersStore = defineStore("papers", {
   }),
   getters: {
     worksheetLessons: (state) => state.lessons.filter((lesson) => lesson.has_generator),
+    // بعد استبدال، رقم النموذج وحده لا يعيد الورقة؛ اللقطة المحفوظة هي المرجع.
+    modified: (state) => (state.recipe?.replacements.length ?? 0) > 0,
   },
   actions: {
     async loadOptions() {
@@ -137,11 +161,14 @@ export const usePapersStore = defineStore("papers", {
         this.optionsLoading = false;
       }
     },
-    async fetchPaper(path: string) {
+    async fetchPaper(path: string, base: Omit<Recipe, "seed" | "replacements">) {
       this.loading = true;
       this.error = "";
       try {
         this.paper = await api.get<Paper>(path);
+        this.recipe = { ...base, seed: this.paper.seed, replacements: [] };
+        this.savedId = null;
+        this.savedTitle = "";
       } catch (error) {
         this.error = accessMessage(error) ?? "تعذر توليد الورقة. تحقق من رقم النموذج وحاول مرة أخرى.";
       } finally {
@@ -149,10 +176,56 @@ export const usePapersStore = defineStore("papers", {
       }
     },
     generateExam(blueprint: string, seed: number | null) {
-      return this.fetchPaper(`/papers/exam?${query({ blueprint, seed })}`);
+      return this.fetchPaper(`/papers/exam?${query({ blueprint, seed })}`, {
+        kind: "exam",
+        blueprint,
+        lesson_code: "",
+        count: 0,
+        level: "",
+      });
     },
     generateWorksheet(lesson: string, count: number, seed: number | null, level: Level | "" = "") {
-      return this.fetchPaper(`/papers/worksheet?${query({ lesson, count, seed, level })}`);
+      return this.fetchPaper(`/papers/worksheet?${query({ lesson, count, seed, level })}`, {
+        kind: "worksheet",
+        blueprint: "",
+        lesson_code: lesson,
+        count,
+        level,
+      });
+    },
+    // استبدال جزء واحد بآخر من الخانة نفسها، مع تفادي كل بصمات الورقة. يُدوَّن في الوصفة.
+    async replacePart(questionNumber: number, label: string) {
+      const question = this.paper?.questions.find((q) => q.number === questionNumber);
+      const index = question?.parts.findIndex((p) => p.label === label) ?? -1;
+      if (!this.paper || !question || !this.recipe || index < 0 || this.replacing) return;
+      const old = question.parts[index];
+      this.replacing = old.fingerprint;
+      this.error = "";
+      try {
+        const exclude = this.paper.questions.flatMap((q) => q.parts.map((p) => p.fingerprint));
+        const { seed, ...part } = await api.post<Part & { seed: number }>("/papers/replace-part", {
+          lesson: old.lesson,
+          label: old.label,
+          marks: old.marks,
+          slot: old.slot,
+          exclude,
+        });
+        question.parts.splice(index, 1, part);
+        this.recipe.replacements.push({ question: questionNumber, label, seed, fingerprint: part.fingerprint });
+      } catch (error) {
+        this.error = accessMessage(error) ?? "تعذر استبدال المسألة. حاول مرة أخرى.";
+      } finally {
+        this.replacing = "";
+      }
+    },
+    // فتح ورقة محفوظة: اللقطة كما حُفظت، ووصفتها، ورقمها ليُحدَّث الحفظ لا يُكرَّر.
+    openSaved(saved: { id: number; title: string; paper: Paper; recipe: Recipe }) {
+      this.bundle = null;
+      this.paper = saved.paper;
+      this.recipe = saved.recipe;
+      this.savedId = saved.id;
+      this.savedTitle = saved.title;
+      this.error = "";
     },
     // الحزمة: خطة من الخادم ثم ورقة لكل درس بالتوازي (كل واحدة بضع عشرات المللي ثانية ومخزنة في الكاش).
     async generateBundle(blueprint: string, seed: number | null) {

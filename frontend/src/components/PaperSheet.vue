@@ -8,9 +8,20 @@ import type { PaperHeaderData } from "@/stores/print";
 import { marksLabel } from "@/utils/marks";
 
 // hideSheet: في الحزمة تُطبع المفاتيح كلها في آخرها، فتُعرض الورقة في موضعها ومفتاحها لاحقًا.
-const props = withDefaults(defineProps<{ paper: Paper; header: PaperHeaderData; showKey: boolean; hideSheet?: boolean }>(), {
-  hideSheet: false,
-});
+// replaceable: زر استبدال لكل جزء (شاشة فقط)؛ replacing بصمة الجزء الجاري استبداله؛ modified بعد أي استبدال.
+const props = withDefaults(
+  defineProps<{
+    paper: Paper;
+    header: PaperHeaderData;
+    showKey: boolean;
+    hideSheet?: boolean;
+    replaceable?: boolean;
+    replacing?: string;
+    modified?: boolean;
+  }>(),
+  { hideSheet: false, replaceable: false, replacing: "", modified: false },
+);
+const emit = defineEmits<{ replace: [question: number, label: string] }>();
 
 const OPTION_LABELS = ["أ", "ب", "ج", "د"];
 
@@ -61,11 +72,22 @@ const sectionNotes = computed(() => {
           </li>
         </ol>
         <div v-else class="work-space" :data-lines="Math.min(Math.max(part.marks, 2), 6)" />
+        <div v-if="replaceable" class="part-tools no-print">
+          <button
+            type="button"
+            class="btn btn-secondary btn-small"
+            :disabled="replacing !== ''"
+            :aria-label="`استبدال السؤال ${question.number}${part.label ? ' ' + part.label : ''}`"
+            @click="emit('replace', question.number, part.label)"
+          >
+            {{ replacing === part.fingerprint ? "جارٍ الاستبدال" : "استبدال بمسألة أخرى" }}
+          </button>
+        </div>
       </div>
     </section>
     <footer class="sheet-foot">
       <span>انتهت الأسئلة</span>
-      <span>رقم النموذج {{ paper.seed }}</span>
+      <span>رقم النموذج {{ paper.seed }}{{ modified ? " (معدّل)" : "" }}</span>
     </footer>
   </article>
 
@@ -100,7 +122,7 @@ const sectionNotes = computed(() => {
         </template>
       </tbody>
     </table>
-    <footer class="sheet-foot"><span>رقم النموذج {{ paper.seed }}</span></footer>
+    <footer class="sheet-foot"><span>رقم النموذج {{ paper.seed }}{{ modified ? " (معدّل)" : "" }}</span></footer>
   </article>
 </template>
 
@@ -147,6 +169,11 @@ const sectionNotes = computed(() => {
 }
 .stem {
   margin-block: var(--space-2);
+}
+.part-tools {
+  display: flex;
+  justify-content: flex-end;
+  margin-block-start: var(--space-2);
 }
 .part-label {
   display: inline-block;

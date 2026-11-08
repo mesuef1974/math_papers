@@ -19,3 +19,9 @@ export function todayLabel(now: Date = new Date()): string {
   const mm = String(now.getMonth() + 1).padStart(2, "0");
   return `${dd}/${mm}/${now.getFullYear()}`;
 }
+
+// طابع زمني من الخادم (ISO) بالصيغة نفسها؛ غير الصالح يعطي نصًا فارغًا.
+export function dateLabel(iso: string): string {
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? "" : todayLabel(date);
+}

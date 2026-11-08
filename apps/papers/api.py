@@ -1,9 +1,10 @@
 """مسارات التوليد. قراءة فقط: GET يعطي الورقة نفسها لكل بذرة، وكلها للمعلمين المسجّلين، بمعدل محدود لكل مستخدم."""
 
+from datetime import datetime
 from typing import Annotated, Literal
 
 from django.http import HttpRequest
-from ninja import Field, Query, Router, Schema
+from ninja import Field, Query, Router, Schema, Status
 from ninja.errors import HttpError
 from ninja.throttling import UserRateThrottle
 
@@ -139,7 +140,77 @@ class PrintProfileIn(Schema):
     worksheet_instructions: str = Field("", max_length=500)
 
 
+class ReplacePartIn(Schema):
+    """طلب بديل لجزء: الخانة كما حُفظت مع الجزء، وبصمات ما في الورقة حتى لا يتكرر."""
+
+    lesson: str = Field(max_length=10)
+    label: str = Field("", max_length=1)
+    marks: int = Field(0, ge=0, le=20)
+    slot: SlotOut
+    exclude: list[Annotated[str, Field(max_length=12)]] = Field([], max_length=200)
+    seed: Seed | None = None
+
+
+class ReplacedPartOut(PartOut):
+    seed: int  # بذرة الاستبدال، تُدوَّن في الوصفة ليُعاد البناء
+
+
+class ReplacementIn(Schema):
+    question: int = Field(ge=1, le=60)
+    label: str = Field("", max_length=1)
+    seed: Seed
+    fingerprint: str = Field(max_length=12)
+
+
+class RecipeIn(Schema):
+    """كيف وُلّدت الورقة: المعاملات ثم الاستبدالات بترتيبها. هوية الورقة المحفوظة."""
+
+    kind: Literal["exam", "worksheet"]
+    blueprint: str = Field("", max_length=80)
+    lesson_code: str = Field("", max_length=10)
+    count: int = Field(0, ge=0, le=20)
+    level: Literal["K", "A", "R", ""] = ""
+    seed: Seed
+    replacements: list[ReplacementIn] = Field([], max_length=60)
+
+
+class SavePaperIn(Schema):
+    title: str = Field("", max_length=200)
+    paper: PaperOut
+    recipe: RecipeIn
+
+
+class SavedPatchIn(Schema):
+    title: str | None = Field(None, max_length=200)
+    paper: PaperOut | None = None
+    recipe: RecipeIn | None = None
+
+
+class SavedSummaryOut(Schema):
+    id: int
+    title: str
+    kind: str
+    blueprint: str
+    lesson_code: str
+    seed: int
+    total_marks: int
+    question_count: int
+    replacement_count: int
+    generator_version: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class SavedPaperOut(SavedSummaryOut):
+    paper: PaperOut = Field(alias="snapshot")
+    recipe: RecipeIn
+
+
 EXHAUSTED = "تعذر توليد مسائل مختلفة بهذا العدد. غيّر رقم النموذج أو قلّل العدد."
+REPLACE_EXHAUSTED = "تعذر إيجاد مسألة مختلفة لهذه الخانة. جرّب مرة أخرى."
+SAVED_LIMIT = f"بلغت الحد الأقصى ({services.MAX_SAVED_PER_USER} ورقة). احذف بعض الأوراق القديمة."
+SAVED_CONFLICT = "هذا التعديل يجعل الورقة نسخة من ورقة محفوظة أخرى."
+KIND_MISMATCH = "نوع الورقة في الوصفة لا يطابق اللقطة."
 
 
 @router.get("/lessons", response=list[LessonOut])
@@ -202,6 +273,83 @@ def bundle_item(request: HttpRequest, query: Query[BundleItemQuery]):
         raise HttpError(404, "الدرس ليس في الحزمة") from error
     except ExhaustedError as error:
         raise HttpError(409, EXHAUSTED) from error
+
+
+@router.post("/papers/replace-part", response=ReplacedPartOut)
+def replace_part(request: HttpRequest, payload: ReplacePartIn):
+    slot = services.PartSlot(
+        payload.label,
+        payload.lesson,
+        "",
+        payload.slot.kind,
+        payload.marks,
+        payload.slot.level,
+        payload.slot.needs_graph,
+    )
+    try:
+        return services.replacement_part(payload.lesson, slot, set(payload.exclude), payload.seed)
+    except services.UnknownLessonError as error:
+        raise HttpError(404, "الدرس غير متاح") from error
+    except ExhaustedError as error:
+        raise HttpError(409, REPLACE_EXHAUSTED) from error
+
+
+def _recipe_dict(recipe: RecipeIn) -> dict:
+    return recipe.dict()
+
+
+@router.get("/saved", response=list[SavedSummaryOut])
+def saved_list(request: HttpRequest):
+    return list(paper_selectors.saved_papers(request.user))
+
+
+@router.post("/saved", response={200: SavedPaperOut, 201: SavedPaperOut})
+def saved_create(request: HttpRequest, payload: SavePaperIn):
+    """201 عند الحفظ، و200 إن كانت الوصفة نفسها محفوظة من قبل (idempotent)."""
+    if payload.paper.kind != payload.recipe.kind:
+        raise HttpError(422, KIND_MISMATCH)
+    try:
+        row, created = services.save_paper(
+            request.user, payload.title.strip(), payload.paper.dict(), _recipe_dict(payload.recipe)
+        )
+    except services.SavedLimitError as error:
+        raise HttpError(409, SAVED_LIMIT) from error
+    return Status(201 if created else 200, row)
+
+
+@router.get("/saved/{int:pk}", response=SavedPaperOut)
+def saved_detail(request: HttpRequest, pk: int):
+    row = paper_selectors.saved_paper(request.user, pk)
+    if row is None:
+        raise HttpError(404, "الورقة غير موجودة")
+    return row
+
+
+@router.patch("/saved/{int:pk}", response=SavedPaperOut)
+def saved_update(request: HttpRequest, pk: int, payload: SavedPatchIn):
+    if (payload.paper is None) != (payload.recipe is None):
+        raise HttpError(422, "اللقطة والوصفة تُحدَّثان معًا.")
+    if payload.paper is not None and payload.recipe is not None and payload.paper.kind != payload.recipe.kind:
+        raise HttpError(422, KIND_MISMATCH)
+    try:
+        row = services.update_saved_paper(
+            request.user,
+            pk,
+            title=payload.title,
+            snapshot=payload.paper.dict() if payload.paper is not None else None,
+            recipe=_recipe_dict(payload.recipe) if payload.recipe is not None else None,
+        )
+    except services.SavedConflictError as error:
+        raise HttpError(409, SAVED_CONFLICT) from error
+    if row is None:
+        raise HttpError(404, "الورقة غير موجودة")
+    return row
+
+
+@router.delete("/saved/{int:pk}", response={204: None})
+def saved_delete(request: HttpRequest, pk: int):
+    services.delete_saved_paper(request.user, pk)
+    return Status(204, None)
 
 
 @router.get("/print-profile", response=PrintProfileOut)

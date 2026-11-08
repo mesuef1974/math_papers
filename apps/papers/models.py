@@ -33,3 +33,40 @@ class PrintProfile(TimeStampedModel):
 
     def __str__(self) -> str:
         return f"ترويسة {self.user_id}"
+
+
+class SavedPaper(TimeStampedModel):
+    """ورقة حفظها المعلم: لقطة كاملة تُطبع كما كانت ولو تغيّرت المولّدات، ووصفة تشرح كيف وُلّدت وما استُبدل.
+
+    الأعمدة المختصرة (الدرس، البذرة، العدد...) منسوخة من اللقطة لتُعرض القائمة دون تحميل اللقطات.
+    """
+
+    class Kind(models.TextChoices):
+        EXAM = "exam", "اختبار"
+        WORKSHEET = "worksheet", "ورقة عمل"
+
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="saved_papers")
+    title = models.CharField(max_length=200)
+    kind = models.CharField(max_length=10, choices=Kind.choices)
+    blueprint = models.CharField(max_length=80, blank=True)
+    lesson_code = models.CharField(max_length=10, blank=True)
+    seed = models.PositiveIntegerField()
+    total_marks = models.PositiveSmallIntegerField(default=0)
+    question_count = models.PositiveSmallIntegerField(default=0)
+    replacement_count = models.PositiveSmallIntegerField(default=0)
+    generator_version = models.CharField(max_length=12, blank=True)
+    recipe_hash = models.CharField(max_length=40)
+    snapshot = models.JSONField()
+    recipe = models.JSONField()
+
+    class Meta:
+        ordering = ["-updated_at"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["owner", "recipe_hash"], name="papers_savedpaper_owner_recipe_uniq"
+            )
+        ]
+        indexes = [models.Index(fields=["owner", "-updated_at"])]
+
+    def __str__(self) -> str:
+        return self.title

@@ -6,6 +6,7 @@ export const router = createRouter({
   history: createWebHistory("/"),
   routes: [
     { path: "/", name: "home", component: () => import("@/pages/HomePage.vue"), meta: { title: "توليد الأوراق" } },
+    { path: "/saved", name: "saved", component: () => import("@/pages/SavedPage.vue"), meta: { title: "أوراقي" } },
     {
       path: "/about",
       name: "about",
