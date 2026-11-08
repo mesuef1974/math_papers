@@ -16,4 +16,16 @@ describe("MathText", () => {
     const wrapper = mount(MathText, { props: { text: "<b>نص</b>" } });
     expect(wrapper.find("b").exists()).toBe(false);
   });
+
+  it("يعرض $$ كصيغة معروضة و\\$ كدولار حرفي", () => {
+    const wrapper = mount(MathText, { props: { text: "ثمنه \\$3 و $$x$$" } });
+    expect(wrapper.text()).toContain("ثمنه $3");
+    expect(wrapper.find("bdi.math.display .katex-display").exists()).toBe(true);
+  });
+
+  it("الصيغة الخاطئة تُلوَّن بمتغير الخطر لا بلون خام", () => {
+    const wrapper = mount(MathText, { props: { text: "$\\frac{$" } });
+    expect(wrapper.html()).toContain("var(--color-danger)");
+    expect(wrapper.html()).not.toContain("#cc0000");
+  });
 });

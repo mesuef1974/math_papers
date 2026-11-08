@@ -1,17 +1,34 @@
-"""API مُنمَّط بـ Django Ninja. المصادقة: جلسة Django (كوكي HttpOnly) + CSRF."""
+"""API مُنمَّط بـ Django Ninja تحت /api/v1/. المصادقة: جلسة Django (كوكي HttpOnly) + CSRF.
+
+مخطط الأخطاء موحد: {"detail": رسالة عربية} وقد يرافقه "errors" بتفاصيل حقول المدخلات.
+"""
 
 from __future__ import annotations
 
 from django.conf import settings
+from django.contrib.admin.views.decorators import staff_member_required
 from django.http import HttpRequest
-from ninja import Field, NinjaAPI, Schema, Status
-from ninja.errors import HttpError
+from ninja import Field, NinjaAPI, Query, Schema, Status
+from ninja.errors import HttpError, ValidationError
 from ninja.security import django_auth
 from ninja.utils import check_csrf
 
 from . import selectors, services
+from .middleware import request_id_of
 
-api = NinjaAPI(title="مولّد أوراق الرياضيات", version="1.0", docs_url="/docs/")
+api = NinjaAPI(
+    title="مولّد أوراق الرياضيات",
+    version="1",
+    docs_url="/docs/",
+    docs_decorator=staff_member_required,  # التوثيق ومخطط OpenAPI للطاقم فقط
+)
+
+
+@api.exception_handler(ValidationError)
+def invalid_input(request: HttpRequest, exc: ValidationError):
+    return api.create_response(
+        request, {"detail": "مدخلات غير صالحة. راجع القيم وحاول مرة أخرى.", "errors": exc.errors}, status=422
+    )
 
 
 class MeOut(Schema):
@@ -37,11 +54,12 @@ class AuditOut(Schema):
 class PingOut(Schema):
     ok: bool
     site: str
+    subtitle: str
 
 
 @api.get("/ping", response=PingOut)
 def ping(request: HttpRequest):
-    return {"ok": True, "site": settings.SITE_TITLE}
+    return {"ok": True, "site": settings.SITE_TITLE, "subtitle": settings.SITE_SUBTITLE}
 
 
 def me_payload(user) -> dict:
@@ -80,13 +98,11 @@ def auth_logout(request: HttpRequest):
 
 
 @api.get("/audit", response=list[AuditOut], auth=django_auth)
-def audit(request: HttpRequest, limit: int = 50):
+def audit(request: HttpRequest, limit: int = Query(50, ge=1, le=200)):
     if not request.user.is_staff:
         raise HttpError(403, "للمشرفين فقط")
-    services.record_audit(
-        action="audit.view", actor=request.user, request_id=request.headers.get("X-Request-ID", "")
-    )
+    services.record_audit(action="audit.view", actor=request.user, request_id=request_id_of(request))
     return [
         {"id": row.pk, "action": row.action, "target": row.target, "created_at": row.created_at.isoformat()}
-        for row in selectors.recent_audit(min(limit, 200))
+        for row in selectors.recent_audit(limit)
     ]

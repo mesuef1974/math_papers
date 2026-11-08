@@ -9,12 +9,12 @@ from apps.core.models import AuditLog
 from apps.papers.access import GENERATE_PERMISSION, TEACHER_GROUP, ensure_teacher
 
 PASSWORD = "Rasm-Bayani-2026"
-EXAM = "/api/papers/exam?blueprint=g12-sci-s1-2026-27-forecast&seed=1"
+EXAM = "/api/v1/papers/exam?blueprint=g12-sci-s1-2026-27-forecast&seed=1"
 
 
 def post_login(client, username="teacher", password=PASSWORD, **extra):
     return client.post(
-        "/api/auth/login",
+        "/api/v1/auth/login",
         json.dumps({"username": username, "password": password}),
         content_type="application/json",
         **extra,
@@ -28,7 +28,9 @@ def teacher(db):
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize("url", ["/api/lessons", "/api/blueprints", EXAM, "/api/papers/worksheet?lesson=2.4"])
+@pytest.mark.parametrize(
+    "url", ["/api/v1/lessons", "/api/v1/blueprints", EXAM, "/api/v1/papers/worksheet?lesson=2.4"]
+)
 def test_papers_require_login(client, url):
     assert client.get(url).status_code == 401
 
@@ -36,7 +38,7 @@ def test_papers_require_login(client, url):
 @pytest.mark.django_db
 def test_user_without_permission_is_forbidden(client, django_user_model):
     client.force_login(django_user_model.objects.create_user(username="guest", password=PASSWORD))
-    assert client.get("/api/lessons").status_code == 403
+    assert client.get("/api/v1/lessons").status_code == 403
 
 
 @pytest.mark.django_db
@@ -50,14 +52,14 @@ def test_login_session_and_logout(client, teacher):
     assert res.status_code == 200
     assert GENERATE_PERMISSION in res.json()["permissions"]
     assert client.get(EXAM).status_code == 200
-    assert client.post("/api/auth/logout").status_code == 204
+    assert client.post("/api/v1/auth/logout").status_code == 204
     assert client.get(EXAM).status_code == 401
     actions = set(AuditLog.objects.values_list("action", flat=True))
     assert {"auth.login", "auth.logout"} <= actions
 
 
 def test_login_rotates_session_key(client, teacher):
-    client.get("/api/ping")
+    client.get("/api/v1/ping")
     client.session.save()
     before = client.session.session_key
     post_login(client)
@@ -82,7 +84,7 @@ def test_login_requires_csrf_token(teacher):
 def test_logout_requires_csrf_token(teacher):
     strict = Client(enforce_csrf_checks=True)
     strict.force_login(teacher)
-    assert strict.post("/api/auth/logout").status_code == 403
+    assert strict.post("/api/v1/auth/logout").status_code == 403
 
 
 def test_repeated_failures_lock_the_account(client, teacher, settings):

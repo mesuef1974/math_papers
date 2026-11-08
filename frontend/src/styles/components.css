@@ -217,28 +217,6 @@
   border-color: transparent;
 }
 
-/* بطاقة حالة */
-.status {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  font-size: var(--text-sm);
-  color: var(--color-ink-soft);
-}
-.status::before {
-  content: "";
-  inline-size: 8px;
-  block-size: 8px;
-  border-radius: var(--radius-pill);
-  background: var(--color-line-strong);
-}
-.status.ok::before {
-  background: var(--color-success);
-}
-.status.bad::before {
-  background: var(--color-danger);
-}
-
 .visually-hidden {
   position: absolute !important;
   inline-size: 1px;

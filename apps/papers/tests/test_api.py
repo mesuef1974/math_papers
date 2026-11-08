@@ -39,7 +39,7 @@ def test_blueprint_matches_forecast():
 
 @pytest.mark.django_db
 def test_exam_shape_and_marks(client):
-    res = client.get("/api/papers/exam", {"blueprint": SLUG, "seed": 7})
+    res = client.get("/api/v1/papers/exam", {"blueprint": SLUG, "seed": 7})
     assert res.status_code == 200
     data = res.json()
     questions = data["questions"]
@@ -55,9 +55,9 @@ def test_exam_shape_and_marks(client):
 @pytest.mark.django_db
 def test_same_seed_same_paper_and_new_seed_differs(client):
     params = {"blueprint": SLUG, "seed": 11}
-    first = client.get("/api/papers/exam", params).json()
-    second = client.get("/api/papers/exam", params).json()
-    other = client.get("/api/papers/exam", {"blueprint": SLUG, "seed": 12}).json()
+    first = client.get("/api/v1/papers/exam", params).json()
+    second = client.get("/api/v1/papers/exam", params).json()
+    other = client.get("/api/v1/papers/exam", {"blueprint": SLUG, "seed": 12}).json()
     assert first == second
     assert first["questions"] != other["questions"]
 
@@ -65,7 +65,7 @@ def test_same_seed_same_paper_and_new_seed_differs(client):
 @pytest.mark.django_db
 @pytest.mark.parametrize("seed", range(40))
 def test_exam_has_no_repeated_stem(client, seed):
-    data = client.get("/api/papers/exam", {"blueprint": SLUG, "seed": seed}).json()
+    data = client.get("/api/v1/papers/exam", {"blueprint": SLUG, "seed": seed}).json()
     stems = [(p["stem"], str(p["graph"])) for q in data["questions"] for p in q["parts"]]
     assert len(stems) == len(set(stems))
 
@@ -73,7 +73,7 @@ def test_exam_has_no_repeated_stem(client, seed):
 @pytest.mark.django_db
 @pytest.mark.parametrize("lesson", sorted(available_lessons()))
 def test_worksheet_reaches_maximum_size_for_every_lesson(client, lesson):
-    res = client.get("/api/papers/worksheet", {"lesson": lesson, "count": 20, "seed": 3})
+    res = client.get("/api/v1/papers/worksheet", {"lesson": lesson, "count": 20, "seed": 3})
     assert res.status_code == 200
     questions = res.json()["questions"]
     assert len(questions) == 20
@@ -82,15 +82,15 @@ def test_worksheet_reaches_maximum_size_for_every_lesson(client, lesson):
 
 @pytest.mark.django_db
 def test_rejects_bad_input(client):
-    assert client.get("/api/papers/exam", {"blueprint": "none"}).status_code == 404
-    assert client.get("/api/papers/worksheet", {"lesson": "3.4"}).status_code == 404
-    assert client.get("/api/papers/worksheet", {"lesson": "2.4", "count": 500}).status_code == 422
-    assert client.get("/api/papers/exam", {"blueprint": SLUG, "seed": -1}).status_code == 422
+    assert client.get("/api/v1/papers/exam", {"blueprint": "none"}).status_code == 404
+    assert client.get("/api/v1/papers/worksheet", {"lesson": "3.4"}).status_code == 404
+    assert client.get("/api/v1/papers/worksheet", {"lesson": "2.4", "count": 500}).status_code == 422
+    assert client.get("/api/v1/papers/exam", {"blueprint": SLUG, "seed": -1}).status_code == 422
 
 
 @pytest.mark.django_db
 def test_lessons_flag_missing_generator(client):
-    rows = {row["code"]: row for row in client.get("/api/lessons").json()}
+    rows = {row["code"]: row for row in client.get("/api/v1/lessons").json()}
     assert rows["3.4"]["has_generator"] is False
     assert rows["3.3"]["has_generator"] is True
 
@@ -98,7 +98,7 @@ def test_lessons_flag_missing_generator(client):
 @pytest.mark.django_db
 def test_graph_is_served_with_the_part(client):
     for seed in range(30):
-        data = client.get("/api/papers/worksheet", {"lesson": "1.1", "count": 6, "seed": seed}).json()
+        data = client.get("/api/v1/papers/worksheet", {"lesson": "1.1", "count": 6, "seed": seed}).json()
         graphs = [p["graph"] for q in data["questions"] for p in q["parts"] if p["graph"]]
         if graphs:
             assert set(graphs[0]) == {"window", "label", "curves", "dots", "asymptotes", "lines"}
@@ -127,28 +127,28 @@ def test_graph_options_are_shuffled_with_their_answer(client):
 
 @pytest.mark.django_db
 def test_worksheet_respects_requested_level(client):
-    rows = {row["code"]: row for row in client.get("/api/lessons").json()}
+    rows = {row["code"]: row for row in client.get("/api/v1/lessons").json()}
     for code, row in rows.items():
         for level in row["levels"]:
             data = client.get(
-                "/api/papers/worksheet", {"lesson": code, "count": 6, "seed": 2, "level": level}
+                "/api/v1/papers/worksheet", {"lesson": code, "count": 6, "seed": 2, "level": level}
             ).json()
             assert {q["parts"][0]["level"] for q in data["questions"]} == {level}, (code, level)
             assert data["level"] == level
         for level in {"K", "A", "R"} - set(row["levels"]):
-            res = client.get("/api/papers/worksheet", {"lesson": code, "level": level})
+            res = client.get("/api/v1/papers/worksheet", {"lesson": code, "level": level})
             assert res.status_code == 404
 
 
 @pytest.mark.django_db
 def test_worksheet_rejects_unknown_level(client):
-    assert client.get("/api/papers/worksheet", {"lesson": "2.4", "level": "X"}).status_code == 422
+    assert client.get("/api/v1/papers/worksheet", {"lesson": "2.4", "level": "X"}).status_code == 422
 
 
 @pytest.mark.django_db
 @pytest.mark.parametrize("seed", range(12))
 def test_exam_levels_and_graphs_follow_blueprint(client, seed):
-    data = client.get("/api/papers/exam", {"blueprint": SLUG, "seed": seed}).json()
+    data = client.get("/api/v1/papers/exam", {"blueprint": SLUG, "seed": seed}).json()
     assert data["level_marks"] == {"K": 4, "A": 26, "R": 10}
     parts = [part for q in data["questions"] for part in q["parts"]]
     graphs = [part for part in parts if part["graph"] or part["option_graphs"]]

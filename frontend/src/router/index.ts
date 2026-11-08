@@ -5,15 +5,31 @@ import { useAuthStore } from "@/stores/auth";
 export const router = createRouter({
   history: createWebHistory("/"),
   routes: [
-    { path: "/", name: "home", component: () => import("@/pages/HomePage.vue") },
-    { path: "/about", name: "about", component: () => import("@/pages/AboutPage.vue"), meta: { public: true } },
-    { path: "/login", name: "login", component: () => import("@/pages/LoginPage.vue"), meta: { public: true } },
+    { path: "/", name: "home", component: () => import("@/pages/HomePage.vue"), meta: { title: "توليد الأوراق" } },
+    {
+      path: "/about",
+      name: "about",
+      component: () => import("@/pages/AboutPage.vue"),
+      meta: { public: true, title: "عن المنصة" },
+    },
+    {
+      path: "/login",
+      name: "login",
+      component: () => import("@/pages/LoginPage.vue"),
+      meta: { public: true, title: "تسجيل الدخول" },
+    },
+    {
+      path: "/:pathMatch(.*)*",
+      name: "not-found",
+      component: () => import("@/pages/NotFoundPage.vue"),
+      meta: { public: true, title: "الصفحة غير موجودة" },
+    },
   ],
 });
 
 // يقبل مسارًا داخليًا فقط، فلا يصبح next وسيلة لإعادة توجيه مفتوحة.
 export function safeNext(value: unknown): string {
-  return typeof value === "string" && value.startsWith("/") && !value.startsWith("//") ? value : "/";
+  return typeof value === "string" && /^\/(?![/\\])/.test(value) ? value : "/";
 }
 
 router.beforeEach(async (to) => {
@@ -24,4 +40,10 @@ router.beforeEach(async (to) => {
   if (to.meta.public) return true;
   if (!auth.user) return { name: "login", query: { next: to.fullPath } };
   return true;
+});
+
+router.afterEach((to) => {
+  const site = document.getElementById("app")?.dataset.siteTitle ?? "";
+  const title = typeof to.meta.title === "string" ? to.meta.title : "";
+  document.title = title && site ? `${title} | ${site}` : title || site;
 });

@@ -1,10 +1,10 @@
 /*
-  الطباعة: تُعاد المتغيرات نفسها إلى أبيض وأسود، فلا يحتاج أي مكون قواعد طباعة للألوان.
-  الوضع الداكن معرّف للشاشة فقط، فلا يتسرب إلى الورق.
+  الطباعة: تُعاد متغيرات الهوية كلها إلى أبيض وأسود، فلا يحتاج أي مكون قواعد طباعة للألوان.
+  الوضع الداكن معرّف للشاشة فقط، فلا يتسرب إلى الورق. الحبر الملون في الشارات ورسائل الخطأ يعود أسود أيضًا.
 */
 @page {
   size: A4;
-  margin: 15mm;
+  margin: 15mm 14mm 16mm;
 }
 @media print {
   :root {
@@ -15,9 +15,29 @@
     --color-ink-soft: #000000;
     --color-line: #bbbbbb;
     --color-line-strong: #888888;
+    --color-grid: transparent;
     --color-brand: #000000;
+    --color-brand-strong: #000000;
+    --color-brand-soft: #ffffff;
+    --color-on-brand: #ffffff;
+    --color-sand: #000000;
+    --color-sand-soft: #ffffff;
+    --color-danger: #000000;
+    --color-danger-soft: #ffffff;
+    --color-success: #000000;
+    --color-success-soft: #ffffff;
+    --color-info: #000000;
+    --color-info-soft: #ffffff;
+    --color-level-k: #000000;
+    --color-level-k-soft: #ffffff;
+    --color-level-a: #000000;
+    --color-level-a-soft: #ffffff;
+    --color-level-r: #000000;
+    --color-level-r-soft: #ffffff;
     --shadow-sm: none;
     --shadow-md: none;
+    --focus-ring: none;
+    --leading-body: 1.6;
   }
   body {
     background: none;
@@ -32,5 +52,8 @@
   .container {
     max-inline-size: none;
     padding: 0;
+  }
+  .badge {
+    border: 1px solid var(--color-line-strong);
   }
 }

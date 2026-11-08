@@ -11,7 +11,14 @@ from dataclasses import dataclass
 from apps.curriculum import selectors
 from apps.curriculum.models import BlueprintItem
 
-from .domain.generators import LEVEL_NAMES, LevelUnavailableError, Problem, available_lessons, generate
+from .domain.generators import (
+    LEVEL_NAMES,
+    LevelUnavailableError,
+    Problem,
+    available_lessons,
+    generate,
+    generator_version,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -30,11 +37,15 @@ class UnknownLessonError(LookupError):
 
 @dataclass(frozen=True)
 class PartSlot:
+    """خانة في الورقة: قيودها تُحفظ مع الجزء حتى يُستبدل أو يُعاد توليده بالقيود نفسها."""
+
     label: str
     lesson: str
     lesson_title: str
     kind: str
     marks: int
+    level: str = ""  # فارغ = أي مستوى
+    needs_graph: bool = False
 
 
 def new_seed() -> int:
@@ -67,6 +78,9 @@ def render_part(problem: Problem, slot: PartSlot, rng: random.Random) -> dict:
         "steps": list(problem.steps),
         "graph": problem.graph,
         "option_graphs": option_graphs,
+        "variant": problem.variant,
+        "fingerprint": problem.fingerprint,
+        "slot": {"kind": slot.kind, "level": slot.level, "needs_graph": slot.needs_graph},
     }
 
 
@@ -75,8 +89,13 @@ def generate_for_slot(item: BlueprintItem, rng: random.Random, used: set[str]) -
     try:
         return generate(item.lesson.code, rng, item.kind, used, item.level or None, item.needs_graph)
     except LevelUnavailableError:
-        logger.warning("blueprint slot %s has no matching variant; generating unconstrained", item.pk)
+        logger.warning("خانة الجدول %s بلا صيغة مطابقة؛ تُملأ بلا قيد المستوى والرسم", item.pk)
         return generate(item.lesson.code, rng, item.kind, used)
+
+
+def paper_meta(kind: str, **extra: object) -> dict:
+    """حقول مشتركة تهم الحفظ وإعادة التوليد."""
+    return {"kind": kind, "generator_version": generator_version(), **extra}
 
 
 def build_exam(slug: str, seed: int | None = None) -> dict:
@@ -96,7 +115,15 @@ def build_exam(slug: str, seed: int | None = None) -> dict:
         parts = []
         for position, item in enumerate(items):
             label = PART_LABELS[position] if len(items) > 1 else ""
-            slot = PartSlot(label, item.lesson.code, item.lesson.title, item.kind, item.marks)
+            slot = PartSlot(
+                label,
+                item.lesson.code,
+                item.lesson.title,
+                item.kind,
+                item.marks,
+                item.level or "",
+                item.needs_graph,
+            )
             problem = generate_for_slot(item, rng, used)
             used.add(problem.key)
             level_marks[problem.level] += item.marks
@@ -105,6 +132,7 @@ def build_exam(slug: str, seed: int | None = None) -> dict:
             {"number": number, "kind": items[0].kind, "marks": sum(i.marks for i in items), "parts": parts}
         )
     return {
+        **paper_meta("exam", blueprint=blueprint.slug, lesson_code=""),
         "title": blueprint.title,
         "seed": seed,
         "total_marks": blueprint.total_marks,
@@ -129,11 +157,12 @@ def build_worksheet(lesson_code: str, count: int, seed: int | None = None, level
         except LevelUnavailableError as error:
             raise UnknownLessonError(lesson_code) from error
         used.add(problem.key)
-        slot = PartSlot("", lesson.code, lesson.title, BlueprintItem.Kind.ESSAY, 0)
+        slot = PartSlot("", lesson.code, lesson.title, BlueprintItem.Kind.ESSAY, 0, level or "")
         questions.append(
             {"number": number, "kind": slot.kind, "marks": 0, "parts": [render_part(problem, slot, rng)]}
         )
     return {
+        **paper_meta("worksheet", blueprint="", lesson_code=lesson.code),
         "title": f"ورقة عمل: {lesson.title}" + (f" ({LEVEL_NAMES[level]})" if level else ""),
         "seed": seed,
         "total_marks": 0,

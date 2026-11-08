@@ -15,14 +15,14 @@ def test_health_ok(client):
 
 @pytest.mark.django_db
 def test_ping(client):
-    res = client.get("/api/ping")
+    res = client.get("/api/v1/ping")
     assert res.status_code == 200
     assert res.json()["ok"] is True
 
 
 @pytest.mark.django_db
 def test_me_requires_auth(client):
-    assert client.get("/api/me").status_code == 401
+    assert client.get("/api/v1/me").status_code == 401
 
 
 @pytest.mark.django_db
@@ -37,9 +37,9 @@ def test_audit_idempotent_on_request_id():
 def test_audit_endpoint_staff_only(client, staff_user, django_user_model):
     plain = django_user_model.objects.create_user(username="u", password="x" * 12)
     client.force_login(plain)
-    assert client.get("/api/audit").status_code == 403
+    assert client.get("/api/v1/audit").status_code == 403
     client.force_login(staff_user)
-    assert client.get("/api/audit").status_code == 200
+    assert client.get("/api/v1/audit").status_code == 200
 
 
 def test_spa_shell_is_arabic_rtl_regardless_of_browser_locale(client):
@@ -64,9 +64,9 @@ def test_me_exposes_admin_url_only_to_staff(client, django_user_model):
     staff = django_user_model.objects.create_user("st", password="x-Pass-12345", is_staff=True)
     plain = django_user_model.objects.create_user("pl", password="x-Pass-12345")
     client.force_login(plain)
-    assert client.get("/api/me").json()["admin_url"] == ""
+    assert client.get("/api/v1/me").json()["admin_url"] == ""
     client.force_login(staff)
-    assert client.get("/api/me").json()["admin_url"] == "/admin/"
+    assert client.get("/api/v1/me").json()["admin_url"] == "/admin/"
 
 
 @pytest.mark.django_db

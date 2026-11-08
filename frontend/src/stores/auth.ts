@@ -23,7 +23,7 @@ export const useAuthStore = defineStore("auth", {
   actions: {
     async loadMe() {
       try {
-        this.user = await api.get<Me>("/api/me");
+        this.user = await api.get<Me>("/me");
       } catch (error) {
         if (!(error instanceof ApiError && error.status === 401)) throw error;
         this.user = null;
@@ -32,12 +32,12 @@ export const useAuthStore = defineStore("auth", {
       }
     },
     async login(username: string, password: string) {
-      this.user = await api.post<Me>("/api/auth/login", { username, password });
+      this.user = await api.post<Me>("/auth/login", { username, password });
       this.checked = true;
     },
     async logout() {
       try {
-        await api.post<void>("/api/auth/logout");
+        await api.post<void>("/auth/logout");
       } finally {
         this.user = null;
       }

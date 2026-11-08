@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onMounted, ref, watch } from "vue";
 import PaperSheet from "@/components/PaperSheet.vue";
 import { useAuthStore } from "@/stores/auth";
 import { LEVEL_NAMES, usePapersStore, type Level } from "@/stores/papers";
@@ -13,8 +13,8 @@ const count = ref(8);
 const seedText = ref("");
 const showKey = ref(false);
 const level = ref<Level | "">("");
+const sheetWrap = ref<HTMLElement | null>(null);
 
-const LEVELS = LEVEL_NAMES as Record<string, string>;
 const lessonLevels = computed(() => store.lessons.find((item) => item.code === lesson.value)?.levels ?? []);
 watch(lesson, () => {
   if (level.value && !lessonLevels.value.includes(level.value)) level.value = "";
@@ -22,6 +22,7 @@ watch(lesson, () => {
 const seed = computed(() => (/^\d+$/.test(seedText.value.trim()) ? Number(seedText.value.trim()) : null));
 const seedInvalid = computed(() => seedText.value.trim() !== "" && seed.value === null);
 const ready = computed(() => !seedInvalid.value && (mode.value === "exam" ? blueprint.value : lesson.value));
+const levelEntries = Object.entries(LEVEL_NAMES) as [Level, string][];
 
 onMounted(() => {
   if (auth.canGenerate) void store.loadOptions();
@@ -37,6 +38,11 @@ watch(
 async function generate() {
   if (mode.value === "exam") await store.generateExam(blueprint.value, seed.value);
   else await store.generateWorksheet(lesson.value, count.value, seed.value, level.value);
+  if (store.paper && !store.error) {
+    // قارئ الشاشة ولوحة المفاتيح ينتقلان إلى الورقة الجديدة بدل البقاء على زر التوليد
+    await nextTick();
+    sheetWrap.value?.focus();
+  }
 }
 
 function print() {
@@ -55,7 +61,7 @@ function print() {
     <p v-if="!auth.canGenerate" class="alert alert-error" role="alert">
       حسابك لا يملك صلاحية توليد الأوراق. اطلب من المشرف إضافتك إلى مجموعة المعلمين.
     </p>
-    <form v-else class="panel generator" @submit.prevent="generate">
+    <form v-else class="panel generator" :aria-busy="store.loading || store.optionsLoading" @submit.prevent="generate">
       <fieldset class="mode">
         <legend class="visually-hidden">نوع الورقة</legend>
         <div class="segmented">
@@ -77,7 +83,7 @@ function print() {
           المستوى
           <select v-model="level" class="select">
             <option value="">كل المستويات</option>
-            <option v-for="(name, code) in LEVEL_NAMES" :key="code" :value="code" :disabled="!lessonLevels.includes(code)">
+            <option v-for="[code, name] in levelEntries" :key="code" :value="code" :disabled="!lessonLevels.includes(code)">
               {{ name }}{{ lessonLevels.includes(code) ? "" : " (غير متاح)" }}
             </option>
           </select>
@@ -88,7 +94,14 @@ function print() {
         </label>
         <label class="field">
           رقم النموذج (اختياري)
-          <input v-model="seedText" class="input" inputmode="numeric" dir="ltr" :aria-invalid="seedInvalid" />
+          <input
+            v-model="seedText"
+            class="input"
+            inputmode="numeric"
+            dir="ltr"
+            :aria-invalid="seedInvalid"
+            :aria-describedby="seedInvalid ? 'seed-error' : undefined"
+          />
         </label>
       </div>
 
@@ -99,8 +112,8 @@ function print() {
         <button v-if="store.paper" type="button" class="btn btn-secondary" @click="print">طباعة أو حفظ PDF</button>
         <label v-if="store.paper" class="check"><input v-model="showKey" type="checkbox" /> إظهار مفتاح الحل</label>
       </div>
-      <p v-if="seedInvalid" class="alert alert-error">رقم النموذج يجب أن يكون أرقامًا فقط.</p>
-      <p v-if="store.error" class="alert alert-error" role="alert">{{ store.error }}</p>
+      <p v-if="seedInvalid" id="seed-error" class="alert alert-error">رقم النموذج يجب أن يكون أرقامًا فقط.</p>
+      <p v-if="store.error" class="alert alert-error" role="alert" aria-live="assertive">{{ store.error }}</p>
     </form>
 
     <div v-if="store.paper?.is_forecast" class="alert alert-info notice">
@@ -108,18 +121,20 @@ function print() {
       <p class="levels">
         <span>درجات المستويات في هذا النموذج:</span>
         <span
-          v-for="(marks, code) in store.paper.level_marks"
+          v-for="[code, name] in levelEntries.filter(([code]) => store.paper?.level_marks[code])"
           :key="code"
           class="badge"
-          :class="`badge-${String(code).toLowerCase()}`"
+          :class="`badge-${code.toLowerCase()}`"
         >
-          {{ LEVELS[code] }} {{ marks }}
+          {{ name }} {{ store.paper?.level_marks[code] }}
         </span>
       </p>
     </div>
   </div>
 
-  <PaperSheet v-if="store.paper" :paper="store.paper" :show-key="showKey" />
+  <div v-if="store.paper" ref="sheetWrap" class="sheet-focus" tabindex="-1" aria-live="polite" :aria-label="store.paper.title">
+    <PaperSheet :paper="store.paper" :show-key="showKey" />
+  </div>
 </template>
 
 <style scoped>
@@ -159,5 +174,8 @@ function print() {
   align-items: center;
   gap: var(--space-2);
   margin-block-start: var(--space-2);
+}
+.sheet-focus:focus-visible {
+  box-shadow: none;
 }
 </style>

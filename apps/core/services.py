@@ -10,6 +10,7 @@ from django.contrib.auth.models import AbstractBaseUser
 from django.db import transaction
 from django.http import HttpRequest
 
+from .middleware import request_id_of
 from .models import AuditLog
 
 
@@ -41,8 +42,11 @@ class LockedOutError(PermissionError):
 
 
 def sign_in(request: HttpRequest, username: str, password: str) -> AbstractBaseUser | None:
-    """يصادق ويبدّل مفتاح الجلسة (ضد تثبيت الجلسة)، ويسجّل النجاح والفشل في سجل التدقيق."""
-    request_id = request.headers.get("X-Request-ID", "")
+    """يصادق ويبدّل مفتاح الجلسة (ضد تثبيت الجلسة)، ويسجّل النجاح والفشل في سجل التدقيق.
+
+    معرّف الطلب من الخادم لا من العميل، وإلا ثبّته مهاجم ليُسجَّل فشل واحد بدل محاولاته كلها.
+    """
+    request_id = request_id_of(request)
     try:
         user = authenticate(request, username=username, password=password)
     except AxesBackendPermissionDenied as error:

@@ -19,7 +19,11 @@ export default defineConfig({
     manifest: true,
     outDir: "../frontend_dist",
     emptyOutDir: true,
-    rollupOptions: { input: ["src/main.ts", "src/styles/admin.css"] },
+    rollupOptions: {
+      input: ["src/main.ts", "src/styles/admin.css"],
+      // KaTeX في جزء مستقل قابل للتخزين طويلًا؛ لا يُعاد تحميله مع كل تغيير في صفحاتنا
+      output: { manualChunks: { katex: ["katex"] } },
+    },
   },
   test: {
     environment: "jsdom",

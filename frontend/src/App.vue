@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { onMounted } from "vue";
-import { useRouter } from "vue-router";
+import { onMounted, watch } from "vue";
+import { useRoute, useRouter } from "vue-router";
 import BrandMark from "@/components/BrandMark.vue";
 import { useAppStore } from "@/stores/app";
 import { useAuthStore } from "@/stores/auth";
@@ -8,12 +8,23 @@ import { usePapersStore } from "@/stores/papers";
 
 const store = useAppStore();
 const auth = useAuthStore();
+const route = useRoute();
 const router = useRouter();
 onMounted(() => store.loadPing());
 
+// سقوط الجلسة (401 من أي طلب، أو خروج) على صفحة محمية يعيد إلى الدخول ثم إلى الصفحة نفسها.
+watch(
+  () => auth.user,
+  (user, previous) => {
+    if (previous && !user && !route.meta.public) {
+      void router.replace({ name: "login", query: { next: route.fullPath } });
+    }
+  },
+);
+
 async function logout() {
-  await auth.logout().catch(() => undefined);
   usePapersStore().$reset(); // لا تبقى ورقة المستخدم السابق في الذاكرة
+  await auth.logout().catch(() => undefined);
   await router.replace({ name: "login" });
 }
 </script>
@@ -25,7 +36,7 @@ async function logout() {
         <BrandMark />
         <span class="brand-name">
           <strong>{{ store.siteTitle }}</strong>
-          <small>12 علمي وتكنولوجي، الفصل الأول</small>
+          <small v-if="store.subtitle">{{ store.subtitle }}</small>
         </span>
       </RouterLink>
       <nav class="nav" aria-label="التنقل الرئيسي">

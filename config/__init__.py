@@ -1,8 +1,1 @@
-"""حزمة الإعدادات. Celery اختياري: إن حُذف config/celery.py في التوليد يبقى الاستيراد صامتًا."""
-
-try:
-    from .celery import app as celery_app
-except ImportError:  # pragma: no cover - بلا Celery
-    celery_app = None
-
-__all__ = ("celery_app",)
+"""حزمة الإعدادات. لا طابور مهام مركَّب الآن؛ ما يتجاوز 300 مللي ثانية يُكسَّر إلى طلبات متوازية مع كاش حتمي."""

@@ -52,6 +52,8 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "apps.core.middleware.RequestIDMiddleware",
+    "apps.core.middleware.SecurityHeadersMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     # لا LocaleMiddleware: الموقع عربي أولًا مهما كان Accept-Language للمتصفح.
@@ -158,6 +160,23 @@ SESSION_COOKIE_AGE = 60 * 60 * 8
 X_FRAME_OPTIONS = "DENY"
 SECURE_CONTENT_TYPE_NOSNIFF = True
 SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
+# CSP: الحزم من الأصل نفسه فقط. style-src يسمح بالأنماط المضمّنة لأن KaTeX يولّدها؛ لا سكربت مضمّن في أي قالب.
+SECURITY_CSP = env(
+    "SECURITY_CSP",
+    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
+    "font-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; object-src 'none'; "
+    "base-uri 'self'; form-action 'self'",
+)
+SECURITY_PERMISSIONS_POLICY = "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+
+# تحديد المعدل لمسارات التوليد (حساب sympy على عامِلَين): لكل مستخدم، عبر CACHES.
+NINJA_DEFAULT_THROTTLE_RATES = {
+    "user": env("THROTTLE_USER_RATE", "90/m"),
+    "anon": env("THROTTLE_ANON_RATE", "30/m"),
+    "auth": None,
+}
+# تسخين كاش ملامح الصيغ عند الإقلاع، وإلا كلّف أول طلب بعد النشر 650 مللي ثانية.
+PAPERS_WARM_CACHE = env_bool("PAPERS_WARM_CACHE", True)
 
 REDIS_URL = env("REDIS_URL", "")
 if REDIS_URL:
@@ -168,14 +187,8 @@ if REDIS_URL:
         }
     }
 
-CELERY_BROKER_URL = REDIS_URL or "memory://"
-CELERY_RESULT_BACKEND = REDIS_URL or "cache+memory://"
-CELERY_TASK_ACKS_LATE = True
-CELERY_TASK_REJECT_ON_WORKER_LOST = True
-CELERY_TASK_TIME_LIMIT = 300
-CELERY_TASK_ALWAYS_EAGER = False
-
 SITE_TITLE = "مولّد أوراق الرياضيات"
+SITE_SUBTITLE = "12 علمي وتكنولوجي، الفصل الأول 2026-2027"
 
 LOGGING = {
     "version": 1,

@@ -11,4 +11,5 @@ DJANGO_VITE["default"]["dev_mode"] = True  # noqa: F405
 DJANGO_VITE["default"]["dev_server_port"] = 5173  # noqa: F405
 CSRF_TRUSTED_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173", "http://localhost:8000"]
 AXES_ENABLED = False
+SECURITY_CSP = ""  # خادم Vite للتطوير على منفذ آخر مع HMR مضمّن
 EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"

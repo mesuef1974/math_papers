@@ -1,4 +1,7 @@
 // عميل fetch صغير: جلسة Django (كوكي HttpOnly) + CSRF. لا توكنات في localStorage.
+// كل المسارات نسبية إلى إصدار الواجهة البرمجية، فتغيير الإصدار في مكان واحد.
+
+export const API_BASE = "/api/v1";
 
 export class ApiError extends Error {
   constructor(
@@ -16,8 +19,8 @@ function csrfToken(): string {
   return document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content ?? "";
 }
 
-async function request<T>(method: string, url: string, body?: unknown): Promise<T> {
-  const res = await fetch(url, {
+async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, {
     method,
     credentials: "same-origin",
     headers: {
@@ -36,8 +39,8 @@ async function request<T>(method: string, url: string, body?: unknown): Promise<
 }
 
 export const api = {
-  get: <T>(url: string) => request<T>("GET", url),
-  post: <T>(url: string, body?: unknown) => request<T>("POST", url, body),
-  put: <T>(url: string, body: unknown) => request<T>("PUT", url, body),
-  del: <T>(url: string) => request<T>("DELETE", url),
+  get: <T>(path: string) => request<T>("GET", path),
+  post: <T>(path: string, body?: unknown) => request<T>("POST", path, body),
+  put: <T>(path: string, body: unknown) => request<T>("PUT", path, body),
+  del: <T>(path: string) => request<T>("DELETE", path),
 };

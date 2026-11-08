@@ -59,8 +59,10 @@ code {
   border-radius: var(--radius-sm);
   padding-inline: var(--space-1);
 }
+/* حلقة التركيز بظل؛ outline شفاف لا يختفي في وضع الألوان القسرية (forced-colors) حيث يُلغى الظل */
 :focus-visible {
-  outline: none;
+  outline: 3px solid transparent;
+  outline-offset: 1px;
   box-shadow: var(--focus-ring);
   border-radius: var(--radius-sm);
 }

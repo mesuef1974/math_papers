@@ -1,4 +1,4 @@
-"""المسارات: API تحت /api/، الصحة تحت /health/، وكل ما عدا ذلك يذهب إلى واجهة Vue (SPA)."""
+"""المسارات: API تحت /api/v1/، الصحة تحت /health/، وكل ما عدا ذلك يذهب إلى واجهة Vue (SPA)."""
 
 from django.conf import settings
 from django.contrib import admin
@@ -12,7 +12,7 @@ api.add_router("", papers_router)
 
 urlpatterns = [
     path(settings.ADMIN_URL, admin.site.urls),
-    path("api/", api.urls),
+    path("api/v1/", api.urls),
     path("health/", health, name="health"),
     re_path(r"^(?!api/|static/|media/).*$", spa, name="spa"),
 ]

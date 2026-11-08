@@ -6,9 +6,10 @@
 
 from __future__ import annotations
 
+import hashlib
 import random
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from functools import cache
 from typing import Any
 
@@ -40,6 +41,7 @@ class Problem:
         default=(), compare=False
     )  # خيارات رسوم، الأول هو الصحيح
     essay_ok: bool = True
+    variant: str = field(default="", compare=False)  # اسم الصيغة التي ولّدتها؛ يضعه generate()
 
     @property
     def key(self) -> str:
@@ -49,6 +51,11 @@ class Problem:
             if self.graph is None
             else f"{self.stem}|{self.graph['curves'][:1]}|{self.graph['dots']}"
         )
+
+    @property
+    def fingerprint(self) -> str:
+        """بصمة قصيرة ثابتة للمسألة، تُحفظ مع الورقة ليُستبدل جزء دون تكرار ما بقي."""
+        return hashlib.sha1(self.key.encode("utf-8"), usedforsecurity=False).hexdigest()[:12]
 
 
 Generator = Callable[[random.Random], Problem]
@@ -69,6 +76,18 @@ class LevelUnavailableError(LookupError):
 
 def available_lessons() -> set[str]:
     return set(REGISTRY)
+
+
+def generator_version() -> str:
+    """بصمة مجموعة الصيغ. أي صيغة تُضاف أو تُحذف تغيّر ترتيب الاختيار، فتُحفظ مع كل ورقة لتفسير اختلاف إعادة التوليد."""
+    names = sorted(f"{lesson}:{fn.__name__}" for lesson, fns in REGISTRY.items() for fn in fns)
+    return hashlib.sha1("\n".join(names).encode("utf-8"), usedforsecurity=False).hexdigest()[:12]
+
+
+def warm_profiles() -> None:
+    for fns in REGISTRY.values():
+        for fn in fns:
+            variant_profile(fn)
 
 
 @cache
@@ -106,6 +125,10 @@ def lesson_levels(lesson: str, kind: str = "essay") -> list[str]:
     return [level for level in LEVEL_NAMES if level in found]
 
 
+class ExhaustedError(ValueError):
+    """نفدت المحاولات دون مسألة جديدة تخالف ما في الورقة."""
+
+
 def generate(
     lesson: str,
     rng: random.Random,
@@ -113,18 +136,27 @@ def generate(
     avoid: set[str] | None = None,
     level: str | None = None,
     graph: bool = False,
+    variant_name: str | None = None,
 ) -> Problem:
-    """يختار صيغة من مولّدات الدرس بالمستوى المطلوب (وبرسم إن طُلب)، ويتفادى ما ظهر في الورقة نفسها."""
+    """يختار صيغة من مولّدات الدرس بالمستوى المطلوب (وبرسم إن طُلب)، ويتفادى ما ظهر في الورقة نفسها.
+
+    variant_name يحصر الاختيار في صيغة واحدة بالاسم، فيُبنى نموذج B بالبنية نفسها وأرقام مختلفة.
+    """
     avoid = avoid if avoid is not None else set()
     pool = variants(lesson, kind, level, graph)
+    if variant_name is not None:
+        pool = [fn for fn in pool if fn.__name__ == variant_name]
     if not pool:
-        raise LevelUnavailableError(f"{lesson}/{kind}/{level}/{'graph' if graph else ''}")
+        raise LevelUnavailableError(
+            f"{lesson}/{kind}/{level}/{'graph' if graph else ''}/{variant_name or ''}"
+        )
     for _ in range(MAX_ATTEMPTS):
-        problem = rng.choice(pool)(rng)
+        fn = rng.choice(pool)
+        problem = replace(fn(rng), variant=fn.__name__)
         fits = problem.mcq_ok if kind == "mcq" else problem.essay_ok
         if fits and problem.key not in avoid and (level is None or problem.level == level):
             return problem
-    raise ValueError(f"تعذر توليد مسألة جديدة للدرس {lesson}")
+    raise ExhaustedError(f"تعذر توليد مسألة جديدة للدرس {lesson}")
 
 
 def tex(value: Any) -> str:

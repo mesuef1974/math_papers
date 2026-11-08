@@ -1,18 +1,13 @@
 <script setup lang="ts">
 import GraphPlot from "@/components/GraphPlot.vue";
 import MathText from "@/components/MathText.vue";
-import { LEVEL_NAMES, type Level, type Paper } from "@/stores/papers";
+import { LEVEL_NAMES, type Paper } from "@/stores/papers";
 import { isolateNumberRanges } from "@/utils/bidi";
+import { marksLabel } from "@/utils/marks";
 
 defineProps<{ paper: Paper; showKey: boolean }>();
 
 const OPTION_LABELS = ["أ", "ب", "ج", "د"];
-
-function marksLabel(marks: number): string {
-  if (marks === 1) return "درجة واحدة";
-  if (marks === 2) return "درجتان";
-  return `${marks} درجات`;
-}
 </script>
 
 <template>
@@ -31,7 +26,7 @@ function marksLabel(marks: number): string {
         <strong>السؤال {{ question.number }}</strong>
         <span v-if="question.marks" class="marks">{{ marksLabel(question.marks) }}</span>
       </div>
-      <div v-for="part in question.parts" :key="part.label + part.stem" class="part">
+      <div v-for="part in question.parts" :key="part.fingerprint" class="part">
         <p class="stem">
           <bdi v-if="part.label" class="part-label">{{ part.label }}.</bdi>
           <MathText :text="part.stem" />
@@ -45,7 +40,7 @@ function marksLabel(marks: number): string {
             <MathText v-else :text="option" />
           </li>
         </ol>
-        <div v-else class="work-space" :style="{ minBlockSize: `${Math.max(part.marks, 2) * 34}px` }" />
+        <div v-else class="work-space" :data-lines="Math.min(Math.max(part.marks, 2), 6)" />
       </div>
     </section>
     <footer class="sheet-foot">رقم النموذج {{ paper.seed }}</footer>
@@ -54,12 +49,12 @@ function marksLabel(marks: number): string {
   <article v-if="showKey" class="sheet answer-key">
     <header class="sheet-head"><h2>مفتاح الحل، نموذج {{ paper.seed }}</h2></header>
     <section v-for="question in paper.questions" :key="question.number" class="question">
-      <div v-for="part in question.parts" :key="part.label + part.stem" class="part">
+      <div v-for="part in question.parts" :key="part.fingerprint" class="part">
         <p class="stem">
           <strong><bdi>{{ question.number }}{{ part.label ? ` ${part.label}` : "" }}</bdi> :</strong>
           <MathText :text="part.answer" />
           <span class="lesson-tag">الدرس {{ part.lesson }}</span>
-          <span class="badge" :class="`badge-${part.level.toLowerCase()}`">{{ LEVEL_NAMES[part.level as Level] }}</span>
+          <span class="badge" :class="`badge-${part.level.toLowerCase()}`">{{ LEVEL_NAMES[part.level] }}</span>
         </p>
         <ol class="steps">
           <li v-for="step in part.steps" :key="step"><MathText :text="step" /></li>
@@ -143,8 +138,22 @@ function marksLabel(marks: number): string {
   font-weight: var(--weight-medium);
   margin-inline-end: var(--space-2);
 }
+/* مساحة الحل تتدرج مع الدرجات (سطر 34px لكل درجة، من 2 إلى 6) */
 .work-space {
+  min-block-size: 68px;
   border-block-end: 1px dashed var(--color-line-strong);
+}
+.work-space[data-lines="3"] {
+  min-block-size: 102px;
+}
+.work-space[data-lines="4"] {
+  min-block-size: 136px;
+}
+.work-space[data-lines="5"] {
+  min-block-size: 170px;
+}
+.work-space[data-lines="6"] {
+  min-block-size: 204px;
 }
 .steps {
   margin-block: var(--space-1);
@@ -175,6 +184,10 @@ function marksLabel(marks: number): string {
     box-shadow: none;
     padding: 0;
     margin: 0;
+  }
+  /* لا قصّ للصيغ الطويلة على الورق؛ التمرير للشاشة فقط */
+  .part {
+    overflow: visible;
   }
   .answer-key {
     break-before: page;

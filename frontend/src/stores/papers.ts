@@ -1,6 +1,5 @@
 import { defineStore } from "pinia";
 import { api, ApiError } from "@/api/client";
-import { router } from "@/router";
 import { useAuthStore } from "@/stores/auth";
 
 export interface Lesson {
@@ -33,38 +32,54 @@ export interface Graph {
   lines: number[][][];
 }
 
+export type QuestionKind = "mcq" | "essay";
+
+// قيود الخانة كما وُلِّدت؛ تلزم الاستبدال ونموذج B.
+export interface Slot {
+  kind: QuestionKind;
+  level: Level | "";
+  needs_graph: boolean;
+}
+
 export interface Part {
   label: string;
   lesson: string;
   lesson_title: string;
   marks: number;
-  level: string;
+  level: Level;
   stem: string;
   options: string[];
   answer: string;
   steps: string[];
   graph: Graph | null;
   option_graphs: Graph[];
+  variant: string;
+  fingerprint: string;
+  slot: Slot;
 }
 
 export interface Question {
   number: number;
-  kind: "mcq" | "essay";
+  kind: QuestionKind;
   marks: number;
   parts: Part[];
 }
 
 export interface Paper {
+  kind: "exam" | "worksheet";
+  generator_version: string;
+  blueprint: string;
+  lesson_code: string;
   title: string;
   seed: number;
   total_marks: number;
   is_forecast: boolean;
-  level_marks: Record<string, number>;
+  level_marks: Partial<Record<Level, number>>;
   questions: Question[];
   level: Level | "";
 }
 
-function query(params: Record<string, string | number | null>): string {
+export function query(params: Record<string, string | number | null>): string {
   const search = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) {
     if (value !== null && value !== "") search.set(key, String(value));
@@ -72,15 +87,15 @@ function query(params: Record<string, string | number | null>): string {
   return search.toString();
 }
 
-// انتهاء الجلسة يعيد إلى الدخول ثم إلى الصفحة نفسها؛ غياب الصلاحية رسالة واضحة.
-function accessMessage(error: unknown): string | null {
+// انتهاء الجلسة يُسقط المستخدم؛ التنقل إلى الدخول يقرره الحارس في App.vue، لا المخزن.
+export function accessMessage(error: unknown): string | null {
   if (!(error instanceof ApiError)) return null;
   if (error.status === 401) {
     useAuthStore().expire();
-    void router.replace({ name: "login", query: { next: router.currentRoute.value.fullPath } });
     return "انتهت الجلسة. سجّل الدخول من جديد.";
   }
   if (error.status === 403) return error.detail || "حسابك لا يملك صلاحية توليد الأوراق.";
+  if (error.status === 409 || error.status === 429) return error.detail;
   return null;
 }
 
@@ -90,6 +105,7 @@ export const usePapersStore = defineStore("papers", {
     blueprints: [] as Blueprint[],
     paper: null as Paper | null,
     loading: false,
+    optionsLoading: false,
     error: "",
   }),
   getters: {
@@ -97,20 +113,23 @@ export const usePapersStore = defineStore("papers", {
   },
   actions: {
     async loadOptions() {
+      this.optionsLoading = true;
       try {
         [this.lessons, this.blueprints] = await Promise.all([
-          api.get<Lesson[]>("/api/lessons"),
-          api.get<Blueprint[]>("/api/blueprints"),
+          api.get<Lesson[]>("/lessons"),
+          api.get<Blueprint[]>("/blueprints"),
         ]);
       } catch (error) {
         this.error = accessMessage(error) ?? "تعذر تحميل الدروس. أعد تحميل الصفحة.";
+      } finally {
+        this.optionsLoading = false;
       }
     },
-    async fetchPaper(url: string) {
+    async fetchPaper(path: string) {
       this.loading = true;
       this.error = "";
       try {
-        this.paper = await api.get<Paper>(url);
+        this.paper = await api.get<Paper>(path);
       } catch (error) {
         this.error = accessMessage(error) ?? "تعذر توليد الورقة. تحقق من رقم النموذج وحاول مرة أخرى.";
       } finally {
@@ -118,10 +137,10 @@ export const usePapersStore = defineStore("papers", {
       }
     },
     generateExam(blueprint: string, seed: number | null) {
-      return this.fetchPaper(`/api/papers/exam?${query({ blueprint, seed })}`);
+      return this.fetchPaper(`/papers/exam?${query({ blueprint, seed })}`);
     },
     generateWorksheet(lesson: string, count: number, seed: number | null, level: Level | "" = "") {
-      return this.fetchPaper(`/api/papers/worksheet?${query({ lesson, count, seed, level })}`);
+      return this.fetchPaper(`/papers/worksheet?${query({ lesson, count, seed, level })}`);
     },
   },
 });

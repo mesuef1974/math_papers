@@ -2,15 +2,23 @@
 import { computed } from "vue";
 import katex from "katex";
 import "katex/dist/katex.min.css";
+import { splitMath } from "@/utils/mathText";
 
 const props = defineProps<{ text: string }>();
 
-// النص يتناوب بين عربي ورياضيات تفصلها علامة $، فالمقاطع الفردية رياضيات.
+// صيغة غير صالحة تُعرض كنص بلون الخطر؛ في الطباعة يعود إلى الأسود عبر print.css، لا أحمر KaTeX الافتراضي.
 const segments = computed(() =>
-  props.text.split("$").map((value, index) =>
-    index % 2 === 1
-      ? { math: true, value: katex.renderToString(value, { throwOnError: false }) }
-      : { math: false, value },
+  splitMath(props.text).map((segment) =>
+    segment.math
+      ? {
+          ...segment,
+          value: katex.renderToString(segment.value, {
+            throwOnError: false,
+            displayMode: segment.display,
+            errorColor: "var(--color-danger)",
+          }),
+        }
+      : segment,
   ),
 );
 </script>
@@ -18,7 +26,7 @@ const segments = computed(() =>
 <template>
   <span class="math-text">
     <template v-for="(segment, index) in segments" :key="index">
-      <bdi v-if="segment.math" class="math" dir="ltr" v-html="segment.value" />
+      <bdi v-if="segment.math" class="math" :class="{ display: segment.display }" dir="ltr" v-html="segment.value" />
       <template v-else>{{ segment.value }}</template>
     </template>
   </span>
@@ -27,5 +35,10 @@ const segments = computed(() =>
 <style scoped>
 .math {
   unicode-bidi: isolate;
+}
+.math.display {
+  display: block;
+  text-align: center;
+  margin-block: var(--space-2);
 }
 </style>

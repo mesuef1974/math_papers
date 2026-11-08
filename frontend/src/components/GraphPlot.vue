@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, useId } from "vue";
 import type { Graph } from "@/stores/papers";
 
 // رسم متجه بأسلوب الكتاب: شبكة على الأعداد الصحيحة، محوران بسهمين، نقاط مفتوحة ومغلقة.
@@ -7,6 +7,8 @@ import type { Graph } from "@/stores/papers";
 const props = withDefaults(defineProps<{ graph: Graph; compact?: boolean }>(), { compact: false });
 
 const PAD = 22;
+// معرّف السهم فريد لكل رسم؛ الصفحة تحمل رسومًا كثيرة والمعرّف المكرر HTML غير صالح.
+const arrowId = `axis-arrow-${useId()}`;
 
 const view = computed(() => {
   const [xMin, xMax, yMin, yMax] = props.graph.window;
@@ -47,7 +49,7 @@ const title = computed(() => `تمثيل بياني للدالة ${props.graph.l
       :aria-label="title"
     >
       <defs>
-        <marker id="axis-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <marker :id="arrowId" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
           <path d="M0,0 L10,5 L0,10 z" class="axis-head" />
         </marker>
       </defs>
@@ -56,8 +58,8 @@ const title = computed(() => `تمثيل بياني للدالة ${props.graph.l
         <line v-for="v in view.ys" :key="`gy${v}`" :x1="view.sx(view.xMin)" :x2="view.sx(view.xMax)" :y1="view.sy(v)" :y2="view.sy(v)" />
       </g>
       <g class="axes">
-        <line :x1="view.sx(view.xMin)" :x2="view.sx(view.xMax) + 10" :y1="view.sy(0)" :y2="view.sy(0)" marker-start="url(#axis-arrow)" marker-end="url(#axis-arrow)" />
-        <line :x1="view.sx(0)" :x2="view.sx(0)" :y1="view.sy(view.yMin)" :y2="view.sy(view.yMax) - 10" marker-start="url(#axis-arrow)" marker-end="url(#axis-arrow)" />
+        <line :x1="view.sx(view.xMin)" :x2="view.sx(view.xMax) + 10" :y1="view.sy(0)" :y2="view.sy(0)" :marker-start="`url(#${arrowId})`" :marker-end="`url(#${arrowId})`" />
+        <line :x1="view.sx(0)" :x2="view.sx(0)" :y1="view.sy(view.yMin)" :y2="view.sy(view.yMax) - 10" :marker-start="`url(#${arrowId})`" :marker-end="`url(#${arrowId})`" />
         <text :x="view.sx(view.xMax) + 6" :y="view.sy(0) - 8" class="axis-name">x</text>
         <text :x="view.sx(0) + 8" :y="view.sy(view.yMax) - 4" class="axis-name">y</text>
       </g>
