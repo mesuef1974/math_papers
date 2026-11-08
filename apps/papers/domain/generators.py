@@ -84,6 +84,25 @@ def generator_version() -> str:
     return hashlib.sha1("\n".join(names).encode("utf-8"), usedforsecurity=False).hexdigest()[:12]
 
 
+def diversity_report(seeds: int = 60) -> list[dict[str, Any]]:
+    """لكل صيغة: كم مسألة مختلفة تعطي عبر بذور متتابعة. يفضح الصيغ ضيقة المعاملات التي تكرر نفسها."""
+    rows = []
+    for lesson, fns in sorted(REGISTRY.items()):
+        for fn in fns:
+            keys = {fn(random.Random(seed)).key for seed in range(seeds)}  # noqa: S311 — بذور ثابتة لا أمنية
+            levels = variant_profile(fn)[0]
+            rows.append(
+                {
+                    "lesson": lesson,
+                    "variant": fn.__name__,
+                    "levels": "".join(level for level in LEVEL_NAMES if level in levels),
+                    "distinct": len(keys),
+                    "seeds": seeds,
+                }
+            )
+    return rows
+
+
 def warm_profiles() -> None:
     for fns in REGISTRY.values():
         for fn in fns:
@@ -341,19 +360,20 @@ def limit_by_factoring(rng: random.Random) -> Problem:
 
 @variant("1.2")
 def limit_by_conjugate(rng: random.Random) -> Problem:
-    p = rng.randint(2, 7)
-    expr = (sp.sqrt(x + p**2) - p) / x
-    value = sp.Rational(1, 2 * p)
-    root = rf"\sqrt{{x+{p * p}}}"
+    p, k = rng.randint(2, 7), rng.randint(1, 4)
+    expr = (sp.sqrt(k * x + p**2) - p) / x
+    value = sp.Rational(k, 2 * p)
+    kx = "x" if k == 1 else f"{k}x"
+    root = rf"\sqrt{{{kx}+{p * p}}}"
     shown = frac(f"{root}-{p}", "x")
     return Problem(
         "1.2",
         f"أوجد ${lim(0, shown)}$.",
         m(value),
-        wrongs(value, sp.Rational(1, p), 0, NO_LIMIT),
+        wrongs(value, sp.Rational(k, p), 0, NO_LIMIT, sp.Rational(1, 2 * p)),
         (
             "نضرب البسط والمقام في مرافق البسط.",
-            f"${shown}={frac('x', f'x({root}+{p})')}={frac(1, f'{root}+{p}')}$",
+            f"${shown}={frac(kx, f'x({root}+{p})')}={frac(k, f'{root}+{p}')}$",
             f"بالتعويض: $L={tex(value)}$",
         ),
         "A",
@@ -416,20 +436,21 @@ def limit_tan_over_sin(rng: random.Random) -> Problem:
 
 @variant("1.3")
 def limit_one_minus_cosine(rng: random.Random) -> Problem:
-    a = rng.randint(2, 8)
-    value = sp.Rational(a * a, 2)
+    a, b = rng.randint(2, 9), rng.randint(1, 4)
+    value = sp.Rational(a * a, 2 * b)
     half = sp.Rational(a, 2)
+    bottom = "x^2" if b == 1 else f"{b}x^2"
     return Problem(
         "1.3",
-        f"أوجد ${lim(0, frac(1 - sp.cos(a * x), 'x^2'))}$.",
+        f"أوجد ${lim(0, frac(1 - sp.cos(a * x), bottom))}$.",
         m(value),
-        wrongs(value, a, half, 0, a * a),
+        wrongs(value, a, half, 0, a * a, sp.Rational(a * a, 2)),
         (
             rf"نستعمل $1-\cos 2u=2\sin^2 u$ مع $u={tex(half * x)}$",
-            rf"فالنهاية $2\left({tex(half)}\right)^2={tex(value)}$",
+            rf"فالنهاية $\dfrac{{2\left({tex(half)}\right)^2}}{{{b}}}={tex(value)}$",
         ),
         "R",
-        {"type": "limit", "expr": (1 - sp.cos(a * x)) / x**2, "at": 0, "value": value},
+        {"type": "limit", "expr": (1 - sp.cos(a * x)) / (b * x**2), "at": 0, "value": value},
     )
 
 
@@ -670,15 +691,18 @@ def derivative_log_quadratic(rng: random.Random) -> Problem:
 
 @variant("2.6")
 def derivative_x_exponential(rng: random.Random) -> Problem:
-    a = nz(rng, -4, 5)
+    a, k = nz(rng, -4, 5), nz(rng, -3, 3)
     e = sp.exp(a * x)
-    f, d = x * e, (1 + a * x) * e
+    f, d = k * x * e, k * (1 + a * x) * e
     return Problem(
         "2.6",
         f"أوجد ${DYDX}$ إذا كانت $y={tex(f)}$.",
         m(d),
-        wrongs(d, a * e, e, (x + a) * e),
-        (rf"قاعدة الضرب: $u=x,\ v={tex(e)}$", rf"${DYDX}={tex(e)}+x\cdot {tex(a * e)}={tex(d)}$"),
+        wrongs(d, k * a * e, k * e, k * (x + a) * e, (1 + a * x) * e),
+        (
+            rf"قاعدة الضرب: $u={tex(k * x)},\ v={tex(e)}$",
+            rf"${DYDX}={tex(k * e)}+{tex(k * x)}\cdot {tex(a * e)}={tex(d)}$",
+        ),
         "A",
         {"type": "function", "f": f, "d": d, "order": 1},
     )
@@ -686,15 +710,15 @@ def derivative_x_exponential(rng: random.Random) -> Problem:
 
 @variant("2.6")
 def derivative_power_log(rng: random.Random) -> Problem:
-    n = rng.randint(2, 5)
-    f = x**n * sp.log(x)
-    d = n * x ** (n - 1) * sp.log(x) + x ** (n - 1)
+    n, k = rng.randint(2, 5), nz(rng, -3, 3)
+    f = k * x**n * sp.log(x)
+    d = k * n * x ** (n - 1) * sp.log(x) + k * x ** (n - 1)
     return Problem(
         "2.6",
         f"أوجد ${DYDX}$ إذا كانت $y={tex(f)}$ حيث $x>0$.",
         m(d),
-        wrongs(d, n * x ** (n - 1) / x, n * x ** (n - 1) * sp.log(x), x ** (n - 1)),
-        (rf"قاعدة الضرب: $u=x^{n},\ v=\ln x$", f"${DYDX}={tex(d)}$"),
+        wrongs(d, k * n * x ** (n - 1) / x, k * n * x ** (n - 1) * sp.log(x), k * x ** (n - 1)),
+        (rf"قاعدة الضرب: $u={tex(k * x**n)},\ v=\ln x$", f"${DYDX}={tex(d)}$"),
         "A",
         {"type": "function", "f": f, "d": d, "order": 1, "positive": True},
     )
@@ -718,13 +742,13 @@ def derivative_sine_cosine(rng: random.Random) -> Problem:
 
 @variant("2.7")
 def derivative_tangent(rng: random.Random) -> Problem:
-    n = rng.randint(2, 6)
-    f, d = sp.tan(n * x), n * sp.sec(n * x) ** 2
+    n, k = rng.randint(2, 6), nz(rng, -4, 4)
+    f, d = k * sp.tan(n * x), k * n * sp.sec(n * x) ** 2
     return Problem(
         "2.7",
         f"أوجد ${DYDX}$ إذا كانت $y={tex(f)}$.",
         m(d),
-        wrongs(d, sp.sec(n * x) ** 2, n * sp.sec(n * x), -n * sp.csc(n * x) ** 2),
+        wrongs(d, k * sp.sec(n * x) ** 2, k * n * sp.sec(n * x), -k * n * sp.csc(n * x) ** 2),
         (r"$\dfrac{d}{dx}\tan u=u'\sec^2 u$", f"${DYDX}={tex(d)}$"),
         "A",
         {"type": "function", "f": f, "d": d, "order": 1},
@@ -733,15 +757,15 @@ def derivative_tangent(rng: random.Random) -> Problem:
 
 @variant("2.7")
 def derivative_x_sine(rng: random.Random) -> Problem:
-    n = rng.randint(2, 5)
+    n, k = rng.randint(2, 5), nz(rng, -3, 3)
     s, c = sp.sin(n * x), sp.cos(n * x)
-    f, d = x * s, s + n * x * c
+    f, d = k * x * s, k * s + k * n * x * c
     return Problem(
         "2.7",
         f"أوجد ${DYDX}$ إذا كانت $y={tex(f)}$.",
         m(d),
-        wrongs(d, n * c, s + x * c, s - n * x * c),
-        (rf"قاعدة الضرب: $u=x,\ v={tex(s)}$", f"${DYDX}={tex(d)}$"),
+        wrongs(d, k * n * c, k * s + k * x * c, k * s - k * n * x * c),
+        (rf"قاعدة الضرب: $u={tex(k * x)},\ v={tex(s)}$", f"${DYDX}={tex(d)}$"),
         "A",
         {"type": "function", "f": f, "d": d, "order": 1},
     )
@@ -806,8 +830,8 @@ def second_derivative_polynomial(rng: random.Random) -> Problem:
 
 @variant("2.9")
 def third_derivative_exponential(rng: random.Random) -> Problem:
-    a = rng.choice([-3, -2, 2, 3, 4])
-    f = sp.exp(a * x)
+    a, k = rng.choice([-3, -2, 2, 3, 4]), nz(rng, -3, 3)
+    f = k * sp.exp(a * x)
     d = a**3 * f
     return Problem(
         "2.9",
@@ -822,15 +846,15 @@ def third_derivative_exponential(rng: random.Random) -> Problem:
 
 @variant("2.9")
 def second_derivative_sine(rng: random.Random) -> Problem:
-    n = rng.randint(2, 6)
-    f = sp.sin(n * x)
+    n, k = rng.randint(2, 6), nz(rng, -4, 4)
+    f = k * sp.sin(n * x)
     d = -(n**2) * f
     return Problem(
         "2.9",
         rf"أوجد $\dfrac{{d^2y}}{{dx^2}}$ إذا كانت $y={tex(f)}$.",
         m(d),
-        wrongs(d, -d, n * sp.cos(n * x), -n * f),
-        (f"${DYDX}={tex(n * sp.cos(n * x))}$", rf"$\dfrac{{d^2y}}{{dx^2}}={tex(d)}$"),
+        wrongs(d, -d, k * n * sp.cos(n * x), -n * f),
+        (f"${DYDX}={tex(k * n * sp.cos(n * x))}$", rf"$\dfrac{{d^2y}}{{dx^2}}={tex(d)}$"),
         "A",
         {"type": "function", "f": f, "d": d, "order": 2},
     )
@@ -1024,28 +1048,55 @@ def fence_against_wall(rng: random.Random) -> Problem:
     )
 
 
+def box_sheets() -> list[tuple[int, int, int]]:
+    """أبعاد صفيحة (a≤b) يكون فيها القصّ الأمثل x صحيحًا: x = (a+b-√(a²-ab+b²))/6 من V'=0."""
+    found = []
+    for a in range(6, 61):
+        for b in range(a, 61):
+            disc = a * a - a * b + b * b
+            r = sp.sqrt(disc)
+            if r.is_integer and (a + b - int(r)) % 6 == 0:
+                cut = (a + b - int(r)) // 6
+                if 0 < cut < a / 2:
+                    found.append((a, b, cut))
+    return found
+
+
+BOX_SHEETS = box_sheets()
+
+
 @variant("3.5")
 def open_box(rng: random.Random) -> Problem:
-    n = rng.randint(1, 8)
-    side = 6 * n
-    volume = x * (side - 2 * x) ** 2
+    a, b, n = rng.choice(BOX_SHEETS)
+    volume = x * (a - 2 * x) * (b - 2 * x)
     value = volume.subs(x, n)
     unit = "سنتيمترًا مكعبًا"
     answer = with_unit(value, unit)
     others = (2 * n, sp.Rational(n, 2), sp.Rational(3 * n, 2))
+    sheet = (
+        f"صفيحة مربعة طول ضلعها ${a}$ سنتيمترًا" if a == b else f"صفيحة مستطيلة أبعادها ${a}$ و${b}$ سنتيمترًا"
+    )
     return Problem(
         "3.5",
-        f"صفيحة مربعة طول ضلعها ${side}$ سنتيمترًا، قُصّ من كل ركن منها مربع طول ضلعه $x$ "
-        "ثم ثُنيت الجوانب لعمل صندوق مفتوح. أوجد أكبر حجم ممكن للصندوق.",
+        f"{sheet}، قُصّ من كل ركن منها مربع طول ضلعه $x$ ثم ثُنيت الجوانب لعمل صندوق مفتوح. "
+        "أوجد أكبر حجم ممكن للصندوق.",
         answer,
         wrongs(answer, *[with_unit(volume.subs(x, v), unit) for v in others]),
         (
-            f"$V(x)=x({tex(side - 2 * x)})^2$ حيث $0<x<{3 * n}$.",
-            f"$V'(x)={tex(sp.factor(sp.diff(volume, x)))}=0$ داخل المجال عند $x={n}$.",
+            f"$V(x)=x({tex(a - 2 * x)})({tex(b - 2 * x)})$ حيث $0<x<{tex(sp.Rational(a, 2))}$.",
+            f"$V'(x)={tex(sp.expand(sp.diff(volume, x)))}=0$ داخل المجال عند $x={n}$.",
             f"أكبر حجم {answer}.",
         ),
         "R",
-        {"type": "optimum", "f": volume, "low": 0, "high": 3 * n, "arg": n, "value": value, "max": True},
+        {
+            "type": "optimum",
+            "f": volume,
+            "low": 0,
+            "high": sp.Rational(a, 2),
+            "arg": n,
+            "value": value,
+            "max": True,
+        },
     )
 
 
@@ -1079,4 +1130,4 @@ def minimum_sum_of_squares(rng: random.Random) -> Problem:
 
 
 # مولّدات الرسوم والمستويات في وحدتين مستقلتين تسجّلان نفسيهما في REGISTRY عند الاستيراد.
-from . import graph_problems, level_problems  # noqa: E402, F401, I001
+from . import graph_problems, level_problems, sketch_problems  # noqa: E402, F401, I001

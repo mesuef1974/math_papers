@@ -10,7 +10,7 @@ SLUG = "g12-sci-s1-2026-27-forecast"
 @pytest.mark.django_db
 def test_plan_counts_follow_blueprint_weight_and_levels_cover_every_available_level():
     plan = {row["lesson"]: row for row in services.bundle_plan(SLUG)}
-    assert len(plan) == 17 and "3.4" not in plan
+    assert len(plan) == 18 and plan["3.4"]["count"] == 6  # 3.4 بلا درجات في الجدول لكنه في المنهج
     assert plan["3.3"]["count"] == 12 and plan["2.2"]["count"] == 6 and plan["1.2"]["count"] == 10
     for code, row in plan.items():
         assert sum(row["levels"].values()) == row["count"]
@@ -43,7 +43,7 @@ def test_bundle_item_is_ordered_easy_to_hard_and_deterministic(client):
 
 @pytest.mark.django_db
 def test_bundle_item_rejects_unknown_lesson_or_blueprint(client):
-    res = client.get("/api/v1/papers/bundle-item", {"blueprint": SLUG, "lesson": "3.4", "seed": 1})
+    res = client.get("/api/v1/papers/bundle-item", {"blueprint": SLUG, "lesson": "3.6", "seed": 1})
     assert res.status_code == 404
     assert client.get("/api/v1/papers/bundle-plan", {"blueprint": "nope"}).status_code == 404
 

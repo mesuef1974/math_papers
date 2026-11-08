@@ -27,6 +27,7 @@ const recipe: Recipe = {
   lesson_code: "1.1",
   count: 0,
   level: "",
+  purpose: "",
   seed: 1,
   replacements: [],
 };

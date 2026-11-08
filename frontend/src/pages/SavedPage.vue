@@ -20,10 +20,15 @@ onMounted(() => {
   if (auth.canGenerate) void saved.load();
 });
 
-const KIND: Record<SavedSummary["kind"], string> = { exam: "اختبار", worksheet: "ورقة عمل" };
+const KIND: Record<SavedSummary["kind"], string> = { exam: "اختبار", worksheet: "ورقة عمل", quiz: "اختبار قصير" };
 
 function scope(item: SavedSummary): string {
-  return item.kind === "exam" ? `من ${item.total_marks}` : `الدرس ${item.lesson_code}`;
+  if (item.kind === "exam") return `من ${item.total_marks}`;
+  if (item.kind === "quiz") {
+    const codes = item.lesson_code.split(",");
+    return `${codes.length > 1 ? "الدرسان" : "الدرس"} ${codes.join(" و")} من ${item.total_marks}`;
+  }
+  return `الدرس ${item.lesson_code}`;
 }
 
 async function open(item: SavedSummary) {

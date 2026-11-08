@@ -73,11 +73,30 @@ describe("papers store: الوصفة والاستبدال", () => {
       lesson_code: "1.2",
       count: 2,
       level: "A",
+      purpose: "",
       seed: 42,
       replacements: [],
     });
     expect(store.savedId).toBeNull();
     expect(store.modified).toBe(false);
+  });
+
+  it("الورقة العلاجية ترسل الغرض بلا مستوى، والوصفة تحفظه", async () => {
+    get.mockResolvedValue(paper());
+    const store = usePapersStore();
+    await store.generateWorksheet("1.2", 6, null, "A", false, "remedial");
+    expect(get.mock.calls[0][0]).toBe("/papers/worksheet?lesson=1.2&count=6&purpose=remedial");
+    expect(store.recipe).toMatchObject({ kind: "worksheet", level: "", purpose: "remedial" });
+  });
+
+  it("الاختبار القصير يرسل الدروس مفصولة بفاصلة بلا تكرار ويدوّنها في الوصفة", async () => {
+    get.mockResolvedValueOnce({ ...paper(), kind: "quiz" }).mockResolvedValueOnce({ ...paper(), kind: "quiz", form: "B" });
+    const store = usePapersStore();
+    await store.generateQuiz(["1.1", "", "1.2", "1.1"], 5, true);
+    expect(get.mock.calls[0][0]).toBe("/papers/quiz?lessons=1.1%2C1.2&seed=5");
+    expect(get.mock.calls[1][0]).toBe("/papers/quiz?lessons=1.1%2C1.2&seed=5&seed=42&form=B");
+    expect(store.recipe).toMatchObject({ kind: "quiz", lesson_code: "1.1,1.2", count: 0, purpose: "" });
+    expect(store.twin?.form).toBe("B");
   });
 
   it("الاستبدال يرسل الخانة وكل البصمات، ويبدّل الجزء ويدوّن الاستبدال", async () => {
@@ -136,6 +155,7 @@ describe("papers store: الوصفة والاستبدال", () => {
         lesson_code: "1.2",
         count: 2,
         level: "",
+        purpose: "",
         seed: 42,
         replacements: [],
       },

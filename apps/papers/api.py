@@ -80,8 +80,11 @@ class QuestionOut(Schema):
 Form = Literal["A", "B"]
 
 
+Kind = Literal["exam", "worksheet", "quiz"]
+
+
 class PaperOut(Schema):
-    kind: Literal["exam", "worksheet"]
+    kind: Kind
     form: Form = "A"
     generator_version: str
     blueprint: str
@@ -107,6 +110,13 @@ class WorksheetQuery(Schema):
     count: Annotated[int, Field(ge=1, le=20)] = 8
     seed: Seed | None = None
     level: Literal["K", "A", "R"] | None = None
+    form: Form = "A"
+    purpose: Literal["", "remedial", "enrichment"] = ""
+
+
+class QuizQuery(Schema):
+    lessons: str = Field(min_length=3, max_length=12)  # «1.1» أو «1.1,1.2»
+    seed: Seed | None = None
     form: Form = "A"
 
 
@@ -172,12 +182,13 @@ class ReplacementIn(Schema):
 class RecipeIn(Schema):
     """كيف وُلّدت الورقة: المعاملات ثم الاستبدالات بترتيبها. هوية الورقة المحفوظة."""
 
-    kind: Literal["exam", "worksheet"]
+    kind: Kind
     form: Form = "A"
     blueprint: str = Field("", max_length=80)
-    lesson_code: str = Field("", max_length=10)
+    lesson_code: str = Field("", max_length=12)
     count: int = Field(0, ge=0, le=20)
     level: Literal["K", "A", "R", ""] = ""
+    purpose: Literal["", "remedial", "enrichment"] = ""
     seed: Seed
     replacements: list[ReplacementIn] = Field([], max_length=60)
 
@@ -255,9 +266,24 @@ def exam(request: HttpRequest, query: Query[ExamQuery]):
 @router.get("/papers/worksheet", response=PaperOut)
 def worksheet(request: HttpRequest, query: Query[WorksheetQuery]):
     try:
-        return services.build_worksheet(query.lesson, query.count, query.seed, query.level, query.form)
+        return services.build_worksheet(
+            query.lesson, query.count, query.seed, query.level, query.form, query.purpose
+        )
     except services.UnknownLessonError as error:
         raise HttpError(404, "الدرس غير متاح بهذا المستوى") from error
+    except ExhaustedError as error:
+        raise HttpError(409, EXHAUSTED) from error
+
+
+@router.get("/papers/quiz", response=PaperOut)
+def quiz(request: HttpRequest, query: Query[QuizQuery]):
+    codes = [code.strip() for code in query.lessons.split(",") if code.strip()]
+    if not 1 <= len(codes) <= services.QUIZ_MAX_LESSONS:
+        raise HttpError(422, "الاختبار القصير لدرس واحد أو درسين.")
+    try:
+        return services.build_quiz(codes, query.seed, query.form)
+    except services.UnknownLessonError as error:
+        raise HttpError(404, "درس غير متاح") from error
     except ExhaustedError as error:
         raise HttpError(409, EXHAUSTED) from error
 

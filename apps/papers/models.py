@@ -44,6 +44,7 @@ class SavedPaper(TimeStampedModel):
     class Kind(models.TextChoices):
         EXAM = "exam", "اختبار"
         WORKSHEET = "worksheet", "ورقة عمل"
+        QUIZ = "quiz", "اختبار قصير"
 
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="saved_papers")
     title = models.CharField(max_length=200)

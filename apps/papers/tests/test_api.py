@@ -83,7 +83,7 @@ def test_worksheet_reaches_maximum_size_for_every_lesson(client, lesson):
 @pytest.mark.django_db
 def test_rejects_bad_input(client):
     assert client.get("/api/v1/papers/exam", {"blueprint": "none"}).status_code == 404
-    assert client.get("/api/v1/papers/worksheet", {"lesson": "3.4"}).status_code == 404
+    assert client.get("/api/v1/papers/worksheet", {"lesson": "3.6"}).status_code == 404
     assert client.get("/api/v1/papers/worksheet", {"lesson": "2.4", "count": 500}).status_code == 422
     assert client.get("/api/v1/papers/exam", {"blueprint": SLUG, "seed": -1}).status_code == 422
 
@@ -91,8 +91,9 @@ def test_rejects_bad_input(client):
 @pytest.mark.django_db
 def test_lessons_flag_missing_generator(client):
     rows = {row["code"]: row for row in client.get("/api/v1/lessons").json()}
-    assert rows["3.4"]["has_generator"] is False
-    assert rows["3.3"]["has_generator"] is True
+    # منذ مولّد 3.4 كل دروس الفصل لها مولّد؛ العلم يبقى في الاستجابة ليخفي أي درس يضاف بلا مولّد
+    assert len(rows) == 18 and all(row["has_generator"] for row in rows.values())
+    assert rows["3.4"]["has_generator"] is True
 
 
 @pytest.mark.django_db

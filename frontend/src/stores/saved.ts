@@ -1,12 +1,12 @@
 import { defineStore } from "pinia";
 import { api } from "@/api/client";
-import { accessMessage, type Paper, type Recipe } from "@/stores/papers";
+import { accessMessage, type Paper, type PaperKind, type Recipe } from "@/stores/papers";
 
 // أوراقي: لقطات محفوظة في الخادم مع وصفاتها. القائمة بلا لقطات، والفتح يجلب اللقطة.
 export interface SavedSummary {
   id: number;
   title: string;
-  kind: "exam" | "worksheet";
+  kind: PaperKind;
   blueprint: string;
   lesson_code: string;
   seed: number;

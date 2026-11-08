@@ -5,7 +5,7 @@ import PaperBundle from "@/components/PaperBundle.vue";
 import PaperSet from "@/components/PaperSet.vue";
 import PrintSettings from "@/components/PrintSettings.vue";
 import { useAuthStore } from "@/stores/auth";
-import { LEVEL_NAMES, usePapersStore, type Level } from "@/stores/papers";
+import { LEVEL_NAMES, PURPOSE_LEVEL, PURPOSE_NAMES, usePapersStore, type Level, type Purpose } from "@/stores/papers";
 import { usePrintStore } from "@/stores/print";
 import { useSavedStore } from "@/stores/saved";
 
@@ -17,12 +17,14 @@ const route = useRoute();
 const router = useRouter();
 const saveTitle = ref("");
 const savedNow = ref(false);
-const mode = ref<"exam" | "worksheet" | "bundle">("exam");
+const mode = ref<"exam" | "quiz" | "worksheet" | "bundle">("exam");
 const blueprint = ref("");
 const lesson = ref("");
+const secondLesson = ref(""); // الدرس الثاني في الاختبار القصير، اختياري
 const count = ref(8);
 const seedText = ref("");
 const level = ref<Level | "">("");
+const purpose = ref<Purpose>("");
 const twin = ref(false);
 const sheetWrap = ref<HTMLElement | null>(null);
 const forms = computed(() => (store.paper ? [store.paper, ...(store.twin ? [store.twin] : [])] : []));
@@ -31,11 +33,24 @@ const hasMcq = computed(() => store.paper?.questions.some((q) => q.kind === "mcq
 const lessonLevels = computed(() => store.lessons.find((item) => item.code === lesson.value)?.levels ?? []);
 watch(lesson, () => {
   if (level.value && !lessonLevels.value.includes(level.value)) level.value = "";
+  if (purpose.value && !lessonLevels.value.includes(PURPOSE_LEVEL[purpose.value])) purpose.value = "";
+  if (secondLesson.value === lesson.value) secondLesson.value = "";
 });
 const seed = computed(() => (/^\d+$/.test(seedText.value.trim()) ? Number(seedText.value.trim()) : null));
 const seedInvalid = computed(() => seedText.value.trim() !== "" && seed.value === null);
-const ready = computed(() => !seedInvalid.value && (mode.value === "worksheet" ? lesson.value : blueprint.value));
+const ready = computed(
+  () => !seedInvalid.value && (mode.value === "worksheet" || mode.value === "quiz" ? lesson.value : blueprint.value),
+);
 const levelEntries = Object.entries(LEVEL_NAMES) as [Level, string][];
+const purposeEntries = Object.entries(PURPOSE_NAMES) as [Purpose, string][];
+function purposeAvailable(code: Purpose): boolean {
+  return code === "" || lessonLevels.value.includes(PURPOSE_LEVEL[code]);
+}
+const generateLabel = computed(() => {
+  if (mode.value === "bundle") return "توليد الحزمة";
+  if (mode.value === "quiz") return "توليد الاختبار القصير";
+  return "توليد الورقة";
+});
 
 onMounted(async () => {
   if (!auth.canGenerate) return;
@@ -89,7 +104,8 @@ async function generate() {
   } else {
     store.bundle = null;
     if (mode.value === "exam") await store.generateExam(blueprint.value, seed.value, twin.value);
-    else await store.generateWorksheet(lesson.value, count.value, seed.value, level.value, twin.value);
+    else if (mode.value === "quiz") await store.generateQuiz([lesson.value, secondLesson.value], seed.value, twin.value);
+    else await store.generateWorksheet(lesson.value, count.value, seed.value, level.value, twin.value, purpose.value);
   }
   if ((store.paper || store.bundle) && !store.error) {
     // قارئ الشاشة ولوحة المفاتيح ينتقلان إلى الورقة الجديدة بدل البقاء على زر التوليد
@@ -108,7 +124,10 @@ function printPaper() {
     <header class="page-head">
       <span class="eyebrow">المنهج القطري، <bdi dir="ltr">2026-2027</bdi></span>
       <h1>أوراق رياضيات 12 علمي وتكنولوجي</h1>
-      <p class="lead">ولّد اختبارًا تدريبيًا من 40 أو ورقة عمل لدرس واحد، بمسائل جديدة في كل مرة ومفتاح حل.</p>
+      <p class="lead">
+        ولّد اختبارًا تدريبيًا من 40، أو اختبارًا قصيرًا من 10 لدرس أو درسين، أو ورقة عمل لدرس (عادية أو علاجية أو
+        إثرائية)، بمسائل جديدة في كل مرة ومفتاح حل.
+      </p>
     </header>
 
     <p v-if="!auth.canGenerate" class="alert alert-error" role="alert">
@@ -119,6 +138,7 @@ function printPaper() {
         <legend class="visually-hidden">نوع الورقة</legend>
         <div class="segmented">
           <label><input v-model="mode" type="radio" value="exam" /><span>اختبار كامل</span></label>
+          <label><input v-model="mode" type="radio" value="quiz" /><span>اختبار قصير</span></label>
           <label><input v-model="mode" type="radio" value="worksheet" /><span>ورقة عمل</span></label>
           <label><input v-model="mode" type="radio" value="bundle" /><span>كل أوراق العمل بضغطة</span></label>
         </div>
@@ -128,16 +148,40 @@ function printPaper() {
         ورقة لكل درس في جدول المواصفات، عدد مسائلها من وزن الدرس في الجدول، مرتبة سهل ثم متوسط ثم مهارات عليا،
         مع غلاف وفهرس. رقم الحزمة يعيد الأوراق نفسها.
       </p>
+      <p v-if="mode === 'quiz'" class="mode-hint">
+        اختبار من 10 درجات: أربعة أسئلة موضوعية بدرجة وسؤالان مقاليان بثلاث درجات، تتناوب على الدرسين إن اخترت درسين.
+      </p>
       <div class="fields">
-        <label v-if="mode === 'worksheet'" class="field wide">
-          الدرس
+        <label v-if="mode === 'worksheet' || mode === 'quiz'" class="field" :class="mode === 'worksheet' ? 'wide' : ''">
+          {{ mode === "quiz" ? "الدرس الأول" : "الدرس" }}
           <select v-model="lesson" class="select">
             <option v-for="item in store.worksheetLessons" :key="item.code" :value="item.code">
               {{ item.code }} {{ item.title }}
             </option>
           </select>
         </label>
+        <label v-if="mode === 'quiz'" class="field">
+          الدرس الثاني (اختياري)
+          <select v-model="secondLesson" class="select">
+            <option value="">درس واحد فقط</option>
+            <option
+              v-for="item in store.worksheetLessons.filter((row) => row.code !== lesson)"
+              :key="item.code"
+              :value="item.code"
+            >
+              {{ item.code }} {{ item.title }}
+            </option>
+          </select>
+        </label>
         <label v-if="mode === 'worksheet'" class="field">
+          غرض الورقة
+          <select v-model="purpose" class="select">
+            <option v-for="[code, name] in purposeEntries" :key="code" :value="code" :disabled="!purposeAvailable(code)">
+              {{ name }}{{ purposeAvailable(code) ? "" : " (غير متاح)" }}
+            </option>
+          </select>
+        </label>
+        <label v-if="mode === 'worksheet' && !purpose" class="field">
           المستوى
           <select v-model="level" class="select">
             <option value="">كل المستويات</option>
@@ -171,7 +215,7 @@ function printPaper() {
         <button type="submit" class="btn btn-primary" :disabled="!ready || store.loading">
           <template v-if="store.loading && mode === 'bundle'">جارٍ توليد {{ store.bundleDone }} من {{ store.bundlePlan.length }}</template>
           <template v-else-if="store.loading">جارٍ التوليد</template>
-          <template v-else>{{ mode === "bundle" ? "توليد الحزمة" : "توليد الورقة" }}</template>
+          <template v-else>{{ generateLabel }}</template>
         </button>
         <button v-if="store.paper || store.bundle" type="button" class="btn btn-secondary" @click="printPaper">
           طباعة أو حفظ PDF

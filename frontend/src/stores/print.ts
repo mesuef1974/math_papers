@@ -29,6 +29,15 @@ export interface PaperHeaderData {
   form?: string; // «أ» أو «ب» عند طباعة نموذجين
 }
 
+// الاختبار القصير بزمن ثابت كأوراق الحصة؛ ويأخذ تعليمات الاختبار لا ورقة العمل.
+export const QUIZ_MINUTES = 20;
+
+function minutesFor(paper: Paper, profile: PrintProfile): number | null {
+  if (paper.kind === "exam") return profile.exam_minutes;
+  if (paper.kind === "quiz") return QUIZ_MINUTES;
+  return null;
+}
+
 const EMPTY: PrintProfile = {
   school: "",
   teacher_name: "",
@@ -60,11 +69,11 @@ export const usePrintStore = defineStore("print", {
         subject: state.profile.subject,
         grade: state.profile.grade,
         title: paper.title,
-        minutes: paper.kind === "exam" ? state.profile.exam_minutes : null,
+        minutes: minutesFor(paper, state.profile),
         date: state.date,
         section: state.section,
         totalMarks: paper.total_marks,
-        instructions: paper.kind === "exam" ? state.profile.exam_instructions : state.profile.worksheet_instructions,
+        instructions: paper.kind === "worksheet" ? state.profile.worksheet_instructions : state.profile.exam_instructions,
         seed: paper.seed,
       }),
   },

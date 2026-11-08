@@ -287,7 +287,55 @@ def assert_implicit_expr(c):
     assert float(c["expr"].subs({x: x0, y: y0})) == pytest.approx(float(slope), abs=1e-6)
 
 
+def assert_shape_signs(c):
+    """الدالة الشاهدة تحقق الإشارتين على الفترة كلها عدديًا."""
+    mpmath.mp.dps = 30
+    f = fn(c["f"])
+    for v in samples(c["low"] + 0.01, c["high"] - 0.01, 101):
+        assert (float(mpmath.diff(f, v, 1)) > 0) == c["increasing"]
+        assert (float(mpmath.diff(f, v, 2)) > 0) == c["up"]
+
+
+def assert_second_derivative_test(c):
+    f, at = sp.lambdify(x, c["f"]), c["at"]
+    mpmath.mp.dps = 30
+    assert abs(float(mpmath.diff(fn(c["f"]), at, 1))) < 1e-9
+    sides = (f(at - 0.5), f(at + 0.5))
+    assert all(v < f(at) for v in sides) if c["max"] else all(v > f(at) for v in sides)
+
+
+def assert_sketch_summary(c):
+    f, d2 = sp.lambdify(x, c["f"]), sp.lambdify(x, sp.diff(c["f"], x, 2))
+    for at, is_max in ((c["max_at"], True), (c["min_at"], False)):
+        sides = (f(at - 0.05), f(at + 0.05))
+        assert all(v < f(at) for v in sides) if is_max else all(v > f(at) for v in sides)
+    t = c["inflection"]
+    assert d2(t - 0.5) * d2(t + 0.5) < 0 and abs(d2(t)) < 1e-9
+
+
+def assert_graph_shape(c):
+    """في الفترة: إشارة f′ المرسومة وميلها يوافقان الشكل؛ وخارجها مباشرة يختل أحدهما."""
+    graph = c["graph"]
+    low, high = c["low"], 5 if c["high"] is None else c["high"]
+
+    def fits(px):
+        value, before, after = one(graph, px), one(graph, px - 0.05), one(graph, px + 0.05)
+        if None in (value, before, after):
+            return None  # المنحنى مقصوص خارج النافذة هنا
+        return (value > 0) == c["increasing"] and (after > before) == c["up"]
+
+    verdicts = [v for px in samples(low + 0.1, high - 0.1, 41) if (v := fits(px)) is not None]
+    assert len(verdicts) >= 5 and all(verdicts)
+    assert fits(low - 0.2) is False
+    if c["high"] is not None:
+        assert fits(high + 0.2) is False
+
+
 CHECKS = {
+    "shape_signs": assert_shape_signs,
+    "second_derivative_test": assert_second_derivative_test,
+    "sketch_summary": assert_sketch_summary,
+    "graph_shape": assert_graph_shape,
     "continuity_bool": assert_continuity_bool,
     "continuity2": assert_continuity2,
     "differentiable": assert_differentiable,
@@ -366,7 +414,7 @@ def test_every_lesson_has_easy_and_higher_order_variants():
 
 
 def test_every_tested_lesson_has_a_generator():
-    tested = "1.1 1.2 1.3 1.4 2.1 2.2 2.3 2.4 2.5 2.6 2.7 2.8 2.9 3.1 3.2 3.3 3.5"
+    tested = "1.1 1.2 1.3 1.4 2.1 2.2 2.3 2.4 2.5 2.6 2.7 2.8 2.9 3.1 3.2 3.3 3.4 3.5"
     assert available_lessons() == set(tested.split())
 
 

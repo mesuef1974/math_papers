@@ -67,9 +67,15 @@ export interface Question {
 }
 
 export type Form = "A" | "B";
+export type PaperKind = "exam" | "worksheet" | "quiz";
+// غرض ورقة العمل: العلاجية تحصر المسائل في السهل، والإثرائية في مهارات العليا.
+export type Purpose = "" | "remedial" | "enrichment";
+export const PURPOSE_NAMES: Record<Purpose, string> = { "": "عادية", remedial: "علاجية (سهل)", enrichment: "إثرائية (مهارات عليا)" };
+export const PURPOSE_LEVEL: Record<Exclude<Purpose, "">, Level> = { remedial: "K", enrichment: "R" };
+export const QUIZ_MAX_LESSONS = 2;
 
 export interface Paper {
-  kind: "exam" | "worksheet";
+  kind: PaperKind;
   form: Form;
   generator_version: string;
   blueprint: string;
@@ -93,12 +99,13 @@ export interface Replacement {
 
 // كيف وُلّدت الورقة وما استُبدل فيها: تُحفظ مع اللقطة وهي هوية الورقة المحفوظة.
 export interface Recipe {
-  kind: "exam" | "worksheet";
+  kind: PaperKind;
   form: Form;
   blueprint: string;
-  lesson_code: string;
+  lesson_code: string; // للاختبار القصير «1.1,1.2»
   count: number;
   level: Level | "";
+  purpose: Purpose;
   seed: number;
   replacements: Replacement[];
 }
@@ -187,14 +194,33 @@ export const usePapersStore = defineStore("papers", {
     generateExam(blueprint: string, seed: number | null, twin = false) {
       return this.fetchPaper(
         `/papers/exam?${query({ blueprint, seed })}`,
-        { kind: "exam", blueprint, lesson_code: "", count: 0, level: "" },
+        { kind: "exam", blueprint, lesson_code: "", count: 0, level: "", purpose: "" },
         twin,
       );
     },
-    generateWorksheet(lesson: string, count: number, seed: number | null, level: Level | "" = "", twin = false) {
+    generateWorksheet(
+      lesson: string,
+      count: number,
+      seed: number | null,
+      level: Level | "" = "",
+      twin = false,
+      purpose: Purpose = "",
+    ) {
+      // الغرض يحدد المستوى في الخادم؛ لا يُرسل مستوى معه حتى لا يتعارضا.
+      const effectiveLevel = purpose ? "" : level;
       return this.fetchPaper(
-        `/papers/worksheet?${query({ lesson, count, seed, level })}`,
-        { kind: "worksheet", blueprint: "", lesson_code: lesson, count, level },
+        `/papers/worksheet?${query({ lesson, count, seed, level: effectiveLevel, purpose })}`,
+        { kind: "worksheet", blueprint: "", lesson_code: lesson, count, level: effectiveLevel, purpose },
+        twin,
+      );
+    },
+    // اختبار قصير من 10 لدرس أو درسين؛ البنية ثابتة والخانات تتناوب على الدروس.
+    generateQuiz(lessons: string[], seed: number | null, twin = false) {
+      const codes = [...new Set(lessons.filter(Boolean))].slice(0, QUIZ_MAX_LESSONS);
+      const lesson_code = codes.join(",");
+      return this.fetchPaper(
+        `/papers/quiz?${query({ lessons: lesson_code, seed })}`,
+        { kind: "quiz", blueprint: "", lesson_code, count: 0, level: "", purpose: "" },
         twin,
       );
     },

@@ -38,6 +38,17 @@ MAX_SEED = 2**31 - 1
 PART_LABELS = "ABCDEFGH"
 OPTION_LABELS = "أبجد"  # تطابق ترتيب عرض الخيارات في الواجهة
 FORMS = ("A", "B")  # نموذجان متكافئان: ب بالبنية والصيغ نفسها وأعداد مختلفة
+PURPOSES = {"remedial": ("K", "ورقة علاجية"), "enrichment": ("R", "ورقة إثرائية")}
+# الاختبار القصير من 10: أربعة موضوعية بدرجة وسؤالان مقاليان بثلاث، بمستويات متدرجة
+QUIZ_SLOTS = (
+    ("mcq", "K", 1),
+    ("mcq", "K", 1),
+    ("mcq", "A", 1),
+    ("mcq", "A", 1),
+    ("essay", "A", 3),
+    ("essay", "R", 3),
+)
+QUIZ_MAX_LESSONS = 2
 
 
 class UnknownBlueprintError(LookupError):
@@ -172,14 +183,22 @@ def build_exam(slug: str, seed: int | None = None, form: str = "A") -> dict:
 
 
 def build_worksheet(
-    lesson_code: str, count: int, seed: int | None = None, level: str | None = None, form: str = "A"
+    lesson_code: str,
+    count: int,
+    seed: int | None = None,
+    level: str | None = None,
+    form: str = "A",
+    purpose: str = "",
 ) -> dict:
+    """ورقة عمل لدرس. purpose=remedial يحصرها في السهل ويسمّيها علاجية، وenrichment في مهارات العليا إثرائية."""
     lesson = selectors.lessons().filter(code=lesson_code).first()
     if lesson is None or lesson_code not in available_lessons():
         raise UnknownLessonError(lesson_code)
     seed = new_seed() if seed is None else seed
+    if purpose:
+        level = PURPOSES[purpose][0]
     if form == "B":
-        return build_form_b(build_worksheet(lesson_code, count, seed, level))
+        return build_form_b(build_worksheet(lesson_code, count, seed, level, purpose=purpose))
     rng = random.Random(seed)  # noqa: S311 — بذرة قابلة للإعادة، لا استعمال أمني
     used: set[str] = set()
     questions = []
@@ -195,7 +214,8 @@ def build_worksheet(
         )
     return {
         **paper_meta("worksheet", blueprint="", lesson_code=lesson.code),
-        "title": f"ورقة عمل: {lesson.title}" + (f" ({LEVEL_NAMES[level]})" if level else ""),
+        "title": f"{PURPOSES[purpose][1] if purpose else 'ورقة عمل'}: {lesson.title}"
+        + (f" ({LEVEL_NAMES[level]})" if level and not purpose else ""),
         "form": "A",
         "seed": seed,
         "total_marks": 0,
@@ -203,6 +223,45 @@ def build_worksheet(
         "level_marks": {},
         "questions": questions,
         "level": level or "",
+    }
+
+
+def build_quiz(lesson_codes: list[str], seed: int | None = None, form: str = "A") -> dict:
+    """اختبار قصير من 10 لدرس أو درسين: الخانات ثابتة وتتناوب على الدروس، ومستوى غير متاح يُملأ بلا قيد."""
+    codes = list(dict.fromkeys(lesson_codes))[:QUIZ_MAX_LESSONS]
+    lessons = {row.code: row for row in selectors.lessons().filter(code__in=codes)}
+    if not codes or any(code not in lessons or code not in available_lessons() for code in codes):
+        raise UnknownLessonError(",".join(lesson_codes))
+    seed = new_seed() if seed is None else seed
+    if form == "B":
+        return build_form_b(build_quiz(codes, seed))
+    rng = random.Random(seed)  # noqa: S311 — بذرة قابلة للإعادة، لا استعمال أمني
+    used: set[str] = set()
+    questions = []
+    level_marks: dict[str, int] = defaultdict(int)
+    for index, (kind, level, marks) in enumerate(QUIZ_SLOTS):
+        lesson = lessons[codes[index % len(codes)]]
+        try:
+            problem = generate(lesson.code, rng, kind, used, level)
+        except LevelUnavailableError:
+            problem = generate(lesson.code, rng, kind, used)
+        used.add(problem.key)
+        level_marks[problem.level] += marks
+        slot = PartSlot("", lesson.code, lesson.title, kind, marks, level)
+        questions.append(
+            {"number": index + 1, "kind": kind, "marks": marks, "parts": [render_part(problem, slot, rng)]}
+        )
+    names = " و".join(f"{lessons[code].code} {lessons[code].title}" for code in codes)
+    return {
+        **paper_meta("quiz", blueprint="", lesson_code=",".join(codes)),
+        "title": f"اختبار قصير: {names}",
+        "form": "A",
+        "seed": seed,
+        "total_marks": sum(marks for _, _, marks in QUIZ_SLOTS),
+        "is_forecast": False,
+        "level_marks": dict(level_marks),
+        "questions": questions,
+        "level": "",
     }
 
 
@@ -241,7 +300,7 @@ def build_form_b(paper_a: dict) -> dict:
     return {
         **paper_a,
         "form": "B",
-        "level_marks": dict(level_marks) if paper_a["kind"] == "exam" else {},
+        "level_marks": dict(level_marks) if paper_a["kind"] != "worksheet" else {},
         "questions": questions,
     }
 
@@ -406,6 +465,10 @@ def bundle_plan(slug: str) -> list[dict]:
         if item.level:
             level_marks[code][item.level] += item.marks
     ready = available_lessons()
+    # درس له مولّد وليس في الجدول (3.4 رسم المنحنيات) يدخل الحزمة بالحد الأدنى وبمستويات متساوية
+    for row in selectors.lessons().filter(code__in=ready - set(marks)):
+        titles[row.code] = row.title
+        marks[row.code] = 0
     plan = []
     for code in sorted(marks):
         if code not in ready:
