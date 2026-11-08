@@ -7,9 +7,12 @@
   size: A4;
   margin: 14mm 14mm 16mm;
   @bottom-center {
-    content: "صفحة " counter(page) " من " counter(pages);
+    /* السطر الأول تذييل الكراسة الجاري (تضبطه PaperSheet في --print-footer)، والثاني رقم الصفحة */
+    content: var(--print-footer) "\A صفحة " counter(page) " من " counter(pages);
+    white-space: pre-line;
+    text-align: center;
     font-family: var(--font-print);
-    font-size: 10pt;
+    font-size: 9pt;
     color: #444444;
   }
 }

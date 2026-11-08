@@ -71,28 +71,61 @@ const header: PaperHeaderData = {
 };
 
 describe("PaperSheet", () => {
-  it("يعرض الترويسة وتعليمات القسمين ومربعات الخيارات ومكان الحل، ويخفي المفتاح افتراضيًا", () => {
+  it("الاختبار كراسة: غلاف وتعليمات ثنائية ومربع رقم وخيارات ومربعات وصندوق حل بدرجته وجدول رصد، ويخفي المفتاح افتراضيًا", () => {
     const wrapper = mount(PaperSheet, { props: { paper, header, showKey: false } });
-    expect(wrapper.text()).toContain("ساعتان ونصف");
+    expect(wrapper.find(".sheet").classes()).toContain("booklet");
+    expect(wrapper.find(".cover").text()).toContain("اختبار الرياضيات (تدريبي)");
+    expect(wrapper.find(".cover").text()).toContain("ساعتان ونصف");
+    expect(wrapper.find(".instructions").text()).toContain("General instructions");
+    expect(wrapper.find(".instructions").text()).toContain("2 موضوعية و1 مقالية");
     const notes = wrapper.findAll(".section-note").map((n) => n.text());
     expect(notes).toHaveLength(2);
     expect(notes[0]).toContain("من 1 إلى 2");
+    expect(notes[0]).toContain("questions 1 through 2");
     expect(notes[1]).toContain("السؤال 3");
+    expect(wrapper.findAll(".question-head .number").map((n) => n.text())).toEqual(["1", "2", "3"]);
     expect(wrapper.findAll(".options li .box")).toHaveLength(8);
-    expect(wrapper.find(".work-space").attributes("data-lines")).toBe("6");
+    expect(wrapper.find(".work-space").exists()).toBe(false);
+    expect(wrapper.find(".work-box").attributes("style")).toContain("min-block-size: 300px");
+    expect(wrapper.find(".part-marks").text()).toBe("12");
+    expect(wrapper.find(".essay .marks").text()).toBe("12 درجة /");
+    expect(wrapper.find(".essay .score-cell").exists()).toBe(true);
+    expect(wrapper.findAll(".section-end").map((n) => n.findAll("span").map((s) => s.text()))).toEqual([
+      ["انتهت الأسئلة الموضوعية", "End of multiple-choice questions"],
+      ["انتهت جميع الأسئلة", "End of all questions"],
+    ]);
+    const score = wrapper.find(".score-page");
+    expect(score.text()).toContain("لا تكتب على هذه الصفحة");
+    expect(score.findAll("tbody tr").map((r) => `${r.find("th").text()} ${r.find("td").text()}`)).toEqual(["1 – 2 2", "3 12", "المجموع 14"]);
     expect(wrapper.find(".answer-key").exists()).toBe(false);
     expect(wrapper.text()).toContain("رقم النموذج 7");
+    expect(document.documentElement.style.getPropertyValue("--print-footer")).toBe('"الرياضيات – اختبار تدريبي 2026-2027"');
   });
 
-  it("المفتاح جدول بصف لكل جزء مع المستوى والدرس والخطوات", () => {
+  it("ورقة العمل تبقى ورقة بترويسة ومساحة حل متدرجة بلا غلاف", () => {
+    const sheet: Paper = { ...paper, kind: "worksheet" };
+    const wrapper = mount(PaperSheet, { props: { paper: sheet, header, showKey: false } });
+    expect(wrapper.find(".sheet").classes()).not.toContain("booklet");
+    expect(wrapper.find(".cover").exists()).toBe(false);
+    expect(wrapper.find(".paper-header").exists()).toBe(true);
+    expect(wrapper.find(".question-head strong").text()).toBe("السؤال 1");
+    expect(wrapper.find(".work-space").attributes("data-lines")).toBe("6");
+    expect(wrapper.findAll(".section-end")).toHaveLength(0);
+    expect(wrapper.find(".score-page").exists()).toBe(false);
+    expect(document.documentElement.style.getPropertyValue("--print-footer")).toBe('""');
+  });
+
+  it("المفتاح: جدول الإجابات الموضوعية ثم جدول بصف لكل جزء مع المستوى والدرس والخطوات، وعنوانه دليل التقدير للاختبار", () => {
     const wrapper = mount(PaperSheet, { props: { paper, header, showKey: true } });
     const key = wrapper.find(".answer-key");
     expect(key.exists()).toBe(true);
-    expect(key.findAll("tbody tr")).toHaveLength(3);
+    expect(key.findAll(".mcq-key tbody tr").map((r) => `${r.find("th").text()} ${r.find("td").text()}`)).toEqual(["1 ب", "2 ج"]);
+    expect(key.findAll("table:not(.mcq-key) tbody tr")).toHaveLength(3);
     expect(key.findAll(".badge-a")).toHaveLength(3);
     expect(key.text()).toContain("اشتق كل حد");
-    expect(key.text()).toContain("مفتاح الحل");
-    expect(key.find(".mcq-line").text()).toBe("الإجابات الموضوعية: 1 ب، 2 ج");
+    expect(key.text()).toContain("دليل تقدير الدرجات");
+    const sheet = mount(PaperSheet, { props: { paper: { ...paper, kind: "worksheet" }, header, showKey: true } });
+    expect(sheet.find(".answer-key").text()).toContain("مفتاح الحل");
   });
 
   it("ورقة بنوع واحد لا تحمل تعليمات أقسام", () => {

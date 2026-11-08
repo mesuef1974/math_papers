@@ -99,7 +99,9 @@ describe("PaperSet", () => {
     const wrapper = mount(PaperSet, {
       props: { papers: [paper("A"), paper("B")], header, showKey: true, bubble: true, replaceable: true },
     });
-    const order = wrapper.findAll("article").map((a) => a.classes().filter((c) => c !== "sheet").join("|") || "sheet");
+    const order = wrapper
+      .findAll("article")
+      .map((a) => a.classes().filter((c) => c !== "sheet" && c !== "booklet").join("|") || "sheet");
     expect(order).toEqual([
       "sheet",
       "answer-sheet",

@@ -55,6 +55,7 @@
   --print-body: 13pt;
   --print-title: 15pt;
   --print-small: 11pt;
+  --print-footer: ""; /* تذييل الصفحة الجاري؛ تضبطه الكراسة عند عرضها */
 
   --text-xs: 0.8125rem;
   --text-sm: 0.9375rem;
