@@ -21,6 +21,7 @@ from apps.curriculum.models import BlueprintItem
 
 from .domain.generators import (
     LEVEL_NAMES,
+    ExhaustedError,
     LevelUnavailableError,
     Problem,
     available_lessons,
@@ -36,6 +37,7 @@ logger = logging.getLogger(__name__)
 MAX_SEED = 2**31 - 1
 PART_LABELS = "ABCDEFGH"
 OPTION_LABELS = "أبجد"  # تطابق ترتيب عرض الخيارات في الواجهة
+FORMS = ("A", "B")  # نموذجان متكافئان: ب بالبنية والصيغ نفسها وأعداد مختلفة
 
 
 class UnknownBlueprintError(LookupError):
@@ -75,16 +77,19 @@ def render_part(problem: Problem, slot: PartSlot, rng: random.Random) -> dict:
     options: list[str] = []
     option_graphs: list[dict] = []
     answer = problem.answer
+    answer_index = -1  # موضع الخيار الصحيح بعد الخلط؛ -1 للمقالي. يلزم ورقة التظليل ومفتاحها.
     if problem.option_graphs:
         # خيارات رسوم: يُخلط الترتيب، والجواب اسم الخيار الصحيح بعد الخلط.
         order = list(range(len(problem.option_graphs)))
         rng.shuffle(order)
         option_graphs = [problem.option_graphs[i] for i in order]
         options = ["" for _ in order]
-        answer = f"الخيار ({OPTION_LABELS[order.index(0)]})"
+        answer_index = order.index(0)
+        answer = f"الخيار ({OPTION_LABELS[answer_index]})"
     elif slot.kind == BlueprintItem.Kind.MCQ:
         options = [problem.answer, *problem.wrong]
         rng.shuffle(options)
+        answer_index = options.index(problem.answer)
     return {
         "label": slot.label,
         "lesson": slot.lesson,
@@ -94,6 +99,7 @@ def render_part(problem: Problem, slot: PartSlot, rng: random.Random) -> dict:
         "stem": problem.stem,
         "options": options,
         "answer": answer,
+        "answer_index": answer_index,
         "steps": list(problem.steps),
         "graph": problem.graph,
         "option_graphs": option_graphs,
@@ -117,11 +123,13 @@ def paper_meta(kind: str, **extra: object) -> dict:
     return {"kind": kind, "generator_version": generator_version(), **extra}
 
 
-def build_exam(slug: str, seed: int | None = None) -> dict:
+def build_exam(slug: str, seed: int | None = None, form: str = "A") -> dict:
     blueprint = selectors.blueprint_with_items(slug)
     if blueprint is None:
         raise UnknownBlueprintError(slug)
     seed = new_seed() if seed is None else seed
+    if form == "B":
+        return build_form_b(build_exam(slug, seed))
     rng = random.Random(seed)  # noqa: S311 — بذرة قابلة للإعادة، لا استعمال أمني
     grouped: dict[int, list[BlueprintItem]] = defaultdict(list)
     for item in blueprint.items.all():
@@ -153,6 +161,7 @@ def build_exam(slug: str, seed: int | None = None) -> dict:
     return {
         **paper_meta("exam", blueprint=blueprint.slug, lesson_code=""),
         "title": blueprint.title,
+        "form": "A",
         "seed": seed,
         "total_marks": blueprint.total_marks,
         "is_forecast": blueprint.is_forecast,
@@ -162,11 +171,15 @@ def build_exam(slug: str, seed: int | None = None) -> dict:
     }
 
 
-def build_worksheet(lesson_code: str, count: int, seed: int | None = None, level: str | None = None) -> dict:
+def build_worksheet(
+    lesson_code: str, count: int, seed: int | None = None, level: str | None = None, form: str = "A"
+) -> dict:
     lesson = selectors.lessons().filter(code=lesson_code).first()
     if lesson is None or lesson_code not in available_lessons():
         raise UnknownLessonError(lesson_code)
     seed = new_seed() if seed is None else seed
+    if form == "B":
+        return build_form_b(build_worksheet(lesson_code, count, seed, level))
     rng = random.Random(seed)  # noqa: S311 — بذرة قابلة للإعادة، لا استعمال أمني
     used: set[str] = set()
     questions = []
@@ -183,12 +196,53 @@ def build_worksheet(lesson_code: str, count: int, seed: int | None = None, level
     return {
         **paper_meta("worksheet", blueprint="", lesson_code=lesson.code),
         "title": f"ورقة عمل: {lesson.title}" + (f" ({LEVEL_NAMES[level]})" if level else ""),
+        "form": "A",
         "seed": seed,
         "total_marks": 0,
         "is_forecast": False,
         "level_marks": {},
         "questions": questions,
         "level": level or "",
+    }
+
+
+def build_form_b(paper_a: dict) -> dict:
+    """النموذج ب من النموذج أ: الخانات نفسها والصيغ نفسها (البنية) بأعداد مختلفة، ولا مسألة مشتركة.
+
+    حتمي من بذرة أ، فيُعاد بالرقم نفسه. صيغة لا تعطي بديلًا جديدًا تُستبدل بأي صيغة مطابقة للخانة.
+    """
+    rng = random.Random(f"{paper_a['seed']}:B")  # noqa: S311 — حتمية لا أمنية
+    avoid = {part["fingerprint"] for q in paper_a["questions"] for part in q["parts"]}
+    questions = []
+    level_marks: dict[str, int] = defaultdict(int)
+    for question in paper_a["questions"]:
+        parts = []
+        for part in question["parts"]:
+            slot = PartSlot(
+                part["label"],
+                part["lesson"],
+                part["lesson_title"],
+                part["slot"]["kind"],
+                part["marks"],
+                part["slot"]["level"],
+                part["slot"]["needs_graph"],
+            )
+            try:
+                problem = generate(
+                    slot.lesson, rng, slot.kind, avoid, part["level"], slot.needs_graph, part["variant"]
+                )
+            except (LevelUnavailableError, ExhaustedError):
+                problem = generate(slot.lesson, rng, slot.kind, avoid, slot.level or None, slot.needs_graph)
+            avoid.add(problem.key)
+            avoid.add(problem.fingerprint)
+            level_marks[problem.level] += slot.marks
+            parts.append(render_part(problem, slot, rng))
+        questions.append({**question, "parts": parts})
+    return {
+        **paper_a,
+        "form": "B",
+        "level_marks": dict(level_marks) if paper_a["kind"] == "exam" else {},
+        "questions": questions,
     }
 
 
@@ -393,6 +447,7 @@ def build_bundle_item(slug: str, lesson_code: str, bundle_seed: int) -> dict:
     paper = {
         **paper_meta("worksheet", blueprint=slug, lesson_code=lesson.code),
         "title": f"ورقة عمل: {lesson.code} {lesson.title}",
+        "form": "A",
         "seed": seed,
         "total_marks": 0,
         "is_forecast": False,

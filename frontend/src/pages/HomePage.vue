@@ -2,7 +2,7 @@
 import { computed, nextTick, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import PaperBundle from "@/components/PaperBundle.vue";
-import PaperSheet from "@/components/PaperSheet.vue";
+import PaperSet from "@/components/PaperSet.vue";
 import PrintSettings from "@/components/PrintSettings.vue";
 import { useAuthStore } from "@/stores/auth";
 import { LEVEL_NAMES, usePapersStore, type Level } from "@/stores/papers";
@@ -23,7 +23,10 @@ const lesson = ref("");
 const count = ref(8);
 const seedText = ref("");
 const level = ref<Level | "">("");
+const twin = ref(false);
 const sheetWrap = ref<HTMLElement | null>(null);
+const forms = computed(() => (store.paper ? [store.paper, ...(store.twin ? [store.twin] : [])] : []));
+const hasMcq = computed(() => store.paper?.questions.some((q) => q.kind === "mcq") ?? false);
 
 const lessonLevels = computed(() => store.lessons.find((item) => item.code === lesson.value)?.levels ?? []);
 watch(lesson, () => {
@@ -85,8 +88,8 @@ async function generate() {
     await store.generateBundle(blueprint.value, seed.value);
   } else {
     store.bundle = null;
-    if (mode.value === "exam") await store.generateExam(blueprint.value, seed.value);
-    else await store.generateWorksheet(lesson.value, count.value, seed.value, level.value);
+    if (mode.value === "exam") await store.generateExam(blueprint.value, seed.value, twin.value);
+    else await store.generateWorksheet(lesson.value, count.value, seed.value, level.value, twin.value);
   }
   if ((store.paper || store.bundle) && !store.error) {
     // قارئ الشاشة ولوحة المفاتيح ينتقلان إلى الورقة الجديدة بدل البقاء على زر التوليد
@@ -147,6 +150,10 @@ function printPaper() {
           عدد المسائل
           <input v-model.number="count" class="input" type="number" min="1" max="20" />
         </label>
+        <label v-if="mode !== 'bundle'" class="check field-check">
+          <input v-model="twin" type="checkbox" />
+          نموذجان أ وب (البنية نفسها بأعداد مختلفة)
+        </label>
         <label class="field">
           رقم النموذج (اختياري)
           <input
@@ -172,6 +179,9 @@ function printPaper() {
         <label v-if="store.paper || store.bundle" class="check">
           <input v-model="print.showKey" type="checkbox" /> {{ store.bundle ? "المفاتيح في آخر الحزمة" : "مفتاح الحل في صفحة أخيرة" }}
         </label>
+        <label v-if="store.paper && hasMcq" class="check">
+          <input v-model="print.bubble" type="checkbox" /> ورقة تظليل للأسئلة الموضوعية
+        </label>
       </div>
       <p v-if="store.paper || store.bundle" class="print-hint">
         في نافذة الطباعة اختر A4 وألغِ «الترويسات والتذييلات» حتى لا يطبع المتصفح الرابط والتاريخ فوق الورقة.
@@ -188,6 +198,7 @@ function printPaper() {
         {{ saved.saving ? "جارٍ الحفظ" : store.savedId ? "تحديث الورقة المحفوظة" : "حفظ في أوراقي" }}
       </button>
       <span v-if="savedNow" class="hint" role="status">حُفظت. <RouterLink to="/saved">أوراقي</RouterLink></span>
+      <span v-else-if="store.twin" class="hint">يُحفظ النموذج أ؛ والنموذج ب يُعاد من رقم النموذج نفسه.</span>
       <span v-else-if="store.modified" class="hint">استُبدلت مسائل، فرقم النموذج وحده لا يعيد هذه الورقة؛ احفظها.</span>
       <p v-if="saved.error" class="alert alert-error wide" role="alert">{{ saved.error }}</p>
     </form>
@@ -217,11 +228,12 @@ function printPaper() {
     aria-live="polite"
     :aria-label="store.paper?.title ?? 'حزمة أوراق العمل'"
   >
-    <PaperSheet
+    <PaperSet
       v-if="store.paper"
-      :paper="store.paper"
-      :header="print.header(store.paper)"
+      :papers="forms"
+      :header="print.header"
       :show-key="print.showKey"
+      :bubble="print.bubble && hasMcq"
       :modified="store.modified"
       :replacing="store.replacing"
       replaceable
@@ -256,6 +268,10 @@ function printPaper() {
 }
 .wide {
   grid-column: 1 / -1;
+}
+.field-check {
+  align-self: end;
+  min-block-size: 42px;
 }
 .actions {
   display: flex;

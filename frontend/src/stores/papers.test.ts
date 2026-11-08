@@ -22,6 +22,7 @@ function part(fingerprint: string, overrides: Partial<Part> = {}): Part {
     stem: `س ${fingerprint}`,
     options: [],
     answer: "1",
+    answer_index: -1,
     steps: [],
     graph: null,
     option_graphs: [],
@@ -35,6 +36,7 @@ function part(fingerprint: string, overrides: Partial<Part> = {}): Part {
 function paper(): Paper {
   return {
     kind: "worksheet",
+    form: "A",
     generator_version: "g",
     blueprint: "",
     lesson_code: "1.2",
@@ -66,6 +68,7 @@ describe("papers store: الوصفة والاستبدال", () => {
     await store.generateWorksheet("1.2", 2, null, "A");
     expect(store.recipe).toEqual({
       kind: "worksheet",
+      form: "A",
       blueprint: "",
       lesson_code: "1.2",
       count: 2,
@@ -97,6 +100,17 @@ describe("papers store: الوصفة والاستبدال", () => {
     expect(store.replacing).toBe("");
   });
 
+  it("طلب النموذج ب يأخذ بذرة أ ويخزّنه توأمًا، والتوليد التالي بلا توأم يمسحه", async () => {
+    get.mockResolvedValueOnce(paper()).mockResolvedValueOnce({ ...paper(), form: "B" });
+    const store = usePapersStore();
+    await store.generateWorksheet("1.2", 2, null, "", true);
+    expect(get.mock.calls[1][0]).toBe("/papers/worksheet?lesson=1.2&count=2&seed=42&form=B");
+    expect(store.twin?.form).toBe("B");
+    get.mockResolvedValueOnce(paper());
+    await store.generateWorksheet("1.2", 2, null, "");
+    expect(store.twin).toBeNull();
+  });
+
   it("409 من الخادم يظهر رسالته ولا يغيّر الورقة", async () => {
     get.mockResolvedValue(paper());
     post.mockRejectedValue(new ApiError(409, "لا بديل"));
@@ -115,7 +129,16 @@ describe("papers store: الوصفة والاستبدال", () => {
       id: 5,
       title: "ورقتي",
       paper: snapshot,
-      recipe: { kind: "worksheet", blueprint: "", lesson_code: "1.2", count: 2, level: "", seed: 42, replacements: [] },
+      recipe: {
+        kind: "worksheet",
+        form: "A",
+        blueprint: "",
+        lesson_code: "1.2",
+        count: 2,
+        level: "",
+        seed: 42,
+        replacements: [],
+      },
     });
     expect(store.paper).toEqual(snapshot);
     expect(store.savedId).toBe(5);

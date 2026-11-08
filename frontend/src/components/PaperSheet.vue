@@ -25,6 +25,14 @@ const emit = defineEmits<{ replace: [question: number, label: string] }>();
 
 const OPTION_LABELS = ["أ", "ب", "ج", "د"];
 
+// سطر التصحيح السريع في المفتاح: رقم كل سؤال موضوعي وحرف إجابته.
+const mcqLine = computed(() =>
+  props.paper.questions
+    .filter((q) => q.kind === "mcq" && (q.parts[0]?.answer_index ?? -1) >= 0)
+    .map((q) => `${q.number} ${OPTION_LABELS[q.parts[0].answer_index]}`)
+    .join("، "),
+);
+
 // تعليمات كل قسم كما في أوراق الوزارة: قبل أول سؤال موضوعي وقبل أول سؤال مقالي، بنطاق أرقامه.
 const sectionNotes = computed(() => {
   const notes = new Map<number, string>();
@@ -93,6 +101,7 @@ const sectionNotes = computed(() => {
 
   <article v-if="showKey" class="sheet answer-key">
     <PaperHeader :header="{ ...header, title: `مفتاح الحل: ${header.title}` }" compact />
+    <p v-if="mcqLine" class="mcq-line"><strong>الإجابات الموضوعية:</strong> {{ mcqLine }}</p>
     <table class="key">
       <thead>
         <tr>
@@ -236,6 +245,13 @@ const sectionNotes = computed(() => {
   border-block-start: 1px solid var(--color-line);
 }
 /* مفتاح الحل: جدول */
+.mcq-line {
+  margin: 0 0 var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-line-strong);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+}
 .key {
   inline-size: 100%;
   border-collapse: collapse;

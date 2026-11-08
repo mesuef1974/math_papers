@@ -7,6 +7,7 @@ import PaperBundle from "./PaperBundle.vue";
 function paper(code: string, n: number): Paper {
   return {
     kind: "worksheet",
+    form: "A",
     generator_version: "v",
     blueprint: "bp",
     lesson_code: code,
@@ -31,6 +32,7 @@ function paper(code: string, n: number): Paper {
           stem: `س $x_{${i}}$`,
           options: [],
           answer: "$1$",
+          answer_index: -1,
           steps: [],
           graph: null,
           option_graphs: [],

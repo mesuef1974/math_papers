@@ -50,6 +50,7 @@ export interface Part {
   stem: string;
   options: string[];
   answer: string;
+  answer_index: number; // موضع الخيار الصحيح، -1 للمقالي
   steps: string[];
   graph: Graph | null;
   option_graphs: Graph[];
@@ -65,8 +66,11 @@ export interface Question {
   parts: Part[];
 }
 
+export type Form = "A" | "B";
+
 export interface Paper {
   kind: "exam" | "worksheet";
+  form: Form;
   generator_version: string;
   blueprint: string;
   lesson_code: string;
@@ -90,6 +94,7 @@ export interface Replacement {
 // كيف وُلّدت الورقة وما استُبدل فيها: تُحفظ مع اللقطة وهي هوية الورقة المحفوظة.
 export interface Recipe {
   kind: "exam" | "worksheet";
+  form: Form;
   blueprint: string;
   lesson_code: string;
   count: number;
@@ -130,6 +135,7 @@ export const usePapersStore = defineStore("papers", {
     lessons: [] as Lesson[],
     blueprints: [] as Blueprint[],
     paper: null as Paper | null,
+    twin: null as Paper | null, // النموذج ب، يُعاد حتميًا من رقم النموذج
     recipe: null as Recipe | null,
     savedId: null as number | null,
     savedTitle: "",
@@ -161,12 +167,15 @@ export const usePapersStore = defineStore("papers", {
         this.optionsLoading = false;
       }
     },
-    async fetchPaper(path: string, base: Omit<Recipe, "seed" | "replacements">) {
+    async fetchPaper(path: string, base: Omit<Recipe, "seed" | "replacements" | "form">, twin = false) {
       this.loading = true;
       this.error = "";
       try {
-        this.paper = await api.get<Paper>(path);
-        this.recipe = { ...base, seed: this.paper.seed, replacements: [] };
+        // النموذج ب بالتوازي؛ بلا بذرة يُطلب بعد أ ليأخذ بذرته.
+        const first = await api.get<Paper>(path);
+        this.paper = first;
+        this.twin = twin ? await api.get<Paper>(`${path}&${query({ seed: first.seed, form: "B" })}`) : null;
+        this.recipe = { ...base, form: "A", seed: first.seed, replacements: [] };
         this.savedId = null;
         this.savedTitle = "";
       } catch (error) {
@@ -175,23 +184,19 @@ export const usePapersStore = defineStore("papers", {
         this.loading = false;
       }
     },
-    generateExam(blueprint: string, seed: number | null) {
-      return this.fetchPaper(`/papers/exam?${query({ blueprint, seed })}`, {
-        kind: "exam",
-        blueprint,
-        lesson_code: "",
-        count: 0,
-        level: "",
-      });
+    generateExam(blueprint: string, seed: number | null, twin = false) {
+      return this.fetchPaper(
+        `/papers/exam?${query({ blueprint, seed })}`,
+        { kind: "exam", blueprint, lesson_code: "", count: 0, level: "" },
+        twin,
+      );
     },
-    generateWorksheet(lesson: string, count: number, seed: number | null, level: Level | "" = "") {
-      return this.fetchPaper(`/papers/worksheet?${query({ lesson, count, seed, level })}`, {
-        kind: "worksheet",
-        blueprint: "",
-        lesson_code: lesson,
-        count,
-        level,
-      });
+    generateWorksheet(lesson: string, count: number, seed: number | null, level: Level | "" = "", twin = false) {
+      return this.fetchPaper(
+        `/papers/worksheet?${query({ lesson, count, seed, level })}`,
+        { kind: "worksheet", blueprint: "", lesson_code: lesson, count, level },
+        twin,
+      );
     },
     // استبدال جزء واحد بآخر من الخانة نفسها، مع تفادي كل بصمات الورقة. يُدوَّن في الوصفة.
     async replacePart(questionNumber: number, label: string) {
@@ -221,6 +226,7 @@ export const usePapersStore = defineStore("papers", {
     // فتح ورقة محفوظة: اللقطة كما حُفظت، ووصفتها، ورقمها ليُحدَّث الحفظ لا يُكرَّر.
     openSaved(saved: { id: number; title: string; paper: Paper; recipe: Recipe }) {
       this.bundle = null;
+      this.twin = null;
       this.paper = saved.paper;
       this.recipe = saved.recipe;
       this.savedId = saved.id;

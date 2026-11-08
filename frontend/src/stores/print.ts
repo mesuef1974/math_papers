@@ -26,6 +26,7 @@ export interface PaperHeaderData {
   totalMarks: number;
   instructions: string;
   seed: number;
+  form?: string; // «أ» أو «ب» عند طباعة نموذجين
 }
 
 const EMPTY: PrintProfile = {
@@ -48,6 +49,7 @@ export const usePrintStore = defineStore("print", {
     date: todayLabel(),
     section: "",
     showKey: false,
+    bubble: false, // ورقة تظليل للأسئلة الموضوعية
   }),
   getters: {
     header:

@@ -15,6 +15,7 @@ function part(overrides: Partial<Part> = {}): Part {
     stem: "أوجد $f'(x)$",
     options: [],
     answer: "$2x$",
+    answer_index: -1,
     steps: ["اشتق كل حد"],
     graph: null,
     option_graphs: [],
@@ -27,6 +28,7 @@ function part(overrides: Partial<Part> = {}): Part {
 
 const paper: Paper = {
   kind: "exam",
+  form: "A",
   generator_version: "v1",
   blueprint: "bp",
   lesson_code: "",
@@ -42,13 +44,13 @@ const paper: Paper = {
       number: 1,
       kind: "mcq",
       marks: 1,
-      parts: [part({ marks: 1, options: ["$1$", "$2$", "$3$", "$4$"], answer: "$2$", fingerprint: "q1" })],
+      parts: [part({ marks: 1, options: ["$1$", "$2$", "$3$", "$4$"], answer: "$2$", answer_index: 1, fingerprint: "q1" })],
     },
     {
       number: 2,
       kind: "mcq",
       marks: 1,
-      parts: [part({ marks: 1, options: ["$1$", "$2$", "$3$", "$4$"], answer: "$3$", fingerprint: "q2" })],
+      parts: [part({ marks: 1, options: ["$1$", "$2$", "$3$", "$4$"], answer: "$3$", answer_index: 2, fingerprint: "q2" })],
     },
     { number: 3, kind: "essay", marks: 12, parts: [part({ marks: 12, fingerprint: "q3" })] },
   ],
@@ -90,6 +92,7 @@ describe("PaperSheet", () => {
     expect(key.findAll(".badge-a")).toHaveLength(3);
     expect(key.text()).toContain("اشتق كل حد");
     expect(key.text()).toContain("مفتاح الحل");
+    expect(key.find(".mcq-line").text()).toBe("الإجابات الموضوعية: 1 ب، 2 ج");
   });
 
   it("ورقة بنوع واحد لا تحمل تعليمات أقسام", () => {

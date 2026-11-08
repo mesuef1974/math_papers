@@ -20,7 +20,16 @@ vi.mock("@/api/client", async (importOriginal) => {
 const { useSavedStore } = await import("@/stores/saved");
 
 const paper = { kind: "worksheet", title: "ورقة", seed: 1, questions: [] } as unknown as Paper;
-const recipe: Recipe = { kind: "worksheet", blueprint: "", lesson_code: "1.1", count: 0, level: "", seed: 1, replacements: [] };
+const recipe: Recipe = {
+  kind: "worksheet",
+  form: "A",
+  blueprint: "",
+  lesson_code: "1.1",
+  count: 0,
+  level: "",
+  seed: 1,
+  replacements: [],
+};
 const summary = {
   id: 3,
   title: "ورقة",

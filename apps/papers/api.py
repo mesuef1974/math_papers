@@ -61,6 +61,7 @@ class PartOut(Schema):
     stem: str
     options: list[str]
     answer: str
+    answer_index: int = -1
     steps: list[str]
     graph: GraphOut | None = None
     option_graphs: list[GraphOut] = []
@@ -76,8 +77,12 @@ class QuestionOut(Schema):
     parts: list[PartOut]
 
 
+Form = Literal["A", "B"]
+
+
 class PaperOut(Schema):
     kind: Literal["exam", "worksheet"]
+    form: Form = "A"
     generator_version: str
     blueprint: str
     lesson_code: str
@@ -94,6 +99,7 @@ class PaperOut(Schema):
 class ExamQuery(Schema):
     blueprint: str
     seed: Seed | None = None
+    form: Form = "A"
 
 
 class WorksheetQuery(Schema):
@@ -101,6 +107,7 @@ class WorksheetQuery(Schema):
     count: Annotated[int, Field(ge=1, le=20)] = 8
     seed: Seed | None = None
     level: Literal["K", "A", "R"] | None = None
+    form: Form = "A"
 
 
 class BundleEntryOut(Schema):
@@ -166,6 +173,7 @@ class RecipeIn(Schema):
     """كيف وُلّدت الورقة: المعاملات ثم الاستبدالات بترتيبها. هوية الورقة المحفوظة."""
 
     kind: Literal["exam", "worksheet"]
+    form: Form = "A"
     blueprint: str = Field("", max_length=80)
     lesson_code: str = Field("", max_length=10)
     count: int = Field(0, ge=0, le=20)
@@ -237,7 +245,7 @@ def blueprints(request: HttpRequest):
 @router.get("/papers/exam", response=PaperOut)
 def exam(request: HttpRequest, query: Query[ExamQuery]):
     try:
-        return services.build_exam(query.blueprint, query.seed)
+        return services.build_exam(query.blueprint, query.seed, query.form)
     except services.UnknownBlueprintError as error:
         raise HttpError(404, "جدول المواصفات غير موجود") from error
     except ExhaustedError as error:
@@ -247,7 +255,7 @@ def exam(request: HttpRequest, query: Query[ExamQuery]):
 @router.get("/papers/worksheet", response=PaperOut)
 def worksheet(request: HttpRequest, query: Query[WorksheetQuery]):
     try:
-        return services.build_worksheet(query.lesson, query.count, query.seed, query.level)
+        return services.build_worksheet(query.lesson, query.count, query.seed, query.level, query.form)
     except services.UnknownLessonError as error:
         raise HttpError(404, "الدرس غير متاح بهذا المستوى") from error
     except ExhaustedError as error:
