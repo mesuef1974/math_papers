@@ -85,6 +85,7 @@ class PaperOut(Schema):
     total_marks: int
     is_forecast: bool
     level_marks: dict[str, int]
+    level_counts: dict[str, int] = {}  # لأوراق الحزمة: عدد المسائل لكل مستوى
     questions: list[QuestionOut]
     level: str = ""
 
@@ -99,6 +100,23 @@ class WorksheetQuery(Schema):
     count: Annotated[int, Field(ge=1, le=20)] = 8
     seed: Seed | None = None
     level: Literal["K", "A", "R"] | None = None
+
+
+class BundleEntryOut(Schema):
+    lesson: str
+    title: str
+    count: int
+    levels: dict[str, int]
+
+
+class BundleQuery(Schema):
+    blueprint: str
+
+
+class BundleItemQuery(Schema):
+    blueprint: str
+    lesson: str
+    seed: Seed
 
 
 class PrintProfileOut(Schema):
@@ -161,6 +179,27 @@ def worksheet(request: HttpRequest, query: Query[WorksheetQuery]):
         return services.build_worksheet(query.lesson, query.count, query.seed, query.level)
     except services.UnknownLessonError as error:
         raise HttpError(404, "الدرس غير متاح بهذا المستوى") from error
+    except ExhaustedError as error:
+        raise HttpError(409, EXHAUSTED) from error
+
+
+@router.get("/papers/bundle-plan", response=list[BundleEntryOut])
+def bundle_plan(request: HttpRequest, query: Query[BundleQuery]):
+    """خطة حزمة كل أوراق العمل من جدول المواصفات؛ الواجهة تطلب أوراقها بالتوازي من bundle-item."""
+    try:
+        return services.bundle_plan(query.blueprint)
+    except services.UnknownBlueprintError as error:
+        raise HttpError(404, "جدول المواصفات غير موجود") from error
+
+
+@router.get("/papers/bundle-item", response=PaperOut)
+def bundle_item(request: HttpRequest, query: Query[BundleItemQuery]):
+    try:
+        return services.build_bundle_item(query.blueprint, query.lesson, query.seed)
+    except services.UnknownBlueprintError as error:
+        raise HttpError(404, "جدول المواصفات غير موجود") from error
+    except services.UnknownLessonError as error:
+        raise HttpError(404, "الدرس ليس في الحزمة") from error
     except ExhaustedError as error:
         raise HttpError(409, EXHAUSTED) from error
 

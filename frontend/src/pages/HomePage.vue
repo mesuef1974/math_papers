@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from "vue";
+import PaperBundle from "@/components/PaperBundle.vue";
 import PaperSheet from "@/components/PaperSheet.vue";
 import PrintSettings from "@/components/PrintSettings.vue";
 import { useAuthStore } from "@/stores/auth";
@@ -9,7 +10,7 @@ import { usePrintStore } from "@/stores/print";
 const store = usePapersStore();
 const auth = useAuthStore();
 const print = usePrintStore();
-const mode = ref<"exam" | "worksheet">("exam");
+const mode = ref<"exam" | "worksheet" | "bundle">("exam");
 const blueprint = ref("");
 const lesson = ref("");
 const count = ref(8);
@@ -23,7 +24,7 @@ watch(lesson, () => {
 });
 const seed = computed(() => (/^\d+$/.test(seedText.value.trim()) ? Number(seedText.value.trim()) : null));
 const seedInvalid = computed(() => seedText.value.trim() !== "" && seed.value === null);
-const ready = computed(() => !seedInvalid.value && (mode.value === "exam" ? blueprint.value : lesson.value));
+const ready = computed(() => !seedInvalid.value && (mode.value === "worksheet" ? lesson.value : blueprint.value));
 const levelEntries = Object.entries(LEVEL_NAMES) as [Level, string][];
 
 onMounted(() => {
@@ -38,9 +39,15 @@ watch(
 );
 
 async function generate() {
-  if (mode.value === "exam") await store.generateExam(blueprint.value, seed.value);
-  else await store.generateWorksheet(lesson.value, count.value, seed.value, level.value);
-  if (store.paper && !store.error) {
+  if (mode.value === "bundle") {
+    store.paper = null;
+    await store.generateBundle(blueprint.value, seed.value);
+  } else {
+    store.bundle = null;
+    if (mode.value === "exam") await store.generateExam(blueprint.value, seed.value);
+    else await store.generateWorksheet(lesson.value, count.value, seed.value, level.value);
+  }
+  if ((store.paper || store.bundle) && !store.error) {
     // قارئ الشاشة ولوحة المفاتيح ينتقلان إلى الورقة الجديدة بدل البقاء على زر التوليد
     await nextTick();
     sheetWrap.value?.focus();
@@ -69,9 +76,14 @@ function printPaper() {
         <div class="segmented">
           <label><input v-model="mode" type="radio" value="exam" /><span>اختبار كامل</span></label>
           <label><input v-model="mode" type="radio" value="worksheet" /><span>ورقة عمل</span></label>
+          <label><input v-model="mode" type="radio" value="bundle" /><span>كل أوراق العمل بضغطة</span></label>
         </div>
       </fieldset>
 
+      <p v-if="mode === 'bundle'" class="mode-hint">
+        ورقة لكل درس في جدول المواصفات، عدد مسائلها من وزن الدرس في الجدول، مرتبة سهل ثم متوسط ثم مهارات عليا،
+        مع غلاف وفهرس. رقم الحزمة يعيد الأوراق نفسها.
+      </p>
       <div class="fields">
         <label v-if="mode === 'worksheet'" class="field wide">
           الدرس
@@ -109,12 +121,18 @@ function printPaper() {
 
       <div class="actions">
         <button type="submit" class="btn btn-primary" :disabled="!ready || store.loading">
-          {{ store.loading ? "جارٍ التوليد" : "توليد الورقة" }}
+          <template v-if="store.loading && mode === 'bundle'">جارٍ توليد {{ store.bundleDone }} من {{ store.bundlePlan.length }}</template>
+          <template v-else-if="store.loading">جارٍ التوليد</template>
+          <template v-else>{{ mode === "bundle" ? "توليد الحزمة" : "توليد الورقة" }}</template>
         </button>
-        <button v-if="store.paper" type="button" class="btn btn-secondary" @click="printPaper">طباعة أو حفظ PDF</button>
-        <label v-if="store.paper" class="check"><input v-model="print.showKey" type="checkbox" /> مفتاح الحل في صفحة أخيرة</label>
+        <button v-if="store.paper || store.bundle" type="button" class="btn btn-secondary" @click="printPaper">
+          طباعة أو حفظ PDF
+        </button>
+        <label v-if="store.paper || store.bundle" class="check">
+          <input v-model="print.showKey" type="checkbox" /> {{ store.bundle ? "المفاتيح في آخر الحزمة" : "مفتاح الحل في صفحة أخيرة" }}
+        </label>
       </div>
-      <p v-if="store.paper" class="print-hint">
+      <p v-if="store.paper || store.bundle" class="print-hint">
         في نافذة الطباعة اختر A4 وألغِ «الترويسات والتذييلات» حتى لا يطبع المتصفح الرابط والتاريخ فوق الورقة.
       </p>
       <p v-if="seedInvalid" id="seed-error" class="alert alert-error">رقم النموذج يجب أن يكون أرقامًا فقط.</p>
@@ -138,8 +156,23 @@ function printPaper() {
     </div>
   </div>
 
-  <div v-if="store.paper" ref="sheetWrap" class="sheet-focus" tabindex="-1" aria-live="polite" :aria-label="store.paper.title">
-    <PaperSheet :paper="store.paper" :header="print.header(store.paper)" :show-key="print.showKey" />
+  <div
+    v-if="store.paper || store.bundle"
+    ref="sheetWrap"
+    class="sheet-focus"
+    tabindex="-1"
+    aria-live="polite"
+    :aria-label="store.paper?.title ?? 'حزمة أوراق العمل'"
+  >
+    <PaperSheet v-if="store.paper" :paper="store.paper" :header="print.header(store.paper)" :show-key="print.showKey" />
+    <PaperBundle
+      v-else-if="store.bundle"
+      :papers="store.bundle"
+      :plan="store.bundlePlan"
+      :seed="store.bundleSeed"
+      :header="print.header"
+      :show-key="print.showKey"
+    />
   </div>
 </template>
 
@@ -184,7 +217,8 @@ function printPaper() {
 .sheet-focus:focus-visible {
   box-shadow: none;
 }
-.print-hint {
+.print-hint,
+.mode-hint {
   margin: 0;
   color: var(--color-ink-soft);
   font-size: var(--text-sm);

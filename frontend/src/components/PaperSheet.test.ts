@@ -34,6 +34,7 @@ const paper: Paper = {
   seed: 7,
   total_marks: 40,
   is_forecast: true,
+  level_counts: { A: 1 },
   level_marks: { A: 40 },
   level: "",
   questions: [

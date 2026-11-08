@@ -147,15 +147,35 @@ def running(port: int) -> bool:
     return port_busy(port)
 
 
+def stale_pids(port: int) -> list[int]:
+    """عمليات runserver على منفذنا بلا ملف pid (شيم uv يولّد حفيدًا، وويندوز يسمح بمستمعَين على المنفذ نفسه)."""
+    needle = f"runserver 127.0.0.1:{port}"
+    if os.name == "nt":
+        script = (
+            "Get-CimInstance Win32_Process -Filter \"Name like 'python%'\" | Where-Object { $_.CommandLine -like '*"
+            + needle
+            + "*' } | ForEach-Object { $_.ProcessId }"
+        )
+        cmd = ["powershell", "-NoProfile", "-Command", script]
+    else:
+        cmd = ["pgrep", "-f", needle]
+    out = subprocess.run(cmd, capture_output=True, text=True, creationflags=NO_WINDOW).stdout  # noqa: S603
+    return [int(x) for x in out.split() if x.isdigit() and int(x) != os.getpid()]
+
+
 def stop(port: int) -> bool:
     pid_path, _ = state_paths(port)
-    if not pid_path.exists():
-        return False
-    pid = int(pid_path.read_text(encoding="utf-8") or 0)
-    if pid and alive(pid):
+    stopped = False
+    if pid_path.exists():
+        pid = int(pid_path.read_text(encoding="utf-8") or 0)
+        if pid and alive(pid):
+            kill_tree(pid)
+        pid_path.unlink(missing_ok=True)
+        stopped = True
+    for pid in stale_pids(port):
         kill_tree(pid)
-    pid_path.unlink(missing_ok=True)
-    return True
+        stopped = True
+    return stopped
 
 
 def main() -> int:

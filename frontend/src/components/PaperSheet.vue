@@ -7,7 +7,10 @@ import { LEVEL_NAMES, type Paper, type Question } from "@/stores/papers";
 import type { PaperHeaderData } from "@/stores/print";
 import { marksLabel } from "@/utils/marks";
 
-const props = defineProps<{ paper: Paper; header: PaperHeaderData; showKey: boolean }>();
+// hideSheet: في الحزمة تُطبع المفاتيح كلها في آخرها، فتُعرض الورقة في موضعها ومفتاحها لاحقًا.
+const props = withDefaults(defineProps<{ paper: Paper; header: PaperHeaderData; showKey: boolean; hideSheet?: boolean }>(), {
+  hideSheet: false,
+});
 
 const OPTION_LABELS = ["أ", "ب", "ج", "د"];
 
@@ -33,7 +36,7 @@ const sectionNotes = computed(() => {
 </script>
 
 <template>
-  <article class="sheet">
+  <article v-if="!hideSheet" class="sheet">
     <PaperHeader :header="header" />
 
     <section v-for="question in paper.questions" :key="question.number" class="question">

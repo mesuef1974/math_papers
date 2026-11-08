@@ -75,8 +75,16 @@ export interface Paper {
   total_marks: number;
   is_forecast: boolean;
   level_marks: Partial<Record<Level, number>>;
+  level_counts: Partial<Record<Level, number>>;
   questions: Question[];
   level: Level | "";
+}
+
+export interface BundleEntry {
+  lesson: string;
+  title: string;
+  count: number;
+  levels: Partial<Record<Level, number>>;
 }
 
 export function query(params: Record<string, string | number | null>): string {
@@ -104,6 +112,10 @@ export const usePapersStore = defineStore("papers", {
     lessons: [] as Lesson[],
     blueprints: [] as Blueprint[],
     paper: null as Paper | null,
+    bundle: null as Paper[] | null,
+    bundlePlan: [] as BundleEntry[],
+    bundleSeed: 0,
+    bundleDone: 0,
     loading: false,
     optionsLoading: false,
     error: "",
@@ -141,6 +153,31 @@ export const usePapersStore = defineStore("papers", {
     },
     generateWorksheet(lesson: string, count: number, seed: number | null, level: Level | "" = "") {
       return this.fetchPaper(`/papers/worksheet?${query({ lesson, count, seed, level })}`);
+    },
+    // الحزمة: خطة من الخادم ثم ورقة لكل درس بالتوازي (كل واحدة بضع عشرات المللي ثانية ومخزنة في الكاش).
+    async generateBundle(blueprint: string, seed: number | null) {
+      this.loading = true;
+      this.error = "";
+      this.bundle = null;
+      this.bundleDone = 0;
+      try {
+        this.bundlePlan = await api.get<BundleEntry[]>(`/papers/bundle-plan?${query({ blueprint })}`);
+        this.bundleSeed = seed ?? Math.floor(Math.random() * 2_000_000_000);
+        const papers = await Promise.all(
+          this.bundlePlan.map(async (entry) => {
+            const paper = await api.get<Paper>(
+              `/papers/bundle-item?${query({ blueprint, lesson: entry.lesson, seed: this.bundleSeed })}`,
+            );
+            this.bundleDone += 1;
+            return paper;
+          }),
+        );
+        this.bundle = papers;
+      } catch (error) {
+        this.error = accessMessage(error) ?? "تعذر توليد الحزمة. حاول مرة أخرى.";
+      } finally {
+        this.loading = false;
+      }
     },
   },
 });

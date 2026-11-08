@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from django.contrib.auth.models import AbstractBaseUser
+from django.core.cache import cache
 from django.db import transaction
 
 from apps.core.services import record_audit
@@ -23,6 +24,7 @@ from .domain.generators import (
     available_lessons,
     generate,
     generator_version,
+    lesson_levels,
 )
 from .models import PrintProfile
 from .selectors import PROFILE_FIELDS, print_profile
@@ -193,3 +195,93 @@ def save_print_profile(user: AbstractBaseUser, data: dict[str, Any]) -> dict[str
             action="print_profile.save", actor=user, target=user.get_username(), payload={"fields": changed}
         )
     return print_profile(user)
+
+
+# حزمة كل أوراق العمل: عدد كل درس من وزنه في جدول المواصفات (4 + 2×الدرجات، بين 6 و12)،
+# والمستويات بنسبها في الجدول مع مسألة واحدة على الأقل من كل مستوى متاح، بترتيب سهل ثم متوسط ثم عليا.
+BUNDLE_MIN, BUNDLE_MAX = 6, 12
+
+
+def split_levels(count: int, available: list[str], weights: dict[str, int]) -> dict[str, int]:
+    """يوزّع count على المستويات المتاحة: 1 لكل مستوى ثم الباقي بنسب الأوزان (أكبر البواقي)."""
+    plan = dict.fromkeys(available, 1)
+    remaining = count - len(available)
+    total = sum(weights.get(level, 0) for level in available)
+    shares = {
+        level: (weights.get(level, 0) / total if total else 1 / len(available)) * remaining
+        for level in available
+    }
+    for level in available:
+        plan[level] += int(shares[level])
+    leftover = remaining - sum(int(shares[level]) for level in available)
+    by_fraction = sorted(available, key=lambda lv: shares[lv] - int(shares[lv]), reverse=True)
+    for level in by_fraction[:leftover]:
+        plan[level] += 1
+    return plan
+
+
+def bundle_plan(slug: str) -> list[dict]:
+    blueprint = selectors.blueprint_with_items(slug)
+    if blueprint is None:
+        raise UnknownBlueprintError(slug)
+    marks: dict[str, int] = defaultdict(int)
+    level_marks: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+    titles: dict[str, str] = {}
+    for item in blueprint.items.all():
+        code = item.lesson.code
+        titles[code] = item.lesson.title
+        marks[code] += item.marks
+        if item.level:
+            level_marks[code][item.level] += item.marks
+    ready = available_lessons()
+    plan = []
+    for code in sorted(marks):
+        if code not in ready:
+            continue
+        count = min(BUNDLE_MAX, max(BUNDLE_MIN, 4 + 2 * marks[code]))
+        # تمهيد +1 لكل مستوى متاح: الجدول يرجّح لا يحتكر (درس يُختبر سهلًا فقط لا يصير 6/1/1)
+        weights = {level: level_marks[code].get(level, 0) + 1 for level in lesson_levels(code)}
+        levels = split_levels(count, lesson_levels(code), weights)
+        plan.append({"lesson": code, "title": titles[code], "count": count, "levels": levels})
+    return plan
+
+
+def lesson_seed(bundle_seed: int, lesson_code: str) -> int:
+    """بذرة الدرس مشتقة من بذرة الحزمة: الحزمة نفسها تعيد الأوراق نفسها، وكل ورقة قابلة لإعادة التوليد وحدها."""
+    return random.Random(f"{bundle_seed}:{lesson_code}").randrange(MAX_SEED)  # noqa: S311 — حتمية لا أمنية
+
+
+def build_bundle_item(slug: str, lesson_code: str, bundle_seed: int) -> dict:
+    """ورقة درس واحد داخل الحزمة بخطة المستويات من الجدول، مرتبة سهل ثم متوسط ثم عليا، ومخزنة في الكاش."""
+    entry = next((row for row in bundle_plan(slug) if row["lesson"] == lesson_code), None)
+    if entry is None:
+        raise UnknownLessonError(lesson_code)
+    key = f"bundle:{generator_version()}:{slug}:{lesson_code}:{bundle_seed}"
+    cached = cache.get(key)
+    if cached is not None:
+        return cached
+    lesson = selectors.lessons().get(code=lesson_code)
+    seed = lesson_seed(bundle_seed, lesson_code)
+    rng = random.Random(seed)  # noqa: S311 — حتمية لا أمنية
+    used: set[str] = set()
+    questions = []
+    for level in LEVEL_NAMES:
+        for _ in range(entry["levels"].get(level, 0)):
+            problem = generate(lesson.code, rng, BlueprintItem.Kind.ESSAY, used, level)
+            used.add(problem.key)
+            slot = PartSlot("", lesson.code, lesson.title, BlueprintItem.Kind.ESSAY, 0, level)
+            part = render_part(problem, slot, rng)
+            questions.append({"number": len(questions) + 1, "kind": slot.kind, "marks": 0, "parts": [part]})
+    paper = {
+        **paper_meta("worksheet", blueprint=slug, lesson_code=lesson.code),
+        "title": f"ورقة عمل: {lesson.code} {lesson.title}",
+        "seed": seed,
+        "total_marks": 0,
+        "is_forecast": False,
+        "level_marks": {},
+        "level_counts": entry["levels"],
+        "questions": questions,
+        "level": "",
+    }
+    cache.set(key, paper, 60 * 60 * 24)
+    return paper
