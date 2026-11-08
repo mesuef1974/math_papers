@@ -12,8 +12,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends gcc libpq-dev &
 RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 WORKDIR /build
-COPY requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
+# requirements.lock مثبّت بالتجزئات (uv pip compile --generate-hashes)؛ أي حزمة غير مطابقة تُرفض.
+COPY requirements.txt requirements.lock ./
+RUN pip install --no-cache-dir --require-hashes -r requirements.lock
 
 # المرحلة 3: صورة التشغيل، مستخدم غير جذر، بلا مترجمات.
 FROM python:3.12-slim-bookworm
