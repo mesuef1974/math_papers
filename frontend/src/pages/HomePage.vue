@@ -1,17 +1,19 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from "vue";
 import PaperSheet from "@/components/PaperSheet.vue";
+import PrintSettings from "@/components/PrintSettings.vue";
 import { useAuthStore } from "@/stores/auth";
 import { LEVEL_NAMES, usePapersStore, type Level } from "@/stores/papers";
+import { usePrintStore } from "@/stores/print";
 
 const store = usePapersStore();
 const auth = useAuthStore();
+const print = usePrintStore();
 const mode = ref<"exam" | "worksheet">("exam");
 const blueprint = ref("");
 const lesson = ref("");
 const count = ref(8);
 const seedText = ref("");
-const showKey = ref(false);
 const level = ref<Level | "">("");
 const sheetWrap = ref<HTMLElement | null>(null);
 
@@ -45,7 +47,7 @@ async function generate() {
   }
 }
 
-function print() {
+function printPaper() {
   window.print();
 }
 </script>
@@ -109,12 +111,16 @@ function print() {
         <button type="submit" class="btn btn-primary" :disabled="!ready || store.loading">
           {{ store.loading ? "جارٍ التوليد" : "توليد الورقة" }}
         </button>
-        <button v-if="store.paper" type="button" class="btn btn-secondary" @click="print">طباعة أو حفظ PDF</button>
-        <label v-if="store.paper" class="check"><input v-model="showKey" type="checkbox" /> إظهار مفتاح الحل</label>
+        <button v-if="store.paper" type="button" class="btn btn-secondary" @click="printPaper">طباعة أو حفظ PDF</button>
+        <label v-if="store.paper" class="check"><input v-model="print.showKey" type="checkbox" /> مفتاح الحل في صفحة أخيرة</label>
       </div>
+      <p v-if="store.paper" class="print-hint">
+        في نافذة الطباعة اختر A4 وألغِ «الترويسات والتذييلات» حتى لا يطبع المتصفح الرابط والتاريخ فوق الورقة.
+      </p>
       <p v-if="seedInvalid" id="seed-error" class="alert alert-error">رقم النموذج يجب أن يكون أرقامًا فقط.</p>
       <p v-if="store.error" class="alert alert-error" role="alert" aria-live="assertive">{{ store.error }}</p>
     </form>
+    <PrintSettings v-if="auth.canGenerate" />
 
     <div v-if="store.paper?.is_forecast" class="alert alert-info notice">
       <p>هذا الاختبار مبني على جدول مواصفات متوقع غير رسمي، فالوزارة لا تصدر جدولًا للثانوية العامة.</p>
@@ -133,7 +139,7 @@ function print() {
   </div>
 
   <div v-if="store.paper" ref="sheetWrap" class="sheet-focus" tabindex="-1" aria-live="polite" :aria-label="store.paper.title">
-    <PaperSheet :paper="store.paper" :show-key="showKey" />
+    <PaperSheet :paper="store.paper" :header="print.header(store.paper)" :show-key="print.showKey" />
   </div>
 </template>
 
@@ -177,5 +183,10 @@ function print() {
 }
 .sheet-focus:focus-visible {
   box-shadow: none;
+}
+.print-hint {
+  margin: 0;
+  color: var(--color-ink-soft);
+  font-size: var(--text-sm);
 }
 </style>

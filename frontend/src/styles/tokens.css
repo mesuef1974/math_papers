@@ -50,6 +50,11 @@
   --font-sans: "Segoe UI", "Noto Sans Arabic", "Geeza Pro", "Dubai", Tahoma, Arial, sans-serif;
   --font-math: "Times New Roman", "Cambria Math", serif;
   --font-mono: Consolas, "Cascadia Mono", monospace;
+  /* الورق: خطوط أوراق الوزارة كما في اختبارات المدارس (Sakkal Majalla ثم Arial)، من الجهاز بلا تضمين لرخصتها */
+  --font-print: "Sakkal Majalla", Arial, "Segoe UI", "Noto Naskh Arabic", "Geeza Pro", sans-serif;
+  --print-body: 13pt;
+  --print-title: 15pt;
+  --print-small: 11pt;
 
   --text-xs: 0.8125rem;
   --text-sm: 0.9375rem;

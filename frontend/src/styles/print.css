@@ -1,10 +1,17 @@
 /*
   الطباعة: تُعاد متغيرات الهوية كلها إلى أبيض وأسود، فلا يحتاج أي مكون قواعد طباعة للألوان.
   الوضع الداكن معرّف للشاشة فقط، فلا يتسرب إلى الورق. الحبر الملون في الشارات ورسائل الخطأ يعود أسود أيضًا.
+  ترقيم الصفحات بصناديق هوامش @page؛ يدعمها Chromium 131+ (المتصفحات الأخرى تطبع بلا ترقيم).
 */
 @page {
   size: A4;
-  margin: 15mm 14mm 16mm;
+  margin: 14mm 14mm 16mm;
+  @bottom-center {
+    content: "صفحة " counter(page) " من " counter(pages);
+    font-family: var(--font-print);
+    font-size: 10pt;
+    color: #444444;
+  }
 }
 @media print {
   :root {
@@ -38,10 +45,15 @@
     --shadow-md: none;
     --focus-ring: none;
     --leading-body: 1.6;
+    --font-sans: var(--font-print);
   }
+  html,
   body {
     background: none;
-    font-size: 13pt;
+  }
+  body {
+    font-family: var(--font-print);
+    font-size: var(--print-body);
   }
   .no-print {
     display: none !important;
@@ -55,5 +67,8 @@
   }
   .badge {
     border: 1px solid var(--color-line-strong);
+  }
+  .katex {
+    font-size: 1.08em;
   }
 }

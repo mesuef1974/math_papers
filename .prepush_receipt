@@ -1,1 +1,1 @@
-{"head": "9da20a4f5c975b469785de8c80b1611589d12525", "at": 1794077986, "checks": {"ruff": "ok", "format": "ok", "migrations": "ok", "collisions": "missing", "secrets": "ok", "tests": "ok"}}
+{"head": "0b87c7f6d22ebb8696c5595dba5f616f35858f55", "at": 1794111207, "checks": {"ruff": "ok", "format": "ok", "migrations": "ok", "collisions": "missing", "secrets": "ok", "tests": "ok", "frontend": "ok"}}

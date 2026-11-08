@@ -1,6 +1,7 @@
 import { mount } from "@vue/test-utils";
 import { describe, expect, it } from "vitest";
 import type { Paper, Part } from "@/stores/papers";
+import type { PaperHeaderData } from "@/stores/print";
 import { marksLabel } from "@/utils/marks";
 import PaperSheet from "./PaperSheet.vue";
 
@@ -42,26 +43,58 @@ const paper: Paper = {
       marks: 1,
       parts: [part({ marks: 1, options: ["$1$", "$2$", "$3$", "$4$"], answer: "$2$", fingerprint: "q1" })],
     },
-    { number: 2, kind: "essay", marks: 12, parts: [part({ marks: 12, fingerprint: "q2" })] },
+    {
+      number: 2,
+      kind: "mcq",
+      marks: 1,
+      parts: [part({ marks: 1, options: ["$1$", "$2$", "$3$", "$4$"], answer: "$3$", fingerprint: "q2" })],
+    },
+    { number: 3, kind: "essay", marks: 12, parts: [part({ marks: 12, fingerprint: "q3" })] },
   ],
 };
 
+const header: PaperHeaderData = {
+  school: "مدرسة",
+  teacher: "",
+  subject: "الرياضيات",
+  grade: "",
+  title: paper.title,
+  minutes: 150,
+  date: "",
+  section: "",
+  totalMarks: 40,
+  instructions: "",
+  seed: 7,
+};
+
 describe("PaperSheet", () => {
-  it("يعرض الأسئلة والخيارات ومكان الحل، ويخفي المفتاح افتراضيًا", () => {
-    const wrapper = mount(PaperSheet, { props: { paper, showKey: false } });
-    expect(wrapper.findAll("section.question")).toHaveLength(2);
-    expect(wrapper.findAll(".options li")).toHaveLength(4);
-    expect(wrapper.find(".work-space").exists()).toBe(true);
+  it("يعرض الترويسة وتعليمات القسمين ومربعات الخيارات ومكان الحل، ويخفي المفتاح افتراضيًا", () => {
+    const wrapper = mount(PaperSheet, { props: { paper, header, showKey: false } });
+    expect(wrapper.text()).toContain("ساعتان ونصف");
+    const notes = wrapper.findAll(".section-note").map((n) => n.text());
+    expect(notes).toHaveLength(2);
+    expect(notes[0]).toContain("من 1 إلى 2");
+    expect(notes[1]).toContain("السؤال 3");
+    expect(wrapper.findAll(".options li .box")).toHaveLength(8);
+    expect(wrapper.find(".work-space").attributes("data-lines")).toBe("6");
     expect(wrapper.find(".answer-key").exists()).toBe(false);
     expect(wrapper.text()).toContain("رقم النموذج 7");
   });
 
-  it("يعرض المفتاح بشارة المستوى والخطوات عند الطلب", () => {
-    const wrapper = mount(PaperSheet, { props: { paper, showKey: true } });
+  it("المفتاح جدول بصف لكل جزء مع المستوى والدرس والخطوات", () => {
+    const wrapper = mount(PaperSheet, { props: { paper, header, showKey: true } });
     const key = wrapper.find(".answer-key");
     expect(key.exists()).toBe(true);
-    expect(key.findAll(".badge-a")).toHaveLength(2);
+    expect(key.findAll("tbody tr")).toHaveLength(3);
+    expect(key.findAll(".badge-a")).toHaveLength(3);
     expect(key.text()).toContain("اشتق كل حد");
+    expect(key.text()).toContain("مفتاح الحل");
+  });
+
+  it("ورقة بنوع واحد لا تحمل تعليمات أقسام", () => {
+    const sheet: Paper = { ...paper, kind: "worksheet", questions: [paper.questions[2]] };
+    const wrapper = mount(PaperSheet, { props: { paper: sheet, header, showKey: false } });
+    expect(wrapper.findAll(".section-note")).toHaveLength(0);
   });
 
   it("يجمع الدرجات بالعربية الصحيحة", () => {

@@ -9,6 +9,7 @@ from ninja.throttling import UserRateThrottle
 
 from apps.curriculum import selectors
 
+from . import selectors as paper_selectors
 from . import services
 from .access import TeacherAuth
 from .domain.generators import ExhaustedError, available_lessons, lesson_levels
@@ -100,6 +101,26 @@ class WorksheetQuery(Schema):
     level: Literal["K", "A", "R"] | None = None
 
 
+class PrintProfileOut(Schema):
+    school: str
+    teacher_name: str
+    subject: str
+    grade: str
+    exam_minutes: int
+    exam_instructions: str
+    worksheet_instructions: str
+
+
+class PrintProfileIn(Schema):
+    school: str = Field("", max_length=160)
+    teacher_name: str = Field("", max_length=120)
+    subject: str = Field(min_length=1, max_length=80)
+    grade: str = Field("", max_length=120)
+    exam_minutes: int = Field(ge=10, le=300)
+    exam_instructions: str = Field("", max_length=500)
+    worksheet_instructions: str = Field("", max_length=500)
+
+
 EXHAUSTED = "تعذر توليد مسائل مختلفة بهذا العدد. غيّر رقم النموذج أو قلّل العدد."
 
 
@@ -142,3 +163,16 @@ def worksheet(request: HttpRequest, query: Query[WorksheetQuery]):
         raise HttpError(404, "الدرس غير متاح بهذا المستوى") from error
     except ExhaustedError as error:
         raise HttpError(409, EXHAUSTED) from error
+
+
+@router.get("/print-profile", response=PrintProfileOut)
+def get_print_profile(request: HttpRequest):
+    return paper_selectors.print_profile(request.user)
+
+
+@router.put("/print-profile", response=PrintProfileOut)
+def put_print_profile(request: HttpRequest, payload: PrintProfileIn):
+    cleaned = {
+        key: value.strip() if isinstance(value, str) else value for key, value in payload.dict().items()
+    }
+    return services.save_print_profile(request.user, cleaned)

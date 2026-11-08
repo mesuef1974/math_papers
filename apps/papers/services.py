@@ -1,4 +1,4 @@
-"""تجميع الأوراق. لا كتابة في قاعدة البيانات: البذرة نفسها تعطي الورقة نفسها دائمًا."""
+"""تجميع الأوراق (قراءة فقط: البذرة نفسها تعطي الورقة نفسها دائمًا) وحفظ ترويسة الطباعة."""
 
 from __future__ import annotations
 
@@ -7,7 +7,12 @@ import random
 import secrets
 from collections import defaultdict
 from dataclasses import dataclass
+from typing import Any
 
+from django.contrib.auth.models import AbstractBaseUser
+from django.db import transaction
+
+from apps.core.services import record_audit
 from apps.curriculum import selectors
 from apps.curriculum.models import BlueprintItem
 
@@ -19,6 +24,8 @@ from .domain.generators import (
     generate,
     generator_version,
 )
+from .models import PrintProfile
+from .selectors import PROFILE_FIELDS, print_profile
 
 logger = logging.getLogger(__name__)
 
@@ -171,3 +178,18 @@ def build_worksheet(lesson_code: str, count: int, seed: int | None = None, level
         "questions": questions,
         "level": level or "",
     }
+
+
+@transaction.atomic
+def save_print_profile(user: AbstractBaseUser, data: dict[str, Any]) -> dict[str, Any]:
+    """يحفظ ترويسة المعلم (idempotent: الحفظ نفسه مرتين لا يغيّر شيئًا ولا يسجّل تدقيقًا ثانيًا)."""
+    row, created = PrintProfile.objects.get_or_create(user=user)
+    changed = [name for name in PROFILE_FIELDS if name in data and getattr(row, name) != data[name]]
+    for name in changed:
+        setattr(row, name, data[name])
+    if changed or created:
+        row.save()
+        record_audit(
+            action="print_profile.save", actor=user, target=user.get_username(), payload={"fields": changed}
+        )
+    return print_profile(user)
