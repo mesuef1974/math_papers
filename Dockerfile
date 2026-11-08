@@ -20,10 +20,14 @@ FROM python:3.12-slim-bookworm
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 \
     DJANGO_SETTINGS_MODULE=config.settings.production \
     PATH="/opt/venv/bin:$PATH"
-RUN apt-get update && apt-get install -y --no-install-recommends libpq5 wget && rm -rf /var/lib/apt/lists/*
+# fonts-noto-core: خطوط عربية (Noto Naskh/Sans Arabic) يطبع بها Chromium حين تغيب خطوط الوزارة في الحاوية.
+RUN apt-get update && apt-get install -y --no-install-recommends libpq5 wget fonts-noto-core && rm -rf /var/lib/apt/lists/*
 RUN groupadd -r app && useradd -r -g app -d /app app && mkdir -p /app/staticfiles /app/media && chown -R app:app /app
 WORKDIR /app
 COPY --from=builder /opt/venv /opt/venv
+# PDF خادمي: Chromium لـ Playwright مع اعتمادياته النظامية، في مسار مشترك يقرؤه المستخدم app (نحو 400 ميغابايت).
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+RUN playwright install --with-deps chromium && rm -rf /var/lib/apt/lists/* && chmod -R a+rX /ms-playwright
 COPY --chown=app:app . .
 COPY --from=frontend --chown=app:app /build/frontend_dist ./frontend_dist
 USER app
