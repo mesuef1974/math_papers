@@ -14,9 +14,12 @@ from . import selectors as paper_selectors
 from . import services
 from .access import TeacherAuth
 from .domain.generators import ExhaustedError, available_lessons, lesson_levels
+from .models import SavedPaper
 
 router = Router(tags=["الأوراق"], auth=TeacherAuth(), throttle=[UserRateThrottle()])
 Seed = Annotated[int, Field(ge=0, le=services.MAX_SEED)]
+# حد رمز الدرس من عمود الجدول نفسه، حتى لا تقبل الواجهة ما لا يحفظه العمود («1.1,1.2» للاختبار القصير)
+LESSON_CODE_MAX = SavedPaper._meta.get_field("lesson_code").max_length
 
 
 class LessonOut(Schema):
@@ -115,7 +118,7 @@ class WorksheetQuery(Schema):
 
 
 class QuizQuery(Schema):
-    lessons: str = Field(min_length=3, max_length=12)  # «1.1» أو «1.1,1.2»
+    lessons: str = Field(min_length=3, max_length=LESSON_CODE_MAX)  # «1.1» أو «1.1,1.2»
     seed: Seed | None = None
     form: Form = "A"
 
@@ -185,7 +188,7 @@ class RecipeIn(Schema):
     kind: Kind
     form: Form = "A"
     blueprint: str = Field("", max_length=80)
-    lesson_code: str = Field("", max_length=12)
+    lesson_code: str = Field("", max_length=LESSON_CODE_MAX)
     count: int = Field(0, ge=0, le=20)
     level: Literal["K", "A", "R", ""] = ""
     purpose: Literal["", "remedial", "enrichment"] = ""
