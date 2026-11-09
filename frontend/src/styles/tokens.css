@@ -16,10 +16,10 @@
   --color-line-strong: #c9c0b0;
   --color-grid: rgb(27 30 35 / 5%);
 
-  /* العلامة */
-  --color-brand: #7a1c3e;
-  --color-brand-strong: #5e1430;
-  --color-brand-soft: #f6e8ed;
+  /* العلامة: قيم هوية «أوراق» v2 من brand/math_papers/identity/tokens */
+  --color-brand: #842447;
+  --color-brand-strong: #6f1137;
+  --color-brand-soft: #f0dfe3;
   --color-on-brand: #ffffff;
   --color-sand: #a87b26;
   --color-sand-soft: #f6eedc;
@@ -40,8 +40,8 @@
   --color-level-k-soft: #e7f3eb;
   --color-level-a: #285e8a;
   --color-level-a-soft: #e7f0f8;
-  --color-level-r: #7a1c3e;
-  --color-level-r-soft: #f6e8ed;
+  --color-level-r: #842447;
+  --color-level-r-soft: #f0dfe3;
 
   --color-focus: #c58a1c;
 
@@ -115,10 +115,10 @@
     --color-line-strong: #454a50;
     --color-grid: rgb(236 234 230 / 4%);
 
-    --color-brand: #e48aa8;
-    --color-brand-strong: #f0a9c0;
-    --color-brand-soft: #3a1d28;
-    --color-on-brand: #1b0d13;
+    --color-brand: #d58298;
+    --color-brand-strong: #eda2b5;
+    --color-brand-soft: #3a1d28; /* أغمق من قيمة الهوية #3d3039 ليبقى النص عليه فوق 4.5:1 */
+    --color-on-brand: #14191f;
     --color-sand: #dcb468;
     --color-sand-soft: #352b18;
 
@@ -133,7 +133,7 @@
     --color-level-k-soft: #1b3123;
     --color-level-a: #94c2ea;
     --color-level-a-soft: #1a2a38;
-    --color-level-r: #e48aa8;
+    --color-level-r: #d58298;
     --color-level-r-soft: #3a1d28;
 
     --color-focus: #e0b45c;
