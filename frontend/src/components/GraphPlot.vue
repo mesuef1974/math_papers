@@ -128,7 +128,7 @@ svg {
 .ticks text {
   fill: var(--color-ink-soft);
   font-size: 12px;
-  stroke: var(--color-surface);
+  stroke: var(--color-sheet);
   stroke-width: 3.5px;
   stroke-linejoin: round;
   paint-order: stroke;
@@ -155,7 +155,7 @@ svg {
   fill: currentColor;
 }
 .dot.open {
-  fill: var(--color-surface);
+  fill: var(--color-sheet);
 }
 .caption {
   font-family: var(--font-math);

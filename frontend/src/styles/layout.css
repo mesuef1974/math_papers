@@ -41,15 +41,12 @@
   line-height: 1.25;
   min-inline-size: 0;
 }
-.brand-name strong {
-  font-size: var(--text-md);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
 .brand-name small {
+  white-space: nowrap;
   color: var(--color-ink-soft);
   font-size: var(--text-xs);
+  border-inline-start: 1px solid var(--color-line);
+  padding-inline-start: var(--space-3);
 }
 .nav {
   display: flex;
@@ -57,6 +54,9 @@
   gap: var(--space-1);
 }
 .nav-link {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
   font: inherit;
   font-size: var(--text-sm);
   white-space: nowrap;
@@ -95,13 +95,23 @@
   padding-block: var(--space-6);
 }
 
-@media (max-width: 560px) {
+/* العنوان الفرعي بجانب الشعار لا يتّسع على الشاشات المتوسطة فيلتفّ في عمود ضيق */
+@media (max-width: 860px) {
   .brand-name small {
     display: none;
   }
-  .brand-name strong {
-    white-space: normal;
-    font-size: var(--text-sm);
+}
+@media (max-width: 560px) {
+  .topbar-inner {
+    flex-wrap: wrap;
+    gap: var(--space-2) var(--space-3);
+    padding-block: var(--space-2);
+  }
+  .brand-name small {
+    display: none;
+  }
+  .nav-user .icon {
+    display: none;
   }
   .nav-link {
     padding-inline: var(--space-2);

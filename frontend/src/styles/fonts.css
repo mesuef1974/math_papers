@@ -1,0 +1,8 @@
+/* Cairo من هوية «أوراق»: خط متغير (وزن 200 إلى 1000) مجزّأ إلى العربية واللاتينية، رخصة OFL في assets/fonts. */
+@font-face {
+  font-family: "Cairo";
+  src: url("../assets/fonts/Cairo.woff2") format("woff2");
+  font-weight: 200 1000;
+  font-style: normal;
+  font-display: swap;
+}

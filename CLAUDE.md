@@ -32,9 +32,10 @@ PostgreSQL + Redis. النشر على Railway (`railway.toml`).
 - `TRUSTED_PROXY_COUNT` (الإنتاج 1 لـ Railway) يحدد عنوان العميل الحقيقي للقفل؛ لا تجعله صفرًا خلف وكيل.
 
 ## الهوية البصرية
-- «ورقة المربعات»: ورق دافئ وشبكة خافتة، وحبر داكن، وعنابي للفعل الأساسي، ورملي للتمييز. الشعار `BrandMark.vue` (ونسخته `public/favicon.svg`) ثابت في الوضعين.
-- الأنماط مركزية في `frontend/src/styles/` عبر `index.css`: `tokens.css` (المصدر الوحيد للألوان والخطوط والمسافات)، `base.css`، `layout.css`، `components.css` (`.btn`، `.field`، `.input`، `.panel`، `.alert`، `.badge-k/a/r`، `.segmented`)، `print.css` (يعيد المتغيرات إلى أبيض وأسود).
-- المكونات تستعمل الأصناف المشتركة والمتغيرات فقط؛ لا لون خام ولا متغير غير معرّف (يفرضه `styles/designTokens.test.ts`).
+- هوية «أوراق» v2 من أداة سِمة (مرجعها `brand/math_papers/identity/`): عنابي #842447 للفعل الأساسي، وذهبي #E3AB3C للتزيين فقط، وخط Cairo مضمَّن محليًا (OFL) بوزن 800 للعناوين، وزوايا حادة 2px، وأيقونات خط 1.75 في `assets/icons` عبر `AppIcon.vue`. الشعار المقفل `BrandLockup.vue` والرمز `BrandMark.vue` (ونسخته `public/favicon.svg`) يتبعان السمة: عنابي نهارًا وأبيض ليلًا. لا تُعدَّل ألوان الرمز.
+- السمة: نهارية، وليلية تلقائيًا بتفضيل النظام أو يدويًا من مبدّل الترويسة (`ThemeToggle.vue`، مخزن `stores/theme.ts`). التفضيل وحده في localStorage (ليس سرًّا)، ويُطبَّق قبل أول رسم بـ `public/theme-init.js` (ملف خارجي لأن CSP تمنع النص المضمّن). الليلي على الشاشة فقط ويعود الورق أبيض وأسود في الطباعة.
+- الأنماط مركزية في `frontend/src/styles/` عبر `index.css`: `tokens.css` (المصدر الوحيد للألوان والخطوط والمسافات؛ كتلتا الوضع الليلي متطابقتان)، `fonts.css`، `base.css`، `layout.css`، `components.css` (`.btn`، `.field`، `.input`، `.panel`، `.alert`، `.badge-k/a/r`، `.segmented`، `.icon`)، `print.css` (يعيد المتغيرات إلى أبيض وأسود).
+- المكونات تستعمل الأصناف المشتركة والمتغيرات فقط؛ لا لون خام ولا متغير غير معرّف (يفرضه `styles/designTokens.test.ts`)، والتباين بين كل نص وخلفيته 4.5:1 فأكثر، والحدود والتركيز 3:1، في الوضعين (يفرضه `styles/contrast.test.ts`). أي لون جديد يُضاف في الكتلتين ويُضاف زوجه إلى الاختبار.
 - المدى الرقمي في نص عربي (السنوات) يُعرض عبر `isolateNumberRanges` من `utils/bidi.ts`.
 
 ## أوامر

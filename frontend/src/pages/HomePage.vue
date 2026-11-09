@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
+import AppIcon from "@/components/AppIcon.vue";
 import PaperBundle from "@/components/PaperBundle.vue";
 import PaperSet from "@/components/PaperSet.vue";
 import PrintSettings from "@/components/PrintSettings.vue";
@@ -152,10 +153,10 @@ function downloadPdf() {
       <fieldset class="mode">
         <legend class="visually-hidden">نوع الورقة</legend>
         <div class="segmented">
-          <label><input v-model="mode" type="radio" value="exam" /><span>اختبار كامل</span></label>
-          <label><input v-model="mode" type="radio" value="quiz" /><span>اختبار قصير</span></label>
-          <label><input v-model="mode" type="radio" value="worksheet" /><span>ورقة عمل</span></label>
-          <label><input v-model="mode" type="radio" value="bundle" /><span>كل أوراق العمل بضغطة</span></label>
+          <label><input v-model="mode" type="radio" value="exam" /><span><AppIcon name="test" />اختبار كامل</span></label>
+          <label><input v-model="mode" type="radio" value="quiz" /><span><AppIcon name="problem" />اختبار قصير</span></label>
+          <label><input v-model="mode" type="radio" value="worksheet" /><span><AppIcon name="worksheet" />ورقة عمل</span></label>
+          <label><input v-model="mode" type="radio" value="bundle" /><span><AppIcon name="curriculum" />كل أوراق العمل بضغطة</span></label>
         </div>
       </fieldset>
 
@@ -230,10 +231,10 @@ function downloadPdf() {
         <button type="submit" class="btn btn-primary" :disabled="!ready || store.loading">
           <template v-if="store.loading && mode === 'bundle'">جارٍ توليد {{ store.bundleDone }} من {{ store.bundlePlan.length }}</template>
           <template v-else-if="store.loading">جارٍ التوليد</template>
-          <template v-else>{{ generateLabel }}</template>
+          <template v-else><AppIcon name="generate" />{{ generateLabel }}</template>
         </button>
         <button v-if="store.paper || store.bundle" type="button" class="btn btn-secondary" @click="printPaper">
-          طباعة أو حفظ PDF
+          <AppIcon name="print" />طباعة أو حفظ PDF
         </button>
         <button v-if="store.paper" type="button" class="btn btn-secondary" :disabled="pdf.busy" @click="downloadPdf">
           {{ pdf.busy ? pdf.statusText : "تنزيل PDF من الخادم" }}
