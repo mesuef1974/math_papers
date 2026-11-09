@@ -1,16 +1,25 @@
 {% extends "admin/base.html" %}
-{% load django_vite %}
+{% load django_vite static %}
+
+{% block dark-mode-vars %}
+  <script src="{% static 'theme-init.js' %}"></script>
+{% endblock %}
 
 {% block extrastyle %}{{ block.super }}<link rel="stylesheet" href="{% vite_asset_url 'src/styles/admin.css' %}">{% endblock %}
 
 {% block title %}{% if subtitle %}{{ subtitle }} | {% endif %}{{ title }} | {{ site_title|default:_('Django site admin') }}{% endblock %}
 
 {% block branding %}
-<div id="site-name"><a href="{% url 'admin:index' %}">{{ site_header|default:_('Django administration') }}</a></div>
+<div id="site-name"><a href="{% url 'admin:index' %}">{% include "admin/_lockup.html" %}<span>{{ site_header|default:_('Django administration') }}</span></a></div>
 {% endblock %}
 
 {% block usertools %}
 <div id="user-tools">
+  <span class="admin-theme" role="group" aria-label="سمة الواجهة">
+    <button type="button" data-theme-set="light" aria-pressed="false">نهاري</button>
+    <button type="button" data-theme-set="auto" aria-pressed="false">تلقائي</button>
+    <button type="button" data-theme-set="dark" aria-pressed="false">ليلي</button>
+  </span>
   <a href="/">العودة إلى المنصة</a> /
   {% if user.is_active and user.is_staff %}
     <strong>{% firstof user.get_short_name user.get_username %}</strong> /
@@ -19,3 +28,5 @@
   {% endif %}
 </div>
 {% endblock %}
+
+{% block extrahead %}{{ block.super }}<script src="{% static 'admin-theme.js' %}" defer></script>{% endblock %}
