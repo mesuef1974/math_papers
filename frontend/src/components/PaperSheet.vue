@@ -202,7 +202,7 @@ watchEffect(() => {
 
 <style scoped>
 .sheet {
-  background: var(--color-surface);
+  background: var(--color-sheet);
   border: var(--border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-md);
@@ -344,7 +344,7 @@ watchEffect(() => {
   inline-size: 56px;
   block-size: 26px;
   border: 1px solid var(--color-ink);
-  background: var(--color-surface);
+  background: var(--color-sheet);
 }
 .booklet .options {
   grid-template-columns: minmax(0, 1fr);

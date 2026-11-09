@@ -18,7 +18,7 @@
   max-inline-size: 62ch;
 }
 
-/* اللوحة: سطح أبيض على ورقة المربعات */
+/* اللوحة: سطح الهوية على الخلفية، بحدّ لا بظل ثقيل */
 .panel {
   background: var(--color-surface);
   border: var(--border);
@@ -60,13 +60,18 @@
   background: var(--color-brand-strong);
 }
 .btn-secondary {
-  background: var(--color-surface);
-  color: var(--color-brand);
+  background: transparent;
+  color: var(--color-ink);
   border-color: var(--color-line-strong);
 }
 .btn-secondary:hover:not(:disabled) {
   border-color: var(--color-brand);
   background: var(--color-brand-soft);
+  color: var(--color-brand-strong);
+}
+.btn .icon {
+  inline-size: 20px;
+  block-size: 20px;
 }
 .btn:disabled {
   opacity: 0.5;
@@ -95,7 +100,7 @@
   font-weight: var(--weight-regular);
   font-size: var(--text-md);
   color: var(--color-ink);
-  background: var(--color-surface);
+  background: var(--color-field);
   border: 1px solid var(--color-line-strong);
   border-radius: var(--radius-sm);
   min-block-size: 42px;
@@ -152,7 +157,9 @@
   cursor: pointer;
 }
 .segmented span {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
   font-size: var(--text-sm);
   font-weight: var(--weight-medium);
   color: var(--color-ink-soft);
@@ -161,8 +168,12 @@
   border-radius: var(--radius-sm);
   transition: background-color var(--duration) var(--ease), color var(--duration) var(--ease);
 }
+.segmented .icon {
+  inline-size: 20px;
+  block-size: 20px;
+}
 .segmented input:checked + span {
-  background: var(--color-surface);
+  background: var(--color-field);
   color: var(--color-brand);
   box-shadow: var(--shadow-sm);
 }
@@ -220,6 +231,18 @@
   color: var(--color-level-r);
   background: var(--color-level-r-soft);
   border-color: transparent;
+}
+
+/* الأيقونة: خطوط الهوية، تأخذ لون النص المحيط */
+.icon {
+  display: inline-flex;
+  flex: none;
+  inline-size: 22px;
+  block-size: 22px;
+}
+.icon svg {
+  inline-size: 100%;
+  block-size: 100%;
 }
 
 .visually-hidden {

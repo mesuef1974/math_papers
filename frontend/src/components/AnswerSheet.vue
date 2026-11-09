@@ -57,7 +57,7 @@ const title = computed(() => `${props.answers ? "مفتاح ورقة الإجا�
 
 <style scoped>
 .sheet {
-  background: var(--color-surface);
+  background: var(--color-sheet);
   border: var(--border);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-md);

@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { onMounted, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import BrandMark from "@/components/BrandMark.vue";
+import AppIcon from "@/components/AppIcon.vue";
+import BrandLockup from "@/components/BrandLockup.vue";
+import ThemeToggle from "@/components/ThemeToggle.vue";
 import { useAppStore } from "@/stores/app";
 import { useAuthStore } from "@/stores/auth";
 import { usePapersStore } from "@/stores/papers";
@@ -33,9 +35,9 @@ async function logout() {
   <header class="topbar no-print">
     <div class="container topbar-inner">
       <RouterLink class="brand" to="/" :aria-label="store.siteTitle">
-        <BrandMark />
+        <BrandLockup :height="40" />
         <span class="brand-name">
-          <strong>{{ store.siteTitle }}</strong>
+          <strong class="visually-hidden">{{ store.siteTitle }}</strong>
           <small v-if="store.subtitle">{{ store.subtitle }}</small>
         </span>
       </RouterLink>
@@ -44,11 +46,12 @@ async function logout() {
         <RouterLink v-if="auth.canGenerate" class="nav-link" to="/saved">أوراقي</RouterLink>
         <RouterLink class="nav-link" to="/about">عن المنصة</RouterLink>
         <a v-if="auth.user?.admin_url" class="nav-link" :href="auth.user.admin_url">الإدارة</a>
-        <button v-if="auth.user" type="button" class="nav-link" :title="auth.user.username" @click="logout">
-          خروج
+        <button v-if="auth.user" type="button" class="nav-link nav-user" :title="auth.user.username" @click="logout">
+          <AppIcon name="teacher" />خروج
         </button>
         <RouterLink v-else class="nav-link" to="/login">دخول</RouterLink>
       </nav>
+      <ThemeToggle />
     </div>
   </header>
   <main class="container page">
