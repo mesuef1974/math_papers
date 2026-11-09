@@ -109,6 +109,10 @@ def supervise(
     def cleanup() -> None:
         if child.poll() is None:
             kill_tree(child.pid)
+            try:
+                child.wait(timeout=10)  # حصاد الابن: بلا ذلك يبقى zombie على POSIX ويبدو حيًّا
+            except subprocess.TimeoutExpired:
+                pass
         pid_path.unlink(missing_ok=True)
         log.close()
 
