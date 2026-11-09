@@ -23,10 +23,9 @@
   --color-on-brand: #ffffff;
   --color-sand: #a87b26;
   --color-sand-soft: #f6eedc;
-  /* الشعار ثابت في الوضعين: هو العلامة، لا يتبع السمة */
-  --color-mark-tile: #7a1c3e;
-  --color-mark-ink: #ffffff;
-  --color-mark-dot: #d9a441;
+  /* الشعار: حبره لون العلامة على الفاتح وأبيض على الداكن، ولون التمييز ثابت (مولَّد بأداة سِمة) */
+  --color-mark-ink: #842447;
+  --color-mark-accent: #e3ab3c;
 
   /* الحالات */
   --color-danger: #a3312a;
@@ -106,6 +105,7 @@
 /* الوضع الداكن على الشاشة فقط؛ الطباعة دائمًا بالأبيض والأسود من print.css */
 @media screen and (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
+    --color-mark-ink: #ffffff;
     --color-paper: #15171a;
     --color-surface: #1d2024;
     --color-surface-sunken: #181b1e;
