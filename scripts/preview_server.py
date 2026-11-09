@@ -60,8 +60,18 @@ def kill_tree(pid: int) -> None:
             creationflags=NO_WINDOW,
         )
         return
+    _posix_kill(pid)
+
+
+def _posix_kill(pid: int) -> None:
+    # killpg يقتل كل من في مجموعة الابن. إن كان الابن في مجموعتنا نحن (لم يُشغَّل بجلسة جديدة) قتلنا أنفسنا
+    # ومن شغّلنا معه، فلا تُقتل المجموعة إلا إذا كانت غير مجموعتنا.
     try:
-        os.killpg(os.getpgid(pid), signal.SIGKILL)
+        pgid = os.getpgid(pid)
+        if pgid == os.getpgrp():
+            os.kill(pid, signal.SIGKILL)
+        else:
+            os.killpg(pgid, signal.SIGKILL)
     except OSError:
         pass
 
@@ -99,6 +109,10 @@ def supervise(
     def cleanup() -> None:
         if child.poll() is None:
             kill_tree(child.pid)
+            try:
+                child.wait(timeout=10)  # حصاد الابن: بلا ذلك يبقى zombie على POSIX ويبدو حيًّا
+            except subprocess.TimeoutExpired:
+                pass
         pid_path.unlink(missing_ok=True)
         log.close()
 

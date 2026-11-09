@@ -78,3 +78,26 @@ def test_running_true_when_port_is_busy_without_pid_file(tmp_path, monkeypatch):
         sock.bind(("127.0.0.1", 0))
         sock.listen()
         assert ps.running(sock.getsockname()[1]) is True
+
+
+def _fake_posix(monkeypatch, child_group, our_group):
+    calls = []
+    monkeypatch.setattr(ps.os, "getpgid", lambda pid: child_group, raising=False)
+    monkeypatch.setattr(ps.os, "getpgrp", lambda: our_group, raising=False)
+    monkeypatch.setattr(ps.os, "killpg", lambda pgid, sig: calls.append(("killpg", pgid)), raising=False)
+    monkeypatch.setattr(ps.os, "kill", lambda pid, sig: calls.append(("kill", pid)))
+    monkeypatch.setattr(ps.signal, "SIGKILL", 9, raising=False)
+    return calls
+
+
+def test_posix_kill_spares_our_own_process_group(monkeypatch):
+    # ابن في مجموعتنا: قتل المجموعة يقتل pytest ومشغّل CI معه، فتُقتل العملية وحدها
+    calls = _fake_posix(monkeypatch, child_group=77, our_group=77)
+    ps._posix_kill(1234)
+    assert calls == [("kill", 1234)]
+
+
+def test_posix_kill_takes_the_whole_group_of_a_detached_child(monkeypatch):
+    calls = _fake_posix(monkeypatch, child_group=1234, our_group=77)
+    ps._posix_kill(1234)
+    assert calls == [("killpg", 1234)]
