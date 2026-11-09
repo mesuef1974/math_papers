@@ -60,8 +60,18 @@ def kill_tree(pid: int) -> None:
             creationflags=NO_WINDOW,
         )
         return
+    _posix_kill(pid)
+
+
+def _posix_kill(pid: int) -> None:
+    # killpg يقتل كل من في مجموعة الابن. إن كان الابن في مجموعتنا نحن (لم يُشغَّل بجلسة جديدة) قتلنا أنفسنا
+    # ومن شغّلنا معه، فلا تُقتل المجموعة إلا إذا كانت غير مجموعتنا.
     try:
-        os.killpg(os.getpgid(pid), signal.SIGKILL)
+        pgid = os.getpgid(pid)
+        if pgid == os.getpgrp():
+            os.kill(pid, signal.SIGKILL)
+        else:
+            os.killpg(pgid, signal.SIGKILL)
     except OSError:
         pass
 
