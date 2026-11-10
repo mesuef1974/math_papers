@@ -3,6 +3,9 @@ name: بوابة الجودة
 on:
   pull_request:
     branches: [main]
+  # الدفع إلى main (إيداع الدمج): Railway ينتظر فحوص الإيداع قبل النشر التلقائي، فبلا هذا يبقى النشر WAITING.
+  push:
+    branches: [main]
   merge_group:
   workflow_dispatch:
 
@@ -11,12 +14,12 @@ permissions:
 
 concurrency:
   group: quality-gate-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name != 'push' }}  # لا يُلغى فحص إيداع main بإيداع بعده
 
 env:
   DJANGO_SETTINGS_MODULE: config.settings.testing
-  SECRET_KEY: ci-testing-only
-  DATABASE_URL: postgres://app:app@localhost:5432/app
+  SECRET_KEY: ci-testing-only  # pragma: allowlist secret
+  DATABASE_URL: postgres://app:app@localhost:5432/app  # pragma: allowlist secret
 
 jobs:
   lint:
@@ -33,7 +36,8 @@ jobs:
       - run: ruff format --check .
       - name: detect-secrets على ما تغيّر
         run: |
-          base="${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}"
+          base="${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before }}"
+          case "$base" in ""|0000000000000000000000000000000000000000) base="HEAD~1" ;; esac
           files=$(git diff --name-only "$base"...HEAD -- . ':!frontend/package-lock.json' | xargs -r ls 2>/dev/null || true)
           [ -z "$files" ] || detect-secrets scan $files | python -c "import json,sys; r=json.load(sys.stdin)['results']; print(r); sys.exit(1 if r else 0)"
 
@@ -44,7 +48,7 @@ jobs:
     services:
       postgres:
         image: postgres:16-alpine
-        env: { POSTGRES_USER: app, POSTGRES_PASSWORD: app, POSTGRES_DB: app }
+        env: { POSTGRES_USER: app, POSTGRES_PASSWORD: app, POSTGRES_DB: app }  # pragma: allowlist secret
         ports: ["5432:5432"]
         options: --health-cmd "pg_isready -U app" --health-interval 5s --health-retries 10
     steps:
