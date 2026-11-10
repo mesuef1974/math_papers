@@ -55,8 +55,9 @@ def test_remedial_and_enrichment_worksheets(client):
         "/api/v1/papers/worksheet", {"lesson": "2.4", "count": 6, "seed": 2, "purpose": "enrichment"}
     ).json()
     assert enrich["title"].startswith("ورقة إثرائية:") and enrich["level"] == "R"
-    # 3.5 بلا مستوى سهل: العلاجية غير متاحة
-    assert client.get("/api/v1/papers/worksheet", {"lesson": "3.5", "purpose": "remedial"}).status_code == 404
+    # 3.5 صار له مستوى سهل (كتابة الدالة من القيد)، فالعلاجية متاحة لكل الدروس
+    late = client.get("/api/v1/papers/worksheet", {"lesson": "3.5", "count": 6, "purpose": "remedial"})
+    assert late.status_code == 200 and late.json()["level"] == "K"
 
 
 @pytest.mark.django_db

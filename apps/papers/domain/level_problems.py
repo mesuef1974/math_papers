@@ -732,3 +732,82 @@ def concavity_from_second_derivative(rng: random.Random) -> Problem:
         "K",
         {"type": "concavity", "f": f, "at": h, "right_side": right_side, "up": ask_up},
     )
+
+
+DECLINE_CONTEXTS = (
+    ("عدد زوار معرض", "ساعة", "افتتاحه", "عدد الزوار", False),
+    ("منسوب الماء في خزان بالسنتيمتر", "دقيقة", "فتح الصمام", "المنسوب", False),
+    ("عدد مشاهدي بث مباشر", "دقيقة", "بدايته", "عدد المشاهدين", False),
+    ("مبيعات متجر بالريال", "يومًا", "بدء الحملة", "المبيعات", True),
+)
+
+
+@variant("3.1")
+def decline_start(rng: random.Random) -> Problem:
+    """نموذج تطبيقي: N'(t) = -3(t-q)(t+p)، فيتزايد حتى t=q ثم يتناقص داخل المجال."""
+    p = rng.randint(1, 5)
+    q = p + 2 * rng.randint(0, 3) + rng.choice([0, 2]) or 2
+    end = q + rng.randint(2, 4)
+    model = -(x**3) + sp.Rational(3, 2) * (q - p) * x**2 + 3 * p * q * x
+    start = 10 * rng.randint(2, 12)
+    start = max(start, 10 * (int(-model.subs(x, end)) // 10 + 2))
+    model = sp.expand(model + start)
+    quantity, unit, since, name, feminine = rng.choice(DECLINE_CONTEXTS)
+    modelled, begins = ("تُنمذَج", "تبدأ") if feminine else ("يُنمذَج", "يبدأ")
+    t = sp.Symbol("t")
+    shown, derivative = model.subs(x, t), sp.factor(sp.diff(model, x)).subs(x, t)
+    answer = f"$t={q}$"
+    return Problem(
+        "3.1",
+        f"{modelled} {quantity} بعد $t$ {unit} من {since} بالدالة $N(t)={tex(shown)}$ حيث $0\\le t\\le {end}$. "
+        f"عند أي قيمة للزمن $t$ {begins} {name} بالتناقص؟ برر إجابتك.",
+        answer,
+        wrongs(answer, f"$t={p}$" if p != q else f"$t={q + 1}$", f"$t={end}$", "$t=0$", f"$t={q - 1}$"),
+        (
+            f"$N'(t)={tex(derivative)}$",
+            f"داخل المجال $N'(t)=0$ عند $t={q}$ فقط، لأن $t=-{p}$ خارج المجال.",
+            f"$N'(t)>0$ على $(0,{q})$ و$N'(t)<0$ على $({q},{end})$.",
+            f"إذن {begins} {name} بالتناقص عند {answer}.",
+        ),
+        "R",
+        {"type": "turning", "f": model, "at": q, "low": 0, "high": end},
+    )
+
+
+SURFACE_SHAPES = (
+    ("صندوق مفتوح من الأعلى", False),
+    ("صندوق مغلق", True),
+    ("خزان على شكل متوازي مستطيلات مفتوح من الأعلى", False),
+    ("علبة مغلقة على شكل متوازي مستطيلات", True),
+)
+
+
+@variant("3.5")
+def surface_in_one_variable(rng: random.Random) -> Problem:
+    """المهارة السابقة لمسائل القيم المثلى: التعويض من قيد الحجم لكتابة الدالة بمتغير واحد."""
+    volume = 4 * rng.randint(2, 60)
+    shape, closed = rng.choice(SURFACE_SHAPES)
+    bases = 2 if closed else 1
+    surface = bases * x**2 + sp.Rational(4 * volume) / x
+    answer = f"$S(x)={tex(surface)}$"
+    other = (3 - bases) * x**2 + sp.Rational(4 * volume) / x
+    return Problem(
+        "3.5",
+        f"{shape} قاعدته مربعة طول ضلعها $x$ سم وحجمه ${volume}$ سم³. "
+        "اكتب المساحة السطحية $S$ بدلالة $x$ فقط.",
+        answer,
+        wrongs(
+            answer,
+            f"$S(x)={tex(other)}$",
+            f"$S(x)={tex(bases * x**2 + sp.Rational(volume) / x)}$",
+            f"$S(x)={tex(bases * x**2 + sp.Rational(4 * volume) / x**2)}$",
+        ),
+        (
+            f"إذا كان الارتفاع $h$ فالحجم $x^2h={volume}$، ومنه $h={tex(sp.Rational(volume) / x**2)}$.",
+            f"المساحة السطحية: {'قاعدتان' if closed else 'قاعدة واحدة'} وأربعة أوجه جانبية، "
+            f"أي $S={tex(bases * x**2)}+4xh$.",
+            f"بالتعويض عن $h$: {answer}",
+        ),
+        "K",
+        {"type": "surface", "S": surface, "volume": volume, "closed": closed},
+    )
