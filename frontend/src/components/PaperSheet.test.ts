@@ -20,7 +20,7 @@ function part(overrides: Partial<Part> = {}): Part {
     graph: null,
     option_graphs: [],
     variant: "power_rule",
-    fingerprint: "abc123def456",
+    fingerprint: "fp-demo-0001",
     slot: { kind: "essay", level: "A", needs_graph: false },
     ...overrides,
   };
@@ -119,7 +119,7 @@ describe("PaperSheet", () => {
     const wrapper = mount(PaperSheet, { props: { paper, header, showKey: true } });
     const key = wrapper.find(".answer-key");
     expect(key.exists()).toBe(true);
-    expect(key.findAll(".mcq-key tbody tr").map((r) => `${r.find("th").text()} ${r.find("td").text()}`)).toEqual(["1 ب", "2 ج"]);
+    expect(key.findAll(".mcq-key tbody tr").map((r) => `${r.find("th").text()} ${r.find("td").text()}`)).toEqual(["1 B", "2 C"]);
     expect(key.findAll("table:not(.mcq-key) tbody tr")).toHaveLength(3);
     expect(key.findAll(".badge-a")).toHaveLength(3);
     expect(key.text()).toContain("اشتق كل حد");

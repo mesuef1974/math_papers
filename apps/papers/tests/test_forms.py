@@ -50,7 +50,7 @@ def test_worksheet_form_b(client):
 @pytest.mark.django_db
 def test_answer_index_points_at_the_correct_option(client):
     paper = client.get("/api/v1/papers/exam", {"blueprint": SLUG, "seed": 3}).json()
-    labels = "أبجد"
+    labels = "ABCD"
     for question in paper["questions"]:
         for part in question["parts"]:
             if not part["options"]:
