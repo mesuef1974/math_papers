@@ -218,7 +218,7 @@ def cases(*rows: tuple[Any, str]) -> str:
 
 
 def lim(at: Any, body: str) -> str:
-    return rf"\lim_{{x \to {tex(at)}}} {body}"
+    return rf"\lim\limits_{{x \to {tex(at)}}} {body}"
 
 
 def frac(top: Any, bottom: Any) -> str:
@@ -409,7 +409,7 @@ def limit_sine_ratio(rng: random.Random) -> Problem:
         wrongs(value, sp.Rational(b, a), 1, 0),
         (
             rf"نكتب الكسر بالصورة ${tex(value)}\cdot{frac(sp.sin(a * x), a * x)}$",
-            rf"بما أن $\lim_{{u \to 0}}\frac{{\sin u}}{{u}}=1$ فالنهاية ${tex(value)}$",
+            rf"بما أن $\lim\limits_{{u \to 0}}\frac{{\sin u}}{{u}}=1$ فالنهاية ${tex(value)}$",
         ),
         "A",
         {"type": "limit", "expr": sp.sin(a * x) / (b * x), "at": 0, "value": value},
@@ -426,7 +426,7 @@ def limit_tan_over_sin(rng: random.Random) -> Problem:
         m(value),
         wrongs(value, sp.Rational(b, a), 1, 0),
         (
-            r"نقسم البسط والمقام على $x$ ونستعمل $\lim_{u \to 0}\frac{\tan u}{u}=\lim_{u \to 0}\frac{\sin u}{u}=1$",
+            r"نقسم البسط والمقام على $x$ ونستعمل $\lim\limits_{u \to 0}\frac{\tan u}{u}=\lim\limits_{u \to 0}\frac{\sin u}{u}=1$",
             f"فالنهاية ${tex(value)}$",
         ),
         "A",
@@ -522,7 +522,7 @@ def derivative_as_limit_h(rng: random.Random) -> Problem:
     value = d.subs(x, a)
     return Problem(
         "2.2",
-        rf"إذا كانت $f(x)={tex(f)}$ فما قيمة $\lim_{{h \to 0}}\dfrac{{f({a}+h)-f({a})}}{{h}}$؟",
+        rf"إذا كانت $f(x)={tex(f)}$ فما قيمة $\lim\limits_{{h \to 0}}\dfrac{{f({a}+h)-f({a})}}{{h}}$؟",
         m(value),
         wrongs(value, f.subs(x, a), 2 * p * a, 0),
         (f"هذه النهاية هي تعريف $f'({a})$.", f"$f'(x)={tex(d)}$", f"$f'({a})={tex(value)}$"),
@@ -539,7 +539,7 @@ def derivative_as_limit_x(rng: random.Random) -> Problem:
     value = d.subs(x, a)
     return Problem(
         "2.2",
-        rf"إذا كانت $f(x)={tex(f)}$ فما قيمة $\lim_{{x \to {a}}}\dfrac{{f(x)-f({a})}}{{{tex(x - a)}}}$؟",
+        rf"إذا كانت $f(x)={tex(f)}$ فما قيمة $\lim\limits_{{x \to {a}}}\dfrac{{f(x)-f({a})}}{{{tex(x - a)}}}$؟",
         m(value),
         wrongs(value, f.subs(x, a), 3 * p * a, 0),
         (f"هذه النهاية هي $f'({a})$.", f"$f'(x)={tex(d)}$", f"$f'({a})={tex(value)}$"),

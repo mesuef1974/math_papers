@@ -133,7 +133,7 @@ def limit_sine_simple(rng: random.Random) -> Problem:
         m(value),
         wrongs(value, sp.Rational(b, a), sp.Integer(a), sp.Integer(0), sp.Integer(1)),
         (
-            rf"$\lim_{{x\to0}}\dfrac{{\sin {a}x}}{{{a}x}}=1$",
+            rf"$\lim\limits_{{x\to0}}\dfrac{{\sin {a}x}}{{{a}x}}=1$",
             f"إذن النهاية $\\dfrac{{{a}}}{{{b}}}={tex(value)}$",
         ),
         "K",
@@ -154,7 +154,7 @@ def limit_sine_tangent_product(rng: random.Random) -> Problem:
         m(value),
         wrongs(value, sp.Rational(a + b, c), sp.Integer(a * b), sp.Rational(c, a * b), sp.Integer(0)),
         (
-            rf"$=\dfrac{{1}}{{{c}}}\cdot\lim_{{x\to0}}\dfrac{{\sin {a}x}}{{x}}\cdot\lim_{{x\to0}}\dfrac{{\tan {b}x}}{{x}}$",
+            rf"$=\dfrac{{1}}{{{c}}}\cdot\lim\limits_{{x\to0}}\dfrac{{\sin {a}x}}{{x}}\cdot\lim\limits_{{x\to0}}\dfrac{{\tan {b}x}}{{x}}$",
             rf"$=\dfrac{{1}}{{{c}}}\cdot {a}\cdot {b}={tex(value)}$",
         ),
         "R",
@@ -279,8 +279,8 @@ def derivative_definition_at_point(rng: random.Random) -> Problem:
         m(value),
         wrongs(value, f.subs(x, a), value + a2, -value),
         (
-            rf"$f'({a})=\lim_{{h\to0}}\dfrac{{f({a}+h)-f({a})}}{{h}}$",
-            rf"$=\lim_{{h\to0}}\left({tex(quotient)}\right)={tex(value)}$",
+            rf"$f'({a})=\lim\limits_{{h\to0}}\dfrac{{f({a}+h)-f({a})}}{{h}}$",
+            rf"$=\lim\limits_{{h\to0}}\left({tex(quotient)}\right)={tex(value)}$",
         ),
         "A",
         {"type": "limit", "expr": (f.subs(x, a + x) - f.subs(x, a)) / x, "at": 0, "value": value},
