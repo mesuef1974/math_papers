@@ -105,6 +105,27 @@ def assert_optimum(c):
     assert f(float(c["arg"])) == pytest.approx(float(c["value"]))
 
 
+def assert_turning(c):
+    """الدالة تتزايد حتى النقطة ثم تتناقص بعدها على المجال كله، فأكبر قيمها عندها (من القيم لا من المشتقة)."""
+    f = sp.lambdify(x, c["f"])
+    xs = samples(c["low"], c["high"], 2001)
+    values = [f(v) for v in xs]
+    peak = max(range(len(xs)), key=values.__getitem__)
+    assert xs[peak] == pytest.approx(float(c["at"]), abs=(c["high"] - c["low"]) / 1000)
+    assert 0 < peak < len(xs) - 1
+    assert all(a < b for a, b in zip(values[:peak], values[1 : peak + 1], strict=False))
+    assert all(a > b for a, b in zip(values[peak:], values[peak + 1 :], strict=False))
+
+
+def assert_surface(c):
+    """المساحة من الهندسة مباشرة: الارتفاع من الحجم، ثم القواعد والأوجه الأربعة."""
+    s = sp.lambdify(x, c["S"])
+    for side in (0.5, 1.0, 2.5, 7.0):
+        height = c["volume"] / side**2
+        direct = (2 if c["closed"] else 1) * side**2 + 4 * side * height
+        assert s(side) == pytest.approx(direct)
+
+
 def assert_one_sided(c):
     left, right = c["left"].subs(x, c["at"]), c["right"].subs(x, c["at"])
     assert (left == right) == (c["value"] is not None)
@@ -360,6 +381,8 @@ CHECKS = {
     "inflection": assert_inflection,
     "concavity": assert_concavity,
     "optimum": assert_optimum,
+    "turning": assert_turning,
+    "surface": assert_surface,
     "one_sided": assert_one_sided,
     "continuity": assert_continuity,
     "average": assert_average,
@@ -409,8 +432,7 @@ def test_every_lesson_has_easy_and_higher_order_variants():
 
     for lesson in available_lessons():
         levels = set(lesson_levels(lesson)) | set(lesson_levels(lesson, "mcq"))
-        expected = {"A", "R"} if lesson == "3.5" else {"K", "A", "R"}
-        assert expected <= levels, (lesson, levels)
+        assert {"K", "A", "R"} <= levels, (lesson, levels)
 
 
 def test_every_tested_lesson_has_a_generator():
