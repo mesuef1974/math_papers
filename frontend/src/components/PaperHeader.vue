@@ -21,7 +21,7 @@ const DOTS = "....................";
     </div>
     <dl class="meta">
       <div><dt>المادة</dt><dd>{{ header.subject }}</dd></div>
-      <div v-if="header.grade"><dt>الصف</dt><dd>{{ header.grade }}</dd></div>
+      <div v-if="header.grade"><dt>الصف</dt><dd>{{ header.grade.replace(/^الصف\s+/, "") }}</dd></div>
       <div v-if="header.form"><dt>النموذج</dt><dd>{{ header.form }}</dd></div>
       <div v-if="header.minutes"><dt>زمن الاختبار</dt><dd>{{ durationLabel(header.minutes) }}</dd></div>
       <div v-if="header.totalMarks"><dt>الدرجة الكلية</dt><dd>{{ header.totalMarks }} درجة</dd></div>

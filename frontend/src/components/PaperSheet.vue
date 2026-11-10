@@ -67,6 +67,11 @@ const sectionNotes = computed(() => {
   return notes;
 });
 
+// خيارات قصيرة (أعداد وصيغ) تُصفّ في عمودين حتى في الكراسة؛ الطويلة وحدها تبقى عمودًا واحدًا.
+const SHORT_OPTION = 26;
+const shortOptions = (part: Question["parts"][number]) =>
+  part.option_graphs.length === 0 && part.options.every((option) => option.length <= SHORT_OPTION);
+
 // ارتفاع صندوق الحل بالدرجات: يبدأ من صندوق قصير ويتسع حتى ثلث الصفحة.
 function workHeight(marks: number): string {
   return `${Math.min(Math.max(60 + marks * 45, 96), 300)}px`;
@@ -105,7 +110,11 @@ watchEffect(() => {
           <span v-if="part.label && !booklet" class="marks">({{ part.marks }})</span>
         </p>
         <GraphPlot v-if="part.graph" :graph="part.graph" :compact="booklet" />
-        <ol v-if="part.options.length" class="options">
+        <ol
+          v-if="part.options.length"
+          class="options"
+          :class="{ 'options-short': shortOptions(part), 'options-graphs': part.option_graphs.length > 0 }"
+        >
           <li v-for="(option, index) in part.options" :key="index" :class="{ 'graph-option': part.option_graphs.length }">
             <span class="box" aria-hidden="true" />
             <bdi class="option-label" dir="ltr">{{ OPTION_LABELS[index] }}.</bdi>
@@ -256,7 +265,9 @@ watchEffect(() => {
 .part-label {
   display: inline-block;
   font-weight: var(--weight-bold);
-  margin-inline-end: var(--space-2);
+  /* الوسم لاتيني (A.) داخل bdi باتجاه LTR، فبداية سطره الداخلية هي جهة نص السؤال في الصفحة العربية */
+  margin-inline-start: var(--space-3);
+  min-inline-size: 1.3em;
 }
 .options {
   direction: ltr; /* A يسارًا ثم B، فالسطر التالي */
@@ -351,6 +362,12 @@ watchEffect(() => {
 .booklet .options {
   grid-template-columns: minmax(0, 1fr);
   padding-inline-start: var(--space-8);
+}
+/* الخيارات القصيرة وخيارات الرسوم عمودان في الكراسة أيضًا: A B ثم C D، فتتسع الصفحة لأسئلة أكثر */
+.booklet .options-short,
+.booklet .options-graphs {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: var(--space-8);
 }
 .booklet .stem {
   margin-block: var(--space-3) var(--space-2);
@@ -474,6 +491,9 @@ watchEffect(() => {
   .section-note {
     background: none;
     border-inline-start-color: var(--color-ink);
+  }
+  .options li {
+    break-inside: avoid;
   }
   /* القسم المقالي يبدأ صفحة جديدة كما في الكراسة */
   .booklet .mcq + .essay {

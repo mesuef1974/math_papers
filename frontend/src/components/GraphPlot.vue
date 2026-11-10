@@ -109,6 +109,13 @@ svg {
   color: var(--color-ink);
   font-family: var(--font-math);
 }
+/* على الورق رسم المسألة بارتفاع أقصى 62mm بالنسبة نفسها، فيتسع سؤالان بيانيان في الصفحة ولا يُقصّ شيء */
+@media print {
+  svg {
+    max-block-size: 62mm;
+    inline-size: auto;
+  }
+}
 .grid line {
   stroke: var(--color-line-strong);
   stroke-width: 1;

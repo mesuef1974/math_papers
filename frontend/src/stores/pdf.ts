@@ -62,12 +62,16 @@ export const usePdfStore = defineStore("pdf", {
     statusText: (state) => STATUS_TEXT[state.status],
   },
   actions: {
-    async download(request: PdfRequest, open: (url: string) => void = (url) => window.location.assign(url)) {
+    async download(
+      request: PdfRequest,
+      open: (url: string) => void = (url) => window.location.assign(url),
+      format: "pdf" | "docx" = "pdf",
+    ) {
       if (this.busy) return;
       this.error = "";
       this.status = "queued";
       try {
-        let job = await api.post<PdfJob>("/pdf", request);
+        let job = await api.post<PdfJob>(`/${format}`, request);
         this.jobId = job.id;
         for (let tick = 0; job.status === "queued" || job.status === "running"; tick += 1) {
           if (tick >= POLL_LIMIT) throw new PollTimeout();

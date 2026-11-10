@@ -82,9 +82,9 @@ def render_pdf(url: str) -> bytes:
             browser.close()
 
 
-def safe_filename(title: str) -> str:
+def safe_filename(title: str, extension: str = "pdf") -> str:
     cleaned = re.sub(r"\s+", " ", re.sub(r'[\\/:*?"<>|\x00-\x1f]+', " ", title)).strip() or "ورقة"
-    return f"{cleaned[:120]}.pdf"
+    return f"{cleaned[:120]}.{extension}"
 
 
 def _key(job_id: str, part: str = "") -> str:
@@ -121,7 +121,12 @@ def _render_job(job_id: str) -> None:
     cache.set(_key(job_id), {**meta, "status": "running", "started": time.time()}, TTL)
     token = signing.dumps({"job": job_id}, salt=TOKEN_SALT)
     try:
-        data = render_pdf(f"{base_url()}/print/{token}")
+        if meta.get("format") == "docx":
+            from .word.builder import build_docx
+
+            data = build_docx(cache.get(_key(job_id, "payload")))
+        else:
+            data = render_pdf(f"{base_url()}/print/{token}")
     except Exception:  # noqa: BLE001 — أي عطل في المتصفح يُبلَّغ للمعلم كرسالة واحدة ويُسجَّل كاملًا
         log.exception("pdf render failed for job %s", job_id)
         cache.set(_key(job_id), {**meta, "status": "error", "error": FAILED}, TTL)
@@ -130,9 +135,10 @@ def _render_job(job_id: str) -> None:
     cache.set(_key(job_id), {**meta, "status": "done", "size": len(data)}, TTL)
 
 
-def create_job(owner_id: int, payload: dict[str, Any], title: str) -> dict[str, Any]:
-    """يسجّل الحمولة والحالة ثم يسلّم المهمة للخيط الخلفي. يرفع UnavailableError أو BusyError."""
-    if not available():
+def create_job(owner_id: int, payload: dict[str, Any], title: str, fmt: str = "pdf") -> dict[str, Any]:
+    """يسجّل الحمولة والحالة ثم يسلّم المهمة للخيط الخلفي. يرفع UnavailableError أو BusyError.
+    fmt: pdf (Chromium) أو docx (python-docx، لا يحتاج المتصفح)."""
+    if fmt == "pdf" and not available():
         raise UnavailableError(UNAVAILABLE)
     job_id = uuid.uuid4().hex
     meta = {
@@ -140,7 +146,8 @@ def create_job(owner_id: int, payload: dict[str, Any], title: str) -> dict[str, 
         "owner": owner_id,
         "status": "queued",
         "error": "",
-        "filename": safe_filename(title),
+        "format": fmt,
+        "filename": safe_filename(title, fmt),
         "created": time.time(),
     }
     cache.set(_key(job_id, "payload"), payload, TTL)
