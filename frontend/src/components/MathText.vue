@@ -12,7 +12,8 @@ const segments = computed(() =>
     segment.math
       ? {
           ...segment,
-          value: katex.renderToString(segment.value, {
+          // السطري بحجم كامل (كسور ونهايات كما في الكتب)؛ المعروض كامل أصلًا، فلا نكرر.
+          value: katex.renderToString(segment.display ? segment.value : `\\displaystyle ${segment.value}`, {
             throwOnError: false,
             displayMode: segment.display,
             errorColor: "var(--color-danger)",

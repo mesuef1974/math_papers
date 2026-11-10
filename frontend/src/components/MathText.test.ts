@@ -28,4 +28,17 @@ describe("MathText", () => {
     expect(wrapper.html()).toContain("var(--color-danger)");
     expect(wrapper.html()).not.toContain("#cc0000");
   });
+
+  it("السطري يُعرض بحجم كامل: الكسر بارتفاع displaystyle لا textstyle", () => {
+    const strut = (text: string) => /katex-strut" style="height:([\d.]+)em/.exec(mount(MathText, { props: { text } }).html())?.[1];
+    const inline = strut("قيمة $\\frac{3}{4}$ هنا");
+    const display = strut("$$\\frac{3}{4}$$");
+    expect(Number(inline)).toBeGreaterThan(1.9); // textstyle ≈ 1.3
+    expect(inline).toBe(display);
+  });
+
+  it("المعروض لا يُكرَّر فيه displaystyle", () => {
+    const html = mount(MathText, { props: { text: "$$\\frac{3}{4}$$" } }).html();
+    expect(html).not.toContain("displaystyle");
+  });
 });
