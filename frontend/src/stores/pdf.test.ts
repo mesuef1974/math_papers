@@ -37,6 +37,15 @@ describe("pdf store: مهمة خلفية واستطلاع ثم تنزيل", () =
   });
   afterEach(() => vi.useRealTimers());
 
+  it("يطلب Word من مسار docx ويستطلع المسار نفسه", async () => {
+    post.mockResolvedValue({ id: "d1", status: "done", error: "", filename: "x.docx" });
+    const open = vi.fn();
+    const store = usePdfStore();
+    await store.download(request, open, "docx");
+    expect(post).toHaveBeenCalledWith("/docx", request);
+    expect(open).toHaveBeenCalledWith("/api/v1/pdf/d1/file");
+  });
+
   it("يستطلع حتى تنتهي المهمة ثم يفتح رابط الملف", async () => {
     post.mockResolvedValue({ id: "a1", status: "queued", error: "", filename: "x.pdf" });
     get.mockResolvedValueOnce({ id: "a1", status: "running", error: "", filename: "x.pdf" }).mockResolvedValueOnce({

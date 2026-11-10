@@ -405,7 +405,9 @@ def put_print_profile(request: HttpRequest, payload: PrintProfileIn):
     return services.save_print_profile(request.user, cleaned)
 
 
-# ---------- PDF خادمي ----------
+# ---------- PDF وWord خادميان ----------
+
+DOCX_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 
 
 class PdfIn(Schema):
@@ -431,14 +433,24 @@ JobId = Annotated[str, Field(pattern=r"^[0-9a-f]{32}$")]
 
 @router.post("/pdf", response={202: PdfJobOut})
 def pdf_create(request: HttpRequest, payload: PdfIn):
+    return _create_document(request, payload, "pdf")
+
+
+@router.post("/docx", response={202: PdfJobOut})
+def docx_create(request: HttpRequest, payload: PdfIn):
+    """Word بتخطيط الورقة نفسها؛ الحالة والملف عبر مسارات /pdf/{id} ذاتها."""
+    return _create_document(request, payload, "docx")
+
+
+def _create_document(request: HttpRequest, payload: PdfIn, fmt: str):
     try:
-        meta = pdf.create_job(request.user.pk, payload.dict(), payload.papers[0].title)
+        meta = pdf.create_job(request.user.pk, payload.dict(), payload.papers[0].title, fmt)
     except pdf.UnavailableError as error:
         raise HttpError(503, str(error)) from error
     except pdf.BusyError as error:
         raise HttpError(429, str(error)) from error
     record_audit(
-        action="pdf.create", actor=request.user, target=meta["id"], request_id=request_id_of(request)
+        action=f"{fmt}.create", actor=request.user, target=meta["id"], request_id=request_id_of(request)
     )
     return Status(202, meta)
 
@@ -466,6 +478,5 @@ def pdf_file(request: HttpRequest, job_id: JobId):
     if found is None:
         raise HttpError(404, "الملف غير جاهز أو انتهت مهلته")
     data, filename = found
-    return FileResponse(
-        io.BytesIO(data), as_attachment=True, filename=filename, content_type="application/pdf"
-    )
+    content_type = DOCX_TYPE if filename.endswith(".docx") else "application/pdf"
+    return FileResponse(io.BytesIO(data), as_attachment=True, filename=filename, content_type=content_type)

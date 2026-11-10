@@ -122,16 +122,20 @@ function printPaper() {
 }
 
 // PDF من الخادم: النماذج المعروضة كما هي مع ترويسة المعلم وحقول هذه الطباعة وخياراتها.
-function downloadPdf() {
+function downloadServerFile(format: "pdf" | "docx") {
   if (!store.paper) return;
-  void pdf.download({
-    papers: forms.value,
-    profile: print.profile,
-    date: print.date,
-    section: print.section,
-    show_key: print.showKey,
-    bubble: print.bubble && hasMcq.value,
-  });
+  void pdf.download(
+    {
+      papers: forms.value,
+      profile: print.profile,
+      date: print.date,
+      section: print.section,
+      show_key: print.showKey,
+      bubble: print.bubble && hasMcq.value,
+    },
+    undefined,
+    format,
+  );
 }
 </script>
 
@@ -236,8 +240,11 @@ function downloadPdf() {
         <button v-if="store.paper || store.bundle" type="button" class="btn btn-secondary" @click="printPaper">
           <AppIcon name="print" />طباعة أو حفظ PDF
         </button>
-        <button v-if="store.paper" type="button" class="btn btn-secondary" :disabled="pdf.busy" @click="downloadPdf">
+        <button v-if="store.paper" type="button" class="btn btn-secondary" :disabled="pdf.busy" @click="downloadServerFile('pdf')">
           {{ pdf.busy ? pdf.statusText : "تنزيل PDF من الخادم" }}
+        </button>
+        <button v-if="store.paper" type="button" class="btn btn-secondary" :disabled="pdf.busy" @click="downloadServerFile('docx')">
+          {{ pdf.busy ? pdf.statusText : "تصدير Word (DOCX)" }}
         </button>
         <label v-if="store.paper || store.bundle" class="check">
           <input v-model="print.showKey" type="checkbox" /> {{ store.bundle ? "المفاتيح في آخر الحزمة" : "مفتاح الحل في صفحة أخيرة" }}
