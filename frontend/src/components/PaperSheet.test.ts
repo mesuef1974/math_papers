@@ -20,7 +20,7 @@ function part(overrides: Partial<Part> = {}): Part {
     graph: null,
     option_graphs: [],
     variant: "power_rule",
-    fingerprint: "abc123def456",
+    fingerprint: "fp-demo-0001",
     slot: { kind: "essay", level: "A", needs_graph: false },
     ...overrides,
   };
