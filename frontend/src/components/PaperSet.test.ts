@@ -75,7 +75,7 @@ describe("AnswerSheet", () => {
     expect(blank.findAll(".filled")).toHaveLength(0);
     expect(blank.text()).toContain("ورقة الإجابة: اختبار");
     const key = mount(AnswerSheet, { props: { paper: paper("A"), header: header(paper("A")), answers: true } });
-    expect(key.findAll(".filled").map((b) => b.text())).toEqual(["ب", "د"]);
+    expect(key.findAll(".filled").map((b) => b.text())).toEqual(["B", "D"]);
     expect(key.text()).toContain("مفتاح ورقة الإجابة");
   });
 

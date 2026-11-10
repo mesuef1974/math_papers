@@ -27,7 +27,8 @@ const props = withDefaults(
 );
 const emit = defineEmits<{ replace: [question: number, label: string] }>();
 
-const OPTION_LABELS = ["أ", "ب", "ج", "د"];
+// حروف لاتينية من اليسار إلى اليمين كما في أوراق الاختبار المطبوعة.
+const OPTION_LABELS = ["A", "B", "C", "D"];
 const booklet = computed(() => props.paper.kind === "exam");
 const keyTitle = computed(() => (booklet.value ? "دليل تقدير الدرجات" : "مفتاح الحل"));
 
@@ -107,7 +108,7 @@ watchEffect(() => {
         <ol v-if="part.options.length" class="options">
           <li v-for="(option, index) in part.options" :key="index" :class="{ 'graph-option': part.option_graphs.length }">
             <span class="box" aria-hidden="true" />
-            <span class="option-label">{{ OPTION_LABELS[index] }})</span>
+            <bdi class="option-label" dir="ltr">{{ OPTION_LABELS[index] }}.</bdi>
             <GraphPlot v-if="part.option_graphs[index]" :graph="part.option_graphs[index]" compact />
             <MathText v-else :text="option" />
           </li>
@@ -162,7 +163,7 @@ watchEffect(() => {
       <tbody>
         <tr v-for="row in mcqAnswers" :key="row.number">
           <th scope="row">{{ row.number }}</th>
-          <td>{{ row.letter }}</td>
+          <td><bdi dir="ltr">{{ row.letter }}</bdi></td>
         </tr>
       </tbody>
     </table>
@@ -258,6 +259,7 @@ watchEffect(() => {
   margin-inline-end: var(--space-2);
 }
 .options {
+  direction: ltr; /* A يسارًا ثم B، فالسطر التالي */
   list-style: none;
   margin: 0;
   padding: 0;

@@ -8,7 +8,7 @@ import type { PaperHeaderData } from "@/stores/print";
 const props = withDefaults(defineProps<{ paper: Paper; header: PaperHeaderData; answers?: boolean }>(), {
   answers: false,
 });
-const LABELS = ["أ", "ب", "ج", "د"];
+const LABELS = ["A", "B", "C", "D"];
 const DOTS = "....................";
 
 const rows = computed(() =>
@@ -85,6 +85,7 @@ const title = computed(() => `${props.answers ? "مفتاح ورقة الإجا�
   column-gap: var(--space-8);
 }
 .row {
+  direction: ltr; /* الرقم ثم A B C D من اليسار إلى اليمين */
   display: flex;
   align-items: center;
   gap: var(--space-3);
