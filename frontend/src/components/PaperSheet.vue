@@ -105,7 +105,7 @@ watchEffect(() => {
       </div>
       <div v-for="part in question.parts" :key="part.fingerprint" class="part">
         <p class="stem">
-          <bdi v-if="part.label" class="part-label">{{ part.label }}.</bdi>
+          <bdi v-if="part.label" class="part-label" dir="rtl">{{ part.label }}.</bdi>
           <MathText :text="part.stem" />
           <span v-if="part.label && !booklet" class="marks">({{ part.marks }})</span>
         </p>
@@ -265,8 +265,8 @@ watchEffect(() => {
 .part-label {
   display: inline-block;
   font-weight: var(--weight-bold);
-  /* الوسم لاتيني (A.) داخل bdi باتجاه LTR، فبداية سطره الداخلية هي جهة نص السؤال في الصفحة العربية */
-  margin-inline-start: var(--space-3);
+  /* الوسم يُقرأ بترقيم عربي (‎.A‎ بصريًا: الحرف يمينًا ثم النقطة) وبعده مسافة قبل نص السؤال */
+  margin-inline-end: var(--space-3);
   min-inline-size: 1.3em;
 }
 .options {
@@ -494,6 +494,18 @@ watchEffect(() => {
   }
   .options li {
     break-inside: avoid;
+  }
+  /* سؤال الاختيار من متعدد كتلة واحدة: نصه وبدائله في الصفحة نفسها */
+  .question.mcq {
+    break-inside: avoid;
+  }
+  /* خط مستقيم بعرض المحتوى كاملًا بين كل سؤال والذي يليه */
+  .question,
+  .booklet .question {
+    border-block-end: 1px solid var(--color-ink);
+  }
+  .question:last-of-type {
+    border-block-end: 0;
   }
   /* القسم المقالي يبدأ صفحة جديدة كما في الكراسة */
   .booklet .mcq + .essay {

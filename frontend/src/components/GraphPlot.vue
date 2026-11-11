@@ -72,13 +72,13 @@ const title = computed(() => `تمثيل بياني للدالة ${props.graph.l
         :y1="view.sy(view.yMin)"
         :y2="view.sy(view.yMax)"
       />
-      <path v-for="(d, i) in view.lines" :key="`l${i}`" :d="d" class="helper" />
-      <path v-for="(d, i) in view.curves" :key="`c${i}`" :d="d" class="curve" />
-      <!-- الأرقام فوق المنحنى بهالة بلون الخلفية، فلا يخفيها منحنى يمر قرب الأصل -->
+      <!-- الأرقام بهالة بلون الخلفية تحت المنحنى؛ المنحنى في المقدمة فوق الشبكة والمحاور والأرقام -->
       <g class="ticks">
         <text v-for="v in view.xTicks" :key="`tx${v}`" :x="view.sx(v)" :y="view.sy(0) + 15" text-anchor="middle">{{ v }}</text>
         <text v-for="v in view.yTicks" :key="`ty${v}`" :x="view.sx(0) - 6" :y="view.sy(v) + 4" text-anchor="end">{{ v }}</text>
       </g>
+      <path v-for="(d, i) in view.lines" :key="`l${i}`" :d="d" class="helper" />
+      <path v-for="(d, i) in view.curves" :key="`c${i}`" :d="d" class="curve" />
       <circle
         v-for="([px, py, closed], i) in graph.dots"
         :key="`d${i}`"

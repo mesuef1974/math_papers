@@ -209,10 +209,6 @@ def render_graph(graph: dict[str, Any], compact: bool = False) -> tuple[bytes, f
     dash = (6 * K, 5 * K)
     for v in graph.get("asymptotes", []):
         canvas.line((sx(v), sy(y_min)), (sx(v), sy(y_max)), 1.3 * K, INK, dash)
-    for path in graph.get("lines", []):
-        canvas.polyline([(sx(px), sy(py)) for px, py in path], 1.3 * K, INK, dash)
-    for path in graph.get("curves", []):
-        canvas.polyline([(sx(px), sy(py)) for px, py in path], 2.2 * K)
 
     size = 8.6 * K
     step = 2 if max(x_max - x_min, y_max - y_min) > 12 else 1
@@ -224,6 +220,12 @@ def render_graph(graph: dict[str, Any], compact: bool = False) -> tuple[bytes, f
             canvas.text(str(v), sx(0) - 6 * K, sy(v) + 4 * K, size, SOFT, "end")
     canvas.text("x", sx(x_max) + 6 * K, sy(0) - 8 * K, size * 0.75, INK)
     canvas.text("y", sx(0) + 8 * K, sy(y_max) - 4 * K, size * 0.75, INK)
+
+    # المنحنى في المقدمة: يُرسم بعد الشبكة والمحاور والأرقام (وهالاتها البيضاء) فلا يقطعه شيء
+    for path in graph.get("lines", []):
+        canvas.polyline([(sx(px), sy(py)) for px, py in path], 1.3 * K, INK, dash)
+    for path in graph.get("curves", []):
+        canvas.polyline([(sx(px), sy(py)) for px, py in path], 2.2 * K)
 
     for px, py, closed in graph.get("dots", []):
         if closed:

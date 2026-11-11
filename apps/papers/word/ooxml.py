@@ -17,6 +17,7 @@ from .omml import to_omml
 FONT = "Arial"
 SYMBOL_FONT = "Segoe UI Symbol"
 LRM = "‎"
+RLM = "‏"
 INK = "000000"
 SOFT = "595959"
 RULE = "808080"
@@ -56,11 +57,12 @@ def add_text(paragraph: Paragraph, text: str, **fmt) -> None:
     """نص عادي؛ الأجزاء العربية تُعلَّم rtl حتى يطبّق Word خط وحجم النص المعقّد."""
     if not text:
         return
+    force_rtl = fmt.pop("force_rtl", False)
     for chunk in re.split(r"(\t)", text):
         if chunk == "\t":
             paragraph._p.append(parse_xml(f"<w:r {W}><w:tab/></w:r>"))
         elif chunk:
-            rtl = bool(ARABIC.search(chunk)) or fmt.pop("force_rtl", False)
+            rtl = force_rtl or bool(ARABIC.search(chunk))
             xml = f'<w:r {W}>{rpr(rtl=rtl, **fmt)}<w:t xml:space="preserve">{escape(chunk)}</w:t></w:r>'
             paragraph._p.append(parse_xml(xml))
 

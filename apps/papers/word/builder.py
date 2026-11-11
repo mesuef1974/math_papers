@@ -443,9 +443,10 @@ def question_head(doc, question: dict, booklet: bool) -> None:
         x.add_text(par, f"   ({marks})", size=10, color=x.SOFT)
 
 
-def option_cell(cell, index: int, part: dict, width: float, booklet: bool) -> None:
+def option_cell(cell, index: int, part: dict, width: float, keep_next: bool) -> None:
+    """keep_next يربط صف البدائل بالصف الذي يليه، فلا ينقسم سؤال الاختيار بين صفحتين."""
     x.set_cell(cell, width, valign="top")
-    par = x.new_paragraph(cell, rtl=False, align="left", after=3, keep_next=False)
+    par = x.new_paragraph(cell, rtl=False, align="left", after=3, keep_next=keep_next)
     x.add_text(par, "☐ ", size=11, font=x.SYMBOL_FONT)
     x.add_text(par, f"{OPTION_LABELS[index]}. ", size=11, bold=True)
     graphs = part.get("option_graphs") or []
@@ -454,8 +455,7 @@ def option_cell(cell, index: int, part: dict, width: float, booklet: bool) -> No
         scale = min(1.0, 4.0 / (h / 96 * 2.54))
         x.add_picture(par, png, w / 96 * 2.54 * scale)
     else:
-        rich(cell, part["options"][index], size=11, rtl=False, first=par)
-    _ = booklet
+        rich(cell, part["options"][index], size=11, rtl=False, first=par, keep_next=keep_next)
 
 
 def options_block(doc, part: dict, booklet: bool) -> None:
@@ -471,16 +471,17 @@ def options_block(doc, part: dict, booklet: bool) -> None:
             for c in range(2):
                 index = r * 2 + c
                 cell = table.cell(r, c)
+                last = r == rows - 1
                 if index < len(options):
-                    option_cell(cell, index, part, width, booklet)
+                    option_cell(cell, index, part, width, not last)
                 else:
                     x.set_cell(cell, width)
-                    x.new_paragraph(cell, after=0)
+                    x.new_paragraph(cell, after=0, keep_next=not last)
     else:
         table = x.make_table(doc, len(options), [CONTENT_CM - 1.0], rtl=False, borders=None, align="center")
         for index in range(len(options)):
             x.set_row(table.rows[index])
-            option_cell(table.cell(index, 0), index, part, CONTENT_CM - 1.0, booklet)
+            option_cell(table.cell(index, 0), index, part, CONTENT_CM - 1.0, index < len(options) - 1)
     x.spacer(doc, 3)
 
 
@@ -533,7 +534,8 @@ def question_block(doc, question: dict, booklet: bool, notes: dict, last_mcq: in
         stem = x.new_paragraph(doc, before=2, after=3, keep_next=True)
         label = part.get("label") or ""
         if label:
-            x.add_text(stem, f"{label}.{x.LRM if label.isascii() else ''} ", size=11, bold=True)
+            # ترقيم عربي: «.A» بصريًا (الحرف يمينًا ثم النقطة) ثم مسافة قبل نص السؤال
+            x.add_text(stem, f"{label}.{x.RLM} ", size=11, bold=True, force_rtl=True)
         rich(doc, part["stem"], size=11, first=stem)
         if label and not booklet and part.get("marks"):
             x.add_text(stem, f"  ({part['marks']})", size=9.5, color=x.SOFT)
@@ -574,8 +576,15 @@ def sheet(doc, paper: dict, header: dict) -> None:
     notes = section_notes(paper)
     questions = paper["questions"]
     last_mcq = max((q["number"] for q in questions if q["kind"] == "mcq"), default=0)
-    for question in questions:
+    first_essay = next((q["number"] for q in questions if q["kind"] != "mcq"), 0)
+    for index, question in enumerate(questions):
+        if booklet and question["number"] == first_essay and last_mcq:
+            x.spacer(doc, 1, page_break=True)  # القسم المقالي يبدأ صفحة جديدة كما في PDF
         question_block(doc, question, booklet, notes, last_mcq, len(questions))
+        closes_section = booklet and question["number"] == last_mcq and last_mcq < len(questions)
+        if index < len(questions) - 1 and not closes_section:
+            # خط مستقيم بعرض النص كاملًا (بين الهامشين) يفصل السؤال عن الذي يليه
+            x.new_paragraph(doc, before=2, after=6, line=None, exact_pt=3, bottom=("single", 6))
     if booklet:
         _bilingual_rule(doc, "انتهت جميع الأسئلة", "End of all questions")
     foot = x.make_table(
