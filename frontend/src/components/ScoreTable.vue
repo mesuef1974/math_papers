@@ -60,18 +60,20 @@ const total = computed(() => rows.value.reduce((sum, row) => sum + row.marks, 0)
 .score-page {
   margin-block-start: var(--space-8);
   padding-block-start: var(--space-4);
-  border-block-start: 2px solid var(--color-ink);
+  border-block-start: 3px solid var(--color-brand);
 }
 .warning {
   display: inline-block;
   margin: 0 0 var(--space-4);
   padding: var(--space-1) var(--space-3);
-  border: 2px solid var(--color-ink);
+  border: 2px solid var(--color-brand);
+  color: var(--color-brand-strong);
   font-weight: var(--weight-bold);
 }
 .heading {
   margin: 0 0 var(--space-3);
   font-size: var(--text-lg);
+  color: var(--color-brand-strong);
 }
 .score {
   inline-size: 100%;
@@ -85,7 +87,8 @@ const total = computed(() => rows.value.reduce((sum, row) => sum + row.marks, 0)
   block-size: 44px;
 }
 .score thead th {
-  background: var(--color-surface-sunken);
+  background: var(--color-brand);
+  color: var(--color-on-brand);
 }
 .score tbody th {
   font-weight: var(--weight-medium);
@@ -95,7 +98,7 @@ const total = computed(() => rows.value.reduce((sum, row) => sum + row.marks, 0)
 }
 .total th,
 .total td {
-  background: var(--color-surface-sunken);
+  background: var(--color-brand-soft);
 }
 .words {
   margin: var(--space-6) 0 0;

@@ -6,7 +6,7 @@ import { splitMath } from "@/utils/mathText";
 
 const props = defineProps<{ text: string }>();
 
-// صيغة غير صالحة تُعرض كنص بلون الخطر؛ في الطباعة يعود إلى الأسود عبر print.css، لا أحمر KaTeX الافتراضي.
+// صيغة غير صالحة تُعرض كنص بلون الخطر؛ لون الخطر من متغيرات الهوية (ومنها print.css على الورق)، لا أحمر KaTeX الافتراضي.
 const segments = computed(() =>
   splitMath(props.text).map((segment) =>
     segment.math

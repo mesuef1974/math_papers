@@ -220,7 +220,13 @@ def paper_header(doc, header: dict, *, compact: bool = False, page_break: bool =
     x.set_cell(mid, HEADER_CM[1])
     # العنوان الطويل (مفتاح اختبار درسين) يصغر قليلًا ليبقى في سطر واحد ما أمكن
     title_size = 14 if len(header["title"]) <= 46 else 12
-    x.add_text(x.new_paragraph(mid, align="center", after=0), header["title"], size=title_size, bold=True)
+    x.add_text(
+        x.new_paragraph(mid, align="center", after=0),
+        header["title"],
+        size=title_size,
+        bold=True,
+        color=x.BRAND_STRONG,
+    )
     org = top.cell(0, 2)
     x.set_cell(org, HEADER_CM[2])
     first = True
@@ -247,12 +253,12 @@ def paper_header(doc, header: dict, *, compact: bool = False, page_break: bool =
         items.append(("التاريخ", header["date"]))
     weights = [max(len(label), len(value)) + 6 for label, value in items]
     meta_widths = [CONTENT_CM * weight / sum(weights) for weight in weights]
-    meta = x.make_table(doc, 1, meta_widths, borders=x.box(6, x.RULE))
+    meta = x.make_table(doc, 1, meta_widths, borders=x.box(6, x.LINE))
     x.set_row(meta.rows[0])
     for index, (label, value) in enumerate(items):
         cell = meta.cell(0, index)
         x.set_cell(cell, meta_widths[index], borders=None)
-        x.add_text(x.new_paragraph(cell, align="center", after=0), label, size=8.5, color=x.SOFT)
+        x.add_text(x.new_paragraph(cell, align="center", after=0), label, size=8.5, color=x.BRAND_STRONG)
         x.add_text(x.new_paragraph(cell, align="center", after=0), value, size=10.5, bold=True)
     if not compact:
         student = x.make_table(doc, 1, [9.0, 4.4, 4.4], borders=None)
@@ -269,9 +275,17 @@ def paper_header(doc, header: dict, *, compact: bool = False, page_break: bool =
             _ = index
         if header["instructions"]:
             par = x.new_paragraph(doc, before=2, after=2)
-            x.add_text(par, "تعليمات: ", size=10, bold=True)
+            x.add_text(par, "تعليمات: ", size=10, bold=True, color=x.BRAND_STRONG)
             x.add_text(par, header["instructions"], size=10)
-    x.new_paragraph(doc, before=0, after=6, line=None, exact_pt=2, bottom=("single", 14))
+    x.new_paragraph(doc, before=0, after=6, line=None, exact_pt=2, bottom=("single", 20, x.BRAND))
+
+
+def accent_bar(doc, width_cm: float = 2.6) -> None:
+    """شريط ذهبي قصير في الوسط: تزيين الهوية تحت عنوان الغلاف."""
+    bar = x.make_table(doc, 1, [width_cm], borders={"top": {"val": "single", "sz": 36, "color": x.ACCENT}})
+    x.set_row(bar.rows[0])
+    x.new_paragraph(bar.cell(0, 0), after=0, line=None, exact_pt=4)
+    x.spacer(doc, 4)
 
 
 def cover_page(doc, header: dict, paper: dict) -> None:
@@ -284,7 +298,14 @@ def cover_page(doc, header: dict, paper: dict) -> None:
         if text:
             x.add_text(x.new_paragraph(doc, align="center", after=gap), text, size=size, bold=bold)
     title = f"اختبار {header['subject']}" + (" (تدريبي)" if paper.get("is_forecast") else "")
-    x.add_text(x.new_paragraph(doc, align="center", before=18, after=10), title, size=26, bold=True)
+    x.add_text(
+        x.new_paragraph(doc, align="center", before=18, after=10),
+        title,
+        size=26,
+        bold=True,
+        color=x.BRAND_STRONG,
+    )
+    accent_bar(doc)
     x.add_text(x.new_paragraph(doc, align="center", after=4), header["title"], size=15)
     if header["grade"]:
         x.add_text(x.new_paragraph(doc, align="center", after=4), header["grade"], size=13)
@@ -300,17 +321,19 @@ def cover_page(doc, header: dict, paper: dict) -> None:
     if header["date"]:
         facts.append(("التاريخ", header["date"]))
     width = 4.6
-    table = x.make_table(doc, 1, [width] * len(facts), borders=x.box(8, x.INK))
+    table = x.make_table(doc, 1, [width] * len(facts), borders=x.box(8, x.BRAND))
     for index, (label, value) in enumerate(facts):
         cell = table.cell(0, index)
         x.set_cell(cell, width, shade=x.SHADE)
-        x.add_text(x.new_paragraph(cell, align="center", before=4, after=0), label, size=10, color=x.SOFT)
+        x.add_text(
+            x.new_paragraph(cell, align="center", before=4, after=0), label, size=10, color=x.BRAND_STRONG
+        )
         x.add_text(x.new_paragraph(cell, align="center", after=4), value, size=13, bold=True)
     x.spacer(doc, 26)
     x.add_text(x.new_paragraph(doc, after=14), f"اسم الطالب: {'.' * 40}", size=13)
     labelled(x.new_paragraph(doc, after=14), f"الشعبة: {header['section'] or '.' * 16}", size=13)
     x.spacer(doc, 16)
-    notes = x.make_table(doc, 1, [CONTENT_CM], borders=x.box(8, x.RULE))
+    notes = x.make_table(doc, 1, [CONTENT_CM], borders=x.box(8, x.LINE))
     cell = notes.cell(0, 0)
     x.set_cell(cell, CONTENT_CM)
     x.add_text(x.new_paragraph(cell, before=3, after=2), "ملاحظات:", size=11, bold=True)
@@ -357,14 +380,21 @@ def instructions_page(doc, header: dict, paper: dict) -> None:
     ]
     rules = [rule for rule in rules if rule[0]]
     x.spacer(doc, 1, page_break=True)
-    head = x.make_table(doc, 1, [8.9, 8.9], borders={"bottom": x.BORDER})
+    head = x.make_table(doc, 1, [8.9, 8.9], borders={"bottom": x.BRAND_EDGE})
     x.set_row(head.rows[0])
     x.set_cell(head.cell(0, 0), 8.9)
-    x.add_text(x.new_paragraph(head.cell(0, 0), before=0, after=2), "تعليمات عامة", size=15, bold=True)
+    x.add_text(
+        x.new_paragraph(head.cell(0, 0), before=0, after=2),
+        "تعليمات عامة",
+        size=15,
+        bold=True,
+        color=x.BRAND_STRONG,
+    )
     x.set_cell(head.cell(0, 1), 8.9)
     x.add_text(
         x.new_paragraph(head.cell(0, 1), rtl=False, align="right", after=2),
         "General instructions",
+        color=x.BRAND_STRONG,
         size=13,
         bold=True,
     )
@@ -434,10 +464,11 @@ def question_head(doc, question: dict, booklet: bool) -> None:
         table = x.make_table(doc, 1, widths, rtl=True, borders=None, align="right")
         x.set_row(table.rows[0])
         number, label = table.cell(0, 0), table.cell(0, 1)
-        x.set_cell(number, widths[0], borders=x.box(12, x.INK, inside=False), shade=x.SHADE)
+        x.set_cell(number, widths[0], borders=x.box(12, x.BRAND, inside=False), shade=x.SHADE)
         x.add_text(
             x.new_paragraph(number, align="center", after=0, keep_next=True),
             str(question["number"]),
+            color=x.BRAND_STRONG,
             size=14,
             bold=True,
         )
@@ -456,7 +487,7 @@ def question_head(doc, question: dict, booklet: bool) -> None:
         return
     par = x.new_paragraph(doc, before=6, after=4, keep_next=True)
     x.add_text(
-        par, f"{NBSP}السؤال {question['number']}{NBSP}", size=11.5, bold=True, color="FFFFFF", fill=x.INK
+        par, f"{NBSP}السؤال {question['number']}{NBSP}", size=11.5, bold=True, color="FFFFFF", fill=x.BRAND
     )
     if marks:
         x.add_text(par, f"   {marks}", size=10, color=x.SOFT)
@@ -467,7 +498,7 @@ def option_cell(cell, index: int, part: dict, width: float, keep_next: bool) -> 
     x.set_cell(cell, width, valign="top")
     par = x.new_paragraph(cell, rtl=False, align="left", after=3, keep_next=keep_next)
     x.add_text(par, "☐ ", size=11, font=x.SYMBOL_FONT)
-    x.add_text(par, f"{OPTION_LABELS[index]}. ", size=11, bold=True)
+    x.add_text(par, f"{OPTION_LABELS[index]}. ", size=11, bold=True, color=x.BRAND_STRONG)
     graphs = part.get("option_graphs") or []
     if graphs and index < len(graphs):
         png, w, h = render_graph(graphs[index], compact=True)
@@ -592,7 +623,7 @@ def question_block(
         label = part.get("label") or ""
         if label:
             # ترقيم عربي: «.A» بصريًا (الحرف يمينًا ثم النقطة) ثم مسافة قبل نص السؤال
-            x.add_text(stem, f"{label}.{x.RLM} ", size=11, bold=True, force_rtl=True)
+            x.add_text(stem, f"{label}.{x.RLM} ", size=11, bold=True, force_rtl=True, color=x.BRAND_STRONG)
         rich(doc, part["stem"], size=11, first=stem)
         if label and not booklet and part.get("marks"):
             x.add_text(stem, f"  ({part['marks']})", size=9.5, color=x.SOFT)
@@ -613,7 +644,7 @@ def question_block(
 
 def _bilingual_rule(doc, ar: str, en: str) -> None:
     table = x.make_table(
-        doc, 1, [CONTENT_CM / 2, CONTENT_CM / 2], borders={"top": x.BORDER, "bottom": x.BORDER}
+        doc, 1, [CONTENT_CM / 2, CONTENT_CM / 2], borders={"top": x.BRAND_EDGE, "bottom": x.BRAND_EDGE}
     )
     x.set_row(table.rows[0])
     x.set_cell(table.cell(0, 0), CONTENT_CM / 2, shade=x.SHADE)
@@ -642,7 +673,7 @@ def sheet(doc, paper: dict, header: dict, *, page_break: bool = False) -> None:
         closes_section = booklet and question["number"] == last_mcq and last_mcq < len(questions)
         if index < len(questions) - 1 and not closes_section:
             # خط مستقيم بعرض النص كاملًا (بين الهامشين) يفصل السؤال عن الذي يليه
-            x.new_paragraph(doc, before=2, after=6, line=None, exact_pt=3, bottom=("single", 6))
+            x.new_paragraph(doc, before=2, after=6, line=None, exact_pt=3, bottom=("single", 6, x.RULE))
     if booklet:
         _bilingual_rule(doc, "انتهت جميع الأسئلة", "End of all questions")
     foot = x.make_table(
@@ -675,19 +706,24 @@ def score_page(doc, paper: dict) -> None:
     x.add_text(
         x.new_paragraph(doc, align="center", page_break=True, after=4),
         "الطلاب: لا تكتب على هذه الصفحة",
+        color=x.BRAND_STRONG,
         size=11,
         bold=True,
     )
     x.add_text(
-        x.new_paragraph(doc, align="center", before=6, after=8), "جدول رصد الدرجات", size=16, bold=True
+        x.new_paragraph(doc, align="center", before=6, after=8),
+        "جدول رصد الدرجات",
+        size=16,
+        bold=True,
+        color=x.BRAND_STRONG,
     )
     widths = [3.2, 3.0, 4.0, 3.8, 3.8]
-    table = x.make_table(doc, len(rows) + 2, widths, borders=x.box(8, x.INK))
+    table = x.make_table(doc, len(rows) + 2, widths, borders=x.box(8, x.RULE))
     heads = ["رقم السؤال", "الدرجة", "درجة الطالب", "المصحح", "المراجع"]
     for c, text in enumerate(heads):
         cell = table.cell(0, c)
-        x.set_cell(cell, widths[c], shade=x.SHADE)
-        x.add_text(x.new_paragraph(cell, align="center", after=0), text, size=10.5, bold=True)
+        x.set_cell(cell, widths[c], shade=x.BRAND)
+        x.add_text(x.new_paragraph(cell, align="center", after=0), text, size=10.5, bold=True, color=x.WHITE)
     x.set_row(table.rows[0], header=True)
     for r, (label, marks) in enumerate(rows, start=1):
         x.set_row(table.rows[r], height_cm=1.0)
@@ -757,6 +793,7 @@ def answer_sheet(doc, paper: dict, header: dict, *, answers: bool) -> None:
                     x.add_text(
                         x.new_paragraph(cell, align="center", after=0, rtl=False),
                         str(number),
+                        color=x.BRAND_STRONG,
                         size=11,
                         bold=True,
                     )
@@ -786,20 +823,23 @@ def key_pages(doc, paper: dict, header: dict, *, page_break: bool = True) -> Non
         x.add_text(
             x.new_paragraph(doc, before=4, after=3, keep_next=True),
             "إجابات الأسئلة الموضوعية",
+            color=x.BRAND_STRONG,
             size=12,
             bold=True,
         )
         per_row = min(10, len(mcq))
         chunks = [mcq[i : i + per_row] for i in range(0, len(mcq), per_row)]
         widths = [2.6] + [1.52] * per_row
-        table = x.make_table(doc, len(chunks) * 2, widths, borders=x.box(6, x.INK), align="right")
+        table = x.make_table(doc, len(chunks) * 2, widths, borders=x.box(6, x.RULE), align="right")
         for index, chunk in enumerate(chunks):
             for offset, (label, shade) in enumerate((("رقم السؤال", x.SHADE), ("رمز الإجابة", None))):
                 r = index * 2 + offset
                 x.set_row(table.rows[r])
                 cell = table.cell(r, 0)
-                x.set_cell(cell, widths[0], shade=x.SHADE)
-                x.add_text(x.new_paragraph(cell, align="center", after=0), label, size=9, bold=True)
+                x.set_cell(cell, widths[0], shade=x.BRAND)
+                x.add_text(
+                    x.new_paragraph(cell, align="center", after=0), label, size=9, bold=True, color=x.WHITE
+                )
                 for c in range(per_row):
                     target = table.cell(r, c + 1)
                     x.set_cell(target, widths[c + 1], shade=shade)
@@ -818,15 +858,16 @@ def key_pages(doc, paper: dict, header: dict, *, page_break: bool = True) -> Non
         x.add_text(
             x.new_paragraph(doc, before=4, after=3, keep_next=True),
             "الحلول والخطوات بدرجاتها",
+            color=x.BRAND_STRONG,
             size=12,
             bold=True,
         )
     widths = [1.9, 9.1, 3.1, 1.9, 1.8]
-    table = x.make_table(doc, 1, widths, borders=x.box(6, x.INK))
+    table = x.make_table(doc, 1, widths, borders=x.box(6, x.RULE))
     for c, text in enumerate(["السؤال", "الإجابة والخطوات", "الدرس", "المستوى", "الدرجة"]):
         cell = table.cell(0, c)
-        x.set_cell(cell, widths[c], shade=x.SHADE)
-        x.add_text(x.new_paragraph(cell, align="center", after=0), text, size=10, bold=True)
+        x.set_cell(cell, widths[c], shade=x.BRAND)
+        x.add_text(x.new_paragraph(cell, align="center", after=0), text, size=10, bold=True, color=x.WHITE)
     x.set_row(table.rows[0], header=True)
     for question in paper["questions"]:
         for part in question["parts"]:
@@ -836,7 +877,13 @@ def key_pages(doc, paper: dict, header: dict, *, page_break: bool = True) -> Non
             for c, width in enumerate(widths):
                 x.set_cell(cells[c], width, valign="top" if c else "center")
             label = f"{question['number']}{(' ' + part['label']) if part.get('label') else ''}"
-            x.add_text(x.new_paragraph(cells[0], align="center", after=0), label, size=10.5, bold=True)
+            x.add_text(
+                x.new_paragraph(cells[0], align="center", after=0),
+                label,
+                size=10.5,
+                bold=True,
+                color=x.BRAND_STRONG,
+            )
             answer = rich(cells[1], part["answer"], size=10.5, bold=True, after=2)
             _ = answer
             for number, step in enumerate(part.get("steps") or [], start=1):
@@ -890,12 +937,12 @@ def _configure_section(section, footer_text: str) -> None:
         paragraph._p.getparent().remove(paragraph._p)
     # تذييل الهوية: خط علوي، اسم المنصة يمينًا، عنوان الورقة وسطًا، رقم الصفحة من المجموع يسارًا
     widths = [4.5, 9.8, 3.5]
-    table = x.make_table(footer, 1, widths, borders={"top": x.BORDER}, cell_margin_cm=0.05)
+    table = x.make_table(footer, 1, widths, borders={"top": x.BRAND_EDGE}, cell_margin_cm=0.05)
     x.set_row(table.rows[0])
     for cell, width in zip(table.rows[0].cells, widths, strict=True):
         x.set_cell(cell, width, valign="top")
     brand = x.new_paragraph(table.cell(0, 0), before=3, after=0, line=None)
-    x.add_text(brand, BRAND_LINE, size=8.5, bold=True)
+    x.add_text(brand, BRAND_LINE, size=8.5, bold=True, color=x.BRAND)
     middle = x.new_paragraph(table.cell(0, 1), align="center", before=3, after=0, line=None)
     x.add_text(middle, footer_text, size=8, color=x.SOFT)
     pages = x.new_paragraph(table.cell(0, 2), align="left", before=3, after=0, line=None)
@@ -928,12 +975,20 @@ def bundle_cover(doc, header: dict, bundle: dict) -> None:
         size=11,
         color=x.SOFT,
     )
-    x.add_text(x.new_paragraph(doc, after=4, keep_next=True), "الفهرس", size=13, bold=True)
+    x.add_text(
+        x.new_paragraph(doc, after=4, keep_next=True), "الفهرس", size=13, bold=True, color=x.BRAND_STRONG
+    )
     widths = [2.0, 8.6, 2.0, 5.2]
-    table = x.make_table(doc, len(plan) + 1, widths, borders=x.box(6, x.INK))
+    table = x.make_table(doc, len(plan) + 1, widths, borders=x.box(6, x.RULE))
     for c, text in enumerate(["الدرس", "العنوان", "المسائل", "المستويات"]):
-        x.set_cell(table.cell(0, c), widths[c], shade=x.SHADE)
-        x.add_text(x.new_paragraph(table.cell(0, c), align="center", after=0), text, size=10, bold=True)
+        x.set_cell(table.cell(0, c), widths[c], shade=x.BRAND)
+        x.add_text(
+            x.new_paragraph(table.cell(0, c), align="center", after=0),
+            text,
+            size=10,
+            bold=True,
+            color=x.WHITE,
+        )
     x.set_row(table.rows[0], header=True)
     for r, entry in enumerate(plan, start=1):
         x.set_row(table.rows[r], height_cm=0.72)
@@ -944,7 +999,7 @@ def bundle_cover(doc, header: dict, bundle: dict) -> None:
         )
         cells = [table.cell(r, c) for c in range(4)]
         code = x.new_paragraph(cells[0], align="center", after=0, rtl=False)
-        x.add_text(code, entry["lesson"], size=10.5, bold=True)
+        x.add_text(code, entry["lesson"], size=10.5, bold=True, color=x.BRAND_STRONG)
         x.add_text(x.new_paragraph(cells[1], after=0), entry["title"], size=10.5)
         count = x.new_paragraph(cells[2], align="center", after=0, rtl=False)
         x.add_text(count, str(entry["count"]), size=10.5)

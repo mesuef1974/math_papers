@@ -97,6 +97,7 @@ const title = computed(() => `${props.answers ? "مفتاح ورقة الإجا�
   inline-size: 2.2em;
   font-weight: var(--weight-bold);
   font-family: var(--font-math);
+  color: var(--color-brand-strong);
 }
 .bubble {
   display: inline-flex;

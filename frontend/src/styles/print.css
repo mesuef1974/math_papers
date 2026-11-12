@@ -1,19 +1,21 @@
 /*
-  الطباعة: تُعاد متغيرات الهوية كلها إلى أبيض وأسود، فلا يحتاج أي مكون قواعد طباعة للألوان.
-  الوضع الداكن معرّف للشاشة فقط، فلا يتسرب إلى الورق. الحبر الملون في الشارات ورسائل الخطأ يعود أسود أيضًا.
+  الطباعة: الورق يتبع هوية «أوراق» بألوانها النهارية دائمًا (العنابي للعناوين والشارات والخطوط الرئيسة،
+  والذهبي للتزيين فقط، والنص والرسوم بحبر داكن). المتغيرات تُثبَّت هنا على قيم الوضع النهاري، فلا يتسرب
+  الوضع الداكن إلى الورق مهما كانت سمة الشاشة، ولا يحتاج أي مكون قواعد طباعة للألوان.
+  العنابي يُطبع رماديًا داكنًا واضحًا على الطابعات غير الملوّنة.
   ترقيم الصفحات بصناديق هوامش @page؛ يدعمها Chromium 131+ (المتصفحات الأخرى تطبع بلا ترقيم).
 */
 @page {
   size: A4;
   margin: 14mm 14mm 17mm;
-  /* تذييل الهوية على الورق: خط رفيع، اسم المنصة يمينًا، عنوان الورقة الجاري وسطًا (--print-footer)، ورقم الصفحة يسارًا */
+  /* تذييل الهوية على الورق: خط عنابي، اسم المنصة يمينًا، عنوان الورقة الجاري وسطًا (--print-footer)، ورقم الصفحة يسارًا */
   @bottom-right {
     content: "أوراق · مولّد أوراق الرياضيات";
     font-family: var(--font-print);
     font-size: 8.5pt;
     font-weight: 700;
-    color: #000000;
-    border-top: 0.6pt solid #000000;
+    color: #842447;
+    border-top: 0.9pt solid #842447;
     padding-top: 2mm;
     vertical-align: top;
     margin-top: 4mm;
@@ -22,8 +24,8 @@
     content: var(--print-footer);
     font-family: var(--font-print);
     font-size: 8.5pt;
-    color: #333333;
-    border-top: 0.6pt solid #000000;
+    color: #4c535c;
+    border-top: 0.9pt solid #842447;
     padding-top: 2mm;
     vertical-align: top;
     margin-top: 4mm;
@@ -32,8 +34,8 @@
     content: "صفحة " counter(page) " من " counter(pages);
     font-family: var(--font-print);
     font-size: 8.5pt;
-    color: #000000;
-    border-top: 0.6pt solid #000000;
+    color: #14171c;
+    border-top: 0.9pt solid #842447;
     padding-top: 2mm;
     vertical-align: top;
     margin-top: 4mm;
@@ -43,40 +45,45 @@
   :root {
     --color-paper: #ffffff;
     --color-surface: #ffffff;
-    --color-surface-sunken: #ffffff;
+    --color-surface-sunken: #f4eef0; /* ترويسات الجداول: عنابي خفيف جدًا */
     --color-sheet: #ffffff;
     --color-field: #ffffff;
-    --color-accent: #000000;
-    --color-ink: #000000;
-    --color-ink-soft: #000000;
-    --color-line: #bbbbbb;
-    --color-line-strong: #888888;
+    --color-ink: #14171c;
+    --color-ink-soft: #4c535c;
+    --color-line: #b5bbc4;
+    --color-line-strong: #7d848e;
     --color-grid: transparent;
-    --color-mark-ink: #000000;
-    --color-mark-accent: #000000;
-    --color-brand: #000000;
-    --color-brand-strong: #000000;
-    --color-brand-soft: #ffffff;
+    --color-brand: #842447;
+    --color-brand-strong: #6f1137;
+    --color-brand-soft: #f0dfe3;
     --color-on-brand: #ffffff;
-    --color-sand: #000000;
-    --color-sand-soft: #ffffff;
-    --color-danger: #000000;
-    --color-danger-soft: #ffffff;
-    --color-success: #000000;
-    --color-success-soft: #ffffff;
-    --color-info: #000000;
-    --color-info-soft: #ffffff;
-    --color-level-k: #000000;
-    --color-level-k-soft: #ffffff;
-    --color-level-a: #000000;
-    --color-level-a-soft: #ffffff;
-    --color-level-r: #000000;
-    --color-level-r-soft: #ffffff;
+    --color-sand: #886100;
+    --color-sand-soft: #f9edd7;
+    --color-accent: #e3ab3c;
+    --color-mark-ink: #842447;
+    --color-mark-accent: #e3ab3c;
+    --color-danger: #780200;
+    --color-danger-soft: #fff2ef;
+    --color-success: #21794a;
+    --color-success-soft: #deffe8;
+    --color-info: #1f5f99;
+    --color-info-soft: #eef6ff;
+    --color-level-k: #21794a;
+    --color-level-k-soft: #deffe8;
+    --color-level-a: #1f5f99;
+    --color-level-a-soft: #eef6ff;
+    --color-level-r: #842447;
+    --color-level-r-soft: #f0dfe3;
     --shadow-sm: none;
     --shadow-md: none;
     --focus-ring: none;
     --leading-body: 1.6;
     --font-sans: var(--font-print);
+  }
+  /* الخلفيات الملوّنة (الشارات وترويسات الجداول) تُطبع كما هي حتى من نافذة طباعة المتصفح */
+  * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
   html,
   body {
@@ -95,9 +102,6 @@
   .container {
     max-inline-size: none;
     padding: 0;
-  }
-  .badge {
-    border: 1px solid var(--color-line-strong);
   }
   .katex {
     font-size: 1.08em;
