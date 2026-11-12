@@ -19,10 +19,16 @@ FONT = "Arial"
 SYMBOL_FONT = "Segoe UI Symbol"
 LRM = "‎"
 RLM = "‏"
+# ألوان هوية «أوراق» على الورق: النص حبر أسود، والعنابي للعناوين والشارات والخطوط الرئيسة، والذهبي للتزيين
 INK = "000000"
-SOFT = "595959"
-RULE = "808080"
-SHADE = "EDEDED"
+SOFT = "4C535C"
+RULE = "7D848E"
+LINE = "B5BBC4"
+BRAND = "842447"
+BRAND_STRONG = "6F1137"
+SHADE = "F0DFE3"  # العنابي الخفيف: خلفية الملاحظات وخانات الأرقام
+ACCENT = "E3AB3C"
+WHITE = "FFFFFF"
 W = nsdecls("w")
 SWAPPED = {"left": "right", "right": "left"}
 ARABIC = re.compile(r"[؀-ۿݐ-ݿ]")
@@ -97,8 +103,8 @@ def _ppr(
     keep_next: bool,
     keep_lines: bool,
     page_break: bool,
-    bottom: tuple[str, int] | None,
-    top: tuple[str, int] | None,
+    bottom: tuple | None,
+    top: tuple | None,
     shade: str | None,
     indent_cm: float,
     exact_pt: float | None,
@@ -111,14 +117,12 @@ def _ppr(
     if page_break:
         parts.append("<w:pageBreakBefore/>")
     if bottom or top:
+        # الحافة (النمط، السمك[، اللون])؛ بلا لون: أسود للخط المتصل ورمادي لغيره
         edges = ""
-        if top:
-            edges += f'<w:top w:val="{top[0]}" w:sz="{top[1]}" w:space="2" w:color="{RULE if top[0] != "single" else INK}"/>'
-        if bottom:
-            edges += (
-                f'<w:bottom w:val="{bottom[0]}" w:sz="{bottom[1]}" w:space="2" '
-                f'w:color="{RULE if bottom[0] != "single" else INK}"/>'
-            )
+        for side, edge in (("top", top), ("bottom", bottom)):
+            if edge:
+                color = edge[2] if len(edge) > 2 else (RULE if edge[0] != "single" else INK)
+                edges += f'<w:{side} w:val="{edge[0]}" w:sz="{edge[1]}" w:space="2" w:color="{color}"/>'
         parts.append(f"<w:pBdr>{edges}</w:pBdr>")
     if shade:
         parts.append(f'<w:shd w:val="clear" w:color="auto" w:fill="{shade}"/>')
@@ -156,8 +160,8 @@ def new_paragraph(
     keep_next: bool = False,
     keep_lines: bool = True,
     page_break: bool = False,
-    bottom: tuple[str, int] | None = None,
-    top: tuple[str, int] | None = None,
+    bottom: tuple | None = None,
+    top: tuple | None = None,
     shade: str | None = None,
     indent_cm: float = 0,
     exact_pt: float | None = None,
@@ -196,6 +200,7 @@ def spacer(container, points: float = 4, page_break: bool = False, keep_next: bo
 # ---------- الجداول ----------
 
 BORDER = {"val": "single", "sz": 6, "color": INK}
+BRAND_EDGE = {"val": "single", "sz": 10, "color": BRAND}
 NONE = {"val": "nil"}
 
 

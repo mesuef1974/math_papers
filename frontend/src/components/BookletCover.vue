@@ -128,7 +128,7 @@ const rules = computed(() => [
   text-align: center;
   gap: var(--space-4);
   padding-block: var(--space-10) var(--space-8);
-  border-block-end: 2px solid var(--color-ink);
+  border-block-end: 3px solid var(--color-brand);
   margin-block-end: var(--space-6);
 }
 .org {
@@ -139,31 +139,48 @@ const rules = computed(() => [
 .exam-title {
   margin: var(--space-6) 0 0;
   font-size: var(--text-2xl);
+  color: var(--color-brand-strong);
+}
+/* شريط ذهبي قصير تحت عنوان الغلاف: تزيين الهوية */
+.exam-title::after {
+  content: "";
+  display: block;
+  inline-size: 84px;
+  block-size: 4px;
+  margin: var(--space-3) auto 0;
+  background: var(--color-accent);
 }
 .line {
   margin: 0;
   font-size: var(--text-lg);
   font-weight: var(--weight-medium);
 }
+/* بيانات الاختبار صندوق واحد بخانات: التسمية بالعنابي فوق القيمة */
 .facts {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: var(--space-2) var(--space-8);
   margin: var(--space-4) 0 0;
+  border: 1px solid var(--color-brand);
+  background: var(--color-brand-soft);
 }
 .facts div {
-  display: flex;
+  display: grid;
+  justify-items: center;
   gap: var(--space-1);
+  padding: var(--space-2) var(--space-8);
+  border-inline-start: 1px solid var(--color-brand);
+}
+.facts div:first-child {
+  border-inline-start: 0;
 }
 .facts dt {
-  font-weight: var(--weight-bold);
-}
-.facts dt::after {
-  content: ":";
+  font-size: var(--text-xs);
+  color: var(--color-brand-strong);
 }
 .facts dd {
   margin: 0;
+  font-weight: var(--weight-bold);
 }
 .student {
   margin: 0;
@@ -179,7 +196,7 @@ const rules = computed(() => [
   padding-inline-start: var(--space-5);
 }
 .instructions {
-  border-block-end: 2px solid var(--color-ink);
+  border-block-end: 3px solid var(--color-brand);
   padding-block-end: var(--space-4);
   margin-block-end: var(--space-6);
 }
@@ -188,7 +205,10 @@ const rules = computed(() => [
   justify-content: space-between;
   gap: var(--space-4);
   margin: 0 0 var(--space-3);
+  padding-block-end: var(--space-2);
+  border-block-end: 2px solid var(--color-brand);
   font-size: var(--text-lg);
+  color: var(--color-brand-strong);
 }
 .columns {
   display: grid;
@@ -206,7 +226,8 @@ const rules = computed(() => [
   gap: var(--space-2);
   margin-block-start: var(--space-4);
   padding: var(--space-3);
-  border: 1px solid var(--color-line-strong);
+  border: 1px solid var(--color-line);
+  border-inline-start: 4px solid var(--color-accent);
   border-radius: var(--radius-sm);
   font-size: var(--text-sm);
 }
@@ -252,6 +273,10 @@ const rules = computed(() => [
     align-content: center;
   }
   .exam-title {
+    font-size: 26pt;
+  }
+  .line,
+  .student {
     font-size: var(--print-title);
   }
   .rules,

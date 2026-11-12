@@ -40,8 +40,9 @@ const DOTS = "....................";
 </template>
 
 <style scoped>
+/* ترويسة الهوية: خط عنابي سميك تحتها، والعنوان وتسميات البيانات بالعنابي، والذهبي شريط تزيين للتعليمات */
 .paper-header {
-  border-block-end: 2px solid var(--color-ink);
+  border-block-end: 3px solid var(--color-brand);
   padding-block-end: var(--space-3);
   margin-block-end: var(--space-3);
   display: grid;
@@ -64,6 +65,7 @@ const DOTS = "....................";
   text-align: center;
   font-size: var(--text-xl);
   margin: 0;
+  color: var(--color-brand-strong);
 }
 .logo {
   justify-self: start;
@@ -81,6 +83,7 @@ const DOTS = "....................";
 }
 .meta dt {
   font-weight: var(--weight-bold);
+  color: var(--color-brand-strong);
 }
 .meta dt::after {
   content: ":";
@@ -101,12 +104,13 @@ const DOTS = "....................";
 .instructions {
   margin: 0;
   padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--color-line-strong);
+  border: 1px solid var(--color-line);
+  border-inline-start: 4px solid var(--color-accent);
   border-radius: var(--radius-sm);
   font-size: var(--text-sm);
 }
 .compact {
-  border-block-end-width: 1px;
+  border-block-end-width: 2px;
 }
 .compact .title {
   font-size: var(--text-lg);

@@ -97,6 +97,7 @@ function levelsLabel(levels: BundleEntry["levels"]): string {
 }
 .index caption {
   text-align: start;
+  color: var(--color-brand-strong);
   font-weight: var(--weight-bold);
   font-size: var(--text-md);
   padding-block-end: var(--space-2);
@@ -108,7 +109,9 @@ function levelsLabel(levels: BundleEntry["levels"]): string {
   text-align: start;
 }
 .index thead th {
-  background: var(--color-surface-sunken);
+  background: var(--color-brand);
+  color: var(--color-on-brand);
+  border-color: var(--color-brand);
 }
 .index .num,
 .code {
@@ -118,6 +121,7 @@ function levelsLabel(levels: BundleEntry["levels"]): string {
 .code {
   font-weight: var(--weight-bold);
   font-family: var(--font-math);
+  color: var(--color-brand-strong);
 }
 .count {
   color: var(--color-ink-soft);

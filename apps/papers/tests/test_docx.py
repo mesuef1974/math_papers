@@ -235,7 +235,7 @@ def test_worksheet_layout_badge_ruled_lines_and_graph_beside_them(client):
     doc = Document(io.BytesIO(build_docx(payload)))
     body = doc.element.body
     badge = next(r for r in body.iter(f"{W}r") if "السؤال 1" in "".join(r.itertext()))
-    assert badge.find(f"{W}rPr/{W}shd").get(f"{W}fill") == "000000"
+    assert badge.find(f"{W}rPr/{W}shd").get(f"{W}fill") == ooxml.BRAND  # شارة بلون الهوية
     assert body.find(f".//{W}tcBorders/{W}bottom[@{W}val='dotted']") is not None
     assert body.find(f".//{W}tcBorders/{W}bottom[@{W}val='dashed']") is None
     # الرسم في خلية مدموجة رأسيًا بجوار أسطر الحل، داخل جدول واحد
@@ -284,3 +284,28 @@ def test_docx_api_accepts_bundle_and_names_the_file(client):
     res = create(client, bundle_payload(client))
     assert res.status_code == 202, res.content
     assert res.json()["filename"] == "حزمة أوراق العمل.docx"
+
+
+def test_documents_follow_brand_colors(client):
+    """ألوان الهوية في Word: عنوان الترويسة وخطها بالعنابي، ترويسات الجداول عنابية بنص أبيض، والشعار ملوّن."""
+    data = build_docx(sample_payload(client, "worksheet", show_key=True))
+    doc = Document(io.BytesIO(data))
+    body = doc.element.body
+    title = next(r for r in body.iter(f"{W}r") if (r.findtext(f"{W}t") or "").startswith("ورقة عمل"))
+    assert title.find(f"{W}rPr/{W}color").get(f"{W}val") == ooxml.BRAND_STRONG
+    rules = [b.get(f"{W}color") for b in body.iter(f"{W}bottom") if b.getparent().tag == f"{W}pBdr"]
+    assert ooxml.BRAND in rules  # خط الترويسة السميك
+    heads = [
+        tc
+        for tc in body.iter(f"{W}tc")
+        if tc.find(f"{W}tcPr/{W}shd") is not None
+        and tc.find(f"{W}tcPr/{W}shd").get(f"{W}fill") == ooxml.BRAND
+    ]
+    assert heads and all(
+        r.find(f"{W}rPr/{W}color").get(f"{W}val") == ooxml.WHITE for tc in heads for r in tc.iter(f"{W}r")
+    )
+    footer = parts_of(data)["word/footer1.xml"].decode("utf-8")
+    assert f'w:color="{ooxml.BRAND}"' in footer
+    import struct
+
+    assert struct.unpack(">B", LOGO[25:26])[0] in (2, 3, 6)  # PNG ملوّن (RGB أو لوحة ألوان)، لا أحادي

@@ -239,8 +239,8 @@ watchEffect(() => {
   gap: var(--space-1);
   margin-block: var(--space-2) var(--space-3);
   padding: var(--space-2) var(--space-3);
-  background: var(--color-surface-sunken);
-  border-inline-start: 3px solid var(--color-ink);
+  background: var(--color-brand-soft);
+  border-inline-start: 4px solid var(--color-brand);
   font-size: var(--text-sm);
 }
 .question {
@@ -257,7 +257,7 @@ watchEffect(() => {
   gap: var(--space-3);
   break-after: avoid;
 }
-/* رقم السؤال شارة مصمتة بلون الهوية (سوداء على الورق) */
+/* رقم السؤال شارة مصمتة بلون الهوية، على الشاشة والورق */
 .question-head strong {
   background: var(--color-brand);
   color: var(--color-on-brand);
@@ -285,6 +285,7 @@ watchEffect(() => {
 .part-label {
   display: inline-block;
   font-weight: var(--weight-bold);
+  color: var(--color-brand-strong);
   /* الوسم يُقرأ بترقيم عربي (‎.A‎ بصريًا: الحرف يمينًا ثم النقطة) وبعده مسافة قبل نص السؤال */
   margin-inline-end: var(--space-3);
   min-inline-size: 1.3em;
@@ -317,7 +318,8 @@ watchEffect(() => {
   align-self: center;
 }
 .option-label {
-  font-weight: var(--weight-medium);
+  font-weight: var(--weight-bold);
+  color: var(--color-brand-strong);
 }
 /* مساحة الحل في أوراق العمل: أسطر منقّطة للكتابة، سطر لكل درجة (2 إلى 6) */
 .work-space {
@@ -393,13 +395,18 @@ watchEffect(() => {
   min-inline-size: 30px;
   block-size: 30px;
   padding-inline: var(--space-1);
-  border: 1.5px solid var(--color-ink);
+  border: 1.5px solid var(--color-brand);
+  background: var(--color-brand-soft);
+  color: var(--color-brand-strong);
   font-weight: var(--weight-bold);
 }
 .booklet .essay .question-head {
   padding: var(--space-1) var(--space-2);
-  border: 1px solid var(--color-ink);
-  background: var(--color-surface-sunken);
+  border: 1px solid var(--color-brand);
+  background: var(--color-brand-soft);
+}
+.booklet .essay .number {
+  background: var(--color-sheet);
 }
 .booklet .essay .marks {
   margin-inline-start: auto;
@@ -490,7 +497,9 @@ watchEffect(() => {
   vertical-align: top;
 }
 .key thead th {
-  background: var(--color-surface-sunken);
+  background: var(--color-brand);
+  color: var(--color-on-brand);
+  border-color: var(--color-brand);
   font-weight: var(--weight-bold);
 }
 .key tbody tr {
@@ -498,7 +507,7 @@ watchEffect(() => {
 }
 .key tbody th {
   white-space: nowrap;
-  color: var(--color-brand);
+  color: var(--color-brand-strong);
 }
 .mcq-key {
   inline-size: auto;
@@ -540,10 +549,6 @@ watchEffect(() => {
   .part {
     overflow: visible;
   }
-  .section-note {
-    background: none;
-    border-inline-start-color: var(--color-ink);
-  }
   .options li {
     break-inside: avoid;
   }
@@ -554,7 +559,7 @@ watchEffect(() => {
   /* خط مستقيم بعرض المحتوى كاملًا بين كل سؤال والذي يليه */
   .question,
   .booklet .question {
-    border-block-end: 1px solid var(--color-ink);
+    border-block-end: 1px solid var(--color-line-strong);
   }
   .question:last-of-type {
     border-block-end: 0;
@@ -572,7 +577,7 @@ watchEffect(() => {
   }
   /* خط الختام بلون الفواصل: يغلق مساحة حل السؤال الأخير */
   .sheet:not(.booklet) .sheet-foot {
-    border-block-start-color: var(--color-ink);
+    border-block-start-color: var(--color-line-strong);
   }
   /* الرسم المجاور لأسطر الحل أصغر قليلًا، فتتسع ثلاثة أسئلة بيانية في الصفحة */
   .part.side :deep(svg) {
