@@ -123,15 +123,16 @@ function printPaper() {
 
 // PDF من الخادم: النماذج المعروضة كما هي مع ترويسة المعلم وحقول هذه الطباعة وخياراتها.
 function downloadServerFile(format: "pdf" | "docx") {
-  if (!store.paper) return;
+  if (!store.paper && !store.bundle) return;
   void pdf.download(
     {
-      papers: forms.value,
+      papers: store.bundle ?? forms.value,
       profile: print.profile,
       date: print.date,
       section: print.section,
       show_key: print.showKey,
-      bubble: print.bubble && hasMcq.value,
+      bubble: !store.bundle && print.bubble && hasMcq.value,
+      bundle: store.bundle ? { plan: store.bundlePlan, seed: store.bundleSeed } : null,
     },
     undefined,
     format,
@@ -240,10 +241,10 @@ function downloadServerFile(format: "pdf" | "docx") {
         <button v-if="store.paper || store.bundle" type="button" class="btn btn-secondary" @click="printPaper">
           <AppIcon name="print" />طباعة أو حفظ PDF
         </button>
-        <button v-if="store.paper" type="button" class="btn btn-secondary" :disabled="pdf.busy" @click="downloadServerFile('pdf')">
+        <button v-if="store.paper || store.bundle" type="button" class="btn btn-secondary" :disabled="pdf.busy" @click="downloadServerFile('pdf')">
           {{ pdf.busy ? pdf.statusText : "تنزيل PDF من الخادم" }}
         </button>
-        <button v-if="store.paper" type="button" class="btn btn-secondary" :disabled="pdf.busy" @click="downloadServerFile('docx')">
+        <button v-if="store.paper || store.bundle" type="button" class="btn btn-secondary" :disabled="pdf.busy" @click="downloadServerFile('docx')">
           {{ pdf.busy ? pdf.statusText : "تصدير Word (DOCX)" }}
         </button>
         <label v-if="store.paper || store.bundle" class="check">

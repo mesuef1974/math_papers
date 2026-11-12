@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, watchEffect } from "vue";
 import PaperHeader from "@/components/PaperHeader.vue";
 import PaperSheet from "@/components/PaperSheet.vue";
 import { LEVEL_NAMES, type BundleEntry, type Level, type Paper } from "@/stores/papers";
@@ -14,15 +14,22 @@ const props = defineProps<{
   showKey: boolean;
 }>();
 
+const BUNDLE_TITLE = "حزمة أوراق العمل: كل دروس الفصل الأول";
 const total = computed(() => props.plan.reduce((sum, entry) => sum + entry.count, 0));
 const coverHeader = computed<PaperHeaderData>(() => ({
   ...props.header(props.papers[0]),
-  title: "حزمة أوراق العمل: كل دروس الفصل الأول",
+  title: BUNDLE_TITLE,
   minutes: null,
   totalMarks: 0,
   instructions: "",
   seed: props.seed,
 }));
+
+// تذييل الحزمة الجاري واحد لكل صفحاتها؛ أوراقها لا تضبطه (runningFooter=false).
+watchEffect(() => {
+  if (typeof document === "undefined") return;
+  document.documentElement.style.setProperty("--print-footer", JSON.stringify(BUNDLE_TITLE));
+});
 
 function levelsLabel(levels: BundleEntry["levels"]): string {
   return (Object.keys(LEVEL_NAMES) as Level[])
@@ -37,24 +44,35 @@ function levelsLabel(levels: BundleEntry["levels"]): string {
     <article class="sheet cover">
       <PaperHeader :header="coverHeader" compact />
       <p class="summary">{{ plan.length }} ورقة عمل، {{ total }} مسألة، مرتبة من السهل إلى مهارات التفكير العليا.</p>
-      <h3>الفهرس</h3>
-      <ol class="index">
-        <li v-for="entry in plan" :key="entry.lesson">
-          <span class="code">{{ entry.lesson }}</span>
-          <span class="name">{{ entry.title }}</span>
-          <span class="count">{{ entry.count }} مسائل: {{ levelsLabel(entry.levels) }}</span>
-        </li>
-      </ol>
+      <table class="index">
+        <caption>الفهرس</caption>
+        <thead>
+          <tr>
+            <th scope="col">الدرس</th>
+            <th scope="col">العنوان</th>
+            <th scope="col">المسائل</th>
+            <th scope="col">المستويات</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="entry in plan" :key="entry.lesson">
+            <th scope="row" class="code">{{ entry.lesson }}</th>
+            <td class="name">{{ entry.title }}</td>
+            <td class="num">{{ entry.count }}</td>
+            <td class="count">{{ levelsLabel(entry.levels) }}</td>
+          </tr>
+        </tbody>
+      </table>
       <footer class="foot">رقم الحزمة {{ seed }}</footer>
     </article>
 
     <div v-for="paper in papers" :key="paper.lesson_code" class="bundle-sheet">
-      <PaperSheet :paper="paper" :header="header(paper)" :show-key="false" />
+      <PaperSheet :paper="paper" :header="header(paper)" :show-key="false" :running-footer="false" />
     </div>
 
     <template v-if="showKey">
       <div v-for="paper in papers" :key="`key-${paper.lesson_code}`" class="bundle-sheet">
-        <PaperSheet :paper="paper" :header="header(paper)" :show-key="true" hide-sheet />
+  <PaperSheet :paper="paper" :header="header(paper)" :show-key="true" hide-sheet :running-footer="false" />
       </div>
     </template>
   </div>
@@ -73,18 +91,29 @@ function levelsLabel(levels: BundleEntry["levels"]): string {
   color: var(--color-ink-soft);
 }
 .index {
-  margin: 0;
-  padding-inline-start: var(--space-6);
-  display: grid;
-  gap: var(--space-2);
+  inline-size: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
 }
-.index li {
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  gap: var(--space-3);
-  align-items: baseline;
-  border-block-end: 1px dotted var(--color-line);
-  padding-block-end: var(--space-1);
+.index caption {
+  text-align: start;
+  font-weight: var(--weight-bold);
+  font-size: var(--text-md);
+  padding-block-end: var(--space-2);
+}
+.index th,
+.index td {
+  border: 1px solid var(--color-line-strong);
+  padding: var(--space-1) var(--space-3);
+  text-align: start;
+}
+.index thead th {
+  background: var(--color-surface-sunken);
+}
+.index .num,
+.code {
+  text-align: center;
+  white-space: nowrap;
 }
 .code {
   font-weight: var(--weight-bold);
@@ -92,7 +121,6 @@ function levelsLabel(levels: BundleEntry["levels"]): string {
 }
 .count {
   color: var(--color-ink-soft);
-  font-size: var(--text-sm);
 }
 .foot {
   color: var(--color-ink-soft);
@@ -108,12 +136,6 @@ function levelsLabel(levels: BundleEntry["levels"]): string {
   }
   .bundle-sheet {
     break-before: page;
-  }
-  .index li {
-    grid-template-columns: auto 1fr;
-  }
-  .count {
-    grid-column: 2;
   }
 }
 </style>

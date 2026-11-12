@@ -25,6 +25,14 @@ describe("PaperHeader", () => {
     }
   });
 
+  it("شعار المنصة «أوراق» في رأس كل ورقة، والمضغوطة أيضًا", () => {
+    for (const compact of [false, true]) {
+      const logo = mount(PaperHeader, { props: { header, compact } }).find("svg.logo.brand-lockup");
+      expect(logo.exists()).toBe(true);
+      expect(logo.attributes("height")).toBe(compact ? "38" : "46");
+    }
+  });
+
   it("ورقة العمل بلا زمن ولا درجة كلية، والمضغوطة بلا سطر الطالب", () => {
     const sheet = { ...header, minutes: null, totalMarks: 0, instructions: "" };
     const text = mount(PaperHeader, { props: { header: sheet } }).text();

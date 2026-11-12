@@ -1,6 +1,6 @@
 import { defineStore } from "pinia";
 import { API_BASE, ApiError, api } from "@/api/client";
-import { accessMessage, type Paper } from "@/stores/papers";
+import { accessMessage, type BundleEntry, type Paper } from "@/stores/papers";
 import type { PrintProfile } from "@/stores/print";
 
 // PDF من الخادم: Chromium في الخادم يطبع صفحة الطباعة نفسها، فترقيم الصفحات مضمون في كل متصفح.
@@ -21,6 +21,7 @@ export interface PdfRequest {
   section: string;
   show_key: boolean;
   bubble: boolean;
+  bundle?: { plan: BundleEntry[]; seed: number } | null; // حزمة كل أوراق العمل: غلاف بفهرس ثم الأوراق
 }
 
 export const POLL_MS = 1000;

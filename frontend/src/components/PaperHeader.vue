@@ -1,10 +1,11 @@
 <script setup lang="ts">
+import BrandLockup from "@/components/BrandLockup.vue";
 import type { PaperHeaderData } from "@/stores/print";
 import { isolateNumberRanges } from "@/utils/bidi";
 import { durationLabel } from "@/utils/duration";
 
 // ترويسة بأسلوب أغلفة الوزارة: المدرسة والمادة والصف والزمن والدرجة، ثم سطر الطالب، ثم التعليمات.
-// الخانة الأخيرة في الصف الأول محجوزة لشعار المنصة عند اعتماده.
+// شعار المنصة «أوراق» في بداية الصف الأول كما في تطبيق الهوية على الورق، والمدرسة والمعلم في نهايته.
 withDefaults(defineProps<{ header: PaperHeaderData; compact?: boolean }>(), { compact: false });
 const DOTS = "....................";
 </script>
@@ -12,12 +13,12 @@ const DOTS = "....................";
 <template>
   <header class="paper-header" :class="{ compact }">
     <div class="top">
+      <BrandLockup class="logo" :height="compact ? 38 : 46" />
+      <h2 class="title">{{ isolateNumberRanges(header.title) }}</h2>
       <div class="org">
         <strong v-if="header.school">{{ header.school }}</strong>
         <span v-if="header.teacher">المعلم: {{ header.teacher }}</span>
       </div>
-      <h2 class="title">{{ isolateNumberRanges(header.title) }}</h2>
-      <div class="logo-slot" aria-hidden="true" />
     </div>
     <dl class="meta">
       <div><dt>المادة</dt><dd>{{ header.subject }}</dd></div>
@@ -54,6 +55,8 @@ const DOTS = "....................";
 }
 .org {
   display: grid;
+  justify-items: end;
+  text-align: end;
   font-size: var(--text-sm);
   line-height: 1.5;
 }
@@ -62,10 +65,8 @@ const DOTS = "....................";
   font-size: var(--text-xl);
   margin: 0;
 }
-.logo-slot {
-  justify-self: end;
-  inline-size: 48px;
-  block-size: 48px;
+.logo {
+  justify-self: start;
 }
 .meta {
   display: flex;
@@ -115,8 +116,11 @@ const DOTS = "....................";
     grid-template-columns: 1fr;
     text-align: center;
   }
-  .logo-slot {
-    display: none;
+  .logo,
+  .org {
+    justify-self: center;
+    justify-items: center;
+    text-align: center;
   }
 }
 @media print {

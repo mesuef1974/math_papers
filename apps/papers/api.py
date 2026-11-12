@@ -8,6 +8,7 @@ from django.http import FileResponse, HttpRequest
 from ninja import Field, Query, Router, Schema, Status
 from ninja.errors import HttpError
 from ninja.throttling import UserRateThrottle
+from pydantic import model_validator
 
 from apps.core.middleware import request_id_of
 from apps.core.services import record_audit
@@ -410,15 +411,34 @@ def put_print_profile(request: HttpRequest, payload: PrintProfileIn):
 DOCX_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 
 
-class PdfIn(Schema):
-    """ما يُطبع كما هو على الشاشة: النماذج (أ، وب إن وُجد) وترويسة المعلم وحقول هذه الطباعة وخياراتها."""
+MAX_FORMS = 2  # النموذج أ، وب إن طُلب
+MAX_BUNDLE_PAPERS = 40  # حزمة كل أوراق العمل: ورقة لكل درس
+BUNDLE_TITLE = "حزمة أوراق العمل"
 
-    papers: list[PaperOut] = Field(min_length=1, max_length=2)
+
+class BundleIn(Schema):
+    """فهرس الحزمة ورقمها كما وُلّدا؛ وجوده يجعل الملف حزمة بغلاف وفهرس لا نماذج ورقة واحدة."""
+
+    plan: list[BundleEntryOut] = Field(min_length=1, max_length=MAX_BUNDLE_PAPERS)
+    seed: Seed
+
+
+class PdfIn(Schema):
+    """ما يُطبع كما هو على الشاشة: النماذج (أ، وب إن وُجد) أو أوراق الحزمة، وترويسة المعلم وحقول هذه الطباعة."""
+
+    papers: list[PaperOut] = Field(min_length=1, max_length=MAX_BUNDLE_PAPERS)
     profile: PrintProfileIn
     date: str = Field("", max_length=20)
     section: str = Field("", max_length=40)
     show_key: bool = False
     bubble: bool = False
+    bundle: BundleIn | None = None
+
+    @model_validator(mode="after")
+    def forms_or_bundle(self):
+        if self.bundle is None and len(self.papers) > MAX_FORMS:
+            raise ValueError("أكثر من نموذجين دون حزمة")
+        return self
 
 
 class PdfJobOut(Schema):
@@ -444,7 +464,8 @@ def docx_create(request: HttpRequest, payload: PdfIn):
 
 def _create_document(request: HttpRequest, payload: PdfIn, fmt: str):
     try:
-        meta = pdf.create_job(request.user.pk, payload.dict(), payload.papers[0].title, fmt)
+        title = BUNDLE_TITLE if payload.bundle else payload.papers[0].title
+        meta = pdf.create_job(request.user.pk, payload.dict(), title, fmt)
     except pdf.UnavailableError as error:
         raise HttpError(503, str(error)) from error
     except pdf.BusyError as error:

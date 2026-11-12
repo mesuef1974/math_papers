@@ -127,6 +127,28 @@ def test_input_limits(client, fake_browser):
     assert client.get("/api/v1/pdf/not-a-job").status_code == 422
 
 
+def test_bundle_goes_through_with_its_index_and_many_papers_need_one(client, fake_browser):
+    body = payload(client)
+    paper = body["papers"][0]
+    entry = {"lesson": "1.2", "title": "حساب النهايات", "count": 3, "levels": {"K": 1, "A": 1, "R": 1}}
+    bundle = {"plan": [entry] * 3, "seed": 9}
+    assert create(client, {**body, "papers": [paper] * 3}).status_code == 422  # أكثر من نموذجين بلا حزمة
+    assert (
+        create(client, {**body, "papers": [paper] * 3, "bundle": {"plan": [], "seed": 9}}).status_code == 422
+    )
+    res = create(client, {**body, "papers": [paper] * 3, "bundle": bundle})
+    assert res.status_code == 202, res.content
+    assert res.json()["filename"] == "حزمة أوراق العمل.pdf"
+    seen = fake_browser["payload"]
+    assert (
+        len(seen["papers"]) == 3 and seen["bundle"]["seed"] == 9 and seen["bundle"]["plan"][0]["count"] == 3
+    )
+    token = fake_browser["url"].rsplit("/print/", 1)[1]
+    printed = client.get(f"/api/v1/pdf/print/{token}").json()
+    assert printed["bundle"]["plan"][0]["title"] == "حساب النهايات"
+    assert create(client, body).status_code == 202 and fake_browser["payload"]["bundle"] is None
+
+
 def test_safe_filename():
     assert pdf.safe_filename('اختبار: "الفصل" الأول/2026?') == "اختبار الفصل الأول 2026.pdf"
     assert pdf.safe_filename("   ") == "ورقة.pdf"
