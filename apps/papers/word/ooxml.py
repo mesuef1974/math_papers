@@ -8,6 +8,7 @@ from xml.sax.saxutils import escape
 
 from docx.oxml import parse_xml
 from docx.oxml.ns import nsdecls, qn
+from docx.section import _Footer, _Header
 from docx.shared import Cm
 from docx.table import _Cell
 from docx.text.paragraph import Paragraph
@@ -23,6 +24,7 @@ SOFT = "595959"
 RULE = "808080"
 SHADE = "EDEDED"
 W = nsdecls("w")
+SWAPPED = {"left": "right", "right": "left"}
 ARABIC = re.compile(r"[؀-ۿݐ-ݿ]")
 
 
@@ -37,6 +39,7 @@ def rpr(
     color: str | None = None,
     font: str = FONT,
     rtl: bool = False,
+    fill: str | None = None,
 ) -> str:
     parts = [f'<w:rFonts w:ascii="{font}" w:hAnsi="{font}" w:cs="{font}" w:eastAsia="{font}"/>']
     if bold:
@@ -48,6 +51,8 @@ def rpr(
     if size:
         half = round(size * 2)
         parts.append(f'<w:sz w:val="{half}"/><w:szCs w:val="{half}"/>')
+    if fill:
+        parts.append(f'<w:shd w:val="clear" w:color="auto" w:fill="{fill}"/>')
     if rtl:
         parts.append("<w:rtl/>")
     return f"<w:rPr>{''.join(parts)}</w:rPr>"
@@ -128,6 +133,10 @@ def _ppr(
     if indent_cm:
         parts.append(f'<w:ind w:start="{twips(indent_cm)}"/>')
     if align:
+        # Word يقرأ left/right في الفقرة العربية (bidi) بمعنى البداية/النهاية، أي معكوسين؛ نعكسهما هنا
+        # فيبقى معنى align في هذه الوحدة فيزيائيًا: left الطرف الأيسر دائمًا.
+        if rtl and align in SWAPPED:
+            align = SWAPPED[align]
         parts.append(f'<w:jc w:val="{align}"/>')
     return f"<w:pPr>{''.join(parts)}</w:pPr>"
 
@@ -153,8 +162,8 @@ def new_paragraph(
     indent_cm: float = 0,
     exact_pt: float | None = None,
 ) -> Paragraph:
-    """فقرة جديدة (أو الفقرة الفارغة الأولى في خلية). align: center/right/left/both كما في OOXML؛
-    في الفقرة العربية يعني left الطرف الأيسر حقًا (right الطرف الأيمن)، فلا خلط مع start/end."""
+    """فقرة جديدة (أو الفقرة الفارغة الأولى في خلية). align: center/right/left/both؛
+    left الطرف الأيسر حقًا وright الأيمن في الفقرة العربية واللاتينية معًا (العكس الذي يطلبه Word يتم في _ppr)."""
     if isinstance(container, _Cell) and len(container.paragraphs) == 1 and _reusable(container.paragraphs[0]):
         paragraph = container.paragraphs[0]
     else:
@@ -226,7 +235,10 @@ def make_table(
     cell_margin_cm: float = 0.12,
 ):
     """جدول بعرض ثابت؛ rtl يجعل العمود الأول في أقصى اليمين (bidiVisual)."""
-    table = container.add_table(rows=rows, cols=len(widths_cm))
+    if isinstance(container, _Footer | _Header):
+        table = container.add_table(rows, len(widths_cm), Cm(sum(widths_cm)))
+    else:
+        table = container.add_table(rows=rows, cols=len(widths_cm))
     total = sum(twips(w) for w in widths_cm)
     margin = twips(cell_margin_cm)
     tbl_pr = (

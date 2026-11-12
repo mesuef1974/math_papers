@@ -22,8 +22,9 @@ const props = withDefaults(
     replaceable?: boolean;
     replacing?: string;
     modified?: boolean;
+    runningFooter?: boolean; // الحزمة تضبط تذييلها الجاري بنفسها، فتعطّل تذييل كل ورقة
   }>(),
-  { hideSheet: false, replaceable: false, replacing: "", modified: false },
+  { hideSheet: false, replaceable: false, replacing: "", modified: false, runningFooter: true },
 );
 const emit = defineEmits<{ replace: [question: number, label: string] }>();
 
@@ -77,12 +78,19 @@ function workHeight(marks: number): string {
   return `${Math.min(Math.max(60 + marks * 45, 96), 300)}px`;
 }
 
+// أسطر مساحة الحل: سطر لكل درجة وسطر زائد (3 إلى 6)، وأربعة حين لا درجات (ورقة العمل)،
+// وستة على الأقل بجانب الرسم ليملأ ارتفاعه. السطر الأخير بلا خط: يغلقه فاصل السؤال فلا يتجاور خطان.
+function workLines(part: Question["parts"][number]): number {
+  const lines = Math.min(Math.max((part.marks || 3) + 1, 3), 6);
+  return part.graph ? Math.max(lines, 6) : lines;
+}
+
 // سطر التذييل الجاري في كل صفحة مطبوعة (يقرؤه print.css في صندوق هامش الصفحة).
 watchEffect(() => {
-  if (typeof document === "undefined") return;
+  if (typeof document === "undefined" || !props.runningFooter) return;
   const footer = booklet.value
     ? [props.header.subject, props.header.title, props.header.grade].filter(Boolean).join(" – ")
-    : "";
+    : props.header.title;
   document.documentElement.style.setProperty("--print-footer", JSON.stringify(footer));
 });
 </script>
@@ -103,7 +111,12 @@ watchEffect(() => {
         <span v-if="question.marks" class="marks">{{ marksLabel(question.marks) }}{{ booklet && question.kind === "essay" ? " /" : "" }}</span>
         <span v-if="booklet && question.kind === 'essay'" class="score-cell" aria-hidden="true" />
       </div>
-      <div v-for="part in question.parts" :key="part.fingerprint" class="part">
+      <div
+        v-for="part in question.parts"
+        :key="part.fingerprint"
+        class="part"
+        :class="{ side: !booklet && part.graph && !part.options.length }"
+      >
         <p class="stem">
           <bdi v-if="part.label" class="part-label" dir="rtl">{{ part.label }}.</bdi>
           <MathText :text="part.stem" />
@@ -130,7 +143,9 @@ watchEffect(() => {
           <div class="work-box" :style="{ minBlockSize: workHeight(part.marks) }" />
           <span class="part-marks" :aria-label="`الدرجة ${part.marks}`">{{ part.marks }}</span>
         </div>
-        <div v-else class="work-space" :data-lines="Math.min(Math.max(part.marks, 2), 6)" />
+        <div v-else class="work-space" :data-lines="workLines(part)" aria-hidden="true">
+          <span v-for="line in workLines(part)" :key="line" class="rule" />
+        </div>
         <div v-if="replaceable" class="part-tools no-print">
           <button
             type="button"
@@ -242,8 +257,13 @@ watchEffect(() => {
   gap: var(--space-3);
   break-after: avoid;
 }
+/* رقم السؤال شارة مصمتة بلون الهوية (سوداء على الورق) */
 .question-head strong {
-  color: var(--color-brand);
+  background: var(--color-brand);
+  color: var(--color-on-brand);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
 }
 .marks {
   color: var(--color-ink-soft);
@@ -299,22 +319,54 @@ watchEffect(() => {
 .option-label {
   font-weight: var(--weight-medium);
 }
-/* مساحة الحل في أوراق العمل تتدرج مع الدرجات (سطر 34px لكل درجة، من 2 إلى 6) */
+/* مساحة الحل في أوراق العمل: أسطر منقّطة للكتابة، سطر لكل درجة (2 إلى 6) */
 .work-space {
-  min-block-size: 68px;
-  border-block-end: 1px dashed var(--color-line-strong);
+  display: grid;
+  margin-block: var(--space-1) var(--space-2);
 }
-.work-space[data-lines="3"] {
-  min-block-size: 102px;
+.rule {
+  display: block;
+  block-size: 30px;
+  border-block-end: 1px dotted var(--color-line-strong);
 }
-.work-space[data-lines="4"] {
-  min-block-size: 136px;
+.rule:last-child {
+  border-block-end: 0;
 }
-.work-space[data-lines="5"] {
-  min-block-size: 170px;
+/* سؤال برسم بلا بدائل: الرسم في جهة وأسطر الحل بجانبه، فلا يضيع عرض الصفحة */
+.part.side {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: var(--space-6);
+  align-items: start;
 }
-.work-space[data-lines="6"] {
-  min-block-size: 204px;
+.part.side > .stem,
+.part.side > .part-tools {
+  grid-column: 1 / -1;
+}
+.part.side > .graph {
+  grid-column: 2;
+  grid-row: 2;
+}
+/* أسطر الحل تتوزع على ارتفاع الرسم المجاور */
+.part.side > .work-space {
+  grid-column: 1;
+  grid-row: 2;
+  align-self: stretch;
+  grid-auto-rows: 1fr;
+}
+.part.side .rule {
+  block-size: auto;
+  min-block-size: 30px;
+}
+@media (max-width: 560px) {
+  .part.side {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .part.side > .graph,
+  .part.side > .work-space {
+    grid-column: 1;
+    grid-row: auto;
+  }
 }
 .sheet-foot {
   display: flex;
@@ -513,6 +565,21 @@ watchEffect(() => {
   }
   .answer-key {
     break-before: page;
+  }
+  /* تذييل الورقة لا ينفرد في صفحة وحده */
+  .sheet-foot {
+    break-before: avoid;
+  }
+  /* خط الختام بلون الفواصل: يغلق مساحة حل السؤال الأخير */
+  .sheet:not(.booklet) .sheet-foot {
+    border-block-start-color: var(--color-ink);
+  }
+  /* الرسم المجاور لأسطر الحل أصغر قليلًا، فتتسع ثلاثة أسئلة بيانية في الصفحة */
+  .part.side :deep(svg) {
+    max-block-size: 50mm;
+  }
+  .question:last-of-type {
+    break-after: avoid;
   }
 }
 </style>

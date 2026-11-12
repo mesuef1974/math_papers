@@ -112,7 +112,8 @@ describe("PaperSheet", () => {
     expect(wrapper.find(".work-space").attributes("data-lines")).toBe("6");
     expect(wrapper.findAll(".section-end")).toHaveLength(0);
     expect(wrapper.find(".score-page").exists()).toBe(false);
-    expect(document.documentElement.style.getPropertyValue("--print-footer")).toBe('""');
+    expect(wrapper.find(".work-space").findAll(".rule")).toHaveLength(6);
+    expect(document.documentElement.style.getPropertyValue("--print-footer")).toBe(JSON.stringify(header.title));
   });
 
   it("المفتاح: جدول الإجابات الموضوعية ثم جدول بصف لكل جزء مع المستوى والدرس والخطوات، وعنوانه دليل التقدير للاختبار", () => {

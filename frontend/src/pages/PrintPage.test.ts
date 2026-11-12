@@ -91,6 +91,29 @@ describe("PrintPage: صفحة الطباعة للمتصفح الخادمي", () 
     expect(document.documentElement.dataset.printReady).toBe("1");
   });
 
+  it("حمولة الحزمة تُعرض غلافًا بفهرس ثم ورقة لكل درس", async () => {
+    const sheet: Paper = { ...paper, kind: "worksheet", lesson_code: "1.1", title: "ورقة عمل: 1.1 مفهوم النهاية" };
+    const plan = [
+      { lesson: "1.1", title: "مفهوم النهاية", count: 1, levels: { K: 1 } },
+      { lesson: "1.2", title: "حساب النهايات", count: 1, levels: { A: 1 } },
+    ];
+    get.mockResolvedValue({
+      ...payload,
+      papers: [sheet, { ...sheet, lesson_code: "1.2", title: "ورقة عمل: 1.2 حساب النهايات" }],
+      bundle: { plan, seed: 9 },
+      show_key: false,
+      bubble: false,
+    });
+    const wrapper = mount(PrintPage, { global: { stubs: { MathText: true, GraphPlot: true } } });
+    await flushPromises();
+    expect(wrapper.find(".bundle .cover").text()).toContain("حزمة أوراق العمل");
+    expect(wrapper.findAll(".index tbody tr")).toHaveLength(2);
+    expect(wrapper.text()).toContain("رقم الحزمة 9");
+    expect(wrapper.findAll(".bundle-sheet")).toHaveLength(2);
+    expect(document.documentElement.style.getPropertyValue("--print-footer")).toContain("حزمة أوراق العمل");
+    expect(document.documentElement.dataset.printReady).toBe("1");
+  });
+
   it("رمز غير صالح: رسالة وإشارة خطأ حتى لا ينتظر الخادم المهلة كاملة", async () => {
     get.mockRejectedValue(new ApiError(404, "صفحة الطباعة غير متاحة"));
     const wrapper = mount(PrintPage);

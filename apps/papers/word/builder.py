@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import re
 from io import BytesIO
+from pathlib import Path
 from typing import Any
 
 from docx import Document
@@ -26,9 +27,16 @@ OPTION_LABELS = "ABCD"
 LEVEL_NAMES = {"K": "سهل", "A": "متوسط", "R": "مهارات عليا"}
 FORM_LABELS = {"A": "أ", "B": "ب"}
 DOTS = "." * 20
+NBSP = "\u00a0"
 QUIZ_MINUTES = 20
 SHORT_OPTION = 26
 MAX_GRAPH_HEIGHT_CM = 6.2
+BRAND_LINE = "أوراق · مولّد أوراق الرياضيات"
+BUNDLE_COVER_TITLE = "حزمة أوراق العمل: كل دروس الفصل الأول"
+LOGO = (Path(__file__).parent / "assets" / "lockup.png").read_bytes()
+HEADER_CM = [3.0, 10.6, 4.2]  # الشعار، العنوان، المدرسة والمعلم
+SIDE_GRAPH_CM = 5.4
+LINE_CM = 0.8
 COVER_NOTES = [
     "هذا الاختبار للتدريب ولا يغطي جميع موضوعات الفصل.",
     "الاختبار لا يغني عن الكتاب المدرسي ولا عن الخطة الفصلية.",
@@ -110,6 +118,13 @@ def header_of(paper: dict, profile: dict, date: str, section: str, multi: bool) 
         "instructions": instructions,
         "form": FORM_LABELS.get(paper.get("form", "A"), "") if multi else "",
     }
+
+
+def labelled(paragraph, text: str, **fmt) -> None:
+    """«تسمية: قيمة» بتشغيلين: القيمة اللاتينية (12/3) في تشغيل غير عربي، فلا يقلب Word طرفي الشرطة."""
+    label, separator, value = text.partition(": ")
+    x.add_text(paragraph, label + separator, **fmt)
+    x.add_text(paragraph, value, **fmt)
 
 
 def short_grade(grade: str) -> str:
@@ -194,24 +209,29 @@ def graph_picture(
 def paper_header(doc, header: dict, *, compact: bool = False, page_break: bool = False) -> None:
     if page_break:
         x.spacer(doc, 1, page_break=True)
-    top = x.make_table(doc, 1, [4.9, 8.0, 4.9], borders=None)
+    top = x.make_table(doc, 1, HEADER_CM, borders=None)
     x.set_row(top.rows[0])
-    org = top.cell(0, 0)
-    x.set_cell(org, 4.9)
+    brand = top.cell(0, 0)
+    x.set_cell(brand, HEADER_CM[0])
+    x.add_picture(
+        x.new_paragraph(brand, rtl=False, align="right", after=0, line=None), LOGO, 2.3 if compact else 2.7
+    )
+    mid = top.cell(0, 1)
+    x.set_cell(mid, HEADER_CM[1])
+    # العنوان الطويل (مفتاح اختبار درسين) يصغر قليلًا ليبقى في سطر واحد ما أمكن
+    title_size = 14 if len(header["title"]) <= 46 else 12
+    x.add_text(x.new_paragraph(mid, align="center", after=0), header["title"], size=title_size, bold=True)
+    org = top.cell(0, 2)
+    x.set_cell(org, HEADER_CM[2])
     first = True
     if header["school"]:
-        x.add_text(x.new_paragraph(org, after=0), header["school"], size=11, bold=True)
+        x.add_text(x.new_paragraph(org, align="left", after=0), header["school"], size=10, bold=True)
         first = False
     if header["teacher"]:
-        x.add_text(x.new_paragraph(org, after=0), f"المعلم: {header['teacher']}", size=9.5)
+        x.add_text(x.new_paragraph(org, align="left", after=0), f"المعلم: {header['teacher']}", size=9.5)
         first = False
     if first:
         x.new_paragraph(org, after=0)
-    mid = top.cell(0, 1)
-    x.set_cell(mid, 8.0)
-    x.add_text(x.new_paragraph(mid, align="center", after=0), header["title"], size=14, bold=True)
-    x.set_cell(top.cell(0, 2), 4.9)
-    x.new_paragraph(top.cell(0, 2), after=0)
     x.spacer(doc, 4)
 
     items = [("المادة", header["subject"])]
@@ -225,12 +245,13 @@ def paper_header(doc, header: dict, *, compact: bool = False, page_break: bool =
         items.append(("الدرجة الكلية", f"{header['total']} درجة"))
     if header["date"]:
         items.append(("التاريخ", header["date"]))
-    width = CONTENT_CM / len(items)
-    meta = x.make_table(doc, 1, [width] * len(items), borders=x.box(6, x.RULE))
+    weights = [max(len(label), len(value)) + 6 for label, value in items]
+    meta_widths = [CONTENT_CM * weight / sum(weights) for weight in weights]
+    meta = x.make_table(doc, 1, meta_widths, borders=x.box(6, x.RULE))
     x.set_row(meta.rows[0])
     for index, (label, value) in enumerate(items):
         cell = meta.cell(0, index)
-        x.set_cell(cell, width, borders=None)
+        x.set_cell(cell, meta_widths[index], borders=None)
         x.add_text(x.new_paragraph(cell, align="center", after=0), label, size=8.5, color=x.SOFT)
         x.add_text(x.new_paragraph(cell, align="center", after=0), value, size=10.5, bold=True)
     if not compact:
@@ -244,7 +265,7 @@ def paper_header(doc, header: dict, *, compact: bool = False, page_break: bool =
             zip(student.rows[0].cells, cells, [9.0, 4.4, 4.4], strict=True)
         ):
             x.set_cell(cell, w)
-            x.add_text(x.new_paragraph(cell, before=6, after=2), text, size=10.5)
+            labelled(x.new_paragraph(cell, before=6, after=2), text, size=10.5)
             _ = index
         if header["instructions"]:
             par = x.new_paragraph(doc, before=2, after=2)
@@ -255,19 +276,15 @@ def paper_header(doc, header: dict, *, compact: bool = False, page_break: bool =
 
 def cover_page(doc, header: dict, paper: dict) -> None:
     """غلاف كراسة الاختبار ثم صفحة التعليمات الثنائية على نسق كراسات الوزارة."""
-    first = True
+    x.add_picture(x.new_paragraph(doc, rtl=False, align="center", after=14, line=None), LOGO, 4.4)
     for text, size, bold, gap in (
         (header["school"], 15, True, 2),
-        (f"المعلم: {header['teacher']}" if header["teacher"] else "", 11, False, 40),
+        (f"المعلم: {header['teacher']}" if header["teacher"] else "", 11, False, 24),
     ):
         if text:
-            x.add_text(
-                x.new_paragraph(doc, align="center", after=gap, page_break=False), text, size=size, bold=bold
-            )
-        first = False
-    _ = first
+            x.add_text(x.new_paragraph(doc, align="center", after=gap), text, size=size, bold=bold)
     title = f"اختبار {header['subject']}" + (" (تدريبي)" if paper.get("is_forecast") else "")
-    x.add_text(x.new_paragraph(doc, align="center", before=30, after=10), title, size=26, bold=True)
+    x.add_text(x.new_paragraph(doc, align="center", before=18, after=10), title, size=26, bold=True)
     x.add_text(x.new_paragraph(doc, align="center", after=4), header["title"], size=15)
     if header["grade"]:
         x.add_text(x.new_paragraph(doc, align="center", after=4), header["grade"], size=13)
@@ -291,7 +308,7 @@ def cover_page(doc, header: dict, paper: dict) -> None:
         x.add_text(x.new_paragraph(cell, align="center", after=4), value, size=13, bold=True)
     x.spacer(doc, 26)
     x.add_text(x.new_paragraph(doc, after=14), f"اسم الطالب: {'.' * 40}", size=13)
-    x.add_text(x.new_paragraph(doc, after=14), f"الشعبة: {header['section'] or '.' * 16}", size=13)
+    labelled(x.new_paragraph(doc, after=14), f"الشعبة: {header['section'] or '.' * 16}", size=13)
     x.spacer(doc, 16)
     notes = x.make_table(doc, 1, [CONTENT_CM], borders=x.box(8, x.RULE))
     cell = notes.cell(0, 0)
@@ -437,10 +454,12 @@ def question_head(doc, question: dict, booklet: bool) -> None:
             x.new_paragraph(score, after=0, keep_next=True, exact_pt=18)
         x.spacer(doc, 3, keep_next=True)
         return
-    par = x.new_paragraph(doc, before=8, after=3, keep_next=True)
-    x.add_text(par, f"السؤال {question['number']}", size=12, bold=True)
+    par = x.new_paragraph(doc, before=6, after=4, keep_next=True)
+    x.add_text(
+        par, f"{NBSP}السؤال {question['number']}{NBSP}", size=11.5, bold=True, color="FFFFFF", fill=x.INK
+    )
     if marks:
-        x.add_text(par, f"   ({marks})", size=10, color=x.SOFT)
+        x.add_text(par, f"   {marks}", size=10, color=x.SOFT)
 
 
 def option_cell(cell, index: int, part: dict, width: float, keep_next: bool) -> None:
@@ -458,7 +477,7 @@ def option_cell(cell, index: int, part: dict, width: float, keep_next: bool) -> 
         rich(cell, part["options"][index], size=11, rtl=False, first=par, keep_next=keep_next)
 
 
-def options_block(doc, part: dict, booklet: bool) -> None:
+def options_block(doc, part: dict, booklet: bool, *, keep: bool = False) -> None:
     options = part["options"]
     graphs = bool(part.get("option_graphs"))
     short = not graphs and all(len(option) <= SHORT_OPTION for option in options)
@@ -471,7 +490,7 @@ def options_block(doc, part: dict, booklet: bool) -> None:
             for c in range(2):
                 index = r * 2 + c
                 cell = table.cell(r, c)
-                last = r == rows - 1
+                last = r == rows - 1 and not keep
                 if index < len(options):
                     option_cell(cell, index, part, width, not last)
                 else:
@@ -481,11 +500,21 @@ def options_block(doc, part: dict, booklet: bool) -> None:
         table = x.make_table(doc, len(options), [CONTENT_CM - 1.0], rtl=False, borders=None, align="center")
         for index in range(len(options)):
             x.set_row(table.rows[index])
-            option_cell(table.cell(index, 0), index, part, CONTENT_CM - 1.0, index < len(options) - 1)
-    x.spacer(doc, 3)
+            option_cell(table.cell(index, 0), index, part, CONTENT_CM - 1.0, keep or index < len(options) - 1)
+    x.spacer(doc, 3, keep_next=keep)
 
 
-def work_box(doc, part: dict, booklet: bool) -> None:
+def work_lines(part: dict) -> int:
+    """أسطر الحل كما في PDF: سطر لكل درجة وسطر زائد (3 إلى 6)، وأربعة حين لا درجات، وستة على الأقل بجوار رسم.
+    السطر الأخير بلا خط منقّط: يغلقه فاصل السؤال فلا يتجاور خطان."""
+    lines = min(max((part["marks"] or 3) + 1, 3), 6)
+    return max(lines, 6) if part.get("graph") else lines
+
+
+DOTTED = {"bottom": {"val": "dotted", "sz": 6, "color": x.RULE}}
+
+
+def work_box(doc, part: dict, booklet: bool, *, keep: bool = False) -> None:
     marks = part["marks"]
     if booklet:
         height_px = min(max(60 + marks * 45, 96), 300)
@@ -511,17 +540,42 @@ def work_box(doc, part: dict, booklet: bool) -> None:
         x.add_text(x.new_paragraph(table.cell(0, 1), align="center", after=0), str(marks), size=12, bold=True)
         x.spacer(doc, 6)
         return
-    lines = min(max(marks, 2), 6)
-    table = x.make_table(doc, lines, [CONTENT_CM], borders=None)
-    dashed = {"bottom": {"val": "dashed", "sz": 4, "color": x.RULE}}
+    lines = work_lines(part)
+    graph = part.get("graph")
+    if not graph:
+        table = x.make_table(doc, lines, [CONTENT_CM], borders=None)
+        for r in range(lines):
+            x.set_row(table.rows[r], height_cm=LINE_CM, exact=True)
+            x.set_cell(table.cell(r, 0), CONTENT_CM, borders=DOTTED if r < lines - 1 else None)
+            x.new_paragraph(table.cell(r, 0), after=0, line=None, exact_pt=10, keep_next=keep)
+        x.spacer(doc, 4, keep_next=keep)
+        return
+    # الرسم يسارًا وأسطر الحل بجواره يمينًا: عمود الرسم خلية واحدة مدموجة رأسيًا، والأسطر تتوزع على ارتفاعه
+    png, width, height = render_graph(graph, compact=False)
+    width_cm, height_cm = width / 96 * 2.54, height / 96 * 2.54
+    scale = min(1.0, SIDE_GRAPH_CM / height_cm, 7.4 / width_cm)
+    side = width_cm * scale + 0.5
+    widths = [CONTENT_CM - side, side]
+    row_cm = max(LINE_CM, (height_cm * scale + 1.0) / lines)
+    table = x.make_table(doc, lines, widths, borders=None)
     for r in range(lines):
-        x.set_row(table.rows[r], height_cm=0.9, exact=True)
-        x.set_cell(table.cell(r, 0), CONTENT_CM, borders=dashed)
-        x.new_paragraph(table.cell(r, 0), after=0, line=None, exact_pt=10)
-    x.spacer(doc, 4)
+        x.set_row(table.rows[r], height_cm=row_cm, exact=True)
+        x.set_cell(table.cell(r, 0), widths[0], borders=DOTTED if r < lines - 1 else None)
+        x.new_paragraph(table.cell(r, 0), after=0, line=None, exact_pt=10, keep_next=True)
+    merged = table.cell(0, 1).merge(table.cell(lines - 1, 1))
+    for extra in merged.paragraphs[1:]:
+        extra._p.getparent().remove(extra._p)
+    picture = x.new_paragraph(merged, rtl=False, align="center", after=0, line=None, keep_next=True)
+    x.add_picture(picture, png, width_cm * scale)
+    caption = x.new_paragraph(merged, rtl=False, align="center", after=0, keep_next=True)
+    x.add_math(caption, f"y={graph['label']}(x)")
+    x.spacer(doc, 4, keep_next=keep)
 
 
-def question_block(doc, question: dict, booklet: bool, notes: dict, last_mcq: int, count: int) -> None:
+def question_block(
+    doc, question: dict, booklet: bool, notes: dict, last_mcq: int, count: int, *, keep: bool = False
+) -> None:
+    """keep: السؤال الأخير في ورقة غير الكراسة يُربط بسطر «انتهت الأسئلة» فلا ينفرد السطر بصفحة."""
     note = notes.get(question["number"])
     if note:
         par = x.new_paragraph(doc, before=4, after=1, keep_next=True, shade=x.SHADE)
@@ -530,7 +584,10 @@ def question_block(doc, question: dict, booklet: bool, notes: dict, last_mcq: in
             en = x.new_paragraph(doc, rtl=False, align="left", after=4, keep_next=True, shade=x.SHADE)
             x.add_text(en, note[1], size=9.5)
     question_head(doc, question, booklet)
-    for part in question["parts"]:
+    parts = question["parts"]
+    for position, part in enumerate(parts):
+        bind = keep and position == len(parts) - 1
+        side = not booklet and bool(part.get("graph")) and not part["options"]
         stem = x.new_paragraph(doc, before=2, after=3, keep_next=True)
         label = part.get("label") or ""
         if label:
@@ -539,7 +596,7 @@ def question_block(doc, question: dict, booklet: bool, notes: dict, last_mcq: in
         rich(doc, part["stem"], size=11, first=stem)
         if label and not booklet and part.get("marks"):
             x.add_text(stem, f"  ({part['marks']})", size=9.5, color=x.SOFT)
-        if part.get("graph"):
+        if part.get("graph") and not side:
             graph_picture(doc, part["graph"], compact=booklet)
             if not booklet:
                 caption = x.new_paragraph(
@@ -547,9 +604,9 @@ def question_block(doc, question: dict, booklet: bool, notes: dict, last_mcq: in
                 )
                 x.add_math(caption, f"y={part['graph']['label']}(x)")
         if part["options"]:
-            options_block(doc, part, booklet)
+            options_block(doc, part, booklet, keep=bind)
         else:
-            work_box(doc, part, booklet)
+            work_box(doc, part, booklet, keep=bind)
     if booklet and question["number"] == last_mcq and last_mcq < count:
         _bilingual_rule(doc, "انتهت الأسئلة الموضوعية", "End of multiple-choice questions")
 
@@ -566,13 +623,13 @@ def _bilingual_rule(doc, ar: str, en: str) -> None:
     x.spacer(doc, 6)
 
 
-def sheet(doc, paper: dict, header: dict) -> None:
+def sheet(doc, paper: dict, header: dict, *, page_break: bool = False) -> None:
     booklet = paper["kind"] == "exam"
     if booklet:
         cover_page(doc, header, paper)
         x.spacer(doc, 2, page_break=True)
     else:
-        paper_header(doc, header)
+        paper_header(doc, header, page_break=page_break)
     notes = section_notes(paper)
     questions = paper["questions"]
     last_mcq = max((q["number"] for q in questions if q["kind"] == "mcq"), default=0)
@@ -580,7 +637,8 @@ def sheet(doc, paper: dict, header: dict) -> None:
     for index, question in enumerate(questions):
         if booklet and question["number"] == first_essay and last_mcq:
             x.spacer(doc, 1, page_break=True)  # القسم المقالي يبدأ صفحة جديدة كما في PDF
-        question_block(doc, question, booklet, notes, last_mcq, len(questions))
+        final = index == len(questions) - 1
+        question_block(doc, question, booklet, notes, last_mcq, len(questions), keep=final and not booklet)
         closes_section = booklet and question["number"] == last_mcq and last_mcq < len(questions)
         if index < len(questions) - 1 and not closes_section:
             # خط مستقيم بعرض النص كاملًا (بين الهامشين) يفصل السؤال عن الذي يليه
@@ -667,7 +725,7 @@ def answer_sheet(doc, paper: dict, header: dict, *, answers: bool) -> None:
             strict=True,
         ):
             x.set_cell(cell, w)
-            x.add_text(x.new_paragraph(cell, before=4, after=2), text, size=10.5)
+            labelled(x.new_paragraph(cell, before=4, after=2), text, size=10.5)
     note = (
         "الدوائر المظلَّلة هي الإجابات الصحيحة لهذا النموذج."
         if answers
@@ -715,10 +773,10 @@ def answer_sheet(doc, paper: dict, header: dict, *, answers: bool) -> None:
     )
 
 
-def key_pages(doc, paper: dict, header: dict) -> None:
+def key_pages(doc, paper: dict, header: dict, *, page_break: bool = True) -> None:
     booklet = paper["kind"] == "exam"
     title = f"{'دليل تقدير الدرجات' if booklet else 'مفتاح الحل'}: {header['title']}"
-    paper_header(doc, {**header, "title": title}, compact=True, page_break=True)
+    paper_header(doc, {**header, "title": title}, compact=True, page_break=page_break)
     mcq = [
         (q["number"], q["parts"][0].get("answer_index", -1))
         for q in paper["questions"]
@@ -731,10 +789,10 @@ def key_pages(doc, paper: dict, header: dict) -> None:
             size=12,
             bold=True,
         )
-        per_row = 10
+        per_row = min(10, len(mcq))
         chunks = [mcq[i : i + per_row] for i in range(0, len(mcq), per_row)]
         widths = [2.6] + [1.52] * per_row
-        table = x.make_table(doc, len(chunks) * 2, widths, borders=x.box(6, x.INK))
+        table = x.make_table(doc, len(chunks) * 2, widths, borders=x.box(6, x.INK), align="right")
         for index, chunk in enumerate(chunks):
             for offset, (label, shade) in enumerate((("رقم السؤال", x.SHADE), ("رمز الإجابة", None))):
                 r = index * 2 + offset
@@ -830,42 +888,106 @@ def _configure_section(section, footer_text: str) -> None:
     footer = section.footer
     for paragraph in list(footer.paragraphs)[1:]:
         paragraph._p.getparent().remove(paragraph._p)
-    par = x.new_paragraph(footer, align="center", after=0, line=None)
-    if footer_text:
-        x.add_text(par, f"{footer_text}  ·  ", size=8.5, color=x.SOFT)
-    x.add_text(par, "صفحة ", size=8.5, color=x.SOFT)
-    x.add_field(par, " PAGE ", size=8.5, color=x.SOFT)
+    # تذييل الهوية: خط علوي، اسم المنصة يمينًا، عنوان الورقة وسطًا، رقم الصفحة من المجموع يسارًا
+    widths = [4.5, 9.8, 3.5]
+    table = x.make_table(footer, 1, widths, borders={"top": x.BORDER}, cell_margin_cm=0.05)
+    x.set_row(table.rows[0])
+    for cell, width in zip(table.rows[0].cells, widths, strict=True):
+        x.set_cell(cell, width, valign="top")
+    brand = x.new_paragraph(table.cell(0, 0), before=3, after=0, line=None)
+    x.add_text(brand, BRAND_LINE, size=8.5, bold=True)
+    middle = x.new_paragraph(table.cell(0, 1), align="center", before=3, after=0, line=None)
+    x.add_text(middle, footer_text, size=8, color=x.SOFT)
+    pages = x.new_paragraph(table.cell(0, 2), align="left", before=3, after=0, line=None)
+    x.add_text(pages, "صفحة ", size=8.5)
+    x.add_field(pages, " PAGE ", size=8.5)
+    x.add_text(pages, " من ", size=8.5)
+    x.add_field(pages, " NUMPAGES ", size=8.5)
+    # الفقرة الفارغة الأصلية تسبق الجدول؛ تُحذف وتُضاف فقرة ختامية دقيقة (الحاوية تنتهي بفقرة لا بجدول)
+    for paragraph in footer.paragraphs:
+        paragraph._p.getparent().remove(paragraph._p)
+    x.spacer(footer, 1)
+
+
+def bundle_cover(doc, header: dict, bundle: dict) -> None:
+    """غلاف الحزمة: ترويسة بالشعار ثم ملخص وفهرس الدروس ورقم الحزمة."""
+    plan = bundle["plan"]
+    cover = {
+        **header,
+        "title": BUNDLE_COVER_TITLE,
+        "minutes": None,
+        "total": 0,
+        "instructions": "",
+        "form": "",
+    }
+    paper_header(doc, cover, compact=True)
+    total = sum(entry["count"] for entry in plan)
+    x.add_text(
+        x.new_paragraph(doc, before=6, after=8),
+        f"{len(plan)} ورقة عمل، {total} مسألة، مرتبة من السهل إلى مهارات التفكير العليا.",
+        size=11,
+        color=x.SOFT,
+    )
+    x.add_text(x.new_paragraph(doc, after=4, keep_next=True), "الفهرس", size=13, bold=True)
+    widths = [2.0, 8.6, 2.0, 5.2]
+    table = x.make_table(doc, len(plan) + 1, widths, borders=x.box(6, x.INK))
+    for c, text in enumerate(["الدرس", "العنوان", "المسائل", "المستويات"]):
+        x.set_cell(table.cell(0, c), widths[c], shade=x.SHADE)
+        x.add_text(x.new_paragraph(table.cell(0, c), align="center", after=0), text, size=10, bold=True)
+    x.set_row(table.rows[0], header=True)
+    for r, entry in enumerate(plan, start=1):
+        x.set_row(table.rows[r], height_cm=0.72)
+        levels = "، ".join(
+            f"{name} {entry['levels'][code]}"
+            for code, name in LEVEL_NAMES.items()
+            if entry["levels"].get(code)
+        )
+        cells = [table.cell(r, c) for c in range(4)]
+        code = x.new_paragraph(cells[0], align="center", after=0, rtl=False)
+        x.add_text(code, entry["lesson"], size=10.5, bold=True)
+        x.add_text(x.new_paragraph(cells[1], after=0), entry["title"], size=10.5)
+        count = x.new_paragraph(cells[2], align="center", after=0, rtl=False)
+        x.add_text(count, str(entry["count"]), size=10.5)
+        x.add_text(x.new_paragraph(cells[3], after=0), levels, size=9.5, color=x.SOFT)
+    x.add_text(x.new_paragraph(doc, before=10), f"رقم الحزمة {bundle['seed']}", size=9, color=x.SOFT)
 
 
 def build_docx(payload: dict[str, Any]) -> bytes:
-    """الحمولة هي PdfIn.dict(): papers وprofile وdate وsection وshow_key وbubble."""
+    """الحمولة هي PdfIn.dict(): papers وprofile وdate وsection وshow_key وbubble، وbundle لحزمة أوراق العمل."""
     papers = payload["papers"]
     profile = payload["profile"]
-    multi = len(papers) > 1
+    bundle = payload.get("bundle")
+    multi = len(papers) > 1 and not bundle
     doc = Document()
     _setup(doc)
     headers = [
         header_of(p, profile, payload.get("date", ""), payload.get("section", ""), multi) for p in papers
     ]
-    for index, (paper, header) in enumerate(zip(papers, headers, strict=True)):
-        section = doc.sections[0] if index == 0 else doc.add_section(WD_SECTION.NEW_PAGE)
-        footer = (
-            " – ".join(v for v in (header["subject"], header["title"], short_grade(header["grade"])) if v)
-            if paper["kind"] == "exam"
-            else ""
-        )
-        _configure_section(section, footer)
-        sheet(doc, paper, header)
-        if payload.get("bubble") and any(q["kind"] == "mcq" for q in paper["questions"]):
-            answer_sheet(doc, paper, header, answers=False)
+    if bundle:
+        # الحزمة قسم واحد بتذييل واحد: غلاف بفهرس، ثم كل ورقة تبدأ صفحة جديدة
+        _configure_section(doc.sections[0], BUNDLE_COVER_TITLE)
+        bundle_cover(doc, headers[0], bundle)
+        for paper, header in zip(papers, headers, strict=True):
+            sheet(doc, paper, header, page_break=True)
+    else:
+        for index, (paper, header) in enumerate(zip(papers, headers, strict=True)):
+            section = doc.sections[0] if index == 0 else doc.add_section(WD_SECTION.NEW_PAGE)
+            footer = (
+                " – ".join(v for v in (header["subject"], header["title"], short_grade(header["grade"])) if v)
+                if paper["kind"] == "exam"
+                else header["title"]
+            )
+            _configure_section(section, footer)
+            sheet(doc, paper, header)
+            if payload.get("bubble") and any(q["kind"] == "mcq" for q in paper["questions"]):
+                answer_sheet(doc, paper, header, answers=False)
     if payload.get("show_key"):
         section = doc.add_section(WD_SECTION.NEW_PAGE)
         _configure_section(section, "مفتاح الحل")
         for index, (paper, header) in enumerate(zip(papers, headers, strict=True)):
-            if index:
-                pass
-            key_pages(doc, paper, header)
-            if payload.get("bubble") and any(q["kind"] == "mcq" for q in paper["questions"]):
+            # القسم الجديد يبدأ صفحة بنفسه؛ فاصل الصفحة قبل الترويسة لما بعد المفتاح الأول فقط
+            key_pages(doc, paper, header, page_break=bool(index))
+            if payload.get("bubble") and not bundle and any(q["kind"] == "mcq" for q in paper["questions"]):
                 answer_sheet(doc, paper, header, answers=True)
     # أول فقرة في الوثيقة فارغة من python-docx قبل إضافة أي شيء؛ تُحذف إن كانت فارغة تمامًا.
     body = doc.element.body

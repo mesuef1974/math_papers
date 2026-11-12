@@ -2,8 +2,9 @@
 import { nextTick, onMounted, ref } from "vue";
 import { useRoute } from "vue-router";
 import { api } from "@/api/client";
+import PaperBundle from "@/components/PaperBundle.vue";
 import PaperSet from "@/components/PaperSet.vue";
-import type { Paper } from "@/stores/papers";
+import type { BundleEntry, Paper } from "@/stores/papers";
 import type { PdfRequest } from "@/stores/pdf";
 import { usePrintStore } from "@/stores/print";
 
@@ -12,6 +13,7 @@ import { usePrintStore } from "@/stores/print";
 const route = useRoute();
 const print = usePrintStore();
 const papers = ref<Paper[]>([]);
+const bundle = ref<{ plan: BundleEntry[]; seed: number } | null>(null);
 const error = ref("");
 
 function signal(state: "1" | "error") {
@@ -27,6 +29,7 @@ onMounted(async () => {
     print.section = payload.section;
     print.showKey = payload.show_key;
     print.bubble = payload.bubble;
+    bundle.value = payload.bundle ?? null;
     papers.value = payload.papers;
     await nextTick();
     await (document.fonts?.ready ?? Promise.resolve());
@@ -41,6 +44,14 @@ const hasMcq = () => papers.value.some((paper) => paper.questions.some((q) => q.
 
 <template>
   <p v-if="error" class="alert alert-error" role="alert">{{ error }}</p>
+  <PaperBundle
+    v-else-if="papers.length && bundle"
+    :papers="papers"
+    :plan="bundle.plan"
+    :seed="bundle.seed"
+    :header="print.header"
+    :show-key="print.showKey"
+  />
   <PaperSet
     v-else-if="papers.length"
     :papers="papers"

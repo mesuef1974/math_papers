@@ -5,15 +5,38 @@
 */
 @page {
   size: A4;
-  margin: 14mm 14mm 16mm;
-  @bottom-center {
-    /* السطر الأول تذييل الكراسة الجاري (تضبطه PaperSheet في --print-footer)، والثاني رقم الصفحة */
-    content: var(--print-footer) "\A صفحة " counter(page) " من " counter(pages);
-    white-space: pre-line;
-    text-align: center;
+  margin: 14mm 14mm 17mm;
+  /* تذييل الهوية على الورق: خط رفيع، اسم المنصة يمينًا، عنوان الورقة الجاري وسطًا (--print-footer)، ورقم الصفحة يسارًا */
+  @bottom-right {
+    content: "أوراق · مولّد أوراق الرياضيات";
     font-family: var(--font-print);
-    font-size: 9pt;
-    color: #444444;
+    font-size: 8.5pt;
+    font-weight: 700;
+    color: #000000;
+    border-top: 0.6pt solid #000000;
+    padding-top: 2mm;
+    vertical-align: top;
+    margin-top: 4mm;
+  }
+  @bottom-center {
+    content: var(--print-footer);
+    font-family: var(--font-print);
+    font-size: 8.5pt;
+    color: #333333;
+    border-top: 0.6pt solid #000000;
+    padding-top: 2mm;
+    vertical-align: top;
+    margin-top: 4mm;
+  }
+  @bottom-left {
+    content: "صفحة " counter(page) " من " counter(pages);
+    font-family: var(--font-print);
+    font-size: 8.5pt;
+    color: #000000;
+    border-top: 0.6pt solid #000000;
+    padding-top: 2mm;
+    vertical-align: top;
+    margin-top: 4mm;
   }
 }
 @media print {
@@ -29,6 +52,8 @@
     --color-line: #bbbbbb;
     --color-line-strong: #888888;
     --color-grid: transparent;
+    --color-mark-ink: #000000;
+    --color-mark-accent: #000000;
     --color-brand: #000000;
     --color-brand-strong: #000000;
     --color-brand-soft: #ffffff;

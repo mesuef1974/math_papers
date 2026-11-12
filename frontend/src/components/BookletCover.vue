@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
+import BrandLockup from "@/components/BrandLockup.vue";
 import type { Paper } from "@/stores/papers";
 import type { PaperHeaderData } from "@/stores/print";
 import { isolateNumberRanges } from "@/utils/bidi";
@@ -53,6 +54,7 @@ const rules = computed(() => [
 
 <template>
   <section class="cover">
+    <BrandLockup :height="78" />
     <div class="org">
       <strong v-if="header.school">{{ header.school }}</strong>
       <span v-if="header.teacher">المعلم: {{ header.teacher }}</span>

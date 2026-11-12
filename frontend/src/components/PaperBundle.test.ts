@@ -69,7 +69,7 @@ describe("PaperBundle", () => {
       props: { papers: [paper("1.1", 2), paper("1.2", 3)], plan, seed: 42, header, showKey: false },
     });
     expect(wrapper.text()).toContain("2 ورقة عمل، 5 مسألة");
-    expect(wrapper.findAll(".index li")).toHaveLength(2);
+    expect(wrapper.findAll(".index tbody tr")).toHaveLength(2);
     expect(wrapper.text()).toContain("سهل 1، متوسط 2");
     expect(wrapper.findAll(".bundle-sheet")).toHaveLength(2);
     expect(wrapper.findAll(".answer-key")).toHaveLength(0);

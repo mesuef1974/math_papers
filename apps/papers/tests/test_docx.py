@@ -10,7 +10,16 @@ from docx import Document
 from lxml import etree
 
 from apps.core.models import AuditLog
-from apps.papers.word.builder import build_docx, marks_label, split_math
+from apps.papers.word import ooxml
+from apps.papers.word.builder import (
+    BRAND_LINE,
+    BUNDLE_COVER_TITLE,
+    LOGO,
+    build_docx,
+    marks_label,
+    split_math,
+    work_lines,
+)
 from apps.papers.word.graph_png import render_graph
 from apps.papers.word.omml import split_array, to_omml
 
@@ -179,3 +188,99 @@ def test_docx_needs_login():
     from django.test import Client
 
     assert Client().post("/api/v1/docx", "{}", content_type="application/json").status_code in (401, 403)
+
+
+# ---------- الهوية والتخطيط والحزمة ----------
+
+
+def parts_of(data: bytes) -> dict[str, bytes]:
+    archive = zipfile.ZipFile(io.BytesIO(data))
+    return {name: archive.read(name) for name in archive.namelist()}
+
+
+def bundle_payload(client, lessons=("1.1", "1.2", "3.1"), **options):
+    slug = client.get("/api/v1/blueprints").json()[0]["slug"]
+    plan = [
+        entry
+        for entry in client.get("/api/v1/papers/bundle-plan", {"blueprint": slug}).json()
+        if entry["lesson"] in lessons
+    ]
+    papers = [
+        client.get("/api/v1/papers/bundle-item", {"blueprint": slug, "lesson": e["lesson"], "seed": 9}).json()
+        for e in plan
+    ]
+    return {
+        "papers": papers,
+        "profile": PROFILE,
+        "date": "12/11/2026",
+        "section": "12/3",
+        "bundle": {"plan": plan, "seed": 9},
+        **options,
+    }
+
+
+@pytest.mark.parametrize("kind", ["exam", "worksheet"])
+def test_every_document_carries_platform_logo_and_name(client, kind):
+    files = parts_of(build_docx(sample_payload(client, kind, show_key=True)))
+    assert LOGO in [data for name, data in files.items() if name.startswith("word/media/")]
+    footers = [data.decode("utf-8") for name, data in files.items() if name.startswith("word/footer")]
+    assert footers and all(BRAND_LINE in footer for footer in footers)
+    assert all(" PAGE " in footer and " NUMPAGES " in footer for footer in footers)
+
+
+def test_worksheet_layout_badge_ruled_lines_and_graph_beside_them(client):
+    paper = client.get("/api/v1/papers/worksheet", {"lesson": "3.1", "count": 8, "seed": 5}).json()
+    assert any(part["graph"] for q in paper["questions"] for part in q["parts"])
+    payload = {"papers": [paper], "profile": PROFILE, "date": "12/11/2026", "section": "12/3"}
+    doc = Document(io.BytesIO(build_docx(payload)))
+    body = doc.element.body
+    badge = next(r for r in body.iter(f"{W}r") if "السؤال 1" in "".join(r.itertext()))
+    assert badge.find(f"{W}rPr/{W}shd").get(f"{W}fill") == "000000"
+    assert body.find(f".//{W}tcBorders/{W}bottom[@{W}val='dotted']") is not None
+    assert body.find(f".//{W}tcBorders/{W}bottom[@{W}val='dashed']") is None
+    # الرسم في خلية مدموجة رأسيًا بجوار أسطر الحل، داخل جدول واحد
+    merged = body.find(f".//{W}tcPr/{W}vMerge[@{W}val='restart']")
+    assert merged is not None and merged.getparent().getparent().find(f".//{W}drawing") is not None
+    # رقم الشعبة في تشغيل غير عربي فلا يقلب Word «12/3»
+    section = next(r for r in body.iter(f"{W}r") if r.findtext(f"{W}t") == "12/3")
+    assert section.find(f"{W}rPr/{W}rtl") is None
+
+
+def test_work_lines_follow_marks_and_fill_beside_a_graph():
+    assert work_lines({"marks": 0}) == 4 and work_lines({"marks": 1}) == 3
+    assert work_lines({"marks": 3}) == 4 and work_lines({"marks": 9}) == 6
+    assert work_lines({"marks": 0, "graph": {"window": [0, 1, 0, 1]}}) == 6
+
+
+def test_alignment_is_physical_in_arabic_paragraphs():
+    doc = Document()
+    arabic = ooxml.new_paragraph(doc, align="left")
+    latin = ooxml.new_paragraph(doc, rtl=False, align="left")
+    assert arabic._p.find(f"{W}pPr/{W}jc").get(f"{W}val") == "right"  # Word يعكسها في فقرة bidi
+    assert latin._p.find(f"{W}pPr/{W}jc").get(f"{W}val") == "left"
+
+
+def test_bundle_docx_has_cover_index_every_sheet_and_keys_last(client):
+    payload = bundle_payload(client)
+    doc = Document(io.BytesIO(build_docx(payload)))
+    assert len(doc.sections) == 1
+    cells = [cell.text for table in doc.tables for row in table.rows for cell in row.cells]
+    text = "\n".join(p.text for p in doc.paragraphs) + "\n".join(cells)
+    assert BUNDLE_COVER_TITLE in text and "الفهرس" in text and "رقم الحزمة 9" in text
+    for entry, paper in zip(payload["bundle"]["plan"], payload["papers"], strict=True):
+        assert entry["title"] in cells and entry["lesson"] in cells
+        assert paper["title"] in cells
+    assert "النموذج" not in cells  # الحزمة ليست نماذج أ/ب: لا خانة «النموذج» في الترويسات
+    assert cells.count("انتهت الأسئلة") == len(payload["papers"])
+    footer = parts_of(build_docx(payload))["word/footer1.xml"].decode("utf-8")
+    assert BUNDLE_COVER_TITLE in footer
+    keyed = Document(io.BytesIO(build_docx({**payload, "show_key": True})))
+    assert len(keyed.sections) == 2
+    keys = [c.text for t in keyed.tables for r in t.rows for c in r.cells if c.text.startswith("مفتاح الحل")]
+    assert len(keys) == len(payload["papers"])
+
+
+def test_docx_api_accepts_bundle_and_names_the_file(client):
+    res = create(client, bundle_payload(client))
+    assert res.status_code == 202, res.content
+    assert res.json()["filename"] == "حزمة أوراق العمل.docx"
