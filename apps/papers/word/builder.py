@@ -819,6 +819,8 @@ def key_pages(doc, paper: dict, header: dict, *, page_break: bool = True) -> Non
         for q in paper["questions"]
         if q["kind"] == "mcq" and q["parts"][0].get("answer_index", -1) >= 0
     ]
+    # أوراق العمل بلا درجات: لا عمود درجة فارغ، وعرضه يذهب لعمود الإجابة
+    has_marks = any(part.get("marks") for question in paper["questions"] for part in question["parts"])
     if mcq:
         x.add_text(
             x.new_paragraph(doc, before=4, after=3, keep_next=True),
@@ -857,14 +859,15 @@ def key_pages(doc, paper: dict, header: dict, *, page_break: bool = True) -> Non
         x.spacer(doc, 8)
         x.add_text(
             x.new_paragraph(doc, before=4, after=3, keep_next=True),
-            "الحلول والخطوات بدرجاتها",
+            "الحلول والخطوات بدرجاتها" if has_marks else "الحلول والخطوات",
             color=x.BRAND_STRONG,
             size=12,
             bold=True,
         )
-    widths = [1.9, 9.1, 3.1, 1.9, 1.8]
+    widths = [1.9, 9.1, 3.1, 1.9, 1.8] if has_marks else [1.9, 10.9, 3.1, 1.9]
+    heads = ["السؤال", "الإجابة والخطوات", "الدرس", "المستوى", "الدرجة"][: len(widths)]
     table = x.make_table(doc, 1, widths, borders=x.box(6, x.RULE))
-    for c, text in enumerate(["السؤال", "الإجابة والخطوات", "الدرس", "المستوى", "الدرجة"]):
+    for c, text in enumerate(heads):
         cell = table.cell(0, c)
         x.set_cell(cell, widths[c], shade=x.BRAND)
         x.add_text(x.new_paragraph(cell, align="center", after=0), text, size=10, bold=True, color=x.WHITE)
@@ -896,11 +899,12 @@ def key_pages(doc, paper: dict, header: dict, *, page_break: bool = True) -> Non
                 LEVEL_NAMES.get(part.get("level", ""), ""),
                 size=9,
             )
-            x.add_text(
-                x.new_paragraph(cells[4], align="center", after=0, rtl=False),
-                str(part["marks"] or ""),
-                size=10.5,
-            )
+            if has_marks:
+                x.add_text(
+                    x.new_paragraph(cells[4], align="center", after=0, rtl=False),
+                    str(part["marks"] or ""),
+                    size=10.5,
+                )
     x.add_text(x.new_paragraph(doc, before=8), f"رقم النموذج {paper['seed']}", size=9, color=x.SOFT)
 
 

@@ -25,33 +25,35 @@ const total = computed(() => rows.value.reduce((sum, row) => sum + row.marks, 0)
   <section class="score-page">
     <p class="warning">الطلاب: لا تكتب على هذه الصفحة</p>
     <h3 class="heading">جدول رصد الدرجات</h3>
-    <table class="score">
-      <thead>
-        <tr>
-          <th scope="col">رقم السؤال</th>
-          <th scope="col">الدرجة</th>
-          <th scope="col">درجة الطالب</th>
-          <th scope="col">المصحح</th>
-          <th scope="col">المراجع</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="row in rows" :key="row.label">
-          <th scope="row"><bdi dir="ltr">{{ row.label }}</bdi></th>
-          <td class="num">{{ row.marks }}</td>
-          <td />
-          <td />
-          <td />
-        </tr>
-        <tr class="total">
-          <th scope="row">المجموع</th>
-          <td class="num">{{ total }}</td>
-          <td />
-          <td />
-          <td />
-        </tr>
-      </tbody>
-    </table>
+    <div class="table-scroll">
+      <table class="score">
+        <thead>
+          <tr>
+            <th scope="col">رقم السؤال</th>
+            <th scope="col">الدرجة</th>
+            <th scope="col">درجة الطالب</th>
+            <th scope="col">المصحح</th>
+            <th scope="col">المراجع</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="row in rows" :key="row.label">
+            <th scope="row"><bdi dir="ltr">{{ row.label }}</bdi></th>
+            <td class="num">{{ row.marks }}</td>
+            <td />
+            <td />
+            <td />
+          </tr>
+          <tr class="total">
+            <th scope="row">المجموع</th>
+            <td class="num">{{ total }}</td>
+            <td />
+            <td />
+            <td />
+          </tr>
+        </tbody>
+      </table>
+    </div>
     <p class="words">الدرجة بالحروف: {{ DOTS }}{{ DOTS }}</p>
   </section>
 </template>
@@ -103,6 +105,13 @@ const total = computed(() => rows.value.reduce((sum, row) => sum + row.marks, 0)
 .words {
   margin: var(--space-6) 0 0;
   font-size: var(--text-lg);
+}
+@media (max-width: 560px) {
+  .score th,
+  .score td {
+    padding: var(--space-2) var(--space-1);
+    font-size: var(--text-sm);
+  }
 }
 @media print {
   .score-page {

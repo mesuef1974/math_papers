@@ -153,6 +153,21 @@ def test_worksheet_docx_has_header_and_key(client):
     assert any("مفتاح الحل" in cell.text for table in doc.tables for row in table.rows for cell in row.cells)
 
 
+def test_key_marks_column_only_when_the_paper_has_marks(client):
+    def key_heads(kind):
+        doc = Document(io.BytesIO(build_docx(sample_payload(client, kind, show_key=True))))
+        for table in doc.tables:
+            heads = [cell.text for cell in table.rows[0].cells]
+            if heads[:2] == ["السؤال", "الإجابة والخطوات"]:
+                return heads, [cell.text for cell in table.rows[1].cells]
+        raise AssertionError("لا جدول حلول في الوثيقة")
+
+    heads, first = key_heads("worksheet")  # ورقة العمل بلا درجات: لا عمود فارغ
+    assert heads == ["السؤال", "الإجابة والخطوات", "الدرس", "المستوى"] and len(first) == 4
+    heads, first = key_heads("exam")
+    assert heads[-1] == "الدرجة" and first[-1].strip().isdigit()
+
+
 def test_two_forms_make_two_sections(client):
     payload = sample_payload(client, "worksheet")
     payload["papers"] = [payload["papers"][0], {**payload["papers"][0], "form": "B"}]
