@@ -44,25 +44,27 @@ function levelsLabel(levels: BundleEntry["levels"]): string {
     <article class="sheet cover">
       <PaperHeader :header="coverHeader" compact />
       <p class="summary">{{ plan.length }} ورقة عمل، {{ total }} مسألة، مرتبة من السهل إلى مهارات التفكير العليا.</p>
-      <table class="index">
-        <caption>الفهرس</caption>
-        <thead>
-          <tr>
-            <th scope="col">الدرس</th>
-            <th scope="col">العنوان</th>
-            <th scope="col">المسائل</th>
-            <th scope="col">المستويات</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="entry in plan" :key="entry.lesson">
-            <th scope="row" class="code">{{ entry.lesson }}</th>
-            <td class="name">{{ entry.title }}</td>
-            <td class="num">{{ entry.count }}</td>
-            <td class="count">{{ levelsLabel(entry.levels) }}</td>
-          </tr>
-        </tbody>
-      </table>
+      <div class="table-scroll">
+        <table class="index">
+          <caption>الفهرس</caption>
+          <thead>
+            <tr>
+              <th scope="col">الدرس</th>
+              <th scope="col">العنوان</th>
+              <th scope="col">المسائل</th>
+              <th scope="col">المستويات</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="entry in plan" :key="entry.lesson">
+              <th scope="row" class="code">{{ entry.lesson }}</th>
+              <td class="name">{{ entry.title }}</td>
+              <td class="num">{{ entry.count }}</td>
+              <td class="count">{{ levelsLabel(entry.levels) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
       <footer class="foot">رقم الحزمة {{ seed }}</footer>
     </article>
 
@@ -130,6 +132,19 @@ function levelsLabel(levels: BundleEntry["levels"]): string {
   color: var(--color-ink-soft);
   font-size: var(--text-xs);
   margin-block-start: var(--space-6);
+}
+/* الجوال: حشو الورقة كما في PaperSheet، وفهرس بخانات أضيق حتى يتسع في العرض */
+@media (max-width: 560px) {
+  .sheet {
+    padding: var(--space-4);
+  }
+  .index {
+    font-size: var(--text-xs);
+  }
+  .index th,
+  .index td {
+    padding: var(--space-1) var(--space-2);
+  }
 }
 @media print {
   .sheet {

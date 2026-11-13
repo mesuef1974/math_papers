@@ -32,6 +32,17 @@
   }
 }
 
+/* جدول أعرض من الشاشة يُمرَّر داخل إطاره فلا تنزاح الصفحة كلها؛ على الورق بلا قصّ */
+.table-scroll {
+  max-inline-size: 100%;
+  overflow-x: auto;
+}
+@media print {
+  .table-scroll {
+    overflow: visible;
+  }
+}
+
 /* الأزرار */
 .btn {
   display: inline-flex;

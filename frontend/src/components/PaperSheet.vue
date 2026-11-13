@@ -39,6 +39,8 @@ const mcqAnswers = computed(() =>
     .filter((q) => q.kind === "mcq" && (q.parts[0]?.answer_index ?? -1) >= 0)
     .map((q) => ({ number: q.number, letter: OPTION_LABELS[q.parts[0].answer_index] })),
 );
+// أوراق العمل بلا درجات، فلا يُعرض لها عمود درجة فارغ في المفتاح.
+const hasMarks = computed(() => props.paper.questions.some((q) => q.parts.some((p) => p.marks > 0)));
 const lastMcq = computed(() => props.paper.questions.filter((q) => q.kind === "mcq").at(-1)?.number ?? 0);
 
 // تعليمات كل قسم كما في كراسات الوزارة: قبل أول سؤال موضوعي وقبل أول سؤال مقالي، بنطاق أرقامه وبلغتين.
@@ -176,51 +178,55 @@ watchEffect(() => {
 
   <article v-if="showKey" class="sheet answer-key">
     <PaperHeader :header="{ ...header, title: `${keyTitle}: ${header.title}` }" compact />
-    <table v-if="mcqAnswers.length" class="key mcq-key">
-      <caption>إجابات الأسئلة الموضوعية</caption>
-      <thead>
-        <tr>
-          <th scope="col">رقم السؤال</th>
-          <th scope="col">رمز الإجابة</th>
-        </tr>
-      </thead>
-      <tbody>
-        <tr v-for="row in mcqAnswers" :key="row.number">
-          <th scope="row">{{ row.number }}</th>
-          <td><bdi dir="ltr">{{ row.letter }}</bdi></td>
-        </tr>
-      </tbody>
-    </table>
-    <table class="key">
-      <caption v-if="mcqAnswers.length">الحلول والخطوات بدرجاتها</caption>
-      <thead>
-        <tr>
-          <th scope="col">السؤال</th>
-          <th scope="col">الإجابة والخطوات</th>
-          <th scope="col">الدرس</th>
-          <th scope="col">المستوى</th>
-          <th scope="col">الدرجة</th>
-        </tr>
-      </thead>
-      <tbody>
-        <template v-for="question in paper.questions" :key="question.number">
-          <tr v-for="part in question.parts" :key="part.fingerprint">
-            <th scope="row">
-              <bdi>{{ question.number }}{{ part.label ? ` ${part.label}` : "" }}</bdi>
-            </th>
-            <td>
-              <p class="answer"><MathText :text="part.answer" /></p>
-              <ol v-if="part.steps.length" class="steps">
-                <li v-for="step in part.steps" :key="step"><MathText :text="step" /></li>
-              </ol>
-            </td>
-            <td class="lesson">{{ part.lesson }}</td>
-            <td><span class="badge" :class="`badge-${part.level.toLowerCase()}`">{{ LEVEL_NAMES[part.level] }}</span></td>
-            <td class="num">{{ part.marks || "" }}</td>
+    <div v-if="mcqAnswers.length" class="table-scroll">
+      <table class="key mcq-key">
+        <caption>إجابات الأسئلة الموضوعية</caption>
+        <thead>
+          <tr>
+            <th scope="col">رقم السؤال</th>
+            <th scope="col">رمز الإجابة</th>
           </tr>
-        </template>
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          <tr v-for="row in mcqAnswers" :key="row.number">
+            <th scope="row">{{ row.number }}</th>
+            <td><bdi dir="ltr">{{ row.letter }}</bdi></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="table-scroll">
+      <table class="key">
+        <caption v-if="mcqAnswers.length">{{ hasMarks ? "الحلول والخطوات بدرجاتها" : "الحلول والخطوات" }}</caption>
+        <thead>
+          <tr>
+            <th scope="col">السؤال</th>
+            <th scope="col">الإجابة والخطوات</th>
+            <th scope="col">الدرس</th>
+            <th scope="col">المستوى</th>
+            <th v-if="hasMarks" scope="col">الدرجة</th>
+          </tr>
+        </thead>
+        <tbody>
+          <template v-for="question in paper.questions" :key="question.number">
+            <tr v-for="part in question.parts" :key="part.fingerprint">
+              <th scope="row">
+                <bdi>{{ question.number }}{{ part.label ? ` ${part.label}` : "" }}</bdi>
+              </th>
+              <td>
+                <p class="answer"><MathText :text="part.answer" /></p>
+                <ol v-if="part.steps.length" class="steps">
+                  <li v-for="step in part.steps" :key="step"><MathText :text="step" /></li>
+                </ol>
+              </td>
+              <td class="lesson">{{ part.lesson }}</td>
+              <td><span class="badge" :class="`badge-${part.level.toLowerCase()}`">{{ LEVEL_NAMES[part.level] }}</span></td>
+              <td v-if="hasMarks" class="num">{{ part.marks || "" }}</td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+    </div>
     <footer class="sheet-foot"><span>رقم النموذج {{ paper.seed }}{{ modified ? " (معدّل)" : "" }}</span></footer>
   </article>
 </template>
@@ -536,6 +542,17 @@ watchEffect(() => {
   }
   .options {
     grid-template-columns: minmax(0, 1fr);
+  }
+  /* الجوال: خط وخانات أصغر حتى يتسع عمود الإجابة، وما زاد يُمرَّر داخل إطار الجدول */
+  .key {
+    font-size: var(--text-xs);
+  }
+  .key th,
+  .key td {
+    padding: var(--space-1) var(--space-2);
+  }
+  .steps {
+    padding-inline-start: var(--space-4);
   }
 }
 @media print {

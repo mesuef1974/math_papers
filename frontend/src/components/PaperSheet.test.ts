@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { mount } from "@vue/test-utils";
 import { describe, expect, it } from "vitest";
 import type { Paper, Part } from "@/stores/papers";
@@ -127,6 +129,30 @@ describe("PaperSheet", () => {
     expect(key.text()).toContain("دليل تقدير الدرجات");
     const sheet = mount(PaperSheet, { props: { paper: { ...paper, kind: "worksheet" }, header, showKey: true } });
     expect(sheet.find(".answer-key").text()).toContain("مفتاح الحل");
+  });
+
+  it("جداول المفتاح والرصد داخل إطار تمرير، وعمود الدرجة يظهر عند وجود درجات فقط", () => {
+    const exam = mount(PaperSheet, { props: { paper, header, showKey: true } });
+    expect(exam.find(".score-page .table-scroll > table.score").exists()).toBe(true);
+    expect(exam.findAll(".answer-key .table-scroll > table.key")).toHaveLength(2);
+    expect(exam.findAll(".answer-key table:not(.mcq-key) thead th").map((th) => th.text())).toContain("الدرجة");
+    expect(exam.find(".answer-key").text()).toContain("الحلول والخطوات بدرجاتها");
+
+    const unmarked: Paper = {
+      ...paper,
+      kind: "worksheet",
+      questions: paper.questions.map((q) => ({ ...q, marks: 0, parts: q.parts.map((p) => ({ ...p, marks: 0 })) })),
+    };
+    const key = mount(PaperSheet, { props: { paper: unmarked, header, showKey: true } }).find(".answer-key");
+    expect(key.findAll("table:not(.mcq-key) thead th").map((th) => th.text())).toEqual(["السؤال", "الإجابة والخطوات", "الدرس", "المستوى"]);
+    expect(key.findAll("table:not(.mcq-key) tbody tr")[0].findAll("th, td")).toHaveLength(4);
+    expect(key.text()).not.toContain("بدرجاتها");
+
+    // الإطار يمرّر على الشاشة ولا يقصّ على الورق
+    const css = readFileSync(join(process.cwd(), "src", "styles", "components.css"), "utf-8");
+    const rule = css.slice(css.indexOf(".table-scroll"));
+    expect(rule).toMatch(/\.table-scroll\s*{[^}]*overflow-x:\s*auto/);
+    expect(rule).toMatch(/@media print\s*{\s*\.table-scroll\s*{[^}]*overflow:\s*visible/);
   });
 
   it("ورقة بنوع واحد لا تحمل تعليمات أقسام", () => {

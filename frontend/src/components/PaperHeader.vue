@@ -48,15 +48,18 @@ const DOTS = "....................";
   display: grid;
   gap: var(--space-3);
 }
+/* الجانبان يحتفظان بعرض محتواهما (الشعار، واسم المدرسة في سطر) والعنوان يأخذ الباقي ويلتف إن طال،
+   فلا يضغط العنوان الطويل عمود المدرسة إلى كلمة في السطر. */
 .top {
   display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  grid-template-columns: minmax(max-content, 1fr) minmax(0, 2.4fr) minmax(max-content, 1fr);
   align-items: center;
   gap: var(--space-3);
 }
 .org {
   display: grid;
   justify-items: end;
+  max-inline-size: 16rem; /* اسم مدرسة طويل جدًا يلتف هنا بدل أن يزاحم العنوان */
   text-align: end;
   font-size: var(--text-sm);
   line-height: 1.5;
@@ -124,6 +127,7 @@ const DOTS = "....................";
   .org {
     justify-self: center;
     justify-items: center;
+    max-inline-size: none;
     text-align: center;
   }
 }

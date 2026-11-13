@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { mount } from "@vue/test-utils";
 import { describe, expect, it } from "vitest";
 import type { PaperHeaderData } from "@/stores/print";
@@ -31,6 +33,13 @@ describe("PaperHeader", () => {
       expect(logo.exists()).toBe(true);
       expect(logo.attributes("height")).toBe(compact ? "38" : "46");
     }
+  });
+
+  it("العنوان الطويل يلتف في عموده ولا يضغط عمود المدرسة: لا مسار auto للعنوان", () => {
+    const source = readFileSync(join(process.cwd(), "src", "components", "PaperHeader.vue"), "utf-8");
+    const top = source.slice(source.indexOf(".top {"), source.indexOf("}", source.indexOf(".top {")));
+    expect(top).toContain("grid-template-columns: minmax(max-content, 1fr) minmax(0, 2.4fr) minmax(max-content, 1fr)");
+    expect(source).toMatch(/\.org\s*{[^}]*max-inline-size:\s*16rem/);
   });
 
   it("ورقة العمل بلا زمن ولا درجة كلية، والمضغوطة بلا سطر الطالب", () => {
