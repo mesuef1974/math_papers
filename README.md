@@ -15,6 +15,14 @@ python manage.py migrate && python manage.py createsuperuser
 ثم في طرفيتين: `python manage.py runserver` و`npm --prefix frontend run dev`. افتح http://127.0.0.1:8000 (Django يحقن حزم Vite مع HMR).
 وثائق API: http://127.0.0.1:8000/api/docs/
 
+صورة الإنتاج تثبّت من `requirements.lock` (إصدارات وتجزئات sha256، `--require-hashes`)، فلا يدخل النشرَ إصدار جديد إلا بتجديد القفل. عند تغيير `requirements.txt`، أو لترقية الاعتماديات، جدّده وراجع فرقه:
+
+```bash
+uv pip compile requirements.txt --generate-hashes --python-version 3.12 --python-platform linux --no-header -o requirements.lock
+```
+
+`tests/test_requirements_lock.py` يفشل إن خالف القفل `requirements.txt` أو نقصته تجزئة.
+
 ## النشر على Railway
 
 1. مشروع جديد → أضف PostgreSQL وRedis.
