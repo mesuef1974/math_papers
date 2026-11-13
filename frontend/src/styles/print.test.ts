@@ -40,7 +40,7 @@ describe("ألوان الورق المطبوع", () => {
   });
 
   it("التذييل الجاري بلون العلامة، والخلفيات الملوّنة تُطبع كما هي", () => {
-    expect(print).toContain("border-top: 0.9pt solid #842447");
+    expect(print).toContain("border-top: 0.9pt solid #8e2433");
     expect(print).toContain("print-color-adjust: exact");
   });
 });

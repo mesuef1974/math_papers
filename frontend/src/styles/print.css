@@ -14,8 +14,8 @@
     font-family: var(--font-print);
     font-size: 8.5pt;
     font-weight: 700;
-    color: #842447;
-    border-top: 0.9pt solid #842447;
+    color: #8e2433;
+    border-top: 0.9pt solid #8e2433;
     padding-top: 2mm;
     vertical-align: top;
     margin-top: 4mm;
@@ -25,7 +25,7 @@
     font-family: var(--font-print);
     font-size: 8.5pt;
     color: #4c535c;
-    border-top: 0.9pt solid #842447;
+    border-top: 0.9pt solid #8e2433;
     padding-top: 2mm;
     vertical-align: top;
     margin-top: 4mm;
@@ -35,7 +35,7 @@
     font-family: var(--font-print);
     font-size: 8.5pt;
     color: #14171c;
-    border-top: 0.9pt solid #842447;
+    border-top: 0.9pt solid #8e2433;
     padding-top: 2mm;
     vertical-align: top;
     margin-top: 4mm;
@@ -53,15 +53,15 @@
     --color-line: #b5bbc4;
     --color-line-strong: #7d848e;
     --color-grid: transparent;
-    --color-brand: #842447;
+    --color-brand: #8e2433;
     --color-brand-strong: #6f1137;
     --color-brand-soft: #f0dfe3;
     --color-on-brand: #ffffff;
     --color-sand: #886100;
     --color-sand-soft: #f9edd7;
     --color-accent: #e3ab3c;
-    --color-mark-ink: #842447;
-    --color-mark-accent: #e3ab3c;
+    --color-mark-ink: #8e2433;
+    --color-mark-accent: #db943c;
     --color-danger: #780200;
     --color-danger-soft: #fff2ef;
     --color-success: #21794a;
@@ -72,7 +72,7 @@
     --color-level-k-soft: #deffe8;
     --color-level-a: #1f5f99;
     --color-level-a-soft: #eef6ff;
-    --color-level-r: #842447;
+    --color-level-r: #8e2433;
     --color-level-r-soft: #f0dfe3;
     --shadow-sm: none;
     --shadow-md: none;

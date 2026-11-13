@@ -1,1 +1,6 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h16"/><path d="M7 15v5"/><path d="M12 17h.01M17 17h.01"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
+  <title>مستوى السهولة</title>
+  <path d="M6 20v-4.5"/>
+  <path d="M12 20h.01"/>
+  <path d="M18 20h.01"/>
+</svg>

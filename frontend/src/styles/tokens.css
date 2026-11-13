@@ -18,10 +18,10 @@
   --color-ink-soft: #5f6670;
   --color-line: #cfd5dd;
   --color-line-strong: #7d848e;
-  --color-grid: rgb(132 36 71 / 5%);
+  --color-grid: rgb(142 36 51 / 5%);
 
   /* العلامة */
-  --color-brand: #842447;
+  --color-brand: #8e2433;
   --color-brand-strong: #6f1137;
   --color-brand-soft: #f0dfe3;
   --color-on-brand: #ffffff;
@@ -29,8 +29,8 @@
   --color-sand-soft: #f9edd7;
   --color-accent: #e3ab3c; /* الذهبي كتزيين فقط، لا يحمل نصًا */
   /* الشعار: حبره لون العلامة نهارًا وأبيض ليلًا، والتمييز ثابت */
-  --color-mark-ink: #842447;
-  --color-mark-accent: #e3ab3c;
+  --color-mark-ink: #8e2433;
+  --color-mark-accent: #db943c;
 
   /* الحالات */
   --color-danger: #780200;
@@ -45,7 +45,7 @@
   --color-level-k-soft: #deffe8;
   --color-level-a: #1f5f99;
   --color-level-a-soft: #eef6ff;
-  --color-level-r: #842447;
+  --color-level-r: #8e2433;
   --color-level-r-soft: #f0dfe3;
 
   --color-focus: #2f6ca6;
