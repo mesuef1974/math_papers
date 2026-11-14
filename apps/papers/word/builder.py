@@ -810,6 +810,42 @@ def answer_sheet(doc, paper: dict, header: dict, *, answers: bool) -> None:
     )
 
 
+def _mark_text(marks: float) -> str:
+    """الدرجة كما تُكتب في الجدول: 1 و0.5 و1.5، وفارغة للصفر."""
+    return f"{marks:g}" if marks else ""
+
+
+def _key_rows(part: dict) -> list[dict]:
+    """صفوف الجزء في المفتاح: صف لكل بند من توزيع الدرجة (خطوات ثم الجواب النهائي)، أو صف واحد بلا توزيع.
+
+    يطابق keyRows في PaperSheet.vue؛ ترقيم الخطوات متصل عبر الصفوف.
+    """
+    items = part.get("marking") or []
+    if not items:
+        return [
+            {
+                "steps": part.get("steps") or [],
+                "start": 1,
+                "marks": part.get("marks") or 0,
+                "final": False,
+                "plain": True,
+            }
+        ]
+    rows, start = [], 1
+    for item in items:
+        rows.append(
+            {
+                "steps": item["steps"],
+                "start": start,
+                "marks": item["marks"],
+                "final": item.get("final", False),
+                "plain": False,
+            }
+        )
+        start += len(item["steps"])
+    return rows
+
+
 def key_pages(doc, paper: dict, header: dict, *, page_break: bool = True) -> None:
     booklet = paper["kind"] == "exam"
     title = f"{'دليل تقدير الدرجات' if booklet else 'مفتاح الحل'}: {header['title']}"
@@ -864,8 +900,16 @@ def key_pages(doc, paper: dict, header: dict, *, page_break: bool = True) -> Non
             size=12,
             bold=True,
         )
-    widths = [1.9, 9.1, 3.1, 1.9, 1.8] if has_marks else [1.9, 10.9, 3.1, 1.9]
-    heads = ["السؤال", "الإجابة والخطوات", "الدرس", "المستوى", "الدرجة"][: len(widths)]
+    # مع الدرجات: عمود لدرجة كل بند بعد الخطوات، وعمود لمجموع الجزء في آخر الجدول
+    widths = [1.7, 7.9, 1.5, 3.1, 1.9, 1.7] if has_marks else [1.9, 10.9, 3.1, 1.9]
+    heads = (
+        ["السؤال", "الإجابة والخطوات", "الدرجة", "الدرس", "المستوى", "المجموع"]
+        if has_marks
+        else ["السؤال", "الإجابة والخطوات", "الدرس", "المستوى"]
+    )
+    lesson_col, level_col = (3, 4) if has_marks else (2, 3)
+    per_item = {1, 2} if has_marks else {1}  # أعمدة تتكرر لكل بند؛ ما عداها خلايا الجزء
+    centered = {0, 2, 5} if has_marks else {0}
     table = x.make_table(doc, 1, widths, borders=x.box(6, x.RULE))
     for c, text in enumerate(heads):
         cell = table.cell(0, c)
@@ -874,37 +918,64 @@ def key_pages(doc, paper: dict, header: dict, *, page_break: bool = True) -> Non
     x.set_row(table.rows[0], header=True)
     for question in paper["questions"]:
         for part in question["parts"]:
-            row = table.add_row()
-            x.set_row(row)
-            cells = row.cells
-            for c, width in enumerate(widths):
-                x.set_cell(cells[c], width, valign="top" if c else "center")
+            rows = _key_rows(part)
             label = f"{question['number']}{(' ' + part['label']) if part.get('label') else ''}"
-            x.add_text(
-                x.new_paragraph(cells[0], align="center", after=0),
-                label,
-                size=10.5,
-                bold=True,
-                color=x.BRAND_STRONG,
-            )
-            answer = rich(cells[1], part["answer"], size=10.5, bold=True, after=2)
-            _ = answer
-            for number, step in enumerate(part.get("steps") or [], start=1):
-                par = x.new_paragraph(cells[1], after=1, indent_cm=0.0)
-                x.add_text(par, f"{number}.{x.LRM} ", size=9.5, color=x.SOFT)
-                rich(cells[1], step, size=9.5, first=par)
-            x.add_text(x.new_paragraph(cells[2], after=0), part.get("lesson", ""), size=9)
-            x.add_text(
-                x.new_paragraph(cells[3], align="center", after=0),
-                LEVEL_NAMES.get(part.get("level", ""), ""),
-                size=9,
-            )
-            if has_marks:
+            built = []
+            for index, entry in enumerate(rows):
+                row = table.add_row()
+                built.append(row)
+                x.set_row(row)
+                cells = row.cells
+                # خلايا الجزء (السؤال والدرس والمستوى والمجموع) تمتد رأسيًا على صفوف بنوده
+                merge = ("restart" if index == 0 else "continue") if len(rows) > 1 else ""
+                for c, width in enumerate(widths):
+                    x.set_cell(
+                        cells[c],
+                        width,
+                        valign="center" if c in centered else "top",
+                        vmerge="" if c in per_item else merge,
+                    )
+                if entry["plain"] or entry["final"]:
+                    first = None
+                    if entry["final"]:
+                        first = x.new_paragraph(cells[1], after=1)
+                        x.add_text(first, "الجواب النهائي: ", size=10.5, bold=True, color=x.BRAND_STRONG)
+                    rich(cells[1], part["answer"], size=10.5, bold=True, after=2, first=first)
+                for number, step in enumerate(entry["steps"], start=entry["start"]):
+                    par = x.new_paragraph(cells[1], after=1, indent_cm=0.0)
+                    x.add_text(par, f"{number}.{x.LRM} ", size=9.5, color=x.SOFT)
+                    rich(cells[1], step, size=9.5, first=par)
+                if has_marks:
+                    x.add_text(
+                        x.new_paragraph(cells[2], align="center", after=0, rtl=False),
+                        _mark_text(entry["marks"]),
+                        size=10.5,
+                    )
+                if index:
+                    continue
                 x.add_text(
-                    x.new_paragraph(cells[4], align="center", after=0, rtl=False),
-                    str(part["marks"] or ""),
+                    x.new_paragraph(cells[0], align="center", after=0),
+                    label,
                     size=10.5,
+                    bold=True,
+                    color=x.BRAND_STRONG,
                 )
+                x.add_text(x.new_paragraph(cells[lesson_col], after=0), part.get("lesson", ""), size=9)
+                x.add_text(
+                    x.new_paragraph(cells[level_col], align="center", after=0),
+                    LEVEL_NAMES.get(part.get("level", ""), ""),
+                    size=9,
+                )
+                if has_marks:
+                    x.add_text(
+                        x.new_paragraph(cells[5], align="center", after=0, rtl=False),
+                        str(part["marks"] or ""),
+                        size=10.5,
+                        bold=True,
+                    )
+            # بنود الجزء لا تنقسم بين صفحتين: كل صف يلحق بما بعده حتى الجواب النهائي
+            for row in built[:-1]:
+                x.keep_row_with_next(row)
     x.add_text(x.new_paragraph(doc, before=8), f"رقم النموذج {paper['seed']}", size=9, color=x.SOFT)
 
 

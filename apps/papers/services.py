@@ -29,6 +29,7 @@ from .domain.generators import (
     generator_version,
     lesson_levels,
 )
+from .domain.marking import marking
 from .models import PrintProfile, SavedPaper
 from .selectors import PROFILE_FIELDS, print_profile, saved_paper
 
@@ -112,6 +113,7 @@ def render_part(problem: Problem, slot: PartSlot, rng: random.Random) -> dict:
         "answer": answer,
         "answer_index": answer_index,
         "steps": list(problem.steps),
+        "marking": marking(slot.kind, problem.steps, slot.marks),
         "graph": problem.graph,
         "option_graphs": option_graphs,
         "variant": problem.variant,

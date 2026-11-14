@@ -131,6 +131,59 @@ describe("PaperSheet", () => {
     expect(sheet.find(".answer-key").text()).toContain("مفتاح الحل");
   });
 
+  it("المفتاح يوزّع درجة الفرع المقالي: صف لكل بند بدرجته ثم الجواب النهائي، والموضوعي صف واحد بدرجته", () => {
+    const marked: Paper = {
+      ...paper,
+      questions: [
+        paper.questions[0],
+        {
+          number: 2,
+          kind: "essay",
+          marks: 3,
+          parts: [
+            part({
+              marks: 3,
+              fingerprint: "essay-marked",
+              steps: ["خطوة أولى", "خطوة ثانية", "خطوة ثالثة"],
+              marking: [
+                { steps: ["خطوة أولى", "خطوة ثانية"], marks: 0.5, final: false },
+                { steps: ["خطوة ثالثة"], marks: 1.5, final: false },
+                { steps: [], marks: 1, final: true },
+              ],
+            }),
+          ],
+        },
+      ],
+    };
+    const key = mount(PaperSheet, { props: { paper: marked, header, showKey: true } }).find(".answer-key");
+    expect(key.findAll("table:not(.mcq-key) thead th").map((th) => th.text())).toEqual([
+      "السؤال",
+      "الإجابة والخطوات",
+      "الدرجة",
+      "الدرس",
+      "المستوى",
+      "المجموع",
+    ]);
+    const rows = key.findAll("table:not(.mcq-key) tbody tr");
+    expect(rows).toHaveLength(4);
+    // الموضوعي: صف واحد، درجته لرمز الإجابة وخطواته بلا درجات
+    expect(rows[0].findAll("th, td")).toHaveLength(6);
+    expect(rows[0].find(".step-mark").text()).toBe("1");
+    // المقالي: خلايا السؤال والدرس والمستوى والمجموع تمتد على صفوف البنود
+    expect(rows[1].find("th").attributes("rowspan")).toBe("3");
+    expect(rows[1].find(".part-total").attributes("rowspan")).toBe("3");
+    expect(rows[2].find("th").exists()).toBe(false);
+    expect(rows.slice(1).map((row) => row.find(".step-mark").text())).toEqual(["0.5", "1.5", "1"]);
+    expect(rows[1].findAll(".steps li")).toHaveLength(2);
+    // ترقيم الخطوات متصل عبر الصفوف
+    expect(rows[2].find(".steps").attributes("start")).toBe("3");
+    expect(rows[3].classes()).toContain("final-row");
+    expect(rows[3].text()).toContain("الجواب النهائي");
+    expect(rows[1].find(".answer").exists()).toBe(false);
+    const sum = rows.slice(1).reduce((total, row) => total + Number(row.find(".step-mark").text()), 0);
+    expect(sum).toBe(3);
+  });
+
   it("جداول المفتاح والرصد داخل إطار تمرير، وعمود الدرجة يظهر عند وجود درجات فقط", () => {
     const exam = mount(PaperSheet, { props: { paper, header, showKey: true } });
     expect(exam.find(".score-page .table-scroll > table.score").exists()).toBe(true);

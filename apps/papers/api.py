@@ -18,6 +18,7 @@ from . import pdf, services
 from . import selectors as paper_selectors
 from .access import TeacherAuth
 from .domain.generators import ExhaustedError, available_lessons, lesson_levels
+from .domain.marking import marking
 from .models import SavedPaper
 
 router = Router(tags=["الأوراق"], auth=TeacherAuth(), throttle=[UserRateThrottle()])
@@ -59,6 +60,14 @@ class SlotOut(Schema):
     needs_graph: bool
 
 
+class MarkItemOut(Schema):
+    """بند في توزيع درجة الفرع: خطوة أو خطوات مدموجة بدرجتها، أو الجواب النهائي (steps فارغة)."""
+
+    steps: list[str]
+    marks: float
+    final: bool = False
+
+
 class PartOut(Schema):
     label: str
     lesson: str
@@ -70,11 +79,18 @@ class PartOut(Schema):
     answer: str
     answer_index: int = -1
     steps: list[str]
+    marking: list[MarkItemOut] = []
     graph: GraphOut | None = None
     option_graphs: list[GraphOut] = []
     variant: str
     fingerprint: str
     slot: SlotOut
+
+    @model_validator(mode="after")
+    def derive_marking(self):
+        """التوزيع مشتق من الخطوات والدرجة دائمًا، فلا يُقبل من العميل، وتناله الأوراق المحفوظة قبل وجوده."""
+        self.marking = [MarkItemOut(**item) for item in marking(self.slot.kind, self.steps, self.marks)]
+        return self
 
 
 class QuestionOut(Schema):

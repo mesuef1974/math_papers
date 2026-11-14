@@ -24,6 +24,7 @@ PostgreSQL + Redis. النشر على Railway (`railway.toml`).
 ## نطاق المحتوى
 - المسائل تُولَّد أصليًا في `apps/papers/domain/generators.py`، ولا يدخل هنا نص من كتاب Savvas أو من الاختبارات أو الخطة الفصلية.
 - كل مولّد جديد يحتاج نوع فحص عددي مستقل في `apps/papers/tests/test_generators.py`.
+- توزيع الدرجات في المفتاح مشتق لا مخزَّن: `apps/papers/domain/marking.py` يوزّع درجة الفرع المقالي على خطواته ثم بند «الجواب النهائي» (أصغر وحدة نصف درجة، والخطوات الزائدة تُدمج)، والموضوعي درجته لرمز الإجابة. `PartOut` يعيد حسابه دائمًا فلا يُقبل من العميل، ويعرضه `PaperSheet.vue` و`key_pages` في Word بالصفوف نفسها.
 - الاختبارات بلا Postgres محلي: `DATABASE_URL=sqlite:///test.db python -m pytest --create-db`.
 
 ## الدخول والصلاحيات
