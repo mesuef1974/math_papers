@@ -52,10 +52,11 @@
 
   /* الخطوط: Cairo مضمَّن محليًا (رخصة OFL) بلا طلب خارجي، ثم خطوط النظام العربية احتياطًا */
   --font-sans: "Cairo", "Segoe UI", "Noto Sans Arabic", "Geeza Pro", Tahoma, Arial, sans-serif;
-  --font-math: "Times New Roman", "Cambria Math", serif;
+  /* نصوص الرسوم: خط KaTeX المضمَّن (katex.min.css) كالمعادلات، فلا تتبدل بين جهاز المعلم والخادم */
+  --font-math: "KaTeX_Main", "Times New Roman", "Cambria Math", serif;
   --font-mono: Consolas, "Cascadia Mono", monospace;
-  /* الورق: خطوط أوراق الوزارة كما في اختبارات المدارس (Sakkal Majalla ثم Arial)، من الجهاز بلا تضمين لرخصتها */
-  --font-print: "Sakkal Majalla", Arial, "Segoe UI", "Noto Naskh Arabic", "Geeza Pro", sans-serif;
+  /* الورق: خط واحد مضمَّن (Noto Naskh Arabic، fonts.css) في الطباعة وPDF وWord، يحمل العربي واللاتيني */
+  --font-print: "Noto Naskh Arabic", "Cairo", "Segoe UI", "Geeza Pro", Tahoma, Arial, sans-serif;
   --print-body: 13pt;
   --print-title: 15pt;
   --print-small: 11pt;

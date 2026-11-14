@@ -2,6 +2,7 @@
 
 import io
 import json
+import struct
 import zipfile
 
 import pytest
@@ -321,6 +322,59 @@ def test_documents_follow_brand_colors(client):
     )
     footer = parts_of(data)["word/footer1.xml"].decode("utf-8")
     assert f'w:color="{ooxml.BRAND}"' in footer
-    import struct
-
     assert struct.unpack(">B", LOGO[25:26])[0] in (2, 3, 6)  # PNG ملوّن (RGB أو لوحة ألوان)، لا أحادي
+
+
+def test_paper_font_is_embedded_and_is_the_print_font(client):
+    """خط الورقة واحد في الطباعة وPDF وWord، ومضمَّن في الملف فيظهر على جهاز لا يملكه."""
+    files = parts_of(build_docx(sample_payload(client, "worksheet")))
+    table = files["word/fontTable.xml"].decode("utf-8")
+    rels = files["word/_rels/fontTable.xml.rels"].decode("utf-8")
+    assert sorted(n for n in files if n.startswith("word/fonts/")) == [
+        "word/fonts/font1.odttf",
+        "word/fonts/font2.odttf",
+    ]
+    for index, (tag, (filename, key)) in enumerate(ooxml.EMBEDDED_FONTS.items(), start=1):
+        original = (ooxml.FONT_DIR / filename).read_bytes()
+        embedded = files[f"word/fonts/font{index}.odttf"]
+        assert original[:4] == b"\x00\x01\x00\x00"  # ملف TrueType
+        assert embedded != original and ooxml.obfuscate_font(embedded, key) == original  # معمًّى ويعود كما كان
+        assert f"<w:{tag} " in table and f'w:fontKey="{key}"' in table
+        assert f"fonts/font{index}.odttf" in rels
+    assert f'w:name="{ooxml.FONT}"' in table
+    assert ooxml.OBFUSCATED_FONT in files["[Content_Types].xml"].decode("utf-8")
+    assert "<w:embedTrueTypeFonts" in files["word/settings.xml"].decode("utf-8")
+    document = files["word/document.xml"].decode("utf-8")
+    assert f'w:cs="{ooxml.FONT}"' in document and 'w:cs="Arial"' not in document
+    tokens = (ooxml.FONT_DIR.parents[4] / "frontend" / "src" / "styles" / "tokens.css").read_text(
+        encoding="utf-8"
+    )
+    assert f'--font-print: "{ooxml.FONT}"' in tokens
+
+
+def _font_table(data: bytes, tag: bytes) -> bytes:
+    count = struct.unpack(">H", data[4:6])[0]
+    for index in range(count):
+        name, _, offset, length = struct.unpack(">4sLLL", data[12 + 16 * index : 28 + 16 * index])
+        if name == tag:
+            return data[offset : offset + length]
+    raise KeyError(tag)
+
+
+def test_word_line_height_is_the_print_line_height(client):
+    """Word يقيس السطر بارتفاع الخط الطبيعي لا بحجمه؛ المضاعف يعيده إلى ارتفاع سطر الطباعة."""
+    for filename, _ in ooxml.EMBEDDED_FONTS.values():
+        font = (ooxml.FONT_DIR / filename).read_bytes()
+        units = struct.unpack(">H", _font_table(font, b"head")[18:20])[0]
+        os2 = _font_table(font, b"OS/2")
+        ascent, descent, gap = struct.unpack(">hhh", os2[68:74])
+        assert struct.unpack(">H", os2[62:64])[0] & 0x80  # USE_TYPO_METRICS: Word يأخذ مقاييس typo
+        assert (ascent - descent + gap) / units == pytest.approx(ooxml.FONT_NATURAL_LINE, abs=0.001)
+    css = (ooxml.FONT_DIR.parents[4] / "frontend" / "src" / "styles" / "print.css").read_text(
+        encoding="utf-8"
+    )
+    assert f"--leading-body: {ooxml.PRINT_LEADING};" in css
+    assert ooxml.LINE_MULTIPLE * ooxml.FONT_NATURAL_LINE == pytest.approx(ooxml.PRINT_LEADING, abs=0.005)
+    document = parts_of(build_docx(sample_payload(client, "worksheet")))["word/document.xml"].decode("utf-8")
+    assert f'w:line="{round(ooxml.LINE_MULTIPLE * 240)}" w:lineRule="auto"' in document
+    assert 'w:line="276"' not in document  # مضاعف Arial القديم

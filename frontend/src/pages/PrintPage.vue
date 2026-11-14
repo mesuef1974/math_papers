@@ -7,6 +7,7 @@ import PaperSet from "@/components/PaperSet.vue";
 import type { BundleEntry, Paper } from "@/stores/papers";
 import type { PdfRequest } from "@/stores/pdf";
 import { usePrintStore } from "@/stores/print";
+import { ensurePrintFonts } from "@/utils/printFonts";
 
 // صفحة الطباعة للمتصفح الخادمي: تقرأ الحمولة برمز موقّع قصير العمر (بلا جلسة) وتعرض الأوراق بالمكونات
 // نفسها، ثم تعلن جاهزيتها في data-print-ready بعد تحميل الخطوط حتى يطبع Chromium ما اكتمل لا ما بدأ.
@@ -32,6 +33,7 @@ onMounted(async () => {
     bundle.value = payload.bundle ?? null;
     papers.value = payload.papers;
     await nextTick();
+    await ensurePrintFonts();
     await (document.fonts?.ready ?? Promise.resolve());
     signal("1");
   } catch {
