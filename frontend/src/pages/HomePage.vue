@@ -3,6 +3,7 @@ import { computed, nextTick, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import AppIcon from "@/components/AppIcon.vue";
 import PaperBundle from "@/components/PaperBundle.vue";
+import PagedSheet from "@/components/PagedSheet.vue";
 import PaperSet from "@/components/PaperSet.vue";
 import PdfPreview from "@/components/PdfPreview.vue";
 import PrintSettings from "@/components/PrintSettings.vue";
@@ -36,7 +37,7 @@ usePaperFit(sheetWrap); // الورقة بعرض A4، وتُصغَّر كلها 
 const forms = computed(() => (store.paper ? [store.paper, ...(store.twin ? [store.twin] : [])] : []));
 const hasMcq = computed(() => store.paper?.questions.some((q) => q.kind === "mcq") ?? false);
 // العرض: الورقة الحية القابلة للاستبدال، أو صفحات ملف PDF الحقيقي من الخادم بحدودها وترقيمها.
-const view = ref<"sheet" | "pdf">("sheet");
+const view = ref<"paged" | "sheet" | "pdf">("paged");
 // طلب ملف الخادم (PDF وWord والمعاينة): النماذج المعروضة كما هي مع ترويسة المعلم وحقول هذه الطباعة وخياراتها.
 const serverRequest = computed<PdfRequest | null>(() =>
   store.paper || store.bundle
@@ -131,7 +132,7 @@ async function generate() {
   }
   if ((store.paper || store.bundle) && !store.error) {
     // قارئ الشاشة ولوحة المفاتيح ينتقلان إلى الورقة الجديدة بدل البقاء على زر التوليد
-    view.value = "sheet";
+    if (view.value === "pdf") view.value = "paged"; // ورقة جديدة: المعاينة القديمة لا تخصها
     await nextTick();
     sheetWrap.value?.focus();
   }
@@ -302,14 +303,17 @@ function downloadServerFile(format: "pdf" | "docx") {
     <fieldset v-if="serverRequest" class="view-switch">
       <legend class="visually-hidden">طريقة عرض الورقة</legend>
       <div class="segmented">
-        <label><input v-model="view" type="radio" value="sheet" /><span><AppIcon name="worksheet" />الورقة</span></label>
+        <label><input v-model="view" type="radio" value="paged" /><span><AppIcon name="worksheet" />الورقة صفحة بصفحة</span></label>
+        <label><input v-model="view" type="radio" value="sheet" /><span><AppIcon name="worksheet" />الورقة متصلة</span></label>
         <label><input v-model="view" type="radio" value="pdf" /><span><AppIcon name="print" />صفحات PDF</span></label>
       </div>
       <p class="hint">
         {{
           view === "pdf"
-            ? "ملف الخادم نفسه بحدود صفحاته وترقيمها كما يُطبع. الاستبدال من عرض «الورقة»."
-            : "«صفحات PDF» تعرض الملف الحقيقي بحدود صفحاته وترقيمها."
+            ? "ملف الخادم نفسه بحدود صفحاته وترقيمها كما يُطبع. الاستبدال من عرضَي «الورقة»."
+            : view === "paged"
+              ? "صفحة واحدة في كل مرة بالتقليب. حدود الصفحات هنا تقديرية؛ حدودها الحقيقية في «صفحات PDF»."
+              : "الورقة متصلة من أولها إلى آخرها؛ «صفحات PDF» تعرض الملف الحقيقي بحدود صفحاته وترقيمها."
         }}
       </p>
     </fieldset>
@@ -326,25 +330,27 @@ function downloadServerFile(format: "pdf" | "docx") {
     aria-live="polite"
     :aria-label="store.paper?.title ?? 'حزمة أوراق العمل'"
   >
-    <PaperSet
-      v-if="store.paper"
-      :papers="forms"
-      :header="print.header"
-      :show-key="print.showKey"
-      :bubble="print.bubble && hasMcq"
-      :modified="store.modified"
-      :replacing="store.replacing"
-      replaceable
-      @replace="replace"
-    />
-    <PaperBundle
-      v-else-if="store.bundle"
-      :papers="store.bundle"
-      :plan="store.bundlePlan"
-      :seed="store.bundleSeed"
-      :header="print.header"
-      :show-key="print.showKey"
-    />
+    <PagedSheet :enabled="view === 'paged'">
+      <PaperSet
+        v-if="store.paper"
+        :papers="forms"
+        :header="print.header"
+        :show-key="print.showKey"
+        :bubble="print.bubble && hasMcq"
+        :modified="store.modified"
+        :replacing="store.replacing"
+        replaceable
+        @replace="replace"
+      />
+      <PaperBundle
+        v-else-if="store.bundle"
+        :papers="store.bundle"
+        :plan="store.bundlePlan"
+        :seed="store.bundleSeed"
+        :header="print.header"
+        :show-key="print.showKey"
+      />
+    </PagedSheet>
   </div>
 </template>
 

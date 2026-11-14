@@ -169,7 +169,7 @@ describe("PdfPreview: تقليب الصفحات", () => {
 
   it("لوحة المفاتيح: الأيسر تالية والأيمن سابقة وHome وEnd", async () => {
     const wrapper = await opened(4);
-    const section = wrapper.find("section");
+    const section = wrapper.find(".flipper");
     await section.trigger("keydown", { key: "ArrowLeft" });
     expect(src(wrapper)).toContain("#page=2&");
     await section.trigger("keydown", { key: "PageDown" });
@@ -210,5 +210,31 @@ describe("PdfPreview: تقليب الصفحات", () => {
     const other = mount(PdfPreview, { props: { request } });
     await flushPromises();
     expect(other.find(".pager").exists()).toBe(false);
+  });
+});
+
+describe("PdfPreview: عارض بصفحة واحدة", () => {
+  it("كل صفحة إطار جديد يفتح عند رقمها، والطبقة تمنع تمرير العارض", async () => {
+    setActivePinia(createPinia());
+    post.mockReset();
+    viewer(true);
+    post.mockResolvedValue({ ...done("j1"), pages: 3 });
+    const wrapper = mount(PdfPreview, { props: { request } });
+    await flushPromises();
+    const first = wrapper.find("iframe").element;
+    expect(wrapper.find(".lock").exists()).toBe(true);
+    await wrapper.findAll(".pager button")[1].trigger("click");
+    expect(wrapper.find("iframe").element).not.toBe(first);
+    expect(wrapper.find("iframe").attributes("src")).toContain("#page=2&");
+  });
+
+  it("بلا عدد صفحات لا طبقة قفل فيبقى العارض قابلًا للتمرير", async () => {
+    setActivePinia(createPinia());
+    post.mockReset();
+    viewer(true);
+    post.mockResolvedValue(done("j1"));
+    const wrapper = mount(PdfPreview, { props: { request } });
+    await flushPromises();
+    expect(wrapper.find(".lock").exists()).toBe(false);
   });
 });
