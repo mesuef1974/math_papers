@@ -1,12 +1,11 @@
-/* سِمة: رموز هوية مولّد أوراق الرياضيات (math_papers). المصدر الوحيد لألوان العلامة؛ يُستورد في tokens.css للمشروع. */
+/* سِمة: رموز هوية مولّد أوراق الرياضيات (math_papers): مرجع ألوان العلامة. التسليم يكتب متغيرات الشعار في tokens.css المشروع نفسه. */
 :root {
   --brand-paper: #FBF3E4;
   --brand-ink: #2A1D1A;
   --brand-primary: #8E2433;
   --brand-accent: #DB943C;
-  /* الشعار ثابت في الوضعين: هو العلامة، لا يتبع السمة */
+  /* الشعار: حبره لون العلامة على الفاتح و--color-mark-on-dark على الداكن؛ الرمز بلون واحد فلا لون تمييز له */
   --color-mark-ink: #8E2433;
-  --color-mark-accent: #DB943C;
   --color-mark-paper: #FBF3E4;
   --color-mark-on-dark: #FFFFFF;
 }
