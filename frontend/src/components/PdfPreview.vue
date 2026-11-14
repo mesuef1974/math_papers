@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
+import PageFlipper from "@/components/PageFlipper.vue";
 import { requestKey, usePdfStore, type PdfRequest } from "@/stores/pdf";
 
 // تبويب «صفحات PDF»: ملف الخادم الحقيقي نفسه (Chromium) في عارض المتصفح المدمج، فحدود الصفحات وترقيمها
@@ -12,42 +13,15 @@ const stale = computed(() => pdf.previewStatus === "done" && pdf.previewKey !== 
 // المتصفحات التي لا تعرض PDF داخل الصفحة (أغلب متصفحات الجوال) تعلن ذلك؛ ما لا يعلن شيئًا يُجرَّب فيه الإطار.
 const inlineViewer = typeof navigator === "undefined" || navigator.pdfViewerEnabled !== false;
 
-// التقليب: عارض المتصفح يفتح الملف على صفحة محددة بجزء الرابط (‎#page=N‎)، وتغيير الجزء وحده يبدّل الصفحة دون
-// إعادة تحميل الملف. العدد من الخادم؛ حين لا يُعرف (0) يبقى العارض وحده بلا أزرار.
+// التقليب: عارض المتصفح لا يبدّل صفحته حين يتغير جزء الرابط وحده، فيُعاد تحميل الإطار لكل صفحة (‎:key‎) وهو يفتح
+// الملف على الصفحة المطلوبة (‎#page=N‎). الإطار بنسبة A4 وفوقه طبقة تمنع تمرير العارض، فلا تُرى الصفحات المجاورة.
+// العدد من الخادم؛ حين لا يُعرف (0) يبقى العارض وحده بلا أزرار.
 const page = ref(1);
 const pages = computed(() => pdf.previewPages);
 const paged = computed(() => inlineViewer && pages.value > 0);
 const frameSrc = computed(() =>
   paged.value ? `${pdf.previewUrl}#page=${page.value}&view=Fit&toolbar=0&navpanes=0` : pdf.previewUrl,
 );
-
-function go(target: number) {
-  const next = Math.round(target);
-  page.value = Math.min(Math.max(Number.isFinite(next) ? next : 1, 1), Math.max(pages.value, 1));
-}
-
-function onPageInput(event: Event) {
-  const input = event.target as HTMLInputElement;
-  go(input.valueAsNumber);
-  input.value = String(page.value);
-}
-
-// الكتاب العربي يبدأ من اليمين: السهم الأيسر والصفحة التالية، والأيمن والسابقة.
-function onKey(event: KeyboardEvent) {
-  if (!paged.value || (event.target as HTMLElement).tagName === "INPUT") return;
-  const moves: Record<string, () => void> = {
-    ArrowLeft: () => go(page.value + 1),
-    PageDown: () => go(page.value + 1),
-    ArrowRight: () => go(page.value - 1),
-    PageUp: () => go(page.value - 1),
-    Home: () => go(1),
-    End: () => go(pages.value),
-  };
-  const move = moves[event.key];
-  if (!move) return;
-  event.preventDefault();
-  move();
-}
 
 watch(
   () => pdf.previewUrl,
@@ -66,7 +40,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <section class="pdf-preview no-print" aria-label="صفحات PDF كما تُطبع" @keydown="onKey">
+  <section class="pdf-preview no-print" aria-label="صفحات PDF كما تُطبع">
     <p v-if="pdf.previewBusy" class="state" role="status">{{ pdf.previewText }}</p>
     <div v-else-if="pdf.previewStatus === 'error'" class="alert alert-error notice" role="alert">
       <span>{{ pdf.previewError }}</span>
@@ -78,32 +52,12 @@ onMounted(() => {
         <button type="button" class="btn btn-secondary btn-small" @click="refresh">تحديث المعاينة</button>
       </div>
       <p v-if="!inlineViewer" class="alert alert-info">متصفحك لا يعرض PDF داخل الصفحة. افتح الملف من الرابط أدناه.</p>
-      <template v-else>
-        <nav v-if="paged" class="pager" aria-label="تقليب الصفحات">
-          <button type="button" class="btn btn-secondary" :disabled="page <= 1" @click="go(page - 1)">
-            <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><polyline points="9 6 15 12 9 18" /></svg>
-            السابقة
-          </button>
-          <label class="where">
-            <span class="visually-hidden">رقم الصفحة</span>
-            <input
-              class="input"
-              type="number"
-              inputmode="numeric"
-              min="1"
-              :max="pages"
-              :value="page"
-              @change="onPageInput"
-            />
-            <span aria-live="polite">من <bdi dir="ltr">{{ pages }}</bdi></span>
-          </label>
-          <button type="button" class="btn btn-secondary" :disabled="page >= pages" @click="go(page + 1)">
-            التالية
-            <svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><polyline points="15 6 9 12 15 18" /></svg>
-          </button>
-        </nav>
-        <iframe class="frame" :src="frameSrc" title="صفحات PDF كما تُطبع"></iframe>
-      </template>
+      <PageFlipper v-else v-model:page="page" :pages="paged ? pages : 0">
+        <div class="frame-box" :class="{ locked: paged }">
+          <iframe :key="paged ? page : 0" class="frame" :src="frameSrc" title="صفحات PDF كما تُطبع"></iframe>
+          <div v-if="paged" class="lock" aria-hidden="true"></div>
+        </div>
+      </PageFlipper>
       <a class="open" :href="pdf.previewUrl" target="_blank" rel="noopener">فتح الملف في نافذة مستقلة</a>
     </template>
   </section>
@@ -140,35 +94,21 @@ onMounted(() => {
   border-radius: var(--radius-md);
   background: var(--color-surface-sunken);
 }
-.pager {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-3);
+.frame-box {
+  position: relative;
 }
-.pager .btn {
-  gap: var(--space-2);
-  min-inline-size: 7.5rem;
+/* صفحة واحدة بنسبة A4 في إطار لا يتجاوز ارتفاع النافذة؛ الطبقة تلتقط العجلة والنقر فلا يتمرر العارض */
+.frame-box.locked {
+  inline-size: min(100%, calc(85vh * 210 / 297));
+  aspect-ratio: 210 / 297;
+  margin-inline: auto;
 }
-.chev {
-  inline-size: 1.1em;
-  block-size: 1.1em;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.75;
-  stroke-linecap: square;
-  stroke-linejoin: miter;
+.frame-box.locked .frame {
+  block-size: 100%;
 }
-.where {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  color: var(--color-ink-soft);
-}
-.where .input {
-  inline-size: 4.5rem;
-  text-align: center;
+.lock {
+  position: absolute;
+  inset: 0;
 }
 .open {
   justify-self: start;

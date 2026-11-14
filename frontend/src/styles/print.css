@@ -99,6 +99,10 @@
   font-size: var(--print-body);
   line-height: var(--leading-body);
 }
+/* بطاقة الصفحة في عرض «صفحة بصفحة»: بيضاء كالورقة في الوضعين (لونها من --color-sheet بعد تثبيته هنا) */
+.paged-card {
+  --color-sheet: #ffffff;
+}
 /* الورقة بعرض الصفحة دائمًا، فجداولها لا تُمرَّر ولا تُقصّ */
 .sheet .table-scroll {
   overflow: visible;
