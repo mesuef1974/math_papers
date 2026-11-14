@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, watchEffect } from "vue";
+import { computed, onMounted, watchEffect } from "vue";
 import BookletCover from "@/components/BookletCover.vue";
 import GraphPlot from "@/components/GraphPlot.vue";
 import MathText from "@/components/MathText.vue";
@@ -8,6 +8,7 @@ import ScoreTable from "@/components/ScoreTable.vue";
 import { LEVEL_NAMES, type Paper, type Question } from "@/stores/papers";
 import type { PaperHeaderData } from "@/stores/print";
 import { marksLabel } from "@/utils/marks";
+import { ensurePrintFonts } from "@/utils/printFonts";
 
 // hideSheet: في الحزمة تُطبع المفاتيح كلها في آخرها، فتُعرض الورقة في موضعها ومفتاحها لاحقًا.
 // replaceable: زر استبدال لكل جزء (شاشة فقط)؛ replacing بصمة الجزء الجاري استبداله؛ modified بعد أي استبدال.
@@ -27,6 +28,9 @@ const props = withDefaults(
   { hideSheet: false, replaceable: false, replacing: "", modified: false, runningFooter: true },
 );
 const emit = defineEmits<{ replace: [question: number, label: string] }>();
+
+// الورقة ظهرت على الشاشة: يُحمَّل خط الطباعة مسبقًا ليكون جاهزًا عند فتح نافذة الطباعة
+onMounted(() => void ensurePrintFonts());
 
 // حروف لاتينية من اليسار إلى اليمين كما في أوراق الاختبار المطبوعة.
 const OPTION_LABELS = ["A", "B", "C", "D"];

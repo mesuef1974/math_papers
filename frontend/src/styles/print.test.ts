@@ -44,3 +44,29 @@ describe("ألوان الورق المطبوع", () => {
     expect(print).toContain("print-color-adjust: exact");
   });
 });
+
+describe("خط الورقة", () => {
+  const fonts = readFileSync(join(STYLES, "fonts.css"), "utf-8");
+  const stack = /--font-print:\s*([^;]+);/.exec(tokens)?.[1] ?? "";
+
+  it("أول خط للورقة هو الخط المضمَّن، ولا خط خاص بجهاز المعلم قبله", () => {
+    expect(stack.startsWith('"Noto Naskh Arabic"')).toBe(true);
+    expect(stack).not.toMatch(/Sakkal Majalla/);
+    expect(print).toContain("font-family: var(--font-print)");
+  });
+
+  it("نصوص الرسوم بخط KaTeX المضمَّن قبل أي خط من الجهاز", () => {
+    const math = /--font-math:\s*([^;]+);/.exec(tokens)?.[1] ?? "";
+    expect(math.startsWith('"KaTeX_Main"')).toBe(true);
+  });
+
+  it("الخط معرَّف بوزنيه من ملفين موجودين ولا يُطبع ببديل قبل تحميله", () => {
+    const faces = [...fonts.matchAll(/@font-face\s*\{([^}]+)\}/g)].map((m) => m[1]).filter((b) => b.includes('"Noto Naskh Arabic"'));
+    expect(faces.map((b) => /font-weight:\s*(\d+)/.exec(b)?.[1])).toEqual(["400", "700"]);
+    for (const block of faces) {
+      const file = /url\("\.\.\/([^"]+)"\)/.exec(block)?.[1] ?? "";
+      expect(readFileSync(join(STYLES, "..", file)).length).toBeGreaterThan(20000);
+      expect(block).toContain("font-display: block");
+    }
+  });
+});

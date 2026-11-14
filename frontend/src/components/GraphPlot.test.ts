@@ -44,4 +44,14 @@ describe("GraphPlot compact", () => {
     expect(Number(small.find("svg").attributes("width"))).toBeLessThan(Number(full.find("svg").attributes("width")));
     expect(small.find("figcaption").exists()).toBe(false);
   });
+
+  it("علامة الاشتقاق في العنوان قائمة خارج اسم الدالة المائل", () => {
+    for (const [name, primes] of [["f′", "′"], ["f′′", "′′"], ["f″", "′′"]]) {
+      const caption = mount(GraphPlot, { props: { graph: { ...graph, label: name } } }).find("figcaption");
+      expect(caption.findAll("i").map((i) => i.text())).toEqual(["y", "f", "x"]);
+      expect(caption.text().replace(/\s/g, "")).toBe(`y=f${primes}(x)`);
+    }
+    const plain = mount(GraphPlot, { props: { graph } }).find("figcaption");
+    expect(plain.text().replace(/\s/g, "")).toBe("y=f(x)");
+  });
 });

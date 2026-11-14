@@ -4,18 +4,37 @@ from __future__ import annotations
 
 import re
 from io import BytesIO
+from pathlib import Path
 from xml.sax.saxutils import escape
 
+from docx.opc.constants import RELATIONSHIP_TYPE as RT
+from docx.opc.packuri import PackURI
+from docx.opc.part import Part
 from docx.oxml import parse_xml
 from docx.oxml.ns import nsdecls, qn
 from docx.section import _Footer, _Header
 from docx.shared import Cm
 from docx.table import _Cell
 from docx.text.paragraph import Paragraph
+from lxml import etree
 
 from .omml import to_omml
 
-FONT = "Arial"
+# خط الورقة الموحَّد مع الطباعة وPDF (frontend/src/styles/fonts.css): يُضمَّن في الملف فيظهر على أي جهاز
+FONT = "Noto Naskh Arabic"
+FONT_DIR = Path(__file__).parent / "assets" / "fonts"
+# عنصر جدول الخطوط ← (ملف TrueType، مفتاح التعمية). المفاتيح ثابتة ليخرج الملف نفسه من الحمولة نفسها.
+EMBEDDED_FONTS = {
+    "embedRegular": ("NotoNaskhArabic-Regular.ttf", "{9C20DED5-8C46-4DE9-B0C9-CAA3B576D2E2}"),
+    "embedBold": ("NotoNaskhArabic-Bold.ttf", "{12CBF5B2-DA98-4F56-A2A0-986736CBCAD5}"),
+}
+OBFUSCATED_FONT = "application/vnd.openxmlformats-officedocument.obfuscatedFont"
+# Word يقيس السطر «المفرد» بارتفاع الخط الطبيعي لا بحجمه. الخط يرفع USE_TYPO_METRICS، فارتفاعه
+# (sTypoAscender - sTypoDescender + sTypoLineGap) / unitsPerEm = 1.703 من حجمه. المضاعف الافتراضي يعيد السطر
+# إلى ارتفاع سطر الطباعة (`--leading-body` في print.css).
+FONT_NATURAL_LINE = 1.703
+PRINT_LEADING = 1.6
+LINE_MULTIPLE = round(PRINT_LEADING / FONT_NATURAL_LINE, 3)
 SYMBOL_FONT = "Segoe UI Symbol"
 LRM = "‎"
 RLM = "‏"
@@ -32,6 +51,51 @@ WHITE = "FFFFFF"
 W = nsdecls("w")
 SWAPPED = {"left": "right", "right": "left"}
 ARABIC = re.compile(r"[؀-ۿݐ-ݿ]")
+
+
+def obfuscate_font(data: bytes, key: str) -> bytes:
+    """تعمية الخط المضمَّن كما يطلب Word (ECMA-376 الجزء 4، 2.8.1): أول 32 بايتًا XOR مع بايتات المفتاح معكوسة.
+    العملية عكس نفسها، فتطبيقها مرتين يعيد الملف الأصلي."""
+    mask = bytes.fromhex(key.strip("{}").replace("-", ""))[::-1]
+    return bytes(b ^ mask[i % 16] for i, b in enumerate(data[:32])) + data[32:]
+
+
+def embed_fonts(doc) -> None:
+    """يضمّن خط الورقة بوزنيه في الوثيقة: جزء معمًّى لكل وزن، وإحالته في جدول الخطوط، وإعداد يبقيه عند إعادة الحفظ."""
+    table = next(rel.target_part for rel in doc.part.rels.values() if rel.reltype == RT.FONT_TABLE)
+    fonts = parse_xml(table.blob)
+    for old in fonts.findall(qn("w:font")):
+        if old.get(qn("w:name")) == FONT:
+            fonts.remove(old)
+    refs = []
+    for index, (tag, (filename, key)) in enumerate(EMBEDDED_FONTS.items(), start=1):
+        part = Part(
+            PackURI(f"/word/fonts/font{index}.odttf"),
+            OBFUSCATED_FONT,
+            obfuscate_font((FONT_DIR / filename).read_bytes(), key),
+            doc.part.package,
+        )
+        refs.append(f'<w:{tag} r:id="{table.relate_to(part, RT.FONT)}" w:fontKey="{key}"/>')
+    fonts.append(
+        parse_xml(
+            f'<w:font {nsdecls("w", "r")} w:name="{FONT}"><w:charset w:val="B2"/><w:family w:val="roman"/>'
+            f'<w:pitch w:val="variable"/>{"".join(refs)}</w:font>'
+        )
+    )
+    table._blob = etree.tostring(fonts, xml_declaration=True, encoding="UTF-8", standalone=True)
+    settings = doc.settings.element
+    if settings.find(qn("w:embedTrueTypeFonts")) is None:
+        # موضعه في مخطط الإعدادات بعد العناصر الآتية وقبل ما سواها
+        before = {
+            qn(f"w:{name}")
+            for name in (
+                "writeProtection", "view", "zoom", "removePersonalInformation", "removeDateAndTime",
+                "doNotDisplayPageBoundaries", "displayBackgroundShape", "printPostScriptOverText",
+                "printFractionalCharacterWidth", "printFormsData",
+            )
+        }  # fmt: skip
+        position = sum(1 for child in settings if child.tag in before)
+        settings.insert(position, parse_xml(f"<w:embedTrueTypeFonts {nsdecls('w')}/>"))
 
 
 def twips(cm: float) -> int:
@@ -156,7 +220,7 @@ def new_paragraph(
     rtl: bool = True,
     before: float = 0,
     after: float = 3,
-    line: float | None = 1.15,
+    line: float | None = LINE_MULTIPLE,
     keep_next: bool = False,
     keep_lines: bool = True,
     page_break: bool = False,

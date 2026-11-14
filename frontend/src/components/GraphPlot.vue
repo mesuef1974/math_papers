@@ -10,6 +10,13 @@ const PAD = 22;
 // معرّف السهم فريد لكل رسم؛ الصفحة تحمل رسومًا كثيرة والمعرّف المكرر HTML غير صالح.
 const arrowId = `axis-arrow-${useId()}`;
 
+// اسم الدالة مائل وعلامات الاشتقاق قائمة: الخط المائل المضمَّن لا يحمل العلامة، فكان المتصفح يرسمها بخط من الجهاز.
+const label = computed(() => {
+  const text = props.graph.label.replace(/″/g, "′′");
+  const cut = text.search(/′/);
+  return cut < 0 ? { name: text, primes: "" } : { name: text.slice(0, cut), primes: text.slice(cut) };
+});
+
 const view = computed(() => {
   const [xMin, xMax, yMin, yMax] = props.graph.window;
   const UNIT = props.compact ? 17 : 26; // خيارات الرسوم أصغر حتى يتسع خياران في السطر
@@ -89,7 +96,7 @@ const title = computed(() => `تمثيل بياني للدالة ${props.graph.l
       />
     </svg>
     <figcaption v-if="!compact" class="caption">
-      <i>y</i> = <i>{{ graph.label }}</i>(<i>x</i>)
+      <i>y</i> = <i>{{ label.name }}</i>{{ label.primes }}(<i>x</i>)
     </figcaption>
   </figure>
 </template>

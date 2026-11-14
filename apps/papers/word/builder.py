@@ -406,7 +406,7 @@ def instructions_page(doc, header: dict, paper: dict) -> None:
         x.set_cell(right, 8.9, valign="top")
         x.set_cell(left, 8.9, valign="top")
         x.add_text(x.new_paragraph(right, after=5, indent_cm=0), f"• {ar}", size=10.5)
-        x.add_text(x.new_paragraph(left, rtl=False, after=5), f"• {en}", size=10.5, font="Arial")
+        x.add_text(x.new_paragraph(left, rtl=False, after=5), f"• {en}", size=10.5)
     x.spacer(doc, 10)
     samples = [
         ("☒", "إجابة صحيحة التأشير", "Correctly marked"),
@@ -1019,6 +1019,7 @@ def build_docx(payload: dict[str, Any]) -> bytes:
     multi = len(papers) > 1 and not bundle
     doc = Document()
     _setup(doc)
+    x.embed_fonts(doc)
     headers = [
         header_of(p, profile, payload.get("date", ""), payload.get("section", ""), multi) for p in papers
     ]
