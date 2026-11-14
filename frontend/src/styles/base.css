@@ -12,12 +12,8 @@ html {
 body {
   margin: 0;
   min-block-size: 100vh;
+  /* ورق مسطّح كما في screens/*.html من الدليل؛ شبكة الدفتر القديمة بقيت للوحة الإدارة في admin.css */
   background-color: var(--color-paper);
-  /* شبكة دفتر الرياضيات خلف الصفحة، خافتة حتى لا تنافس المحتوى */
-  background-image:
-    linear-gradient(var(--color-grid) 1px, transparent 1px),
-    linear-gradient(90deg, var(--color-grid) 1px, transparent 1px);
-  background-size: var(--grid-size) var(--grid-size);
   color: var(--color-ink);
   font-family: var(--font-sans);
   font-size: var(--text-md);

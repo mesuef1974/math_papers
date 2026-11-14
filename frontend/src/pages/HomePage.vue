@@ -441,4 +441,21 @@ function downloadServerFile(format: "pdf" | "docx") {
   color: var(--color-ink-soft);
   font-size: var(--text-sm);
 }
+/* الجوال (screens/mobile): رأس الصفحة بطاقة عنابية كبيرة بنصف قطر 3× */
+@media (max-width: 900px) {
+  .page-head {
+    padding: var(--space-6) var(--space-5);
+    border-radius: var(--radius-xl);
+    background: var(--color-brand);
+    color: var(--color-on-brand);
+  }
+  .page-head .eyebrow,
+  .page-head .lead {
+    color: var(--color-on-brand);
+  }
+  .page-head h1 {
+    color: var(--color-on-brand);
+    font-size: var(--text-xl);
+  }
+}
 </style>

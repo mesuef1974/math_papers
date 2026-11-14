@@ -20,6 +20,12 @@ export const router = createRouter({
       meta: { title: "مخطط التدفق الحي" },
     },
     {
+      path: "/welcome",
+      name: "landing",
+      component: () => import("@/pages/LandingPage.vue"),
+      meta: { public: true, bleed: true, title: "مولّد أوراق الرياضيات" },
+    },
+    {
       path: "/about",
       name: "about",
       component: () => import("@/pages/AboutPage.vue"),
@@ -58,6 +64,8 @@ router.beforeEach(async (to) => {
   // من له جلسة لا يرى بطاقة الدخول: يعود إلى وجهته أو الرئيسية.
   if (to.name === "login" && auth.user) return safeNext(to.query.next);
   if (to.meta.public) return true;
+  // الزائر الذي يفتح الجذر يرى الصفحة الافتتاحية لا بطاقة الدخول؛ باقي الصفحات المحمية تحوّله إلى الدخول.
+  if (!auth.user && to.name === "home") return { name: "landing" };
   if (!auth.user) return { name: "login", query: { next: to.fullPath } };
   return true;
 });
