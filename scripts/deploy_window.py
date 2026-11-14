@@ -1,6 +1,11 @@
 """نافذة النشر: كل دمج إلى main نشر فوري على Railway، فلا دمج وقت الدوام إلا الإصلاح العاجل.
 
-يُفرض في طابور الدمج (merge_group) وحده. الإصلاح العاجل يمرّ بوسم LABEL على الطلب.
+طريقتان للفرض، والإصلاح العاجل يمرّ فيهما بوسم LABEL على الطلب:
+  - `deploy_window.py status`: حالة إيداع STATUS_CONTEXT على رأس كل طلب مفتوح إلى main، حمراء وقت الدوام
+    وخضراء خارجه. هي فحص مطلوب على main، فيمنع GitHub الدمج اليدوي والتلقائي داخل النافذة، ويُدمج الطلب
+    المفعَّل دمجه وحده عند فتحها. يحدّثها سير عمل مجدول وأحداث الطلب (`.github/workflows/deploy-window.yml`).
+    الحالة تُغلق قبل الدوام بـ GUARD_MINUTES احتياطًا لتأخر جدولة GitHub.
+  - طابور الدمج (merge_group) حيث يتاح (مستودعات المنظمات)، بلا وسيط: يرفض المجموعة وقت الدوام.
 الإعداد من القالب: الإزاحة 3 ساعة، الأيام weekday() = 6,0,1,2,3، الساعات 07-14.
 """
 
@@ -18,6 +23,8 @@ WORK_DAYS = {int(d) for d in "6,0,1,2,3".split(",")}
 _HOURS = "07-14".split("-")
 WINDOW_START_HOUR, WINDOW_END_HOUR = int(_HOURS[0]), int(_HOURS[1])
 LABEL = "نشر-عاجل"
+STATUS_CONTEXT = "نافذة النشر"
+GUARD_MINUTES = 30
 _QUEUE_PR_RE = re.compile(r"/pr-(\d+)-")
 
 
@@ -53,7 +60,83 @@ def decide(event: str, now: datetime, labels: list[str] | None) -> tuple[bool, s
     return False, f"وقت الدوام ({local}): الدمج نشر فوري وممنوع الآن. أعد بعد {end} أو وسم الطلب «{LABEL}»."
 
 
+def closed_for_status(now: datetime) -> bool:
+    """وقت الدوام، أو ما قبله بمدة الاحتياط: الجدولة قد تتأخر دقائق، فتُغلق الحالة قبل بدء الدوام لا بعده."""
+    return in_work_hours(now) or in_work_hours(now + timedelta(minutes=GUARD_MINUTES))
+
+
+def status_for(now: datetime, labels: list[str]) -> tuple[str, str]:
+    local = now.astimezone(LOCAL_TZ).strftime("%A %H:%M")
+    if not closed_for_status(now):
+        return "success", f"خارج الدوام ({local}) — الدمج مسموح."
+    if LABEL in labels:
+        return "success", f"وقت الدوام ({local}) والطلب موسوم «{LABEL}» — يمرّ إصلاحًا عاجلًا."
+    return (
+        "failure",
+        f"وقت الدوام ({local}): الدمج نشر فوري وممنوع حتى {WINDOW_END_HOUR}:00، أو وسم «{LABEL}».",
+    )
+
+
+def open_prs(repo: str, base: str) -> list[dict]:
+    out = subprocess.run(
+        [
+            "gh",
+            "api",
+            "--paginate",
+            f"repos/{repo}/pulls?state=open&base={base}&per_page=100",
+            "--jq",
+            ".[] | {number, sha: .head.sha, labels: [.labels[].name]}",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
+    return [json.loads(line) for line in out.stdout.splitlines() if line.strip()]
+
+
+def post_status(repo: str, sha: str, state: str, description: str) -> None:
+    subprocess.run(
+        [
+            "gh",
+            "api",
+            "-X",
+            "POST",
+            f"repos/{repo}/statuses/{sha}",
+            "-f",
+            f"state={state}",
+            "-f",
+            f"context={STATUS_CONTEXT}",
+            "-f",
+            f"description={description[:140]}",
+        ],
+        check=True,
+        capture_output=True,
+    )
+
+
+def update_statuses(repo: str, base: str, now: datetime) -> list[tuple[int, str]]:
+    """يكتب الحالة على رأس كل طلب مفتوح؛ إعادة التشغيل تكتب القيمة نفسها (idempotent)."""
+    written = []
+    for pr in open_prs(repo, base):
+        state, description = status_for(now, pr["labels"])
+        post_status(repo, pr["sha"], state, description)
+        written.append((pr["number"], state))
+    return written
+
+
+def main_status() -> int:
+    written = update_statuses(os.environ["REPO"], os.environ.get("BASE", "main"), datetime.now(UTC))
+    for number, state in written:
+        print(f"#{number}: {STATUS_CONTEXT} = {state}")
+    if not written:
+        print("لا طلبات مفتوحة")
+    return 0
+
+
 def main() -> int:
+    if sys.argv[1:] == ["status"]:
+        return main_status()
     event = os.environ.get("EVENT", "")
     now = datetime.now(UTC)
     labels = None
