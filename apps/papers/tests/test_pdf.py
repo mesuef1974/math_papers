@@ -73,6 +73,42 @@ def test_other_teacher_cannot_see_job(client, fake_browser):
     assert other.get(f"/api/v1/pdf/{job['id']}/file").status_code == 404
 
 
+def test_inline_pdf_is_framed_by_same_origin_only(client, fake_browser):
+    """تبويب «صفحات PDF» يضمّن الملف في إطار من الأصل نفسه؛ التنزيل وWord وكل رد آخر يبقى ممنوع التضمين."""
+    job = create(client, payload(client)).json()
+    inline = client.get(f"/api/v1/pdf/{job['id']}/file", {"inline": 1})
+    assert inline.status_code == 200 and inline["Content-Type"] == "application/pdf"
+    assert inline["Content-Disposition"].startswith("inline")
+    assert inline["X-Frame-Options"] == "SAMEORIGIN"
+    assert inline["Content-Security-Policy"] == "frame-ancestors 'self'"
+    assert b"".join(inline.streaming_content) == FAKE_PDF
+
+    download = client.get(f"/api/v1/pdf/{job['id']}/file")
+    assert download["Content-Disposition"].startswith("attachment")
+    assert download["X-Frame-Options"] == "DENY"
+    assert "frame-ancestors 'none'" in download["Content-Security-Policy"]
+    status = client.get(f"/api/v1/pdf/{job['id']}")
+    assert (
+        status["X-Frame-Options"] == "DENY" and "frame-ancestors 'none'" in status["Content-Security-Policy"]
+    )
+
+    other = Client()
+    other.force_login(ensure_teacher("teacher2", "Rasm-Bayani-2026")[0])
+    assert other.get(f"/api/v1/pdf/{job['id']}/file", {"inline": 1}).status_code == 404
+
+
+def test_inline_never_applies_to_word(client, monkeypatch):
+    monkeypatch.setattr(pdf, "_submit", pdf._render_job)
+    body = json.dumps(payload(client))
+    job = client.post("/api/v1/docx", body, content_type="application/json").json()
+    assert job["status"] == "done" and job["filename"].endswith(".docx")
+    file = client.get(f"/api/v1/pdf/{job['id']}/file", {"inline": 1})
+    assert file.status_code == 200
+    assert file["Content-Disposition"].startswith("attachment")
+    assert file["X-Frame-Options"] == "DENY"
+    assert "frame-ancestors 'none'" in file["Content-Security-Policy"]
+
+
 def test_print_payload_needs_valid_unexpired_token(client, fake_browser, monkeypatch):
     job = create(client, payload(client)).json()
     token = fake_browser["url"].rsplit("/print/", 1)[1]
