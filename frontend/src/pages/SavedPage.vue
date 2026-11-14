@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
+import EmptyState from "@/components/EmptyState.vue";
 import { useAuthStore } from "@/stores/auth";
 import { usePapersStore } from "@/stores/papers";
 import { useSavedStore, type SavedSummary } from "@/stores/saved";
@@ -77,9 +78,9 @@ async function remove(item: SavedSummary) {
   <p v-if="!auth.canGenerate" class="alert alert-error" role="alert">حسابك لا يملك صلاحية توليد الأوراق.</p>
   <div v-else class="panel" :aria-busy="saved.loading">
     <p v-if="saved.error" class="alert alert-error" role="alert">{{ saved.error }}</p>
-    <p v-if="saved.loaded && !saved.items.length" class="empty">
+    <EmptyState v-if="saved.loaded && !saved.items.length">
       لا أوراق محفوظة بعد. ولّد ورقة من <RouterLink to="/">الرئيسية</RouterLink> ثم احفظها.
-    </p>
+    </EmptyState>
     <table v-else-if="saved.items.length" class="list">
       <thead>
         <tr>
@@ -129,10 +130,6 @@ async function remove(item: SavedSummary) {
 </template>
 
 <style scoped>
-.empty {
-  margin: 0;
-  color: var(--color-ink-soft);
-}
 .list {
   inline-size: 100%;
   border-collapse: collapse;
