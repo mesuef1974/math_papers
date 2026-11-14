@@ -5,7 +5,7 @@ import GraphPlot from "@/components/GraphPlot.vue";
 import MathText from "@/components/MathText.vue";
 import PaperHeader from "@/components/PaperHeader.vue";
 import ScoreTable from "@/components/ScoreTable.vue";
-import { LEVEL_NAMES, type Paper, type Question } from "@/stores/papers";
+import { LEVEL_NAMES, type Paper, type Part, type Question } from "@/stores/papers";
 import type { PaperHeaderData } from "@/stores/print";
 import { marksLabel } from "@/utils/marks";
 import { ensurePrintFonts } from "@/utils/printFonts";
@@ -45,6 +45,35 @@ const mcqAnswers = computed(() =>
 );
 // أوراق العمل بلا درجات، فلا يُعرض لها عمود درجة فارغ في المفتاح.
 const hasMarks = computed(() => props.paper.questions.some((q) => q.parts.some((p) => p.marks > 0)));
+
+// صفوف المفتاح لكل جزء: المقالي ذو الدرجة صف لكل بند من توزيعه (خطوات الطريقة ثم الجواب النهائي) بدرجته،
+// وغيره صف واحد فيه الإجابة وخطواتها. ترقيم الخطوات متصل عبر صفوف الجزء.
+interface KeyRow {
+  steps: string[];
+  start: number;
+  marks: number;
+  final: boolean;
+  plain: boolean;
+}
+function keyRows(part: Part): KeyRow[] {
+  const items = part.marking ?? [];
+  if (!items.length) return [{ steps: part.steps, start: 1, marks: part.marks, final: false, plain: true }];
+  let start = 1;
+  return items.map((item) => {
+    const row = { steps: item.steps, start, marks: item.marks, final: item.final, plain: false };
+    start += item.steps.length;
+    return row;
+  });
+}
+const keyParts = computed(() =>
+  props.paper.questions.flatMap((question) =>
+    question.parts.map((part) => ({
+      id: `${question.number}${part.label ? ` ${part.label}` : ""}`,
+      part,
+      rows: keyRows(part),
+    })),
+  ),
+);
 const lastMcq = computed(() => props.paper.questions.filter((q) => q.kind === "mcq").at(-1)?.number ?? 0);
 
 // تعليمات كل قسم كما في كراسات الوزارة: قبل أول سؤال موضوعي وقبل أول سؤال مقالي، بنطاق أرقامه وبلغتين.
@@ -206,26 +235,32 @@ watchEffect(() => {
           <tr>
             <th scope="col">السؤال</th>
             <th scope="col">الإجابة والخطوات</th>
+            <th v-if="hasMarks" scope="col">الدرجة</th>
             <th scope="col">الدرس</th>
             <th scope="col">المستوى</th>
-            <th v-if="hasMarks" scope="col">الدرجة</th>
+            <th v-if="hasMarks" scope="col">المجموع</th>
           </tr>
         </thead>
         <tbody>
-          <template v-for="question in paper.questions" :key="question.number">
-            <tr v-for="part in question.parts" :key="part.fingerprint">
-              <th scope="row">
-                <bdi>{{ question.number }}{{ part.label ? ` ${part.label}` : "" }}</bdi>
+          <template v-for="{ id, part, rows } in keyParts" :key="part.fingerprint">
+            <tr v-for="(row, index) in rows" :key="index" :class="{ 'final-row': row.final }">
+              <th v-if="index === 0" scope="row" :rowspan="rows.length">
+                <bdi>{{ id }}</bdi>
               </th>
               <td>
-                <p class="answer"><MathText :text="part.answer" /></p>
-                <ol v-if="part.steps.length" class="steps">
-                  <li v-for="step in part.steps" :key="step"><MathText :text="step" /></li>
+                <p v-if="row.plain || row.final" class="answer">
+                  <span v-if="row.final" class="final-label">الجواب النهائي: </span><MathText :text="part.answer" />
+                </p>
+                <ol v-if="row.steps.length" class="steps" :class="{ marked: !row.plain }" :start="row.start">
+                  <li v-for="step in row.steps" :key="step"><MathText :text="step" /></li>
                 </ol>
               </td>
-              <td class="lesson">{{ part.lesson }}</td>
-              <td><span class="badge" :class="`badge-${part.level.toLowerCase()}`">{{ LEVEL_NAMES[part.level] }}</span></td>
-              <td v-if="hasMarks" class="num">{{ part.marks || "" }}</td>
+              <td v-if="hasMarks" class="num step-mark"><bdi dir="ltr">{{ row.marks || "" }}</bdi></td>
+              <td v-if="index === 0" class="lesson" :rowspan="rows.length">{{ part.lesson }}</td>
+              <td v-if="index === 0" :rowspan="rows.length">
+                <span class="badge" :class="`badge-${part.level.toLowerCase()}`">{{ LEVEL_NAMES[part.level] }}</span>
+              </td>
+              <td v-if="hasMarks && index === 0" class="num part-total" :rowspan="rows.length">{{ part.marks || "" }}</td>
             </tr>
           </template>
         </tbody>
@@ -536,9 +571,27 @@ watchEffect(() => {
   padding-inline-start: var(--space-5);
   color: var(--color-ink-soft);
 }
+.steps.marked {
+  margin-block: 0;
+  color: var(--color-ink);
+}
+.final-label {
+  font-weight: var(--weight-bold);
+  color: var(--color-brand-strong);
+}
 .lesson,
 .num {
   white-space: nowrap;
+}
+.num {
+  text-align: center;
+}
+.key .step-mark,
+.key .part-total {
+  vertical-align: middle;
+}
+.part-total {
+  font-weight: var(--weight-bold);
 }
 @media (max-width: 560px) {
   .sheet {

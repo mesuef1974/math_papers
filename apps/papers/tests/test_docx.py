@@ -166,7 +166,40 @@ def test_key_marks_column_only_when_the_paper_has_marks(client):
     heads, first = key_heads("worksheet")  # ورقة العمل بلا درجات: لا عمود فارغ
     assert heads == ["السؤال", "الإجابة والخطوات", "الدرس", "المستوى"] and len(first) == 4
     heads, first = key_heads("exam")
-    assert heads[-1] == "الدرجة" and first[-1].strip().isdigit()
+    assert heads[2] == "الدرجة" and heads[-1] == "المجموع" and first[-1].strip().isdigit()
+
+
+def test_key_distributes_essay_marks_over_steps_and_final_answer(client):
+    """جدول الحلول في Word: مجموع درجات بنود كل جزء يساوي مجموعه، ولكل جزء مقالي بند جواب نهائي واحد."""
+    payload = sample_payload(client, show_key=True)
+    doc = Document(io.BytesIO(build_docx(payload)))
+    table = next(
+        t for t in doc.tables if [c.text for c in t.rows[0].cells][:2] == ["السؤال", "الإجابة والخطوات"]
+    )
+    sums: dict[str, float] = {}
+    totals: dict[str, float] = {}
+    finals: dict[str, int] = {}
+    for row in table.rows[1:]:
+        cells = row.cells  # الخلايا المدموجة رأسيًا تعيد نص أول صف في الجزء
+        label = cells[0].text
+        sums[label] = sums.get(label, 0) + float(cells[2].text)
+        totals[label] = float(cells[5].text)
+        finals[label] = finals.get(label, 0) + cells[1].text.startswith("الجواب النهائي")
+    assert sums == totals
+    essay = [
+        f"{q['number']} {p['label']}".strip()
+        for q in payload["papers"][0]["questions"]
+        if q["kind"] == "essay"
+        for p in q["parts"]
+    ]
+    assert essay and all(finals[label] == 1 for label in essay)
+    assert all(count == 0 for label, count in finals.items() if label not in essay)
+    assert b'<w:vMerge w:val="restart"/>' in parts_of(build_docx(payload))["word/document.xml"]
+    # بنود الجزء الواحد لا تنقسم بين صفحتين: كل صف غير أخير في جزئه يلحق بما بعده، بكل فقراته
+    rows = table.rows[1:]
+    for row, following in zip(rows, rows[1:], strict=False):
+        kept = all(p.find(f"{W}pPr/{W}keepNext") is not None for p in row._tr.iter(f"{W}p"))
+        assert kept == (row.cells[0].text == following.cells[0].text)
 
 
 def test_two_forms_make_two_sections(client):

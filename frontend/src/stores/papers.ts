@@ -41,6 +41,13 @@ export interface Slot {
   needs_graph: boolean;
 }
 
+// بند في توزيع درجة الفرع المقالي: خطوة أو خطوات مدموجة بدرجتها (أنصاف)، أو الجواب النهائي (steps فارغة).
+export interface MarkItem {
+  steps: string[];
+  marks: number;
+  final: boolean;
+}
+
 export interface Part {
   label: string;
   lesson: string;
@@ -52,6 +59,7 @@ export interface Part {
   answer: string;
   answer_index: number; // موضع الخيار الصحيح، -1 للمقالي
   steps: string[];
+  marking?: MarkItem[]; // يحسبه الخادم؛ فارغ للموضوعي ولما لا درجة له
   graph: Graph | null;
   option_graphs: Graph[];
   variant: string;

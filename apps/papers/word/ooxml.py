@@ -340,7 +340,9 @@ def set_cell(
     shade: str | None = None,
     valign: str = "center",
     span: int = 0,
+    vmerge: str = "",
 ) -> None:
+    """vmerge: «restart» لأول خلية في دمج رأسي و«continue» لما تحتها؛ فارغ بلا دمج."""
     tc = cell._tc
     existing = tc.tcPr
     if existing is not None:
@@ -348,11 +350,19 @@ def set_cell(
     xml = f'<w:tcPr {W}><w:tcW w:w="{twips(width_cm)}" w:type="dxa"/>'
     if span:
         xml += f'<w:gridSpan w:val="{span}"/>'
+    if vmerge:
+        xml += f'<w:vMerge w:val="{vmerge}"/>'
     xml += _edges(borders, "tcBorders")
     if shade:
         xml += f'<w:shd w:val="clear" w:color="auto" w:fill="{shade}"/>'
     xml += f'<w:vAlign w:val="{valign}"/></w:tcPr>'
     tc.insert(0, parse_xml(xml))
+
+
+def keep_row_with_next(row) -> None:
+    """يلحق الصف بما بعده في الصفحة. Word يشترط keepNext على كل فقرة في الصف، ومنها خلايا الدمج الرأسي."""
+    for element in row._tr.iter(qn("w:p")):
+        Paragraph(element, None).paragraph_format.keep_with_next = True
 
 
 def set_row(
