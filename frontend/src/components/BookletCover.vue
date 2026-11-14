@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import BrandLockup from "@/components/BrandLockup.vue";
+import BrandPattern from "@/components/BrandPattern.vue";
 import type { Paper } from "@/stores/papers";
 import type { PaperHeaderData } from "@/stores/print";
 import { isolateNumberRanges } from "@/utils/bidi";
@@ -54,6 +55,7 @@ const rules = computed(() => [
 
 <template>
   <section class="cover">
+    <div class="cover-pattern" aria-hidden="true"><BrandPattern :tile="140" /></div>
     <BrandLockup :height="78" />
     <div class="org">
       <strong v-if="header.school">{{ header.school }}</strong>
@@ -122,12 +124,21 @@ const rules = computed(() => [
 </template>
 
 <style scoped>
+/* شريط النمط على حافة الغلاف العليا: خارج مجرى المحتوى (absolute) فلا يغيّر ارتفاع الغلاف، وفوق الشعار لا خلفه */
+.cover-pattern {
+  position: absolute;
+  inset-inline: 0;
+  inset-block-start: 0;
+  block-size: 18mm;
+  overflow: hidden;
+}
 .cover {
+  position: relative;
   display: grid;
   justify-items: center;
   text-align: center;
   gap: var(--space-4);
-  padding-block: var(--space-10) var(--space-8);
+  padding-block: calc(18mm + var(--space-4)) var(--space-8);
   border-block-end: 3px solid var(--color-brand);
   margin-block-end: var(--space-6);
   /* الغلاف يملأ معظم صفحته ومحتواه في وسطها؛ على الورق يحسبها المتصفح من ارتفاع الصفحة نفسها */

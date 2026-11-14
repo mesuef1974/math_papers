@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref } from "vue";
 import BrandMark from "@/components/BrandMark.vue";
+import BrandPattern from "@/components/BrandPattern.vue";
 import { playMarkIntro } from "@/utils/markIntro";
 
 // شاشة الافتتاح (identity/applications/app-splash): الرمز وحده في وسط الصفحة بخلفية الورق، مع ظهور الرمز بالحركة.
@@ -23,6 +24,7 @@ onBeforeUnmount(() => clearTimeout(timer));
     <div ref="holder" class="splash-mark">
       <BrandMark :size="132" />
     </div>
+    <div class="splash-pattern" aria-hidden="true"><BrandPattern :tile="100" /></div>
     <span class="visually-hidden">جارٍ التحميل</span>
   </div>
 </template>
@@ -39,5 +41,12 @@ onBeforeUnmount(() => clearTimeout(timer));
 }
 .splash.ready {
   visibility: visible;
+}
+/* شريط النمط في أسفل الشاشة كما في app-splash: بعيد عن الرمز، ولا نص فوقه */
+.splash-pattern {
+  position: absolute;
+  inset-inline: 0;
+  inset-block-end: 0;
+  block-size: 160px;
 }
 </style>
