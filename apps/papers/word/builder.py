@@ -466,7 +466,7 @@ def question_head(doc, question: dict, booklet: bool) -> None:
     if booklet:
         essay = question["kind"] == "essay"
         widths = [1.3, 3.6, 2.2] if essay else [1.3, 3.6]
-        table = x.make_table(doc, 1, widths, rtl=True, borders=None, align="right")
+        table = x.make_table(doc, 1, widths, rtl=True, borders=None, align="left")
         x.set_row(table.rows[0])
         number, label = table.cell(0, 0), table.cell(0, 1)
         x.set_cell(number, widths[0], borders=x.box(12, x.BRAND, inside=False), shade=x.SHADE)
@@ -873,7 +873,7 @@ def key_pages(doc, paper: dict, header: dict, *, page_break: bool = True) -> Non
         per_row = min(10, len(mcq))
         chunks = [mcq[i : i + per_row] for i in range(0, len(mcq), per_row)]
         widths = [2.6] + [1.52] * per_row
-        table = x.make_table(doc, len(chunks) * 2, widths, borders=x.box(6, x.RULE), align="right")
+        table = x.make_table(doc, len(chunks) * 2, widths, borders=x.box(6, x.RULE), align="left")
         for index, chunk in enumerate(chunks):
             for offset, (label, shade) in enumerate((("رقم السؤال", x.SHADE), ("رمز الإجابة", None))):
                 r = index * 2 + offset

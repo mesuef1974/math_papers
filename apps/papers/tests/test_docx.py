@@ -296,6 +296,18 @@ def test_exam_cover_opens_with_pattern_band_before_the_logo(client):
     assert PATTERN_BAND not in [d for n, d in sheet.items() if n.startswith("word/media/")]
 
 
+def test_rtl_tables_hug_the_leading_edge_so_numbers_sit_at_line_start(client):
+    """في جدول bidiVisual تعني jc=right الحافة الخلفية أي يسار الصفحة: شارة رقم السؤال وجدول إجابات المفتاح
+    القصيران يجب أن يلتصقا ببداية السطر (اليمين) كما في الويب وPDF، فلا يظهر بينها jc=right أبدًا."""
+    for kind in ("exam", "worksheet"):
+        doc = Document(io.BytesIO(build_docx(sample_payload(client, kind, show_key=True))))
+        for tbl in doc.element.body.iter(f"{W}tbl"):
+            pr = tbl.find(f"{W}tblPr")
+            if pr.find(f"{W}bidiVisual") is not None:
+                jc = pr.find(f"{W}jc")
+                assert jc is None or jc.get(f"{W}val") != "right"
+
+
 def test_worksheet_layout_badge_ruled_lines_and_graph_beside_them(client):
     paper = client.get("/api/v1/papers/worksheet", {"lesson": "3.1", "count": 8, "seed": 5}).json()
     assert any(part["graph"] for q in paper["questions"] for part in q["parts"])
