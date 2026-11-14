@@ -9,7 +9,7 @@ vi.mock("@/api/client", async (importOriginal) => {
   return { ...actual, api: { ...actual.api, get: (...a: unknown[]) => get(...a), post: (...a: unknown[]) => post(...a) } };
 });
 
-const { usePdfStore, POLL_MS, POLL_LIMIT } = await import("@/stores/pdf");
+const { usePdfStore, requestKey, POLL_MS, POLL_LIMIT, PREVIEW_MAX_AGE_MS } = await import("@/stores/pdf");
 
 const request = {
   papers: [],
@@ -102,5 +102,70 @@ describe("pdf store: مهمة خلفية واستطلاع ثم تنزيل", () =
     expect(post).toHaveBeenCalledTimes(1);
     await vi.advanceTimersByTimeAsync(POLL_MS);
     await first;
+  });
+});
+
+describe("pdf store: معاينة «صفحات PDF»", () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    get.mockReset();
+    post.mockReset();
+    vi.useFakeTimers();
+  });
+  afterEach(() => vi.useRealTimers());
+
+  it("تطلب ملف PDF وتستطلعه ثم تعطي رابط العرض داخل الصفحة، دون مسّ حالة التنزيل", async () => {
+    post.mockResolvedValue({ id: "p1", status: "queued", error: "", filename: "x.pdf" });
+    get.mockResolvedValue({ id: "p1", status: "done", error: "", filename: "x.pdf" });
+    const store = usePdfStore();
+    const run = store.preview(request);
+    expect(post).toHaveBeenCalledWith("/pdf", request);
+    expect(store.previewBusy).toBe(true);
+    expect(store.previewText).toContain("المعاينة");
+    await vi.advanceTimersByTimeAsync(POLL_MS);
+    await run;
+    expect(store.previewStatus).toBe("done");
+    expect(store.previewUrl).toBe("/api/v1/pdf/p1/file?inline=1");
+    expect(store.status).toBe("idle");
+    expect(store.busy).toBe(false);
+  });
+
+  it("المعاينة حديثة لطلبها وحده، وتقدُم بتغيّر الطلب أو بانتهاء مهلة ملفها", async () => {
+    post.mockResolvedValue({ id: "p2", status: "done", error: "", filename: "x.pdf" });
+    const store = usePdfStore();
+    expect(store.previewFresh(request)).toBe(false);
+    await store.preview(request);
+    expect(store.previewFresh(request)).toBe(true);
+    expect(store.previewFresh({ ...request, show_key: false })).toBe(false);
+    expect(store.previewKey).toBe(requestKey(request));
+    vi.advanceTimersByTime(PREVIEW_MAX_AGE_MS);
+    expect(store.previewFresh(request)).toBe(false);
+  });
+
+  it("خطأ المهمة ورفض الخادم يظهران في حالة المعاينة بلا رابط", async () => {
+    post.mockResolvedValue({ id: "p3", status: "error", error: "تعذر توليد الملف. حاول مرة أخرى.", filename: "" });
+    const store = usePdfStore();
+    await store.preview(request);
+    expect(store.previewStatus).toBe("error");
+    expect(store.previewError).toContain("تعذر توليد الملف");
+    expect(store.previewUrl).toBe("");
+
+    post.mockRejectedValue(new ApiError(429, "الخادم مشغول بتوليد ملفات أخرى. حاول بعد قليل."));
+    await store.preview(request);
+    expect(store.previewError).toContain("مشغول");
+    expect(store.error).toBe("");
+  });
+
+  it("لا تبدأ معاينة ثانية ما دامت الأولى جارية، والتنزيل لا يحجبها", async () => {
+    post.mockResolvedValue({ id: "p4", status: "queued", error: "", filename: "" });
+    get.mockResolvedValue({ id: "p4", status: "done", error: "", filename: "" });
+    const store = usePdfStore();
+    const download = store.download(request, vi.fn());
+    const first = store.preview(request);
+    await store.preview(request);
+    expect(post).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(POLL_MS);
+    await Promise.all([download, first]);
+    expect(store.previewStatus).toBe("done");
   });
 });

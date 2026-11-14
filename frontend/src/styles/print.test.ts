@@ -145,3 +145,15 @@ describe("خط الورقة", () => {
     }
   });
 });
+
+describe("تبويب صفحات PDF", () => {
+  const home = readFileSync(join(STYLES, "..", "pages", "HomePage.vue"), "utf-8");
+
+  it("الورقة خلف التبويب تغيب عن الشاشة وحدها، فتطبعها نافذة طباعة المتصفح", () => {
+    const [template, style] = home.split("<style");
+    expect(template).toMatch(/class="sheet-focus"\s+:class="\{ 'behind-pdf': view === 'pdf' \}"/);
+    expect(template).not.toMatch(/v-if="[^"]*view === 'sheet'/);
+    expect(style).toMatch(/@media screen \{\s*\.behind-pdf \{\s*display: none;\s*\}\s*\}/);
+    expect(style.replace(/@media screen \{[^}]*\}\s*\}/, "")).not.toContain(".behind-pdf");
+  });
+});
