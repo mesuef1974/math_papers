@@ -62,6 +62,11 @@ const TEXT: [string, string][] = [
   ["--color-sand", "--color-surface"],
   ["--color-sand", "--color-sand-soft"],
   ["--color-ink", "--color-sand-soft"],
+  // مخطط معاون المعلم: عقد بحالات (قائم/جارٍ/مخطط) ونص عليها
+  ["--color-ink", "--color-success-soft"],
+  ["--color-ink-soft", "--color-success-soft"],
+  ["--color-on-brand", "--color-success"],
+  ["--color-on-brand", "--color-ink-soft"],
 ];
 const NON_TEXT: [string, string][] = [
   ["--color-line-strong", "--color-field"],
