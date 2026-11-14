@@ -12,6 +12,7 @@ export interface PdfJob {
   status: Exclude<PdfStatus, "idle">;
   error: string;
   filename: string;
+  pages?: number; // صفحات PDF الجاهز (0 أو غائب: غير معروف)
 }
 
 export interface PdfRequest {
@@ -98,6 +99,7 @@ export const usePdfStore = defineStore("pdf", {
     previewStatus: "idle" as PdfStatus,
     previewError: "",
     previewUrl: "",
+    previewPages: 0,
     previewKey: "",
     previewAt: 0,
   }),
@@ -139,6 +141,7 @@ export const usePdfStore = defineStore("pdf", {
       if (this.previewBusy) return;
       this.previewError = "";
       this.previewUrl = "";
+      this.previewPages = 0;
       this.previewKey = requestKey(request);
       this.previewStatus = "queued";
       try {
@@ -151,6 +154,7 @@ export const usePdfStore = defineStore("pdf", {
           return;
         }
         this.previewUrl = inlineUrl(job.id);
+        this.previewPages = job.pages ?? 0;
         this.previewAt = Date.now();
         this.previewStatus = "done";
       } catch (error) {
