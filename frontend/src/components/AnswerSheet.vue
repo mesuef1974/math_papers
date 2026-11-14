@@ -56,14 +56,6 @@ const title = computed(() => `${props.answers ? "مفتاح ورقة الإجا�
 </template>
 
 <style scoped>
-.sheet {
-  background: var(--color-sheet);
-  border: var(--border);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-md);
-  padding: var(--space-8);
-  margin-block-start: var(--space-6);
-}
 .student {
   display: flex;
   flex-wrap: wrap;
@@ -114,21 +106,8 @@ const title = computed(() => `${props.answers ? "مفتاح ورقة الإجا�
   background: var(--color-ink);
   color: var(--color-on-brand);
 }
-.sheet-foot {
-  display: flex;
-  justify-content: space-between;
-  color: var(--color-ink-soft);
-  font-size: var(--text-xs);
-  margin-block-start: var(--space-4);
-  padding-block-start: var(--space-2);
-  border-block-start: 1px solid var(--color-line);
-}
 @media print {
   .sheet {
-    border: 0;
-    box-shadow: none;
-    padding: 0;
-    margin: 0;
     break-before: page;
   }
   .filled {

@@ -12,7 +12,7 @@
   --color-paper: #ffffff;
   --color-surface: #f1f5fc;
   --color-surface-sunken: #e3e8f0;
-  --color-sheet: #ffffff; /* الورقة المعروضة على الشاشة: بيضاء نهارًا */
+  --color-sheet: #ffffff; /* الورقة: بيضاء دائمًا (يثبّتها نطاق .sheet في print.css) */
   --color-field: #ffffff;
   --color-ink: #14171c;
   --color-ink-soft: #5f6670;
@@ -61,6 +61,13 @@
   --print-title: 15pt;
   --print-small: 11pt;
   --print-footer: ""; /* تذييل الصفحة الجاري؛ تضبطه الكراسة عند عرضها */
+  /* صفحة الورق A4 بهوامش @page في print.css (يفرض تطابقهما print.test.ts)؛ الورقة على الشاشة بالمقاس نفسه */
+  --page-width: 210mm;
+  --page-height: 297mm;
+  --page-margin-block-start: 14mm;
+  --page-margin-inline: 14mm;
+  --page-margin-block-end: 17mm;
+  --paper-zoom: 1; /* تصغير الورقة كلها حين تضيق حاويتها؛ يضبطه composables/usePaperFit.ts */
 
   /* سلم الخط من الهوية (نسبة 1.25)، والصغير لا ينزل عن 13px في الواجهة */
   --text-xs: 0.8125rem;
@@ -111,7 +118,7 @@
   color-scheme: light;
 }
 
-/* الوضع الليلي على الشاشة فقط؛ الطباعة دائمًا بالأبيض والأسود من print.css */
+/* الوضع الليلي لواجهة الشاشة فقط؛ الورقة (معروضةً أو مطبوعةً) بألوان الهوية النهارية من نطاق .sheet في print.css */
 @media screen and (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --color-paper: #14191f;

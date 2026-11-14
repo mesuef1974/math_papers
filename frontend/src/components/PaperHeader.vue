@@ -61,12 +61,12 @@ const DOTS = "....................";
   justify-items: end;
   max-inline-size: 16rem; /* اسم مدرسة طويل جدًا يلتف هنا بدل أن يزاحم العنوان */
   text-align: end;
-  font-size: var(--text-sm);
+  font-size: var(--print-small);
   line-height: 1.5;
 }
 .title {
   text-align: center;
-  font-size: var(--text-xl);
+  font-size: var(--print-title);
   margin: 0;
   color: var(--color-brand-strong);
 }
@@ -78,7 +78,7 @@ const DOTS = "....................";
   flex-wrap: wrap;
   gap: var(--space-2) var(--space-6);
   margin: 0;
-  font-size: var(--text-sm);
+  font-size: var(--print-small);
 }
 .meta div {
   display: flex;
@@ -110,35 +110,12 @@ const DOTS = "....................";
   border: 1px solid var(--color-line);
   border-inline-start: 4px solid var(--color-accent);
   border-radius: var(--radius-sm);
-  font-size: var(--text-sm);
+  font-size: var(--print-small);
 }
 .compact {
   border-block-end-width: 2px;
 }
 .compact .title {
   font-size: var(--text-lg);
-}
-@media (max-width: 560px) {
-  .top {
-    grid-template-columns: 1fr;
-    text-align: center;
-  }
-  .logo,
-  .org {
-    justify-self: center;
-    justify-items: center;
-    max-inline-size: none;
-    text-align: center;
-  }
-}
-@media print {
-  .title {
-    font-size: var(--print-title);
-  }
-  .meta,
-  .org,
-  .instructions {
-    font-size: var(--print-small);
-  }
 }
 </style>

@@ -106,13 +106,6 @@ const total = computed(() => rows.value.reduce((sum, row) => sum + row.marks, 0)
   margin: var(--space-6) 0 0;
   font-size: var(--text-lg);
 }
-@media (max-width: 560px) {
-  .score th,
-  .score td {
-    padding: var(--space-2) var(--space-1);
-    font-size: var(--text-sm);
-  }
-}
 @media print {
   .score-page {
     break-before: page;

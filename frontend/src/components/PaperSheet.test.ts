@@ -222,11 +222,16 @@ describe("PaperSheet", () => {
     expect(buttons).toHaveLength(3);
     expect(buttons[0].classes()).toContain("btn-small");
     expect(wrapper.find(".part-tools").classes()).toContain("no-print");
+    // الزر في هامش الصفحة بكلمة قصيرة، واسمه الكامل للقارئ الآلي وتلميحه للفأرة
+    expect(buttons.map((b) => b.text())).toEqual(["بدّل", "بدّل", "بدّل"]);
+    expect(buttons[2].attributes("aria-label")).toBe("استبدال السؤال 3");
+    expect(buttons[2].attributes("title")).toBe("استبدال بمسألة أخرى");
     await buttons[2].trigger("click");
     expect(wrapper.emitted("replace")).toEqual([[3, ""]]);
     expect(wrapper.text()).toContain("رقم النموذج 7 (معدّل)");
     await wrapper.setProps({ replacing: "q2" });
-    expect(wrapper.findAll(".part-tools button")[1].text()).toBe("جارٍ الاستبدال");
+    expect(wrapper.findAll(".part-tools button")[1].text()).toBe("جارٍ");
+    expect(wrapper.findAll(".part-tools button")[1].attributes("aria-busy")).toBe("true");
     expect(wrapper.findAll(".part-tools button")[0].attributes("disabled")).toBeDefined();
   });
 
