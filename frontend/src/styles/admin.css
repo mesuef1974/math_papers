@@ -1,5 +1,5 @@
 /*
-  هوية «أوراق» v2 على لوحة إدارة Django. تُحمَّل بعد أنماط الإدارة فتعيد ربط متغيراتها بمتغيرات المنصة،
+  هوية «أوراق» v8 على لوحة إدارة Django (الترويسة بسطح الورقة وقفل الهوية الحالي كما في ترويسة التطبيق، لا شريطًا عنابيًا). تُحمَّل بعد أنماط الإدارة فتعيد ربط متغيراتها بمتغيرات المنصة،
   فتتبع اللوحة الألوان والخطوط والسمة من tokens.css نفسه ولا يتكرر لون هنا.
   السمة: لا يُحمَّل theme.js ولا dark_mode.css من Django (قالب base_site.html)؛ تفضيل المنصة
   (math_papers_theme) هو المرجع، ومبدّل الترويسة يغيّره (public/admin-theme.js)، فتتطابق الإدارة مع المنصة.
@@ -21,10 +21,10 @@ html[data-theme="auto"] {
   --body-quiet-color: var(--color-ink-soft);
   --body-loud-color: var(--color-ink);
 
-  --header-color: var(--color-on-brand);
-  --header-branding-color: var(--color-on-brand);
-  --header-bg: var(--color-brand);
-  --header-link-color: var(--color-on-brand);
+  --header-color: var(--color-ink);
+  --header-branding-color: var(--color-ink);
+  --header-bg: var(--color-surface);
+  --header-link-color: var(--color-brand);
 
   --breadcrumbs-fg: var(--color-ink-soft);
   --breadcrumbs-link-fg: var(--color-brand);
@@ -62,17 +62,14 @@ html[data-theme="auto"] {
   --font-family-monospace: var(--font-mono);
 }
 
+/* ورق مسطّح كما في screens/*.html من الدليل: بلا شبكة الدفتر القديمة */
 body {
   background-color: var(--color-paper);
-  background-image:
-    linear-gradient(var(--color-grid) 1px, transparent 1px),
-    linear-gradient(90deg, var(--color-grid) 1px, transparent 1px);
-  background-size: var(--grid-size) var(--grid-size);
   font-family: var(--font-sans);
 }
 
 #header {
-  box-shadow: var(--shadow-sm);
+  border-block-end: var(--border);
 }
 
 #site-name a:link,
@@ -86,7 +83,6 @@ body {
 .admin-lockup {
   flex: none;
   inline-size: auto;
-  color: var(--color-on-brand);
 }
 
 /* مبدّل السمة في ترويسة الإدارة */
@@ -95,13 +91,14 @@ body {
   gap: 2px;
   padding: 2px;
   margin-inline-end: var(--space-3);
-  background: color-mix(in srgb, var(--color-on-brand) 14%, transparent);
+  background: var(--color-surface-sunken);
+  border: var(--border);
   border-radius: var(--radius-sm);
 }
 .admin-theme button {
   font: inherit;
   font-size: var(--text-xs);
-  color: var(--color-on-brand);
+  color: var(--color-ink);
   background: none;
   border: 0;
   border-radius: var(--radius-sm);
@@ -109,8 +106,8 @@ body {
   cursor: pointer;
 }
 .admin-theme button[aria-pressed="true"] {
-  background: var(--color-on-brand);
-  color: var(--color-brand);
+  background: var(--color-brand);
+  color: var(--color-on-brand);
   font-weight: var(--weight-bold);
 }
 
@@ -186,19 +183,13 @@ caption {
   letter-spacing: 0;
 }
 
-@media print {
-  body {
-    background-image: none;
-  }
-}
-
 #header h1,
 #header h1 a:link,
 #header h1 a:visited,
 #header #branding h1,
 #header #site-name a:link,
 #header #site-name a:visited {
-  color: var(--color-on-brand);
+  color: var(--color-ink);
 }
 
 /* تخطيط الصفوف المتناوبة: --darkened-bg الليلي يُنزل الروابط العنابية إلى 3.84:1،
