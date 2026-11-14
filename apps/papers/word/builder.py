@@ -34,6 +34,8 @@ MAX_GRAPH_HEIGHT_CM = 6.2
 BRAND_LINE = "أوراق · مولّد أوراق الرياضيات"
 BUNDLE_COVER_TITLE = "حزمة أوراق العمل: كل دروس الفصل الأول"
 LOGO = (Path(__file__).parent / "assets" / "lockup.png").read_bytes()
+# شريط النمط (patterns/motif-soft.svg) بعرض المحتوى؛ تحويل نقطي بدقة 300dpi وخلفية شفافة، يُحدَّث مع كل إصدار من سِمة
+PATTERN_BAND = (Path(__file__).parent / "assets" / "pattern_band.png").read_bytes()
 HEADER_CM = [3.0, 10.6, 4.2]  # الشعار، العنوان، المدرسة والمعلم
 SIDE_GRAPH_CM = 5.4
 LINE_CM = 0.8
@@ -290,6 +292,9 @@ def accent_bar(doc, width_cm: float = 2.6) -> None:
 
 def cover_page(doc, header: dict, paper: dict) -> None:
     """غلاف كراسة الاختبار ثم صفحة التعليمات الثنائية على نسق كراسات الوزارة."""
+    x.add_picture(
+        x.new_paragraph(doc, rtl=False, align="center", after=10, line=None), PATTERN_BAND, CONTENT_CM
+    )
     x.add_picture(x.new_paragraph(doc, rtl=False, align="center", after=14, line=None), LOGO, 4.4)
     for text, size, bold, gap in (
         (header["school"], 15, True, 2),

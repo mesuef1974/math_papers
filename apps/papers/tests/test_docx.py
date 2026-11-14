@@ -2,6 +2,7 @@
 
 import io
 import json
+import re
 import struct
 import zipfile
 
@@ -16,6 +17,7 @@ from apps.papers.word.builder import (
     BRAND_LINE,
     BUNDLE_COVER_TITLE,
     LOGO,
+    PATTERN_BAND,
     build_docx,
     marks_label,
     split_math,
@@ -275,6 +277,23 @@ def test_every_document_carries_platform_logo_and_name(client, kind):
     footers = [data.decode("utf-8") for name, data in files.items() if name.startswith("word/footer")]
     assert footers and all(BRAND_LINE in footer for footer in footers)
     assert all(" PAGE " in footer and " NUMPAGES " in footer for footer in footers)
+
+
+def test_exam_cover_opens_with_pattern_band_before_the_logo(client):
+    """النمط على الغلاف فقط (الدليل: الأغلفة)، وفوق الشعار لا بجواره؛ وورقة العمل بلا غلاف فلا نمط فيها."""
+    exam = parts_of(build_docx(sample_payload(client, "exam")))
+    media = {name: data for name, data in exam.items() if name.startswith("word/media/")}
+    assert PATTERN_BAND in media.values() and LOGO in media.values()
+    document = exam["word/document.xml"].decode("utf-8")
+    ids = {data: name.rsplit("/", 1)[1] for name, data in media.items()}
+    rels = exam["word/_rels/document.xml.rels"].decode("utf-8")
+    order = re.findall(r'r:embed="(rId\d+)"', document)
+    target = dict(re.findall(r'Id="(rId\d+)"[^>]*Target="media/([^"]+)"', rels))
+    target.update({rid: t for t, rid in re.findall(r'Target="media/([^"]+)"[^>]*Id="(rId\d+)"', rels)})
+    first_two = [target.get(rid) for rid in order[:2]]
+    assert first_two == [ids[PATTERN_BAND], ids[LOGO]]
+    sheet = parts_of(build_docx(sample_payload(client, "worksheet")))
+    assert PATTERN_BAND not in [d for n, d in sheet.items() if n.startswith("word/media/")]
 
 
 def test_worksheet_layout_badge_ruled_lines_and_graph_beside_them(client):
