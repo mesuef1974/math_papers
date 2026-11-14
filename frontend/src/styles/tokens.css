@@ -95,10 +95,12 @@
   --space-12: 48px;
   --space-16: 64px;
 
-  /* الزوايا حادة بنصف قطر الهوية 2px، وللبطاقات ضعفه */
+  /* نصف قطر الهوية 8px (--r في screens/*.html من الدليل): للأزرار والحقول، وضعفه للبطاقات، و3× للبطاقة الكبيرة في الجوال، و4× للوحة الرمز */
   --radius-sm: 8px;
   --radius-md: 16px;
   --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-tile: 32px;
   --radius-pill: 999px;
 
   --shadow-sm: 0 1px 2px rgb(42 29 26 / 6%);
@@ -113,6 +115,7 @@
   --container: 1000px;
   --container-narrow: 440px;
   --topbar-height: 64px;
+  --sidebar-width: 280px;
   --grid-size: 32px;
 
   color-scheme: light;
