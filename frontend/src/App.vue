@@ -44,6 +44,7 @@ async function logout() {
       <nav class="nav" aria-label="التنقل الرئيسي">
         <RouterLink class="nav-link" to="/">الرئيسية</RouterLink>
         <RouterLink v-if="auth.canGenerate" class="nav-link" to="/saved">أوراقي</RouterLink>
+        <RouterLink v-if="auth.canGenerate" class="nav-link" to="/copilot">المعاون</RouterLink>
         <RouterLink class="nav-link" to="/about">عن المنصة</RouterLink>
         <a v-if="auth.user?.admin_url" class="nav-link" :href="auth.user.admin_url">الإدارة</a>
         <button v-if="auth.user" type="button" class="nav-link nav-user" :title="auth.user.username" @click="logout">

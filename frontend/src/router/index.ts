@@ -8,6 +8,18 @@ export const router = createRouter({
     { path: "/", name: "home", component: () => import("@/pages/HomePage.vue"), meta: { title: "توليد الأوراق" } },
     { path: "/saved", name: "saved", component: () => import("@/pages/SavedPage.vue"), meta: { title: "أوراقي" } },
     {
+      path: "/copilot",
+      name: "copilot-automation",
+      component: () => import("@/pages/CopilotAutomationPage.vue"),
+      meta: { title: "أتمتة المعاون" },
+    },
+    {
+      path: "/copilot/flow",
+      name: "copilot-flow",
+      component: () => import("@/pages/CopilotFlowPage.vue"),
+      meta: { title: "مخطط التدفق الحي" },
+    },
+    {
       path: "/about",
       name: "about",
       component: () => import("@/pages/AboutPage.vue"),
