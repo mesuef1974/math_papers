@@ -2,6 +2,7 @@
 
 import json
 import re
+import time
 
 import pytest
 from django.core.cache import cache
@@ -34,7 +35,7 @@ def fake_browser(monkeypatch):
         return FAKE_PDF
 
     monkeypatch.setattr(pdf, "available", lambda: True)
-    monkeypatch.setattr(pdf, "_submit", pdf._run)
+    monkeypatch.setattr(pdf, "_submit", pdf._render_job)
     monkeypatch.setattr(pdf, "render_pdf", render)
     return seen
 
@@ -98,6 +99,28 @@ def test_full_queue_rejects_and_leaves_nothing_behind(client, monkeypatch):
     assert not [key for key in getattr(cache, "_cache", {}) if "papers:pdf" in key]
 
 
+def test_export_job_left_running_by_its_test(client, monkeypatch):
+    """يترك مهمة بطيئة في الخيط الخلفي بلا انتظار، كما يفعل كل اختبار يكتفي برد الإنشاء.
+    الاختبار الذي يليه يتحقق أنها لم تعبر إليه."""
+    from apps.papers.word import builder
+
+    def slow(body):
+        time.sleep(0.4)
+        return b"PK-slow"
+
+    monkeypatch.setattr(builder, "build_docx", slow)
+    res = client.post("/api/v1/docx", json.dumps(payload(client)), content_type="application/json")
+    assert res.status_code == 202 and res.json()["status"] in ("queued", "running")
+
+
+def test_no_export_job_crosses_into_the_next_test(client):
+    """الكاش مُسح قبل هذا الاختبار. مهمة باقية من الاختبار السابق كانت ستكتب حالتها وملفها بعد المسح،
+    وهو ما أفشل test_full_queue_rejects_and_leaves_nothing_behind عشوائيًا في CI (2026-11-14)."""
+    pdf._executor.submit(lambda: None).result(timeout=30)  # ينتظر ما قد يكون باقيًا في الخيط
+    assert pdf._queued == 0
+    assert not [key for key in getattr(cache, "_cache", {}) if "papers:pdf" in key]
+
+
 def test_stale_and_failed_jobs_report_error(client, monkeypatch):
     monkeypatch.setattr(pdf, "available", lambda: True)
     monkeypatch.setattr(pdf, "_submit", lambda job_id: None)
@@ -110,7 +133,7 @@ def test_stale_and_failed_jobs_report_error(client, monkeypatch):
     assert client.get(f"/api/v1/pdf/{job['id']}/file").status_code == 404
 
     monkeypatch.setattr(pdf.time, "time", real_time)
-    monkeypatch.setattr(pdf, "_submit", pdf._run)
+    monkeypatch.setattr(pdf, "_submit", pdf._render_job)
 
     def boom(url):
         raise RuntimeError("chromium crashed")
