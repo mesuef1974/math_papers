@@ -1,0 +1,40 @@
+name: نافذة النشر
+
+# حالة الإيداع «نافذة النشر» على رأس كل طلب مفتوح إلى main: حمراء وقت الدوام وخضراء خارجه، وهي فحص مطلوب
+# على main. طابور الدمج غير متاح لمستودع حساب شخصي، فهذه الحالة هي ما يفرض النافذة على الدمج اليدوي والتلقائي.
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, labeled, unlabeled]
+    branches: [main]
+  schedule:
+    # UTC. الدوام 07-14 بإزاحة +3 أيام الأحد إلى الخميس. الإغلاق من 06:30 (GUARD_MINUTES)، بثلاث محاولات
+    # قبل 07:00 لأن جدولة GitHub قد تتأخر دقائق. والفتح بعد 14:00؛ تأخره يؤخر الدمج ولا يسمح بنشر وقت الدوام.
+    - cron: "32,44,56 3 * * 0-4"
+    - cron: "3,18,48 11 * * 0-4"
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-window
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  pull-requests: read
+  statuses: write
+
+jobs:
+  status:
+    name: تحديث حالة نافذة النشر
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # السكربت من الفرع الرئيس لا من رأس الطلب، وإلا عدّله طلب ليتجاوزه.
+          ref: ${{ github.event.repository.default_branch || 'main' }}
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          BASE: ${{ github.event.repository.default_branch || 'main' }}
+        run: python3 scripts/deploy_window.py status
