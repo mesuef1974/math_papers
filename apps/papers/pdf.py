@@ -82,6 +82,15 @@ def render_pdf(url: str) -> bytes:
             browser.close()
 
 
+_PAGE_OBJECT = re.compile(rb"/Type\s*/Page(?![A-Za-z])")
+
+
+def count_pages(data: bytes) -> int:
+    """عدد صفحات ملف PDF من Chromium: كائنات الصفحات (‎/Type /Page‎) لا عقدة الشجرة (‎/Pages‎).
+    تقدير للتقليب في المعاينة فقط؛ الصفر يعني «غير معروف» فيُعرض العارض بلا أزرار."""
+    return len(_PAGE_OBJECT.findall(data))
+
+
 def safe_filename(title: str, extension: str = "pdf") -> str:
     cleaned = re.sub(r"\s+", " ", re.sub(r'[\\/:*?"<>|\x00-\x1f]+', " ", title)).strip() or "ورقة"
     return f"{cleaned[:120]}.{extension}"
@@ -131,8 +140,9 @@ def _render_job(job_id: str) -> None:
         log.exception("pdf render failed for job %s", job_id)
         cache.set(_key(job_id), {**meta, "status": "error", "error": FAILED}, TTL)
         return
+    pages = count_pages(data) if meta.get("format") != "docx" else 0
     cache.set(_key(job_id, "file"), data, TTL)
-    cache.set(_key(job_id), {**meta, "status": "done", "size": len(data)}, TTL)
+    cache.set(_key(job_id), {**meta, "status": "done", "size": len(data), "pages": pages}, TTL)
 
 
 def create_job(owner_id: int, payload: dict[str, Any], title: str, fmt: str = "pdf") -> dict[str, Any]:

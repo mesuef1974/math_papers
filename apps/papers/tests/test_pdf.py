@@ -212,3 +212,27 @@ def test_safe_filename():
     assert pdf.safe_filename('اختبار: "الفصل" الأول/2026?') == "اختبار الفصل الأول 2026.pdf"
     assert pdf.safe_filename("   ") == "ورقة.pdf"
     assert re.fullmatch(r".{1,120}\.pdf", pdf.safe_filename("x" * 300))
+
+
+def _pdf_with_pages(count: int) -> bytes:
+    """ملف يشبه ما يكتبه Chromium: عقدة شجرة ‎/Pages‎ واحدة وكائن ‎/Type /Page‎ لكل صفحة."""
+    kids = b"".join(b"%d 0 obj\n<< /Type /Page /Parent 1 0 R >>\nendobj\n" % (n + 3) for n in range(count))
+    return b"%%PDF-1.4\n1 0 obj\n<< /Type /Pages /Count %d >>\nendobj\n" % count + kids + b"%EOF"
+
+
+def test_count_pages_counts_page_objects_not_the_tree_node():
+    assert pdf.count_pages(_pdf_with_pages(14)) == 14
+    assert pdf.count_pages(_pdf_with_pages(1)) == 1
+    assert pdf.count_pages(FAKE_PDF) == 0
+
+
+def test_job_status_reports_pages_for_preview_flipping(client, fake_browser, monkeypatch):
+    monkeypatch.setattr(pdf, "render_pdf", lambda url: _pdf_with_pages(3))
+    job = create(client, payload(client)).json()
+    assert client.get(f"/api/v1/pdf/{job['id']}").json()["pages"] == 3
+
+
+def test_word_job_has_no_page_count(client, monkeypatch):
+    monkeypatch.setattr(pdf, "_submit", pdf._render_job)
+    job = client.post("/api/v1/docx", json.dumps(payload(client)), content_type="application/json").json()
+    assert client.get(f"/api/v1/pdf/{job['id']}").json()["pages"] == 0

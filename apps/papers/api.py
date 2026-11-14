@@ -462,6 +462,7 @@ class PdfJobOut(Schema):
     status: Literal["queued", "running", "done", "error"]
     error: str = ""
     filename: str = ""
+    pages: int = 0  # صفحات PDF الجاهز لتقليب المعاينة؛ 0 غير معروف أو ملف Word
 
 
 JobId = Annotated[str, Field(pattern=r"^[0-9a-f]{32}$")]

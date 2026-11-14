@@ -110,3 +110,105 @@ describe("PdfPreview: صفحات ملف الخادم الحقيقي", () => {
     expect(wrapper.find("iframe").attributes("src")).toContain("j2");
   });
 });
+
+describe("PdfPreview: تقليب الصفحات", () => {
+  const withPages = (id: string, pages: number) => ({ ...done(id), pages });
+  const src = (wrapper: ReturnType<typeof mount>) => wrapper.find("iframe").attributes("src") ?? "";
+  const buttons = (wrapper: ReturnType<typeof mount>) => wrapper.findAll(".pager button");
+
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    get.mockReset();
+    post.mockReset();
+    viewer(true);
+  });
+
+  async function opened(pages = 3) {
+    post.mockResolvedValue(withPages("j1", pages));
+    const wrapper = mount(PdfPreview, { props: { request } });
+    await flushPromises();
+    return wrapper;
+  }
+
+  it("يعرض الصفحة الأولى وعدد الصفحات من الخادم وأزرار السابقة والتالية", async () => {
+    const wrapper = await opened(3);
+    expect(wrapper.find(".pager").exists()).toBe(true);
+    expect(wrapper.find(".pager").text()).toContain("3");
+    expect(src(wrapper)).toBe("/api/v1/pdf/j1/file?inline=1#page=1&view=Fit&toolbar=0&navpanes=0");
+    const [prev, next] = buttons(wrapper);
+    expect(prev.attributes("disabled")).toBeDefined();
+    expect(next.attributes("disabled")).toBeUndefined();
+  });
+
+  it("التالية والسابقة تبدّلان جزء الرابط وحده ويتعطل الزر عند الطرفين", async () => {
+    const wrapper = await opened(2);
+    const [prev, next] = buttons(wrapper);
+    await next.trigger("click");
+    expect(src(wrapper)).toContain("#page=2&");
+    expect(src(wrapper).startsWith("/api/v1/pdf/j1/file?inline=1#")).toBe(true);
+    expect(next.attributes("disabled")).toBeDefined();
+    await prev.trigger("click");
+    expect(src(wrapper)).toContain("#page=1&");
+    expect(post).toHaveBeenCalledTimes(1);
+  });
+
+  it("رقم الصفحة المكتوب يُقيَّد بين الأولى والأخيرة", async () => {
+    const wrapper = await opened(5);
+    const input = wrapper.find(".pager input");
+    await input.setValue("4");
+    await input.trigger("change");
+    expect(src(wrapper)).toContain("#page=4&");
+    await input.setValue("99");
+    await input.trigger("change");
+    expect(src(wrapper)).toContain("#page=5&");
+    expect((input.element as HTMLInputElement).value).toBe("5");
+    await input.setValue("0");
+    await input.trigger("change");
+    expect(src(wrapper)).toContain("#page=1&");
+  });
+
+  it("لوحة المفاتيح: الأيسر تالية والأيمن سابقة وHome وEnd", async () => {
+    const wrapper = await opened(4);
+    const section = wrapper.find("section");
+    await section.trigger("keydown", { key: "ArrowLeft" });
+    expect(src(wrapper)).toContain("#page=2&");
+    await section.trigger("keydown", { key: "PageDown" });
+    expect(src(wrapper)).toContain("#page=3&");
+    await section.trigger("keydown", { key: "ArrowRight" });
+    expect(src(wrapper)).toContain("#page=2&");
+    await section.trigger("keydown", { key: "End" });
+    expect(src(wrapper)).toContain("#page=4&");
+    await section.trigger("keydown", { key: "Home" });
+    expect(src(wrapper)).toContain("#page=1&");
+    await section.trigger("keydown", { key: "a" });
+    expect(src(wrapper)).toContain("#page=1&");
+  });
+
+  it("تحديث المعاينة يعيد التقليب إلى الصفحة الأولى بعدد الصفحات الجديد", async () => {
+    post.mockResolvedValueOnce(withPages("j1", 3)).mockResolvedValueOnce(withPages("j2", 6));
+    const wrapper = mount(PdfPreview, { props: { request } });
+    await flushPromises();
+    await buttons(wrapper)[1].trigger("click");
+    expect(src(wrapper)).toContain("#page=2&");
+    await wrapper.setProps({ request: { ...request, show_key: false } });
+    await wrapper.find(".notice button").trigger("click");
+    await flushPromises();
+    expect(src(wrapper)).toContain("j2/file?inline=1#page=1&");
+    expect(wrapper.find(".pager").text()).toContain("6");
+  });
+
+  it("بلا عدد صفحات أو بلا عارض داخلي: لا أزرار تقليب", async () => {
+    post.mockResolvedValue({ ...done("j1"), pages: 0 });
+    const wrapper = mount(PdfPreview, { props: { request } });
+    await flushPromises();
+    expect(wrapper.find(".pager").exists()).toBe(false);
+    expect(src(wrapper)).toBe("/api/v1/pdf/j1/file?inline=1");
+    wrapper.unmount();
+    setActivePinia(createPinia());
+    viewer(false);
+    post.mockResolvedValue(withPages("j3", 4));
+    const other = mount(PdfPreview, { props: { request } });
+    await flushPromises();
+    expect(other.find(".pager").exists()).toBe(false);
+  });
+});
