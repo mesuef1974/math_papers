@@ -5,6 +5,7 @@ import AppIcon from "@/components/AppIcon.vue";
 import PaperBundle from "@/components/PaperBundle.vue";
 import PaperSet from "@/components/PaperSet.vue";
 import PrintSettings from "@/components/PrintSettings.vue";
+import { usePaperFit } from "@/composables/usePaperFit";
 import { useAuthStore } from "@/stores/auth";
 import { LEVEL_NAMES, PURPOSE_LEVEL, PURPOSE_NAMES, usePapersStore, type Level, type Purpose } from "@/stores/papers";
 import { usePdfStore } from "@/stores/pdf";
@@ -30,6 +31,7 @@ const level = ref<Level | "">("");
 const purpose = ref<Purpose>("");
 const twin = ref(false);
 const sheetWrap = ref<HTMLElement | null>(null);
+usePaperFit(sheetWrap); // الورقة بعرض A4، وتُصغَّر كلها حين تضيق الشاشة
 const forms = computed(() => (store.paper ? [store.paper, ...(store.twin ? [store.twin] : [])] : []));
 const hasMcq = computed(() => store.paper?.questions.some((q) => q.kind === "mcq") ?? false);
 

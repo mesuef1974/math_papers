@@ -130,15 +130,18 @@ const rules = computed(() => [
   padding-block: var(--space-10) var(--space-8);
   border-block-end: 3px solid var(--color-brand);
   margin-block-end: var(--space-6);
+  /* الغلاف يملأ معظم صفحته ومحتواه في وسطها؛ على الورق يحسبها المتصفح من ارتفاع الصفحة نفسها */
+  min-block-size: calc(0.7 * (var(--page-height) - var(--page-margin-block-start) - var(--page-margin-block-end)));
+  align-content: center;
 }
 .org {
   display: grid;
   gap: var(--space-1);
-  font-size: var(--text-md);
+  font-size: var(--print-small);
 }
 .exam-title {
   margin: var(--space-6) 0 0;
-  font-size: var(--text-2xl);
+  font-size: 26pt;
   color: var(--color-brand-strong);
 }
 /* شريط ذهبي قصير تحت عنوان الغلاف: تزيين الهوية */
@@ -152,7 +155,7 @@ const rules = computed(() => [
 }
 .line {
   margin: 0;
-  font-size: var(--text-lg);
+  font-size: var(--print-title);
   font-weight: var(--weight-medium);
 }
 /* بيانات الاختبار صندوق واحد بخانات: التسمية بالعنابي فوق القيمة */
@@ -163,6 +166,7 @@ const rules = computed(() => [
   margin: var(--space-4) 0 0;
   border: 1px solid var(--color-brand);
   background: var(--color-brand-soft);
+  font-size: var(--print-small);
 }
 .facts div {
   display: grid;
@@ -184,7 +188,7 @@ const rules = computed(() => [
 }
 .student {
   margin: 0;
-  font-size: var(--text-lg);
+  font-size: var(--print-title);
 }
 .notes {
   justify-self: start;
@@ -218,7 +222,7 @@ const rules = computed(() => [
 .rules {
   margin: 0;
   padding-inline-start: var(--space-5);
-  font-size: var(--text-sm);
+  font-size: var(--print-small);
   line-height: 1.7;
 }
 .marking {
@@ -229,7 +233,7 @@ const rules = computed(() => [
   border: 1px solid var(--color-line);
   border-inline-start: 4px solid var(--color-accent);
   border-radius: var(--radius-sm);
-  font-size: var(--text-sm);
+  font-size: var(--print-small);
 }
 .sample {
   display: flex;
@@ -254,12 +258,7 @@ const rules = computed(() => [
 }
 .teacher-note {
   margin: var(--space-3) 0 0;
-  font-size: var(--text-sm);
-}
-@media (max-width: 560px) {
-  .columns {
-    grid-template-columns: minmax(0, 1fr);
-  }
+  font-size: var(--print-small);
 }
 @media print {
   .cover,
@@ -270,21 +269,6 @@ const rules = computed(() => [
   }
   .cover {
     min-block-size: 70vh;
-    align-content: center;
-  }
-  .exam-title {
-    font-size: 26pt;
-  }
-  .line,
-  .student {
-    font-size: var(--print-title);
-  }
-  .rules,
-  .marking,
-  .teacher-note,
-  .facts,
-  .org {
-    font-size: var(--print-small);
   }
 }
 </style>

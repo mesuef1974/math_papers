@@ -81,14 +81,6 @@ function levelsLabel(levels: BundleEntry["levels"]): string {
 </template>
 
 <style scoped>
-.sheet {
-  background: var(--color-sheet);
-  border: var(--border);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-md);
-  padding: var(--space-8);
-  margin-block-start: var(--space-6);
-}
 .summary {
   color: var(--color-ink-soft);
 }
@@ -133,26 +125,7 @@ function levelsLabel(levels: BundleEntry["levels"]): string {
   font-size: var(--text-xs);
   margin-block-start: var(--space-6);
 }
-/* الجوال: حشو الورقة كما في PaperSheet، وفهرس بخانات أضيق حتى يتسع في العرض */
-@media (max-width: 560px) {
-  .sheet {
-    padding: var(--space-4);
-  }
-  .index {
-    font-size: var(--text-xs);
-  }
-  .index th,
-  .index td {
-    padding: var(--space-1) var(--space-2);
-  }
-}
 @media print {
-  .sheet {
-    border: 0;
-    box-shadow: none;
-    padding: 0;
-    margin: 0;
-  }
   .bundle-sheet {
     break-before: page;
   }

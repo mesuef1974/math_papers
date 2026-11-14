@@ -110,18 +110,14 @@ const title = computed(() => `تمثيل بياني للدالة ${props.graph.l
   gap: 2px;
   max-inline-size: 100%;
 }
+/* رسم المسألة بارتفاع أقصى 62mm بالنسبة نفسها، فيتسع سؤالان بيانيان في الصفحة ولا يُقصّ شيء */
 svg {
   max-inline-size: 100%;
+  max-block-size: 62mm;
+  inline-size: auto;
   block-size: auto;
   color: var(--color-ink);
   font-family: var(--font-math);
-}
-/* على الورق رسم المسألة بارتفاع أقصى 62mm بالنسبة نفسها، فيتسع سؤالان بيانيان في الصفحة ولا يُقصّ شيء */
-@media print {
-  svg {
-    max-block-size: 62mm;
-    inline-size: auto;
-  }
 }
 .grid line {
   stroke: var(--color-line-strong);
