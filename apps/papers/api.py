@@ -509,11 +509,24 @@ def pdf_status(request: HttpRequest, job_id: JobId):
     return meta
 
 
+# ملف PDF المعروض داخل تبويب «صفحات PDF»: يُضمَّن من الأصل نفسه وحده. الوسيطان (XFrameOptions وSecurityHeaders)
+# لا يستبدلان ترويسة وضعها العرض، فكل ما عدا هذا الرد يبقى DENY و‎frame-ancestors 'none'‎.
+INLINE_PDF_CSP = "frame-ancestors 'self'"
+
+
 @router.get("/pdf/{job_id}/file")
-def pdf_file(request: HttpRequest, job_id: JobId):
+def pdf_file(request: HttpRequest, job_id: JobId, inline: bool = False):
+    """inline: عرض ملف PDF في عارض المتصفح داخل الصفحة بدل تنزيله. Word يُنزَّل دائمًا."""
     found = pdf.job_file(request.user.pk, job_id)
     if found is None:
         raise HttpError(404, "الملف غير جاهز أو انتهت مهلته")
     data, filename = found
-    content_type = DOCX_TYPE if filename.endswith(".docx") else "application/pdf"
-    return FileResponse(io.BytesIO(data), as_attachment=True, filename=filename, content_type=content_type)
+    if filename.endswith(".docx"):
+        return FileResponse(io.BytesIO(data), as_attachment=True, filename=filename, content_type=DOCX_TYPE)
+    response = FileResponse(
+        io.BytesIO(data), as_attachment=not inline, filename=filename, content_type="application/pdf"
+    )
+    if inline:
+        response["X-Frame-Options"] = "SAMEORIGIN"
+        response["Content-Security-Policy"] = INLINE_PDF_CSP
+    return response

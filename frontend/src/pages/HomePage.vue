@@ -4,11 +4,12 @@ import { useRoute, useRouter } from "vue-router";
 import AppIcon from "@/components/AppIcon.vue";
 import PaperBundle from "@/components/PaperBundle.vue";
 import PaperSet from "@/components/PaperSet.vue";
+import PdfPreview from "@/components/PdfPreview.vue";
 import PrintSettings from "@/components/PrintSettings.vue";
 import { usePaperFit } from "@/composables/usePaperFit";
 import { useAuthStore } from "@/stores/auth";
 import { LEVEL_NAMES, PURPOSE_LEVEL, PURPOSE_NAMES, usePapersStore, type Level, type Purpose } from "@/stores/papers";
-import { usePdfStore } from "@/stores/pdf";
+import { usePdfStore, type PdfRequest } from "@/stores/pdf";
 import { usePrintStore } from "@/stores/print";
 import { useSavedStore } from "@/stores/saved";
 
@@ -34,6 +35,22 @@ const sheetWrap = ref<HTMLElement | null>(null);
 usePaperFit(sheetWrap); // الورقة بعرض A4، وتُصغَّر كلها حين تضيق الشاشة
 const forms = computed(() => (store.paper ? [store.paper, ...(store.twin ? [store.twin] : [])] : []));
 const hasMcq = computed(() => store.paper?.questions.some((q) => q.kind === "mcq") ?? false);
+// العرض: الورقة الحية القابلة للاستبدال، أو صفحات ملف PDF الحقيقي من الخادم بحدودها وترقيمها.
+const view = ref<"sheet" | "pdf">("sheet");
+// طلب ملف الخادم (PDF وWord والمعاينة): النماذج المعروضة كما هي مع ترويسة المعلم وحقول هذه الطباعة وخياراتها.
+const serverRequest = computed<PdfRequest | null>(() =>
+  store.paper || store.bundle
+    ? {
+        papers: store.bundle ?? forms.value,
+        profile: print.profile,
+        date: print.date,
+        section: print.section,
+        show_key: print.showKey,
+        bubble: !store.bundle && print.bubble && hasMcq.value,
+        bundle: store.bundle ? { plan: store.bundlePlan, seed: store.bundleSeed } : null,
+      }
+    : null,
+);
 
 const lessonLevels = computed(() => store.lessons.find((item) => item.code === lesson.value)?.levels ?? []);
 watch(lesson, () => {
@@ -114,6 +131,7 @@ async function generate() {
   }
   if ((store.paper || store.bundle) && !store.error) {
     // قارئ الشاشة ولوحة المفاتيح ينتقلان إلى الورقة الجديدة بدل البقاء على زر التوليد
+    view.value = "sheet";
     await nextTick();
     sheetWrap.value?.focus();
   }
@@ -123,22 +141,9 @@ function printPaper() {
   window.print();
 }
 
-// PDF من الخادم: النماذج المعروضة كما هي مع ترويسة المعلم وحقول هذه الطباعة وخياراتها.
 function downloadServerFile(format: "pdf" | "docx") {
-  if (!store.paper && !store.bundle) return;
-  void pdf.download(
-    {
-      papers: store.bundle ?? forms.value,
-      profile: print.profile,
-      date: print.date,
-      section: print.section,
-      show_key: print.showKey,
-      bubble: !store.bundle && print.bubble && hasMcq.value,
-      bundle: store.bundle ? { plan: store.bundlePlan, seed: store.bundleSeed } : null,
-    },
-    undefined,
-    format,
-  );
+  if (!serverRequest.value) return;
+  void pdf.download(serverRequest.value, undefined, format);
 }
 </script>
 
@@ -293,12 +298,30 @@ function downloadServerFile(format: "pdf" | "docx") {
         </span>
       </p>
     </div>
+
+    <fieldset v-if="serverRequest" class="view-switch">
+      <legend class="visually-hidden">طريقة عرض الورقة</legend>
+      <div class="segmented">
+        <label><input v-model="view" type="radio" value="sheet" /><span><AppIcon name="worksheet" />الورقة</span></label>
+        <label><input v-model="view" type="radio" value="pdf" /><span><AppIcon name="print" />صفحات PDF</span></label>
+      </div>
+      <p class="hint">
+        {{
+          view === "pdf"
+            ? "ملف الخادم نفسه بحدود صفحاته وترقيمها كما يُطبع. الاستبدال من عرض «الورقة»."
+            : "«صفحات PDF» تعرض الملف الحقيقي بحدود صفحاته وترقيمها."
+        }}
+      </p>
+    </fieldset>
   </div>
 
+  <PdfPreview v-if="view === 'pdf' && serverRequest" :request="serverRequest" />
+  <!-- الورقة تبقى في الصفحة خلف تبويب PDF (مخفية على الشاشة وحدها) حتى تطبعها «طباعة أو حفظ PDF» من المتصفح -->
   <div
     v-if="store.paper || store.bundle"
     ref="sheetWrap"
     class="sheet-focus"
+    :class="{ 'behind-pdf': view === 'pdf' }"
     tabindex="-1"
     aria-live="polite"
     :aria-label="store.paper?.title ?? 'حزمة أوراق العمل'"
@@ -369,6 +392,25 @@ function downloadServerFile(format: "pdf" | "docx") {
 }
 .sheet-focus:focus-visible {
   box-shadow: none;
+}
+.view-switch {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+  border: 0;
+  margin: var(--space-5) 0 0;
+  padding: 0;
+  min-inline-size: 0;
+}
+.view-switch .hint {
+  margin: 0;
+}
+/* خلف تبويب PDF: الورقة تغيب عن الشاشة وحدها وتبقى للطباعة */
+@media screen {
+  .behind-pdf {
+    display: none;
+  }
 }
 .save {
   margin-block-start: var(--space-4);
