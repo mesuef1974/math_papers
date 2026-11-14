@@ -3,6 +3,7 @@ import { onMounted, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import AppIcon from "@/components/AppIcon.vue";
 import BrandLockup from "@/components/BrandLockup.vue";
+import SplashScreen from "@/components/SplashScreen.vue";
 import ThemeToggle from "@/components/ThemeToggle.vue";
 import { useAppStore } from "@/stores/app";
 import { useAuthStore } from "@/stores/auth";
@@ -32,6 +33,7 @@ async function logout() {
 </script>
 
 <template>
+  <SplashScreen v-if="!auth.checked" class="no-print" />
   <header class="topbar no-print">
     <div class="container topbar-inner">
       <RouterLink class="brand" to="/" :aria-label="store.siteTitle">

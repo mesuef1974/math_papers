@@ -1,0 +1,424 @@
+release: math_papers/v8
+concept: a1
+purpose: ما في دليل الهوية، وما طُبّق منه آليًا في هذا المشروع، وما تبقّى على جلسة المشروع. مولَّد من سِمة؛ لا يُعدَّل يدويًا.
+applied_by_delivery:
+- الرمز والقفل والأيقونات العامة وmanifest
+- رموز التطبيق اللونية والأبعاد حسب token_map، نهارًا وليلًا
+- الورقة المطبوعة (apply_paper) حيث رُسمت خريطتها
+limits:
+- قيم الوضع الليلي يطبّقها التسليم ولا يعيد فحصها هنا؛ فحص color-parity للنهار وحده
+- 'الفحوص الأخرى فحوص وجود لا جودة: وجودها لا يعني أنها مطابقة لتصميم الدليل'
+sections:
+- id: strategy
+  title: المنصة الاستراتيجية (الشخصية والنبرة واتجاه الصورة)
+  status: provided
+  files:
+  - STRATEGY.md
+- id: color
+  title: الألوان والأدوار في الوضعين
+  status: applied
+  files:
+  - tokens/tokens.css
+- id: type
+  title: الخط
+  status: provided
+  files:
+  - fonts/Cairo[slnt,wght].ttf
+  - fonts/OFL-Cairo.txt
+- id: pattern
+  title: النمط
+  status: provided
+  files:
+  - patterns/motif-mono.svg
+  - patterns/motif-soft.svg
+  - patterns/motif-strong.svg
+- id: icons
+  title: مجموعة الأيقونات
+  status: provided
+  files:
+  - icons/answer-key.svg
+  - icons/curriculum.svg
+  - icons/generate.svg
+  - icons/level-challenge.svg
+  - icons/level-easy.svg
+  - icons/print.svg
+  - icons/problem.svg
+  - icons/teacher.svg
+  - icons/test.svg
+  - icons/worksheet.svg
+- id: applications
+  title: 'الهوية في الاستعمال: التطبيقات والشاشات'
+  status: provided
+  files:
+  - applications/app-splash.png
+  - applications/app-splash.svg
+  - applications/card-back.png
+  - applications/card-back.svg
+  - applications/card-front.png
+  - applications/card-front.svg
+  - applications/email-mark.png
+  - applications/email-signature.html
+  - applications/letterhead.png
+  - applications/letterhead.svg
+  - applications/print-header.png
+  - applications/print-header.svg
+  - applications/slide-content.png
+  - applications/slide-content.svg
+  - applications/slide-title.png
+  - applications/slide-title.svg
+  - applications/social-avatar.png
+  - applications/social-avatar.svg
+  - applications/social-cover.png
+  - applications/social-cover.svg
+  - applications/social-post.png
+  - applications/social-post.svg
+  - screens/app-dark.html
+  - screens/app-dark.png
+  - screens/app-light.html
+  - screens/app-light.png
+  - screens/landing.html
+  - screens/landing.png
+  - screens/mobile.html
+  - screens/mobile.png
+  - screens/print.html
+  - screens/print.png
+- id: motion
+  title: 'الحركة: ظهور الرمز'
+  status: provided
+  files:
+  - motion.css
+  - motion/mark-intro.html
+- id: tokens
+  title: tokens بصيغها
+  status: provided
+  files:
+  - tokens/_tokens.scss
+  - tokens/tailwind.preset.js
+  - tokens/tokens.css
+- id: book
+  title: دليل الهوية وعرض الكشف
+  status: provided
+  files:
+  - brand-book.html
+  - brand-book.pdf
+  - reveal.html
+  - reveal.pdf
+token_map:
+- app_var: --color-paper
+  light:
+    role: bg
+    var: --math_papers-bg
+    value: '#fbf3e4'
+  dark:
+    role: bg
+    var: --math_papers-bg
+    value: '#1d1711'
+- app_var: --color-surface
+  light:
+    role: surface
+    var: --math_papers-surface
+    value: '#fbf4ee'
+  dark:
+    role: surface
+    var: --math_papers-surface
+    value: '#2f2721'
+- app_var: --color-surface-sunken
+  light:
+    role: raised
+    var: --math_papers-raised
+    value: '#eee6e0'
+  dark:
+    role: raised
+    var: --math_papers-raised
+    value: '#443b34'
+- app_var: --color-sheet
+  light: يُترك بقيمة التطبيق
+  dark:
+    role: surface
+    var: --math_papers-surface
+    value: '#2f2721'
+- app_var: --color-field
+  light: يُترك بقيمة التطبيق
+  dark:
+    role: bg
+    var: --math_papers-bg
+    value: '#1d1711'
+- app_var: --color-ink
+  light:
+    role: text
+    var: --math_papers-text
+    value: '#2a1d1a'
+  dark:
+    role: text
+    var: --math_papers-text
+    value: '#fbf4ee'
+- app_var: --color-ink-soft
+  light:
+    role: text-muted
+    var: --math_papers-text-muted
+    value: '#6f655c'
+  dark:
+    role: text-muted
+    var: --math_papers-text-muted
+    value: '#c2b9b1'
+- app_var: --color-line
+  light:
+    role: border
+    var: --math_papers-border
+    value: '#dbd3cb'
+  dark:
+    role: border
+    var: --math_papers-border
+    value: '#5a5148'
+- app_var: --color-line-strong
+  light:
+    role: border-strong
+    var: --math_papers-border-strong
+    value: '#8b8178'
+  dark:
+    role: border-strong
+    var: --math_papers-border-strong
+    value: '#8b8178'
+- app_var: --color-brand
+  light:
+    role: brand
+    var: --math_papers-brand
+    value: '#8e2433'
+  dark:
+    role: brand
+    var: --math_papers-brand
+    value: '#dc8084'
+- app_var: --color-brand-strong
+  light:
+    role: brand-strong
+    var: --math_papers-brand-strong
+    value: '#740a21'
+  dark:
+    role: brand-strong
+    var: --math_papers-brand-strong
+    value: '#f4a1a3'
+- app_var: --color-brand-soft
+  light:
+    role: brand-soft
+    var: --math_papers-brand-soft
+    value: '#eed6c9'
+  dark:
+    role: brand-soft
+    var: --math_papers-brand-soft
+    value: '#422c27'
+- app_var: --color-on-brand
+  light:
+    role: on-brand
+    var: --math_papers-on-brand
+    value: '#ffffff'
+  dark:
+    role: on-brand
+    var: --math_papers-on-brand
+    value: '#1d1711'
+- app_var: --color-sand
+  light:
+    role: accent-text
+    var: --math_papers-accent-text
+    value: '#935a00'
+  dark:
+    role: accent-text
+    var: --math_papers-accent-text
+    value: '#db943c'
+- app_var: --color-sand-soft
+  light:
+    role: accent-soft
+    var: --math_papers-accent-soft
+    value: '#f7e4ca'
+  dark:
+    role: accent-soft
+    var: --math_papers-accent-soft
+    value: '#45321d'
+- app_var: --color-accent
+  light:
+    role: accent
+    var: --math_papers-accent
+    value: '#db943c'
+  dark:
+    role: accent
+    var: --math_papers-accent
+    value: '#db943c'
+- app_var: --color-danger
+  light:
+    role: error
+    var: --math_papers-error
+    value: '#740f00'
+  dark:
+    role: error
+    var: --math_papers-error
+    value: '#ff9c89'
+- app_var: --color-danger-soft
+  light:
+    role: error-soft
+    var: --math_papers-error-soft
+    value: '#fff2ef'
+  dark:
+    role: error-soft
+    var: --math_papers-error-soft
+    value: '#510700'
+- app_var: --color-success
+  light:
+    role: success
+    var: --math_papers-success
+    value: '#3f6b3a'
+  dark:
+    role: success
+    var: --math_papers-success
+    value: '#669061'
+- app_var: --color-success-soft
+  light:
+    role: success-soft
+    var: --math_papers-success-soft
+    value: '#e3fee0'
+  dark:
+    role: success-soft
+    var: --math_papers-success-soft
+    value: '#012000'
+- app_var: --color-info
+  light:
+    role: info
+    var: --math_papers-info
+    value: '#2f5e7d'
+  dark:
+    role: info
+    var: --math_papers-info
+    value: '#5e89a7'
+- app_var: --color-info-soft
+  light:
+    role: info-soft
+    var: --math_papers-info-soft
+    value: '#ecf7ff'
+  dark:
+    role: info-soft
+    var: --math_papers-info-soft
+    value: '#001b2c'
+- app_var: --color-level-k
+  light:
+    role: success
+    var: --math_papers-success
+    value: '#3f6b3a'
+  dark:
+    role: success
+    var: --math_papers-success
+    value: '#669061'
+- app_var: --color-level-k-soft
+  light:
+    role: success-soft
+    var: --math_papers-success-soft
+    value: '#e3fee0'
+  dark:
+    role: success-soft
+    var: --math_papers-success-soft
+    value: '#012000'
+- app_var: --color-level-a
+  light:
+    role: info
+    var: --math_papers-info
+    value: '#2f5e7d'
+  dark:
+    role: info
+    var: --math_papers-info
+    value: '#5e89a7'
+- app_var: --color-level-a-soft
+  light:
+    role: info-soft
+    var: --math_papers-info-soft
+    value: '#ecf7ff'
+  dark:
+    role: info-soft
+    var: --math_papers-info-soft
+    value: '#001b2c'
+- app_var: --color-level-r
+  light:
+    role: brand
+    var: --math_papers-brand
+    value: '#8e2433'
+  dark:
+    role: brand
+    var: --math_papers-brand
+    value: '#dc8084'
+- app_var: --color-level-r-soft
+  light:
+    role: brand-soft
+    var: --math_papers-brand-soft
+    value: '#eed6c9'
+  dark:
+    role: brand-soft
+    var: --math_papers-brand-soft
+    value: '#422c27'
+- app_var: --color-focus
+  light:
+    role: focus
+    var: --math_papers-focus
+    value: '#416e8d'
+  dark:
+    role: focus
+    var: --math_papers-focus
+    value: '#5e89a7'
+- app_var: --radius-sm
+  light:
+    role: radius
+    var: --math_papers-radius
+    value: 8px
+  dark:
+    role: radius
+    var: --math_papers-radius
+    value: 8px
+- app_var: --radius-md
+  light:
+    role: radius
+    var: --math_papers-radius
+    value: 16px
+  dark:
+    role: radius
+    var: --math_papers-radius
+    value: 16px
+  times: 2.0
+- app_var: --radius-lg
+  light:
+    role: radius
+    var: --math_papers-radius
+    value: 16px
+  dark:
+    role: radius
+    var: --math_papers-radius
+    value: 16px
+  times: 2.0
+checks:
+- id: color-parity
+  section: color
+  ok: true
+  detail: كل المتغيرات اللونية النهارية مطابقة
+- id: font-family
+  section: type
+  ok: true
+  detail: عائلة Cairo مذكورة في أنماط المشروع
+- id: motion-included
+  section: motion
+  ok: false
+  detail: ظهور الرمز غير مضمَّن في الواجهة
+  action: استورد identity/motion.css وطبّق الصنف sima-mark-intro على الرمز عند أول ظهور.
+- id: slide-templates
+  section: applications
+  ok: false
+  detail: قوالب الشرائح غير موجودة في المشروع
+  action: ابنِ قالب شرائح 16:9 من identity/applications/slide-*.svg.
+- id: splash-screen
+  section: applications
+  ok: false
+  detail: شاشة الافتتاح غير موجودة في المشروع
+  action: ابنِ شاشة افتتاح من identity/applications/app-splash.svg.
+- id: token-parity-test
+  section: tokens
+  ok: false
+  detail: اختبار تطابق الرموز مع ADOPTION.yaml غير موجود
+  action: اكتب اختبارًا يقرأ token_map من ADOPTION.yaml ويطابقه مع tokens.css.
+gaps:
+- motion-included
+- slide-templates
+- splash-screen
+- token-parity-test

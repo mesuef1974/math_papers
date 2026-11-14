@@ -16,6 +16,8 @@ function files(dir: string, ext: string): string[] {
 const tokens = readFileSync(join(STYLES, "tokens.css"), "utf-8");
 const defined = new Set([...tokens.matchAll(/(--[a-z0-9-]+)\s*:/g)].map((m) => m[1]));
 const sheets = [...files(SRC, ".vue"), ...files(STYLES, ".css").filter((path) => !path.endsWith("tokens.css"))];
+// متغيرات محلية يضبطها العنصر نفسه لا الهوية: --i رقم الجزء في ظهور الرمز (motion.css المولَّد، وله قيمة احتياطية 0)
+const LOCAL_VARS = new Set(["--i"]);
 const RAW_COLOR = /#[0-9a-f]{3,8}\b|\b(?:rgb|rgba|hsl|hsla)\(/i;
 
 describe("الهوية البصرية", () => {
@@ -26,6 +28,6 @@ describe("الهوية البصرية", () => {
 
   it.each(sheets)("كل متغير في %s معرَّف في tokens.css", (path) => {
     const used = [...readFileSync(path, "utf-8").matchAll(/var\((--[a-z0-9-]+)/g)].map((m) => m[1]);
-    expect(used.filter((name) => !defined.has(name))).toEqual([]);
+    expect(used.filter((name) => !defined.has(name) && !LOCAL_VARS.has(name))).toEqual([]);
   });
 });
