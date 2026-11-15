@@ -32,6 +32,12 @@ QUIZ_MINUTES = 20
 SHORT_OPTION = 26
 MAX_GRAPH_HEIGHT_CM = 6.2
 FOOTER_LOGO_CM = 1.9  # عرض الشعار المقفل في التذييل (ارتفاعه نحو 0.8 سم): أكبر من الكلمة الحية 8.5pt ويبقى داخل هامش التذييل
+COPYRIGHT_NAME = "سفيان مسيف"  # سطر الحقوق في التذييل؛ نظيره في الواجهة frontend/src/utils/brand.ts
+COPYRIGHT_PHONE = "55296286"
+PHONE_ICON_CM = 0.34
+PHONE_ICON = (
+    Path(__file__).parent / "assets" / "phone.png"
+).read_bytes()  # أيقونة جوال بخط 1.75 كأيقونات الهوية، بلون العلامة
 BUNDLE_COVER_TITLE = "حزمة أوراق العمل: كل دروس الفصل الأول"
 LOGO = (Path(__file__).parent / "assets" / "lockup.png").read_bytes()
 # شريط النمط (patterns/motif-soft.svg) بعرض المحتوى؛ تحويل نقطي بدقة 300dpi وخلفية شفافة، يُحدَّث مع كل إصدار من سِمة
@@ -1015,8 +1021,8 @@ def _configure_section(section, footer_text: str) -> None:
     footer = section.footer
     for paragraph in list(footer.paragraphs)[1:]:
         paragraph._p.getparent().remove(paragraph._p)
-    # تذييل الهوية: خط علوي، اسم المنصة يمينًا، عنوان الورقة وسطًا، رقم الصفحة من المجموع يسارًا
-    widths = [4.5, 9.8, 3.5]
+    # تذييل الهوية: خط علوي، الشعار المقفل يمينًا، وسطرا الوسط: عنوان الورقة بسطر واحد ثم سطر الحقوق، ورقم الصفحة من المجموع يسارًا
+    widths = [2.4, 12.4, 3.0]
     table = x.make_table(footer, 1, widths, borders={"top": x.BRAND_EDGE}, cell_margin_cm=0.05)
     x.set_row(table.rows[0])
     for cell, width in zip(table.rows[0].cells, widths, strict=True):
@@ -1027,7 +1033,13 @@ def _configure_section(section, footer_text: str) -> None:
         FOOTER_LOGO_CM,
     )
     middle = x.new_paragraph(table.cell(0, 1), align="center", before=3, after=0, line=None)
-    x.add_text(middle, footer_text, size=8, color=x.SOFT)
+    # العنوان سطر واحد دائمًا: يصغَّر الخط بطوله لأن Word لا يقلّص النص ليتسع
+    title_size = 7.0 if len(footer_text) <= 100 else 6.5 if len(footer_text) <= 115 else 6.0
+    x.add_text(middle, footer_text, size=title_size, color=x.SOFT)
+    copyright_line = x.new_paragraph(table.cell(0, 1), align="center", before=0, after=0, line=None)
+    x.add_text(copyright_line, f"©{NBSP}{COPYRIGHT_NAME}  ", size=7.5)
+    x.add_picture(copyright_line, PHONE_ICON, PHONE_ICON_CM)
+    x.add_text(copyright_line, f"  {COPYRIGHT_PHONE}", size=7.5)
     pages = x.new_paragraph(table.cell(0, 2), align="left", before=3, after=0, line=None)
     x.add_text(pages, "صفحة ", size=8.5)
     x.add_field(pages, " PAGE ", size=8.5)

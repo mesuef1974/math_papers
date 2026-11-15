@@ -2,6 +2,7 @@
 import { computed } from "vue";
 import AnswerSheet from "@/components/AnswerSheet.vue";
 import PaperSheet from "@/components/PaperSheet.vue";
+import PrintFrame from "@/components/PrintFrame.vue";
 import type { Paper } from "@/stores/papers";
 import type { PaperHeaderData } from "@/stores/print";
 
@@ -31,26 +32,28 @@ const hasMcq = (paper: Paper) => paper.questions.some((q) => q.kind === "mcq");
 
 <template>
   <div class="paper-set">
-    <template v-for="(paper, index) in papers" :key="`sheet-${paper.form}`">
-      <div class="form-block">
-        <PaperSheet
-          :paper="paper"
-          :header="headerOf(paper)"
-          :show-key="false"
-          :replaceable="replaceable && index === 0"
-          :replacing="replacing"
-          :modified="modified && index === 0"
-          @replace="(q, l) => emit('replace', q, l)"
-        />
-        <AnswerSheet v-if="bubble && hasMcq(paper)" :paper="paper" :header="headerOf(paper)" />
-      </div>
-    </template>
-    <template v-if="showKey">
-      <div v-for="(paper, index) in papers" :key="`key-${paper.form}`" class="form-block">
-        <PaperSheet :paper="paper" :header="headerOf(paper)" show-key hide-sheet :modified="modified && index === 0" />
-        <AnswerSheet v-if="bubble && hasMcq(paper)" :paper="paper" :header="headerOf(paper)" answers />
-      </div>
-    </template>
+    <PrintFrame>
+      <template v-for="(paper, index) in papers" :key="`sheet-${paper.form}`">
+        <div class="form-block">
+          <PaperSheet
+            :paper="paper"
+            :header="headerOf(paper)"
+            :show-key="false"
+            :replaceable="replaceable && index === 0"
+            :replacing="replacing"
+            :modified="modified && index === 0"
+            @replace="(q, l) => emit('replace', q, l)"
+          />
+          <AnswerSheet v-if="bubble && hasMcq(paper)" :paper="paper" :header="headerOf(paper)" />
+        </div>
+      </template>
+      <template v-if="showKey">
+        <div v-for="(paper, index) in papers" :key="`key-${paper.form}`" class="form-block">
+          <PaperSheet :paper="paper" :header="headerOf(paper)" show-key hide-sheet :modified="modified && index === 0" />
+          <AnswerSheet v-if="bubble && hasMcq(paper)" :paper="paper" :header="headerOf(paper)" answers />
+        </div>
+      </template>
+    </PrintFrame>
   </div>
 </template>
 

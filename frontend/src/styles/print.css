@@ -8,37 +8,14 @@
 @page {
   size: A4;
   margin: 14mm 14mm 17mm;
-  /* تذييل الهوية على الورق: خط عنابي، اسم المنصة يمينًا، عنوان الورقة الجاري وسطًا (--print-footer)، ورقم الصفحة يسارًا */
-  @bottom-right {
-    content: "أوراق · مولّد أوراق الرياضيات";
-    font-family: var(--font-print);
-    font-size: 8.5pt;
-    font-weight: 700;
-    color: #8e2433;
-    border-top: 0.9pt solid #8e2433;
-    padding-top: 2mm;
-    vertical-align: top;
-    margin-top: 4mm;
-  }
-  @bottom-center {
-    content: var(--print-footer);
-    font-family: var(--font-print);
-    font-size: 8.5pt;
-    color: #4c535c;
-    border-top: 0.9pt solid #8e2433;
-    padding-top: 2mm;
-    vertical-align: top;
-    margin-top: 4mm;
-  }
+  /* ترقيم الصفحات يسارًا؛ وبقية التذييل (الشعار والعنوان وسطر الحقوق) في .print-foot لأن Chromium لا يرسم الصور في صناديق الهوامش */
   @bottom-left {
     content: "صفحة " counter(page) " من " counter(pages);
     font-family: var(--font-print);
     font-size: 8.5pt;
     color: #14171c;
-    border-top: 0.9pt solid #8e2433;
-    padding-top: 2mm;
     vertical-align: top;
-    margin-top: 4mm;
+    margin-top: 2mm;
   }
 }
 /*
@@ -107,6 +84,27 @@
 .sheet .table-scroll {
   overflow: visible;
 }
+/*
+  إطار الطباعة (PrintFrame): على الشاشة يُجرَّد من الجدول فيبقى المحتوى كتلة عادية ولا يظهر تذييله؛ عند الطباعة جدول فعلي
+  يكرّر tfoot شريط التذييل في أسفل كل صفحة ويحجز حيّزه (الشعار لا يُرسم في هوامش @page).
+*/
+.print-frame,
+.print-frame > tbody,
+.print-frame > tbody > tr,
+.print-frame > tbody > tr > td {
+  display: block;
+  padding: 0;
+  border: 0;
+}
+.print-reserve {
+  display: none;
+}
+.print-foot {
+  display: none;
+  --color-ink: #2a1d1a;
+  --color-ink-soft: #6f655c;
+  --color-mark-ink: #8e2433;
+}
 .sheet-foot {
   display: flex;
   justify-content: space-between;
@@ -145,6 +143,83 @@
   }
   .no-print {
     display: none !important;
+  }
+  .print-frame {
+    display: table;
+    inline-size: 100%;
+    table-layout: fixed;
+    border-collapse: collapse;
+  }
+  .print-frame > tbody {
+    display: table-row-group;
+  }
+  .print-frame > tbody > tr {
+    display: table-row;
+  }
+  .print-frame > tbody > tr > td {
+    display: table-cell;
+  }
+  .print-reserve {
+    display: table-footer-group;
+    visibility: hidden;
+  }
+  .print-reserve > tr {
+    display: table-row;
+  }
+  .print-reserve > tr > td {
+    display: table-cell;
+    padding: 0;
+    block-size: 9mm;
+  }
+  .print-foot {
+    display: block;
+    position: fixed;
+    inset-inline: 0;
+    inset-block-end: 0;
+    font-family: var(--font-print);
+    color: var(--color-ink-soft);
+  }
+  .print-foot-inner {
+    display: flex;
+    align-items: center;
+    gap: 3mm;
+    border-block-start: 0.9pt solid #8e2433;
+    padding-block-start: 1.2mm;
+    block-size: 9mm;
+    box-sizing: border-box;
+  }
+  .print-foot .pf-logo {
+    flex: none;
+    block-size: 7.4mm;
+    inline-size: calc(7.4mm * 618.75 / 256);
+    background: url("../assets/brand/lockup.svg") no-repeat center / contain;
+  }
+  .print-foot .pf-text {
+    flex: 1 1 auto;
+    min-inline-size: 0;
+    text-align: center;
+  }
+  .print-foot .pf-text p {
+    margin: 0;
+    font-size: 7.5pt;
+    line-height: 1.35;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .print-foot .pf-title::before {
+    content: var(--print-footer);
+  }
+  .print-foot .pf-copy {
+    color: var(--color-ink);
+  }
+  .print-foot .pf-phone {
+    display: inline-block;
+    inline-size: 3.4mm;
+    block-size: 3.4mm;
+    vertical-align: -0.8mm;
+    margin-inline: 1.2mm 1mm;
+    color: #8e2433;
   }
   .page {
     padding: 0;
