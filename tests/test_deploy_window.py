@@ -11,6 +11,12 @@ from scripts import deploy_window as dw
 WORKFLOW = Path(__file__).resolve().parent.parent / ".github" / "workflows" / "deploy-window.yml"
 
 
+@pytest.fixture(autouse=True)
+def enforced(monkeypatch):
+    """المنطق يُختبر والنافذة مفروضة؛ تعطيلها بقرار المالك له اختباره الخاص أدناه."""
+    monkeypatch.setattr(dw, "ENFORCED", True)
+
+
 def local(day: int, hour: int, minute: int = 0) -> datetime:
     """وقت محلي (UTC+3) في نوفمبر 2026: 12 خميس، 13 جمعة، 14 سبت، 15 أحد."""
     return datetime(2026, 11, day, hour, minute, tzinfo=dw.LOCAL_TZ).astimezone(UTC)
@@ -31,6 +37,23 @@ def local(day: int, hour: int, minute: int = 0) -> datetime:
 )
 def test_status_follows_work_hours_with_guard(moment, state):
     assert dw.status_for(moment, [])[0] == state
+
+
+def test_disabled_window_is_always_open(monkeypatch):
+    """قرار المالك 2026-11-15: النشر مسموح في أي وقت، فلا حمرة وقت الدوام ولا حاجة للوسم."""
+    monkeypatch.setattr(dw, "ENFORCED", False)
+    for moment in (local(15, 7, 0), local(12, 13, 59), local(15, 6, 30), local(14, 10, 0)):
+        assert dw.status_for(moment, [])[0] == "success"
+        assert dw.decide("merge_group", moment, [])[0] is True
+        assert not dw.in_work_hours(moment)
+    assert "معطّلة" in dw.status_for(local(15, 10, 0), [])[1]
+
+
+def test_shipped_default_is_disabled():
+    """القيمة المُرسَلة هي قرار المالك؛ إعادة الفرض تعني تغيير الثابت عمدًا لا بالخطأ."""
+    import importlib
+
+    assert importlib.reload(dw).ENFORCED is False
 
 
 def test_urgent_label_opens_the_window():

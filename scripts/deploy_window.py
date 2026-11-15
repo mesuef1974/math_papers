@@ -18,6 +18,8 @@ import subprocess
 import sys
 from datetime import UTC, datetime, timedelta, timezone
 
+# قرار المالك 2026-11-15: النشر مسموح لهذا المشروع في أي وقت. False يُخضّر الحالة دائمًا؛ True يعيد فرض نافذة الدوام.
+ENFORCED = False
 LOCAL_TZ = timezone(timedelta(hours=int("3")))
 WORK_DAYS = {int(d) for d in "6,0,1,2,3".split(",")}
 _HOURS = "07-14".split("-")
@@ -29,6 +31,8 @@ _QUEUE_PR_RE = re.compile(r"/pr-(\d+)-")
 
 
 def in_work_hours(now: datetime) -> bool:
+    if not ENFORCED:
+        return False
     local = now.astimezone(LOCAL_TZ)
     return local.weekday() in WORK_DAYS and WINDOW_START_HOUR <= local.hour < WINDOW_END_HOUR
 
@@ -51,6 +55,8 @@ def pr_labels(repo: str, number: int) -> list[str]:
 def decide(event: str, now: datetime, labels: list[str] | None) -> tuple[bool, str]:
     local = now.astimezone(LOCAL_TZ).strftime("%A %H:%M")
     end = f"{WINDOW_END_HOUR}:00"
+    if not ENFORCED:
+        return True, f"نافذة النشر معطّلة بقرار المالك ({local}) — النشر مسموح."
     if not in_work_hours(now):
         return True, f"خارج الدوام ({local}) — النشر مسموح."
     if event != "merge_group":
@@ -67,6 +73,8 @@ def closed_for_status(now: datetime) -> bool:
 
 def status_for(now: datetime, labels: list[str]) -> tuple[str, str]:
     local = now.astimezone(LOCAL_TZ).strftime("%A %H:%M")
+    if not ENFORCED:
+        return "success", f"نافذة النشر معطّلة بقرار المالك ({local}) — الدمج مسموح في أي وقت."
     if not closed_for_status(now):
         return "success", f"خارج الدوام ({local}) — الدمج مسموح."
     if LABEL in labels:
