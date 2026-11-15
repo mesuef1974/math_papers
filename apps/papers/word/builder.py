@@ -31,7 +31,7 @@ NBSP = "\u00a0"
 QUIZ_MINUTES = 20
 SHORT_OPTION = 26
 MAX_GRAPH_HEIGHT_CM = 6.2
-BRAND_LINE = "أوراق · مولّد أوراق الرياضيات"
+FOOTER_LOGO_CM = 1.9  # عرض الشعار المقفل في التذييل (ارتفاعه نحو 0.8 سم): أكبر من الكلمة الحية 8.5pt ويبقى داخل هامش التذييل
 BUNDLE_COVER_TITLE = "حزمة أوراق العمل: كل دروس الفصل الأول"
 LOGO = (Path(__file__).parent / "assets" / "lockup.png").read_bytes()
 # شريط النمط (patterns/motif-soft.svg) بعرض المحتوى؛ تحويل نقطي بدقة 300dpi وخلفية شفافة، يُحدَّث مع كل إصدار من سِمة
@@ -1021,8 +1021,11 @@ def _configure_section(section, footer_text: str) -> None:
     x.set_row(table.rows[0])
     for cell, width in zip(table.rows[0].cells, widths, strict=True):
         x.set_cell(cell, width, valign="top")
-    brand = x.new_paragraph(table.cell(0, 0), before=3, after=0, line=None)
-    x.add_text(brand, BRAND_LINE, size=8.5, bold=True, color=x.BRAND)
+    x.add_picture(
+        x.new_paragraph(table.cell(0, 0), rtl=False, align="right", before=3, after=0, line=None),
+        LOGO,
+        FOOTER_LOGO_CM,
+    )
     middle = x.new_paragraph(table.cell(0, 1), align="center", before=3, after=0, line=None)
     x.add_text(middle, footer_text, size=8, color=x.SOFT)
     pages = x.new_paragraph(table.cell(0, 2), align="left", before=3, after=0, line=None)
