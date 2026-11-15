@@ -282,6 +282,11 @@ def test_every_document_carries_platform_logo_and_name(client, kind):
     # سطر الحقوق في كل تذييل: العلامة والاسم والرقم وأيقونة الجوال (رسمان: الشعار والأيقونة)
     assert all(COPYRIGHT_NAME in footer and COPYRIGHT_PHONE in footer for footer in footers)
     assert all(footer.count("<w:drawing>") == 2 for footer in footers)
+    # عمود الوسط للعنوان أعرض الأعمدة، ومجموع الأعمدة عرض المحتوى (21 − 3.2 سم)
+    for footer in footers:
+        grid = [int(w) for w in re.findall(r'<w:gridCol w:w="(\d+)"', footer)]
+        assert len(grid) == 3 and grid[1] > 2 * (grid[0] + grid[2])
+        assert abs(sum(grid) - 17.8 * 567) < 20
     assert all(" PAGE " in footer and " NUMPAGES " in footer for footer in footers)
 
 

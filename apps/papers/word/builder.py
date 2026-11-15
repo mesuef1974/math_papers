@@ -1022,7 +1022,7 @@ def _configure_section(section, footer_text: str) -> None:
     for paragraph in list(footer.paragraphs)[1:]:
         paragraph._p.getparent().remove(paragraph._p)
     # تذييل الهوية: خط علوي، الشعار المقفل يمينًا، وسطرا الوسط: عنوان الورقة بسطر واحد ثم سطر الحقوق، ورقم الصفحة من المجموع يسارًا
-    widths = [2.4, 12.4, 3.0]
+    widths = [2.1, 13.4, 2.3]
     table = x.make_table(footer, 1, widths, borders={"top": x.BRAND_EDGE}, cell_margin_cm=0.05)
     x.set_row(table.rows[0])
     for cell, width in zip(table.rows[0].cells, widths, strict=True):
@@ -1033,18 +1033,18 @@ def _configure_section(section, footer_text: str) -> None:
         FOOTER_LOGO_CM,
     )
     middle = x.new_paragraph(table.cell(0, 1), align="center", before=3, after=0, line=None)
-    # العنوان سطر واحد دائمًا: يصغَّر الخط بطوله لأن Word لا يقلّص النص ليتسع
-    title_size = 7.0 if len(footer_text) <= 100 else 6.5 if len(footer_text) <= 115 else 6.0
+    # العنوان سطر واحد دائمًا: يصغَّر الخط بطوله لأن Word لا يقلّص النص ليتسع، والمقاس يتحمّل خطًا بديلًا أعرض من Noto حين لا يُحمَّل المضمَّن
+    title_size = 7.0 if len(footer_text) <= 100 else 6.0 if len(footer_text) <= 115 else 5.5
     x.add_text(middle, footer_text, size=title_size, color=x.SOFT)
     copyright_line = x.new_paragraph(table.cell(0, 1), align="center", before=0, after=0, line=None)
     x.add_text(copyright_line, f"©{NBSP}{COPYRIGHT_NAME}  ", size=7.5)
     x.add_picture(copyright_line, PHONE_ICON, PHONE_ICON_CM)
     x.add_text(copyright_line, f"  {COPYRIGHT_PHONE}", size=7.5)
     pages = x.new_paragraph(table.cell(0, 2), align="left", before=3, after=0, line=None)
-    x.add_text(pages, "صفحة ", size=8.5)
-    x.add_field(pages, " PAGE ", size=8.5)
-    x.add_text(pages, " من ", size=8.5)
-    x.add_field(pages, " NUMPAGES ", size=8.5)
+    x.add_text(pages, "صفحة ", size=7.5)
+    x.add_field(pages, " PAGE ", size=7.5)
+    x.add_text(pages, " من ", size=7.5)
+    x.add_field(pages, " NUMPAGES ", size=7.5)
     # الفقرة الفارغة الأصلية تسبق الجدول؛ تُحذف وتُضاف فقرة ختامية دقيقة (الحاوية تنتهي بفقرة لا بجدول)
     for paragraph in footer.paragraphs:
         paragraph._p.getparent().remove(paragraph._p)
