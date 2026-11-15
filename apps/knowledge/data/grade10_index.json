@@ -1,0 +1,2830 @@
+{
+ "book": "grade10",
+ "schema_version": 1,
+ "lessons": [
+  {
+   "lesson": "1.1",
+   "unit": 1,
+   "standards": [
+    "10.3.2"
+   ],
+   "practices": [
+    "MP.7",
+    "MP.8"
+   ],
+   "objectives_bloom": [
+    "unclassified",
+    "فهم"
+   ],
+   "examples": [
+    {
+     "n": 1,
+     "representations": [
+      "جدول",
+      "بياني"
+     ]
+    },
+    {
+     "n": 2,
+     "representations": [
+      "بياني"
+     ]
+    },
+    {
+     "n": 3,
+     "representations": [
+      "جدول"
+     ]
+    },
+    {
+     "n": 4,
+     "representations": [
+      "جبري",
+      "سياق"
+     ]
+    },
+    {
+     "n": 5,
+     "representations": [
+      "بياني",
+      "جبري"
+     ]
+    }
+   ],
+   "analysis": [
+    {
+     "example": 1,
+     "dok": 1,
+     "exercises": [
+      14,
+      15,
+      16,
+      17,
+      18,
+      19
+     ]
+    },
+    {
+     "example": 2,
+     "dok": 1,
+     "exercises": [
+      10,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      30
+     ]
+    },
+    {
+     "example": 2,
+     "dok": 3,
+     "exercises": [
+      13
+     ]
+    },
+    {
+     "example": 3,
+     "dok": 1,
+     "exercises": [
+      20,
+      21
+     ]
+    },
+    {
+     "example": 3,
+     "dok": 3,
+     "exercises": [
+      11
+     ]
+    },
+    {
+     "example": 4,
+     "dok": 1,
+     "exercises": [
+      12,
+      22,
+      23
+     ]
+    },
+    {
+     "example": 5,
+     "dok": 2,
+     "exercises": [
+      24,
+      25
+     ]
+    },
+    {
+     "example": 5,
+     "dok": 3,
+     "exercises": [
+      26,
+      27,
+      28,
+      29
+     ]
+    },
+    {
+     "example": 5,
+     "dok": 4,
+     "exercises": [
+      31
+     ]
+    }
+   ],
+   "exercises_total": 31,
+   "task_guide": {
+    "basic": "10-21, 23, 25-31",
+    "advanced": "10-13, 16-31"
+   },
+   "quiz_depths": [
+    1,
+    1,
+    2,
+    1,
+    2
+   ],
+   "vocabulary": {
+    "new": 2,
+    "review": 3
+   }
+  },
+  {
+   "lesson": "1.2",
+   "unit": 1,
+   "standards": [
+    "10.3.2",
+    "10.3.3"
+   ],
+   "practices": [
+    "MP.4",
+    "MP.7"
+   ],
+   "objectives_bloom": [
+    "unclassified",
+    "تطبيق"
+   ],
+   "examples": [
+    {
+     "n": 1,
+     "representations": [
+      "بياني"
+     ]
+    },
+    {
+     "n": 2,
+     "representations": [
+      "بياني"
+     ]
+    },
+    {
+     "n": 3,
+     "representations": [
+      "بياني"
+     ]
+    },
+    {
+     "n": 4,
+     "representations": [
+      "بياني"
+     ]
+    },
+    {
+     "n": 5,
+     "representations": [
+      "بياني",
+      "جبري",
+      "سياق"
+     ]
+    }
+   ],
+   "analysis": [
+    {
+     "example": 1,
+     "dok": 1,
+     "exercises": [
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21
+     ]
+    },
+    {
+     "example": 2,
+     "dok": 1,
+     "exercises": [
+      22,
+      23,
+      24,
+      25,
+      26
+     ]
+    },
+    {
+     "example": 3,
+     "dok": 1,
+     "exercises": [
+      13,
+      27,
+      28,
+      43
+     ]
+    },
+    {
+     "example": 3,
+     "dok": 2,
+     "exercises": [
+      29,
+      30,
+      31,
+      32,
+      37,
+      38
+     ]
+    },
+    {
+     "example": 3,
+     "dok": 3,
+     "exercises": [
+      10,
+      11,
+      14
+     ]
+    },
+    {
+     "example": 4,
+     "dok": 2,
+     "exercises": [
+      33,
+      34,
+      35,
+      36,
+      42
+     ]
+    },
+    {
+     "example": 4,
+     "dok": 3,
+     "exercises": [
+      12
+     ]
+    },
+    {
+     "example": 5,
+     "dok": 2,
+     "exercises": [
+      39
+     ]
+    },
+    {
+     "example": 5,
+     "dok": 3,
+     "exercises": [
+      40,
+      41,
+      44
+     ]
+    }
+   ],
+   "exercises_total": 44,
+   "task_guide": {
+    "basic": "10–24, 27–31, 35-44",
+    "advanced": "10–14, 19–26, 28-44"
+   },
+   "quiz_depths": [
+    1,
+    1,
+    2,
+    1,
+    2
+   ],
+   "vocabulary": {
+    "new": 1,
+    "review": 3
+   }
+  },
+  {
+   "lesson": "1.3",
+   "unit": 1,
+   "standards": [
+    "10.3.1",
+    "10.3.2",
+    "10.3.3"
+   ],
+   "practices": [
+    "MP.3",
+    "MP.7"
+   ],
+   "objectives_bloom": [
+    "تطبيق",
+    "unclassified",
+    "unclassified",
+    "فهم"
+   ],
+   "examples": [
+    {
+     "n": 1,
+     "representations": [
+      "بياني"
+     ]
+    },
+    {
+     "n": 2,
+     "representations": [
+      "بياني",
+      "جبري"
+     ]
+    },
+    {
+     "n": 3,
+     "representations": [
+      "جدول",
+      "جبري",
+      "سياق"
+     ]
+    },
+    {
+     "n": 4,
+     "representations": [
+      "بياني",
+      "جبري",
+      "سياق"
+     ]
+    }
+   ],
+   "analysis": [
+    {
+     "example": 1,
+     "dok": 2,
+     "exercises": [
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      41
+     ]
+    },
+    {
+     "example": 2,
+     "dok": 1,
+     "exercises": [
+      10,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28
+     ]
+    },
+    {
+     "example": 2,
+     "dok": 2,
+     "exercises": [
+      13
+     ]
+    },
+    {
+     "example": 2,
+     "dok": 3,
+     "exercises": [
+      14
+     ]
+    },
+    {
+     "example": 3,
+     "dok": 2,
+     "exercises": [
+      29,
+      30,
+      40
+     ]
+    },
+    {
+     "example": 3,
+     "dok": 3,
+     "exercises": [
+      37,
+      38,
+      39
+     ]
+    },
+    {
+     "example": 3,
+     "dok": 4,
+     "exercises": [
+      42
+     ]
+    },
+    {
+     "example": 4,
+     "dok": 1,
+     "exercises": [
+      33,
+      34,
+      35,
+      36
+     ]
+    },
+    {
+     "example": 4,
+     "dok": 2,
+     "exercises": [
+      31,
+      32
+     ]
+    },
+    {
+     "example": 4,
+     "dok": 3,
+     "exercises": [
+      11,
+      12
+     ]
+    }
+   ],
+   "exercises_total": 42,
+   "task_guide": {
+    "basic": "10-26, 29-34, 37-42",
+    "advanced": "10-14, 17-20, 23-42"
+   },
+   "quiz_depths": [
+    1,
+    2,
+    1,
+    2,
+    1
+   ],
+   "vocabulary": {
+    "new": 1,
+    "review": 3
+   }
+  },
+  {
+   "lesson": "1.4",
+   "unit": 1,
+   "standards": [
+    "10.3.1",
+    "10.3.3"
+   ],
+   "practices": [
+    "MP.4",
+    "MP.7"
+   ],
+   "objectives_bloom": [
+    "تطبيق",
+    "تطبيق",
+    "فهم"
+   ],
+   "examples": [
+    {
+     "n": 1,
+     "representations": [
+      "جبري",
+      "سياق"
+     ]
+    },
+    {
+     "n": 2,
+     "representations": [
+      "جبري",
+      "سياق"
+     ]
+    },
+    {
+     "n": 3,
+     "representations": [
+      "جدول",
+      "بياني",
+      "سياق"
+     ]
+    },
+    {
+     "n": 4,
+     "representations": [
+      "جدول",
+      "بياني",
+      "جبري",
+      "سياق"
+     ]
+    }
+   ],
+   "analysis": [
+    {
+     "example": 1,
+     "dok": 2,
+     "exercises": [
+      20,
+      21
+     ]
+    },
+    {
+     "example": 1,
+     "dok": 3,
+     "exercises": [
+      13,
+      26
+     ]
+    },
+    {
+     "example": 2,
+     "dok": 1,
+     "exercises": [
+      28
+     ]
+    },
+    {
+     "example": 2,
+     "dok": 2,
+     "exercises": [
+      9,
+      11,
+      16,
+      17,
+      18,
+      19,
+      27
+     ]
+    },
+    {
+     "example": 2,
+     "dok": 3,
+     "exercises": [
+      12,
+      14,
+      15,
+      24,
+      29
+     ]
+    },
+    {
+     "example": 3,
+     "dok": 2,
+     "exercises": [
+      22,
+      23
+     ]
+    },
+    {
+     "example": 3,
+     "dok": 3,
+     "exercises": [
+      10
+     ]
+    },
+    {
+     "example": 4,
+     "dok": 3,
+     "exercises": [
+      25
+     ]
+    }
+   ],
+   "exercises_total": 29,
+   "task_guide": {
+    "basic": "9-20, 23-29",
+    "advanced": "9-14, 18-29"
+   },
+   "quiz_depths": [
+    2,
+    1,
+    2,
+    2,
+    1
+   ],
+   "vocabulary": {
+    "new": 2,
+    "review": 2
+   }
+  },
+  {
+   "lesson": "2.1",
+   "unit": 2,
+   "standards": [
+    "10.2.2"
+   ],
+   "practices": [],
+   "objectives_bloom": [
+    "تطبيق",
+    "تطبيق"
+   ],
+   "examples": [
+    {
+     "n": 1,
+     "representations": [
+      "بياني",
+      "جبري"
+     ]
+    },
+    {
+     "n": 2,
+     "representations": [
+      "جدول"
+     ]
+    },
+    {
+     "n": 3,
+     "representations": [
+      "بياني",
+      "جبري",
+      "سياق"
+     ]
+    }
+   ],
+   "analysis": [
+    {
+     "example": 1,
+     "dok": 1,
+     "exercises": [
+      13,
+      14,
+      16,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      35,
+      36,
+      38
+     ]
+    },
+    {
+     "example": 1,
+     "dok": 2,
+     "exercises": [
+      15,
+      17
+     ]
+    },
+    {
+     "example": 2,
+     "dok": 1,
+     "exercises": [
+      30,
+      31,
+      32,
+      33,
+      37
+     ]
+    },
+    {
+     "example": 2,
+     "dok": 2,
+     "exercises": [
+      12
+     ]
+    },
+    {
+     "example": 3,
+     "dok": 1,
+     "exercises": [
+      34
+     ]
+    },
+    {
+     "example": 3,
+     "dok": 2,
+     "exercises": [
+      39
+     ]
+    }
+   ],
+   "exercises_total": 39,
+   "task_guide": {
+    "basic": "12-27, 31-39",
+    "advanced": "12-18, 22-39"
+   },
+   "quiz_depths": [
+    1,
+    1,
+    1,
+    2,
+    2
+   ],
+   "vocabulary": {
+    "new": 2,
+    "review": 3
+   }
+  },
+  {
+   "lesson": "2.2",
+   "unit": 2,
+   "standards": [
+    "10.2.1"
+   ],
+   "practices": [
+    "MP.2",
+    "MP.7"
+   ],
+   "objectives_bloom": [
+    "تطبيق",
+    "تطبيق",
+    "تطبيق",
+    "تطبيق"
+   ],
+   "examples": [
+    {
+     "n": 1,
+     "representations": [
+      "جبري"
+     ]
+    },
+    {
+     "n": 2,
+     "representations": [
+      "جدول",
+      "جبري"
+     ]
+    },
+    {
+     "n": 3,
+     "representations": [
+      "جبري",
+      "سياق"
+     ]
+    },
+    {
+     "n": 4,
+     "representations": [
+      "بياني",
+      "جبري"
+     ]
+    },
+    {
+     "n": 5,
+     "representations": [
+      "بياني"
+     ]
+    }
+   ],
+   "analysis": [
+    {
+     "example": 1,
+     "dok": 1,
+     "exercises": [
+      20,
+      21,
+      22,
+      23
+     ]
+    },
+    {
+     "example": 1,
+     "dok": 3,
+     "exercises": [
+      15
+     ]
+    },
+    {
+     "example": 2,
+     "dok": 1,
+     "exercises": [
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      38
+     ]
+    },
+    {
+     "example": 2,
+     "dok": 2,
+     "exercises": [
+      18
+     ]
+    },
+    {
+     "example": 2,
+     "dok": 3,
+     "exercises": [
+      17
+     ]
+    },
+    {
+     "example": 3,
+     "dok": 3,
+     "exercises": [
+      30,
+      31,
+      37
+     ]
+    },
+    {
+     "example": 4,
+     "dok": 1,
+     "exercises": [
+      32,
+      33
+     ]
+    },
+    {
+     "example": 5,
+     "dok": 1,
+     "exercises": [
+      34,
+      35
+     ]
+    },
+    {
+     "example": 5,
+     "dok": 2,
+     "exercises": [
+      16,
+      36
+     ]
+    },
+    {
+     "example": 5,
+     "dok": 3,
+     "exercises": [
+      19
+     ]
+    },
+    {
+     "example": 5,
+     "dok": 4,
+     "exercises": [
+      39
+     ]
+    }
+   ],
+   "exercises_total": 39,
+   "task_guide": {
+    "basic": "15-27, 30-39",
+    "advanced": "15-19, 22-39"
+   },
+   "quiz_depths": [
+    1,
+    1,
+    1,
+    2,
+    2
+   ],
+   "vocabulary": {
+    "new": 2,
+    "review": 3
+   }
+  },
+  {
+   "lesson": "2.3",
+   "unit": 2,
+   "standards": [
+    "10.1.1"
+   ],
+   "practices": [
+    "MP.3",
+    "MP.7"
+   ],
+   "objectives_bloom": [
+    "تطبيق",
+    "unclassified",
+    "تطبيق"
+   ],
+   "examples": [
+    {
+     "n": 1,
+     "representations": [
+      "جبري"
+     ]
+    },
+    {
+     "n": 2,
+     "representations": [
+      "جبري"
+     ]
+    },
+    {
+     "n": 3,
+     "representations": [
+      "جبري"
+     ]
+    },
+    {
+     "n": 4,
+     "representations": [
+      "جبري"
+     ]
+    },
+    {
+     "n": 5,
+     "representations": [
+      "جبري",
+      "سياق"
+     ]
+    }
+   ],
+   "analysis": [
+    {
+     "example": 1,
+     "dok": 1,
+     "exercises": [
+      26,
+      27,
+      28,
+      29,
+      30,
+      31
+     ]
+    },
+    {
+     "example": 2,
+     "dok": 1,
+     "exercises": [
+      32,
+      33,
+      34,
+      35
+     ]
+    },
+    {
+     "example": 3,
+     "dok": 1,
+     "exercises": [
+      36,
+      37,
+      38,
+      39,
+      51
+     ]
+    },
+    {
+     "example": 3,
+     "dok": 2,
+     "exercises": [
+      20,
+      23,
+      24
+     ]
+    },
+    {
+     "example": 3,
+     "dok": 3,
+     "exercises": [
+      25
+     ]
+    },
+    {
+     "example": 4,
+     "dok": 1,
+     "exercises": [
+      40,
+      41,
+      42,
+      43,
+      44,
+      45
+     ]
+    },
+    {
+     "example": 4,
+     "dok": 2,
+     "exercises": [
+      21,
+      22
+     ]
+    },
+    {
+     "example": 5,
+     "dok": 1,
+     "exercises": [
+      46,
+      47
+     ]
+    },
+    {
+     "example": 5,
+     "dok": 2,
+     "exercises": [
+      48,
+      49,
+      50,
+      52
+     ]
+    },
+    {
+     "example": 5,
+     "dok": 3,
+     "exercises": [
+      53
+     ]
+    }
+   ],
+   "exercises_total": 53,
+   "task_guide": {
+    "basic": "20-37, 42-53",
+    "advanced": "20-25, 30-53"
+   },
+   "quiz_depths": [
+    1,
+    1,
+    1,
+    2,
+    2
+   ],
+   "vocabulary": {
+    "new": 1,
+    "review": 4
+   }
+  },
+  {
+   "lesson": "2.4",
+   "unit": 2,
+   "standards": [
+    "10.2.1"
+   ],
+   "practices": [
+    "MP.2",
+    "MP.7"
+   ],
+   "objectives_bloom": [
+    "تطبيق",
+    "unclassified"
+   ],
+   "examples": [
+    {
+     "n": 1,
+     "representations": [
+      "جبري"
+     ]
+    },
+    {
+     "n": 2,
+     "representations": [
+      "جبري"
+     ]
+    },
+    {
+     "n": 3,
+     "representations": [
+      "جبري"
+     ]
+    },
+    {
+     "n": 4,
+     "representations": [
+      "جبري",
+      "سياق"
+     ]
+    }
+   ],
+   "analysis": [
+    {
+     "example": 1,
+     "dok": 1,
+     "exercises": [
+      23,
+      24,
+      25,
+      26,
+      27,
+      28
+     ]
+    },
+    {
+     "example": 1,
+     "dok": 2,
+     "exercises": [
+      18
+     ]
+    },
+    {
+     "example": 2,
+     "dok": 1,
+     "exercises": [
+      29,
+      30,
+      31,
+      32,
+      33,
+      34,
+      41,
+      42
+     ]
+    },
+    {
+     "example": 2,
+     "dok": 2,
+     "exercises": [
+      20
+     ]
+    },
+    {
+     "example": 3,
+     "dok": 1,
+     "exercises": [
+      35,
+      36,
+      37,
+      38,
+      39,
+      40,
+      43,
+      44
+     ]
+    },
+    {
+     "example": 3,
+     "dok": 2,
+     "exercises": [
+      19,
+      21,
+      45,
+      50,
+      51
+     ]
+    },
+    {
+     "example": 3,
+     "dok": 3,
+     "exercises": [
+      22
+     ]
+    },
+    {
+     "example": 4,
+     "dok": 2,
+     "exercises": [
+      46,
+      47,
+      48,
+      49
+     ]
+    },
+    {
+     "example": 4,
+     "dok": 3,
+     "exercises": [
+      52
+     ]
+    }
+   ],
+   "exercises_total": 52,
+   "task_guide": {
+    "basic": "18-38, 41, 44-52",
+    "advanced": "18-23, 26-28, 31-52"
+   },
+   "quiz_depths": [
+    1,
+    2,
+    1,
+    1,
+    2
+   ],
+   "vocabulary": {
+    "new": 0,
+    "review": 4
+   }
+  },
+  {
+   "lesson": "2.5",
+   "unit": 2,
+   "standards": [
+    "10.2.1"
+   ],
+   "practices": [
+    "MP.2",
+    "MP.7"
+   ],
+   "objectives_bloom": [
+    "تطبيق",
+    "تطبيق"
+   ],
+   "examples": [
+    {
+     "n": 1,
+     "representations": [
+      "بياني",
+      "جبري"
+     ]
+    },
+    {
+     "n": 2,
+     "representations": [
+      "جبري"
+     ]
+    },
+    {
+     "n": 3,
+     "representations": [
+      "جبري",
+      "سياق"
+     ]
+    },
+    {
+     "n": 4,
+     "representations": [
+      "جبري"
+     ]
+    },
+    {
+     "n": 5,
+     "representations": [
+      "بياني",
+      "جبري",
+      "سياق"
+     ]
+    }
+   ],
+   "analysis": [
+    {
+     "example": 1,
+     "dok": 1,
+     "exercises": [
+      15,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25
+     ]
+    },
+    {
+     "example": 1,
+     "dok": 2,
+     "exercises": [
+      50
+     ]
+    },
+    {
+     "example": 2,
+     "dok": 1,
+     "exercises": [
+      18,
+      26,
+      27,
+      28,
+      29
+     ]
+    },
+    {
+     "example": 2,
+     "dok": 2,
+     "exercises": [
+      16,
+      19
+     ]
+    },
+    {
+     "example": 2,
+     "dok": 3,
+     "exercises": [
+      46
+     ]
+    },
+    {
+     "example": 3,
+     "dok": 1,
+     "exercises": [
+      30,
+      31,
+      32,
+      33
+     ]
+    },
+    {
+     "example": 3,
+     "dok": 2,
+     "exercises": [
+      34,
+      35,
+      49,
+      51
+     ]
+    },
+    {
+     "example": 4,
+     "dok": 1,
+     "exercises": [
+      36,
+      37,
+      38,
+      39
+     ]
+    },
+    {
+     "example": 4,
+     "dok": 2,
+     "exercises": [
+      44,
+      47
+     ]
+    },
+    {
+     "example": 5,
+     "dok": 1,
+     "exercises": [
+      40,
+      41,
+      42,
+      43
+     ]
+    },
+    {
+     "example": 5,
+     "dok": 2,
+     "exercises": [
+      17,
+      45
+     ]
+    },
+    {
+     "example": 5,
+     "dok": 3,
+     "exercises": [
+      48
+     ]
+    }
+   ],
+   "exercises_total": 51,
+   "task_guide": {
+    "basic": "15-23, 28-51",
+    "advanced": "15-39, 44-51"
+   },
+   "quiz_depths": [
+    1,
+    1,
+    1,
+    2,
+    2
+   ],
+   "vocabulary": {
+    "new": 1,
+    "review": 3
+   }
+  },
+  {
+   "lesson": "2.6",
+   "unit": 2,
+   "standards": [
+    "10.2.1"
+   ],
+   "practices": [
+    "MP.6",
+    "MP.7"
+   ],
+   "objectives_bloom": [
+    "unclassified",
+    "تطبيق",
+    "تطبيق"
+   ],
+   "examples": [
+    {
+     "n": 1,
+     "representations": [
+      "جبري"
+     ]
+    },
+    {
+     "n": 2,
+     "representations": [
+      "بياني",
+      "جبري"
+     ]
+    },
+    {
+     "n": 3,
+     "representations": [
+      "بياني",
+      "جبري",
+      "سياق"
+     ]
+    },
+    {
+     "n": 4,
+     "representations": [
+      "بياني",
+      "جبري"
+     ]
+    }
+   ],
+   "analysis": [
+    {
+     "example": 2,
+     "dok": 1,
+     "exercises": [
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28
+     ]
+    },
+    {
+     "example": 2,
+     "dok": 2,
+     "exercises": [
+      15,
+      16,
+      17
+     ]
+    },
+    {
+     "example": 3,
+     "dok": 2,
+     "exercises": [
+      39,
+      40,
+      41,
+      44
+     ]
+    },
+    {
+     "example": 4,
+     "dok": 1,
+     "exercises": [
+      29,
+      30,
+      31,
+      32,
+      33,
+      34,
+      35,
+      36,
+      37,
+      38,
+      42,
+      43
+     ]
+    }
+   ],
+   "exercises_total": 44,
+   "task_guide": {
+    "basic": "14-32 , 37-44",
+    "advanced": "14-18 , 23-44"
+   },
+   "quiz_depths": [
+    1,
+    1,
+    1,
+    1,
+    1
+   ],
+   "vocabulary": {
+    "new": 3,
+    "review": 0
+   }
+  },
+  {
+   "lesson": "2.7",
+   "unit": 2,
+   "standards": [
+    "10.2.3"
+   ],
+   "practices": [
+    "MP.1",
+    "MP.7"
+   ],
+   "objectives_bloom": [
+    "تطبيق",
+    "unclassified"
+   ],
+   "examples": [
+    {
+     "n": 1,
+     "representations": [
+      "جبري"
+     ]
+    },
+    {
+     "n": 2,
+     "representations": [
+      "جبري",
+      "سياق"
+     ]
+    },
+    {
+     "n": 3,
+     "representations": [
+      "بياني",
+      "جبري"
+     ]
+    },
+    {
+     "n": 4,
+     "representations": [
+      "جبري"
+     ]
+    },
+    {
+     "n": 5,
+     "representations": [
+      "جبري",
+      "سياق"
+     ]
+    }
+   ],
+   "analysis": [
+    {
+     "example": 1,
+     "dok": 1,
+     "exercises": [
+      15,
+      16,
+      17,
+      18,
+      32
+     ]
+    },
+    {
+     "example": 1,
+     "dok": 2,
+     "exercises": [
+      12
+     ]
+    },
+    {
+     "example": 2,
+     "dok": 2,
+     "exercises": [
+      19,
+      20,
+      26
+     ]
+    },
+    {
+     "example": 2,
+     "dok": 3,
+     "exercises": [
+      8
+     ]
+    },
+    {
+     "example": 3,
+     "dok": 1,
+     "exercises": [
+      21,
+      22
+     ]
+    },
+    {
+     "example": 3,
+     "dok": 2,
+     "exercises": [
+      11
+     ]
+    },
+    {
+     "example": 4,
+     "dok": 1,
+     "exercises": [
+      23,
+      24,
+      31
+     ]
+    },
+    {
+     "example": 4,
+     "dok": 2,
+     "exercises": [
+      10,
+      14
+     ]
+    },
+    {
+     "example": 4,
+     "dok": 3,
+     "exercises": [
+      13
+     ]
+    },
+    {
+     "example": 5,
+     "dok": 2,
+     "exercises": [
+      9,
+      25,
+      27,
+      28,
+      29
+     ]
+    },
+    {
+     "example": 5,
+     "dok": 3,
+     "exercises": [
+      30,
+      33
+     ]
+    }
+   ],
+   "exercises_total": 33,
+   "task_guide": {
+    "basic": "8-23, 25-33",
+    "advanced": "8-14, 16-33"
+   },
+   "quiz_depths": [
+    2,
+    2,
+    2,
+    2,
+    2
+   ],
+   "vocabulary": {
+    "new": 2,
+    "review": 3
+   }
+  },
+  {
+   "lesson": "2.8",
+   "unit": 2,
+   "standards": [
+    "10.2.4"
+   ],
+   "practices": [
+    "MP.1",
+    "MP.7"
+   ],
+   "objectives_bloom": [
+    "فهم",
+    "تطبيق"
+   ],
+   "examples": [
+    {
+     "n": 1,
+     "representations": [
+      "بياني"
+     ]
+    },
+    {
+     "n": 2,
+     "representations": [
+      "بياني",
+      "جبري"
+     ]
+    },
+    {
+     "n": 3,
+     "representations": [
+      "جبري"
+     ]
+    },
+    {
+     "n": 4,
+     "representations": [
+      "جبري",
+      "سياق"
+     ]
+    }
+   ],
+   "analysis": [
+    {
+     "example": 1,
+     "dok": 2,
+     "exercises": [
+      20
+     ]
+    },
+    {
+     "example": 1,
+     "dok": 3,
+     "exercises": [
+      13,
+      14
+     ]
+    },
+    {
+     "example": 2,
+     "dok": 1,
+     "exercises": [
+      18,
+      19,
+      21,
+      22,
+      23,
+      24
+     ]
+    },
+    {
+     "example": 2,
+     "dok": 2,
+     "exercises": [
+      17,
+      34,
+      37
+     ]
+    },
+    {
+     "example": 2,
+     "dok": 3,
+     "exercises": [
+      12
+     ]
+    },
+    {
+     "example": 3,
+     "dok": 1,
+     "exercises": [
+      27,
+      28,
+      29,
+      31,
+      36
+     ]
+    },
+    {
+     "example": 3,
+     "dok": 2,
+     "exercises": [
+      33
+     ]
+    },
+    {
+     "example": 3,
+     "dok": 3,
+     "exercises": [
+      15,
+      38
+     ]
+    },
+    {
+     "example": 4,
+     "dok": 1,
+     "exercises": [
+      25,
+      26,
+      30
+     ]
+    },
+    {
+     "example": 4,
+     "dok": 2,
+     "exercises": [
+      32,
+      35
+     ]
+    },
+    {
+     "example": 4,
+     "dok": 3,
+     "exercises": [
+      16
+     ]
+    }
+   ],
+   "exercises_total": 38,
+   "task_guide": {
+    "basic": "12–29, 32–38",
+    "advanced": "12-17, 20–38"
+   },
+   "quiz_depths": [
+    1,
+    2,
+    2,
+    1,
+    1
+   ],
+   "vocabulary": {
+    "new": 1,
+    "review": 2
+   }
+  },
+  {
+   "lesson": "2.9",
+   "unit": 2,
+   "standards": [
+    "10.2.5"
+   ],
+   "practices": [
+    "MP.2",
+    "MP.7"
+   ],
+   "objectives_bloom": [
+    "فهم",
+    "تطبيق"
+   ],
+   "examples": [
+    {
+     "n": 1,
+     "representations": [
+      "بياني",
+      "جبري"
+     ]
+    },
+    {
+     "n": 2,
+     "representations": [
+      "بياني"
+     ]
+    },
+    {
+     "n": 3,
+     "representations": [
+      "جبري"
+     ]
+    },
+    {
+     "n": 4,
+     "representations": [
+      "جبري",
+      "سياق"
+     ]
+    }
+   ],
+   "analysis": [
+    {
+     "example": 1,
+     "dok": 1,
+     "exercises": [
+      16,
+      20,
+      21,
+      22,
+      23,
+      24
+     ]
+    },
+    {
+     "example": 2,
+     "dok": 1,
+     "exercises": [
+      25,
+      26,
+      27,
+      28,
+      37
+     ]
+    },
+    {
+     "example": 2,
+     "dok": 2,
+     "exercises": [
+      15,
+      17,
+      18
+     ]
+    },
+    {
+     "example": 3,
+     "dok": 1,
+     "exercises": [
+      29,
+      30,
+      31,
+      36,
+      38
+     ]
+    },
+    {
+     "example": 3,
+     "dok": 2,
+     "exercises": [
+      19
+     ]
+    },
+    {
+     "example": 4,
+     "dok": 2,
+     "exercises": [
+      32,
+      33,
+      34,
+      35,
+      39
+     ]
+    }
+   ],
+   "exercises_total": 39,
+   "task_guide": {
+    "basic": "17-39",
+    "advanced": "17-39"
+   },
+   "quiz_depths": [
+    1,
+    1,
+    1,
+    1,
+    1
+   ],
+   "vocabulary": {
+    "new": 2,
+    "review": 4
+   }
+  },
+  {
+   "lesson": "2.10",
+   "unit": 2,
+   "standards": [
+    "10.6.1",
+    "10.6.2"
+   ],
+   "practices": [
+    "MP.4",
+    "MP.7"
+   ],
+   "objectives_bloom": [
+    "تطبيق",
+    "تطبيق",
+    "تطبيق",
+    "تطبيق"
+   ],
+   "examples": [
+    {
+     "n": 1,
+     "representations": [
+      "بياني",
+      "جبري"
+     ]
+    },
+    {
+     "n": 2,
+     "representations": [
+      "بياني",
+      "جبري"
+     ]
+    },
+    {
+     "n": 3,
+     "representations": [
+      "بياني",
+      "جبري",
+      "سياق"
+     ]
+    },
+    {
+     "n": 4,
+     "representations": [
+      "جبري"
+     ]
+    },
+    {
+     "n": 5,
+     "representations": [
+      "جبري"
+     ]
+    }
+   ],
+   "analysis": [
+    {
+     "example": 1,
+     "dok": 1,
+     "exercises": [
+      18
+     ]
+    },
+    {
+     "example": 1,
+     "dok": 2,
+     "exercises": [
+      12,
+      13,
+      38
+     ]
+    },
+    {
+     "example": 1,
+     "dok": 3,
+     "exercises": [
+      17
+     ]
+    },
+    {
+     "example": 2,
+     "dok": 1,
+     "exercises": [
+      19,
+      20,
+      21,
+      22,
+      23,
+      24
+     ]
+    },
+    {
+     "example": 2,
+     "dok": 2,
+     "exercises": [
+      11,
+      14,
+      15
+     ]
+    },
+    {
+     "example": 2,
+     "dok": 3,
+     "exercises": [
+      16,
+      39
+     ]
+    },
+    {
+     "example": 3,
+     "dok": 2,
+     "exercises": [
+      25,
+      34,
+      35,
+      36
+     ]
+    },
+    {
+     "example": 4,
+     "dok": 1,
+     "exercises": [
+      26,
+      27,
+      28,
+      29,
+      37
+     ]
+    },
+    {
+     "example": 5,
+     "dok": 1,
+     "exercises": [
+      30,
+      31,
+      32,
+      33
+     ]
+    }
+   ],
+   "exercises_total": 39,
+   "task_guide": {
+    "basic": "11-18, 31-39",
+    "advanced": "11–18, 21–39"
+   },
+   "quiz_depths": [
+    1,
+    1,
+    1,
+    2,
+    2
+   ],
+   "vocabulary": {
+    "new": 1,
+    "review": 2
+   }
+  },
+  {
+   "lesson": "3.1",
+   "unit": 3,
+   "standards": [
+    "10.5.1"
+   ],
+   "practices": [
+    "MP.2",
+    "MP.7"
+   ],
+   "objectives_bloom": [
+    "unclassified",
+    "unclassified"
+   ],
+   "examples": [
+    {
+     "n": 1,
+     "representations": [
+      "بياني"
+     ]
+    },
+    {
+     "n": 2,
+     "representations": [
+      "بياني"
+     ]
+    },
+    {
+     "n": 3,
+     "representations": [
+      "بياني"
+     ]
+    },
+    {
+     "n": 4,
+     "representations": [
+      "بياني",
+      "جبري"
+     ]
+    },
+    {
+     "n": 5,
+     "representations": [
+      "جدول",
+      "بياني"
+     ]
+    },
+    {
+     "n": 6,
+     "representations": []
+    }
+   ],
+   "analysis": [
+    {
+     "example": 1,
+     "dok": 1,
+     "exercises": [
+      16
+     ]
+    },
+    {
+     "example": 2,
+     "dok": 2,
+     "exercises": [
+      10,
+      17
+     ]
+    },
+    {
+     "example": 3,
+     "dok": 2,
+     "exercises": [
+      18,
+      22,
+      27
+     ]
+    },
+    {
+     "example": 3,
+     "dok": 3,
+     "exercises": [
+      24,
+      25,
+      26
+     ]
+    },
+    {
+     "example": 3,
+     "dok": 4,
+     "exercises": [
+      29
+     ]
+    },
+    {
+     "example": 4,
+     "dok": 1,
+     "exercises": [
+      19
+     ]
+    },
+    {
+     "example": 4,
+     "dok": 2,
+     "exercises": [
+      15
+     ]
+    },
+    {
+     "example": 4,
+     "dok": 3,
+     "exercises": [
+      11,
+      12,
+      14
+     ]
+    },
+    {
+     "example": 5,
+     "dok": 1,
+     "exercises": [
+      20
+     ]
+    },
+    {
+     "example": 5,
+     "dok": 3,
+     "exercises": [
+      23
+     ]
+    },
+    {
+     "example": 6,
+     "dok": 2,
+     "exercises": [
+      21,
+      28
+     ]
+    },
+    {
+     "example": 6,
+     "dok": 3,
+     "exercises": [
+      13
+     ]
+    }
+   ],
+   "exercises_total": 29,
+   "task_guide": {
+    "basic": "10-21, 24-29",
+    "advanced": "10-16, 19-29"
+   },
+   "quiz_depths": [
+    1,
+    2,
+    2,
+    2,
+    2
+   ],
+   "vocabulary": {
+    "new": 1,
+    "review": 2
+   }
+  },
+  {
+   "lesson": "3.2",
+   "unit": 3,
+   "standards": [
+    "10.5.1"
+   ],
+   "practices": [
+    "MP.6",
+    "MP.8"
+   ],
+   "objectives_bloom": [
+    "unclassified",
+    "unclassified",
+    "unclassified"
+   ],
+   "examples": [
+    {
+     "n": 1,
+     "representations": [
+      "بياني"
+     ]
+    },
+    {
+     "n": 2,
+     "representations": [
+      "بياني"
+     ]
+    },
+    {
+     "n": 3,
+     "representations": [
+      "بياني"
+     ]
+    },
+    {
+     "n": 4,
+     "representations": [
+      "جبري",
+      "سياق"
+     ]
+    },
+    {
+     "n": 5,
+     "representations": [
+      "بياني"
+     ]
+    }
+   ],
+   "analysis": [
+    {
+     "example": 1,
+     "dok": 2,
+     "exercises": [
+      10,
+      15,
+      16,
+      17,
+      18,
+      27,
+      28
+     ]
+    },
+    {
+     "example": 2,
+     "dok": 2,
+     "exercises": [
+      19,
+      20
+     ]
+    },
+    {
+     "example": 3,
+     "dok": 2,
+     "exercises": [
+      11,
+      21
+     ]
+    },
+    {
+     "example": 3,
+     "dok": 3,
+     "exercises": [
+      13
+     ]
+    },
+    {
+     "example": 3,
+     "dok": 4,
+     "exercises": [
+      14,
+      29
+     ]
+    },
+    {
+     "example": 4,
+     "dok": 2,
+     "exercises": [
+      22,
+      23,
+      26
+     ]
+    },
+    {
+     "example": 4,
+     "dok": 3,
+     "exercises": [
+      24,
+      25
+     ]
+    },
+    {
+     "example": 5,
+     "dok": 3,
+     "exercises": [
+      9,
+      12
+     ]
+    }
+   ],
+   "exercises_total": 29,
+   "task_guide": {
+    "basic": "9-20, 23-29",
+    "advanced": "9-14, 17-29"
+   },
+   "quiz_depths": [
+    1,
+    3,
+    2,
+    2,
+    2
+   ],
+   "vocabulary": {
+    "new": 1,
+    "review": 4
+   }
+  },
+  {
+   "lesson": "3.3",
+   "unit": 3,
+   "standards": [
+    "10.5.2"
+   ],
+   "practices": [
+    "MP.3",
+    "MP.4"
+   ],
+   "objectives_bloom": [
+    "تطبيق",
+    "تطبيق"
+   ],
+   "examples": [
+    {
+     "n": 1,
+     "representations": [
+      "بياني"
+     ]
+    },
+    {
+     "n": 2,
+     "representations": [
+      "بياني"
+     ]
+    },
+    {
+     "n": 3,
+     "representations": [
+      "بياني"
+     ]
+    },
+    {
+     "n": 4,
+     "representations": [
+      "بياني",
+      "جبري"
+     ]
+    },
+    {
+     "n": 5,
+     "representations": [
+      "بياني",
+      "سياق"
+     ]
+    }
+   ],
+   "analysis": [
+    {
+     "example": 1,
+     "dok": 2,
+     "exercises": [
+      16
+     ]
+    },
+    {
+     "example": 1,
+     "dok": 3,
+     "exercises": [
+      10
+     ]
+    },
+    {
+     "example": 2,
+     "dok": 2,
+     "exercises": [
+      15
+     ]
+    },
+    {
+     "example": 2,
+     "dok": 3,
+     "exercises": [
+      13,
+      18,
+      20
+     ]
+    },
+    {
+     "example": 3,
+     "dok": 2,
+     "exercises": [
+      11,
+      12,
+      17,
+      24
+     ]
+    },
+    {
+     "example": 3,
+     "dok": 3,
+     "exercises": [
+      14
+     ]
+    },
+    {
+     "example": 4,
+     "dok": 2,
+     "exercises": [
+      19,
+      25
+     ]
+    },
+    {
+     "example": 5,
+     "dok": 2,
+     "exercises": [
+      21,
+      22
+     ]
+    },
+    {
+     "example": 5,
+     "dok": 3,
+     "exercises": [
+      23,
+      26,
+      27
+     ]
+    }
+   ],
+   "exercises_total": 27,
+   "task_guide": {
+    "basic": "10-19, 21-27",
+    "advanced": "10-15, 17-27"
+   },
+   "quiz_depths": [
+    2,
+    3,
+    3,
+    2,
+    2
+   ],
+   "vocabulary": {
+    "new": 0,
+    "review": 1
+   }
+  },
+  {
+   "lesson": "3.4",
+   "unit": 3,
+   "standards": [
+    "10.5.2",
+    "10.5.3"
+   ],
+   "practices": [
+    "MP.5",
+    "MP.6",
+    "MP.7"
+   ],
+   "objectives_bloom": [
+    "تطبيق",
+    "تطبيق"
+   ],
+   "examples": [
+    {
+     "n": 1,
+     "representations": [
+      "بياني"
+     ]
+    },
+    {
+     "n": 2,
+     "representations": [
+      "بياني",
+      "جبري"
+     ]
+    },
+    {
+     "n": 3,
+     "representations": [
+      "بياني",
+      "جبري"
+     ]
+    },
+    {
+     "n": 4,
+     "representations": [
+      "بياني",
+      "جبري"
+     ]
+    },
+    {
+     "n": 5,
+     "representations": [
+      "بياني",
+      "جبري"
+     ]
+    },
+    {
+     "n": 6,
+     "representations": [
+      "بياني",
+      "جبري",
+      "سياق"
+     ]
+    }
+   ],
+   "analysis": [
+    {
+     "example": 1,
+     "dok": 2,
+     "exercises": [
+      15,
+      16,
+      26
+     ]
+    },
+    {
+     "example": 1,
+     "dok": 3,
+     "exercises": [
+      11,
+      14
+     ]
+    },
+    {
+     "example": 2,
+     "dok": 2,
+     "exercises": [
+      12,
+      17,
+      25
+     ]
+    },
+    {
+     "example": 3,
+     "dok": 2,
+     "exercises": [
+      13,
+      14,
+      18
+     ]
+    },
+    {
+     "example": 3,
+     "dok": 3,
+     "exercises": [
+      24
+     ]
+    },
+    {
+     "example": 4,
+     "dok": 2,
+     "exercises": [
+      19
+     ]
+    },
+    {
+     "example": 5,
+     "dok": 2,
+     "exercises": [
+      20,
+      23
+     ]
+    },
+    {
+     "example": 6,
+     "dok": 2,
+     "exercises": [
+      21
+     ]
+    },
+    {
+     "example": 6,
+     "dok": 3,
+     "exercises": [
+      22
+     ]
+    },
+    {
+     "example": 6,
+     "dok": 4,
+     "exercises": [
+      27
+     ]
+    }
+   ],
+   "exercises_total": 27,
+   "task_guide": {
+    "basic": "11-27",
+    "advanced": "11-27"
+   },
+   "quiz_depths": [
+    2,
+    2,
+    3,
+    2,
+    2
+   ],
+   "vocabulary": {
+    "new": 1,
+    "review": 3
+   }
+  },
+  {
+   "lesson": "3.5",
+   "unit": 3,
+   "standards": [
+    "10.5.2",
+    "10.5.3"
+   ],
+   "practices": [
+    "MP.1",
+    "MP.2"
+   ],
+   "objectives_bloom": [
+    "تطبيق",
+    "تطبيق"
+   ],
+   "examples": [
+    {
+     "n": 1,
+     "representations": [
+      "بياني",
+      "جبري"
+     ]
+    },
+    {
+     "n": 2,
+     "representations": [
+      "بياني",
+      "جبري"
+     ]
+    },
+    {
+     "n": 3,
+     "representations": [
+      "جبري",
+      "سياق"
+     ]
+    },
+    {
+     "n": 4,
+     "representations": [
+      "بياني"
+     ]
+    },
+    {
+     "n": 5,
+     "representations": [
+      "بياني",
+      "جبري"
+     ]
+    }
+   ],
+   "analysis": [
+    {
+     "example": 1,
+     "dok": 2,
+     "exercises": [
+      17,
+      18,
+      19
+     ]
+    },
+    {
+     "example": 2,
+     "dok": 2,
+     "exercises": [
+      14,
+      26,
+      29
+     ]
+    },
+    {
+     "example": 2,
+     "dok": 3,
+     "exercises": [
+      25
+     ]
+    },
+    {
+     "example": 3,
+     "dok": 2,
+     "exercises": [
+      12,
+      20
+     ]
+    },
+    {
+     "example": 3,
+     "dok": 3,
+     "exercises": [
+      15,
+      24
+     ]
+    },
+    {
+     "example": 4,
+     "dok": 2,
+     "exercises": [
+      13,
+      30
+     ]
+    },
+    {
+     "example": 4,
+     "dok": 3,
+     "exercises": [
+      16
+     ]
+    },
+    {
+     "example": 5,
+     "dok": 2,
+     "exercises": [
+      21,
+      22,
+      23
+     ]
+    },
+    {
+     "example": 5,
+     "dok": 3,
+     "exercises": [
+      27,
+      28
+     ]
+    },
+    {
+     "example": 5,
+     "dok": 4,
+     "exercises": [
+      31
+     ]
+    }
+   ],
+   "exercises_total": 31,
+   "task_guide": {
+    "basic": "12-22, 24-31",
+    "advanced": "12-16, 18-31"
+   },
+   "quiz_depths": [
+    2,
+    3,
+    2,
+    1,
+    2
+   ],
+   "vocabulary": {
+    "new": 0,
+    "review": 2
+   }
+  }
+ ]
+}
