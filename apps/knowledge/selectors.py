@@ -2,11 +2,17 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
+from functools import lru_cache
+from pathlib import Path
 
 from django.db.models import Sum
 
+from .domain.grade10_index import Grade10Index, Grade10Lesson
 from .models import ExerciseTemplate
+
+GRADE10_INDEX = Path(__file__).resolve().parent / "data" / "grade10_index.json"
 
 
 @dataclass(frozen=True)
@@ -39,3 +45,13 @@ def coverage() -> list[CoverageRow]:
     for (lesson, level, graph), count in sorted(template_counts().items()):
         result.append(CoverageRow(lesson, level, graph, count, len(variants(lesson, "essay", level, graph))))
     return result
+
+
+@lru_cache(maxsize=1)
+def grade10_index() -> Grade10Index:
+    """فهرس العاشر المشتق من الملف المودَع (يُتحقق من مخططه عند أول قراءة)."""
+    return Grade10Index(**json.loads(GRADE10_INDEX.read_text(encoding="utf-8")))
+
+
+def grade10_lesson(code: str) -> Grade10Lesson | None:
+    return next((lesson for lesson in grade10_index().lessons if lesson.lesson == code), None)

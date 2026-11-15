@@ -26,6 +26,7 @@ PostgreSQL + Redis. النشر على Railway (`railway.toml`).
 - المسائل تُولَّد أصليًا في `apps/papers/domain/generators.py`، ولا يدخل هنا نص من كتاب Savvas أو من الاختبارات أو الخطة الفصلية.
 - كل مولّد جديد يحتاج نوع فحص عددي مستقل في `apps/papers/tests/test_generators.py`.
 - توزيع الدرجات في المفتاح مشتق لا مخزَّن: `apps/papers/domain/marking.py` يوزّع درجة الفرع المقالي على خطواته ثم بند «الجواب النهائي» (أصغر وحدة نصف درجة، والخطوات الزائدة تُدمج)، والموضوعي درجته لرمز الإجابة. `PartOut` يعيد حسابه دائمًا فلا يُقبل من العميل، ويعرضه `AnswerKey.vue` و`key_pages` في Word بالصفوف نفسها.
+- فهرس العاشر `apps/knowledge/data/grade10_index.json` مشتق عددي فقط (معايير وممارسات ومستويات بلوم وتمثيلات الأمثلة وصفوف تحليل التمارين و«دليل المهام» وأعماق الاختبار وعدد المصطلحات)، بلا نص دليل: مخطط `domain/grade10_index.py` صارم لا يملك حقلًا نصيًا حرًّا، ويُبنى بـ `python manage.py build_grade10_index --source <مجلد الكتاب خارج المستودع>` ويقرؤه `selectors.grade10_index()`.
 - الاختبارات بلا Postgres محلي: `DATABASE_URL=sqlite:///test.db python -m pytest --create-db`.
 
 ## الدخول والصلاحيات
