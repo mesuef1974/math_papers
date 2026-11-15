@@ -16,8 +16,9 @@ function files(dir: string, ext: string): string[] {
 const tokens = readFileSync(join(STYLES, "tokens.css"), "utf-8");
 const defined = new Set([...tokens.matchAll(/(--[a-z0-9-]+)\s*:/g)].map((m) => m[1]));
 const sheets = [...files(SRC, ".vue"), ...files(STYLES, ".css").filter((path) => !path.endsWith("tokens.css"))];
-// متغيرات محلية يضبطها العنصر نفسه لا الهوية: --i رقم الجزء في ظهور الرمز (motion.css المولَّد، وله قيمة احتياطية 0)
-const LOCAL_VARS = new Set(["--i"]);
+// متغيرات محلية يضبطها العنصر نفسه لا الهوية: --i رقم الجزء في ظهور الرمز (motion.css المولَّد، وله قيمة احتياطية 0)،
+// و--ratio نسبة صفحة PDF يضبطها PdfPageView من الملف نفسه
+const LOCAL_VARS = new Set(["--i", "--ratio"]);
 const RAW_COLOR = /#[0-9a-f]{3,8}\b|\b(?:rgb|rgba|hsl|hsla)\(/i;
 
 describe("الهوية البصرية", () => {

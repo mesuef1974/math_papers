@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
 import PageFlipper from "@/components/PageFlipper.vue";
+import PdfPageView from "@/components/PdfPageView.vue";
 import { requestKey, usePdfStore, type PdfRequest } from "@/stores/pdf";
 
 // تبويب «صفحات PDF»: ملف الخادم الحقيقي نفسه (Chromium) في عارض المتصفح المدمج، فحدود الصفحات وترقيمها
@@ -13,15 +14,12 @@ const stale = computed(() => pdf.previewStatus === "done" && pdf.previewKey !== 
 // المتصفحات التي لا تعرض PDF داخل الصفحة (أغلب متصفحات الجوال) تعلن ذلك؛ ما لا يعلن شيئًا يُجرَّب فيه الإطار.
 const inlineViewer = typeof navigator === "undefined" || navigator.pdfViewerEnabled !== false;
 
-// التقليب: عارض المتصفح لا يبدّل صفحته حين يتغير جزء الرابط وحده، فيُعاد تحميل الإطار لكل صفحة (‎:key‎) وهو يفتح
-// الملف على الصفحة المطلوبة (‎#page=N‎). الإطار بنسبة A4 وفوقه طبقة تمنع تمرير العارض، فلا تُرى الصفحات المجاورة.
-// العدد من الخادم؛ حين لا يُعرف (0) يبقى العارض وحده بلا أزرار.
+// التقليب: صفحات الملف تُرسم على canvas بدقة الشاشة (PdfPageView) بدل عارض المتصفح الذي كان يُعاد بناؤه مع كل
+// صفحة فيومض وجودته بحجم إطاره؛ فلا يلزم عارض داخلي في المتصفح ويعمل التقليب في الجوال أيضًا. العدد من الخادم؛
+// حين لا يُعرف (0) يبقى عارض المتصفح وحده بلا أزرار، وبلا عارض داخلي يُعرض رابط الفتح.
 const page = ref(1);
 const pages = computed(() => pdf.previewPages);
-const paged = computed(() => inlineViewer && pages.value > 0);
-const frameSrc = computed(() =>
-  paged.value ? `${pdf.previewUrl}#page=${page.value}&view=Fit&toolbar=0&navpanes=0` : pdf.previewUrl,
-);
+const paged = computed(() => pages.value > 0);
 
 watch(
   () => pdf.previewUrl,
@@ -51,13 +49,11 @@ onMounted(() => {
         <span>تغيّرت الورقة أو إعدادات طباعتها بعد هذه المعاينة.</span>
         <button type="button" class="btn btn-secondary btn-small" @click="refresh">تحديث المعاينة</button>
       </div>
-      <p v-if="!inlineViewer" class="alert alert-info">متصفحك لا يعرض PDF داخل الصفحة. افتح الملف من الرابط أدناه.</p>
-      <PageFlipper v-else v-model:page="page" :pages="paged ? pages : 0">
-        <div class="frame-box" :class="{ locked: paged }">
-          <iframe :key="paged ? page : 0" class="frame" :src="frameSrc" title="صفحات PDF كما تُطبع"></iframe>
-          <div v-if="paged" class="lock" aria-hidden="true"></div>
-        </div>
+      <PageFlipper v-if="paged" v-model:page="page" :pages="pages">
+        <PdfPageView :url="pdf.previewUrl" :page="page" :pages="pages" />
       </PageFlipper>
+      <p v-else-if="!inlineViewer" class="alert alert-info">متصفحك لا يعرض PDF داخل الصفحة. افتح الملف من الرابط أدناه.</p>
+      <iframe v-else class="frame" :src="pdf.previewUrl" title="صفحات PDF كما تُطبع"></iframe>
       <a class="open" :href="pdf.previewUrl" target="_blank" rel="noopener">فتح الملف في نافذة مستقلة</a>
     </template>
   </section>
@@ -85,7 +81,7 @@ onMounted(() => {
   justify-content: space-between;
   gap: var(--space-2) var(--space-4);
 }
-/* العارض يملأ الحاوية ويتولّى هو تكبير الصفحات؛ الارتفاع من ارتفاع النافذة حتى تُرى صفحة كاملة تقريبًا */
+/* عارض المتصفح عند جهل عدد الصفحات: يملأ الحاوية ويتولّى هو التكبير */
 .frame {
   display: block;
   inline-size: 100%;
@@ -93,22 +89,6 @@ onMounted(() => {
   border: var(--border);
   border-radius: var(--radius-md);
   background: var(--color-surface-sunken);
-}
-.frame-box {
-  position: relative;
-}
-/* صفحة واحدة بنسبة A4 في إطار لا يتجاوز ارتفاع النافذة؛ الطبقة تلتقط العجلة والنقر فلا يتمرر العارض */
-.frame-box.locked {
-  inline-size: min(100%, calc(85vh * 210 / 297));
-  aspect-ratio: 210 / 297;
-  margin-inline: auto;
-}
-.frame-box.locked .frame {
-  block-size: 100%;
-}
-.lock {
-  position: absolute;
-  inset: 0;
 }
 .open {
   justify-self: start;

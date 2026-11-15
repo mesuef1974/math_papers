@@ -13,6 +13,7 @@ vi.mock("@/api/client", async (importOriginal) => {
 
 const { usePdfStore, PREVIEW_MAX_AGE_MS } = await import("@/stores/pdf");
 const { default: PdfPreview } = await import("./PdfPreview.vue");
+const { default: PdfPageView } = await import("./PdfPageView.vue");
 
 const request: PdfRequest = {
   papers: [],
@@ -113,7 +114,9 @@ describe("PdfPreview: صفحات ملف الخادم الحقيقي", () => {
 
 describe("PdfPreview: تقليب الصفحات", () => {
   const withPages = (id: string, pages: number) => ({ ...done(id), pages });
-  const src = (wrapper: ReturnType<typeof mount>) => wrapper.find("iframe").attributes("src") ?? "";
+  // الرسم الفعلي على canvas له اختبار مستقل (PdfPageView.test.ts)؛ هنا يُستبدل بمكوّن مبتور يعرض خصائصه
+  const mountStubbed = () => mount(PdfPreview, { props: { request }, global: { stubs: { PdfPageView: true } } });
+  const view = (wrapper: ReturnType<typeof mount>) => wrapper.findComponent(PdfPageView);
   const buttons = (wrapper: ReturnType<typeof mount>) => wrapper.findAll(".pager button");
 
   beforeEach(() => {
@@ -125,7 +128,7 @@ describe("PdfPreview: تقليب الصفحات", () => {
 
   async function opened(pages = 3) {
     post.mockResolvedValue(withPages("j1", pages));
-    const wrapper = mount(PdfPreview, { props: { request } });
+    const wrapper = mountStubbed();
     await flushPromises();
     return wrapper;
   }
@@ -134,21 +137,23 @@ describe("PdfPreview: تقليب الصفحات", () => {
     const wrapper = await opened(3);
     expect(wrapper.find(".pager").exists()).toBe(true);
     expect(wrapper.find(".pager").text()).toContain("3");
-    expect(src(wrapper)).toBe("/api/v1/pdf/j1/file?inline=1#page=1&view=Fit&toolbar=0&navpanes=0");
+    expect(view(wrapper).props()).toEqual({ url: "/api/v1/pdf/j1/file?inline=1", page: 1, pages: 3 });
+    expect(wrapper.find("iframe").exists()).toBe(false);
     const [prev, next] = buttons(wrapper);
     expect(prev.attributes("disabled")).toBeDefined();
     expect(next.attributes("disabled")).toBeUndefined();
   });
 
-  it("التالية والسابقة تبدّلان جزء الرابط وحده ويتعطل الزر عند الطرفين", async () => {
+  it("التالية والسابقة تبدّلان رقم الصفحة وحده ويتعطل الزر عند الطرفين دون طلب جديد", async () => {
     const wrapper = await opened(2);
     const [prev, next] = buttons(wrapper);
+    const before = view(wrapper).element;
     await next.trigger("click");
-    expect(src(wrapper)).toContain("#page=2&");
-    expect(src(wrapper).startsWith("/api/v1/pdf/j1/file?inline=1#")).toBe(true);
+    expect(view(wrapper).props("page")).toBe(2);
+    expect(view(wrapper).element).toBe(before); // المكوّن نفسه لا يُعاد بناؤه: لا وميض
     expect(next.attributes("disabled")).toBeDefined();
     await prev.trigger("click");
-    expect(src(wrapper)).toContain("#page=1&");
+    expect(view(wrapper).props("page")).toBe(1);
     expect(post).toHaveBeenCalledTimes(1);
   });
 
@@ -157,84 +162,62 @@ describe("PdfPreview: تقليب الصفحات", () => {
     const input = wrapper.find(".pager input");
     await input.setValue("4");
     await input.trigger("change");
-    expect(src(wrapper)).toContain("#page=4&");
+    expect(view(wrapper).props("page")).toBe(4);
     await input.setValue("99");
     await input.trigger("change");
-    expect(src(wrapper)).toContain("#page=5&");
+    expect(view(wrapper).props("page")).toBe(5);
     expect((input.element as HTMLInputElement).value).toBe("5");
     await input.setValue("0");
     await input.trigger("change");
-    expect(src(wrapper)).toContain("#page=1&");
+    expect(view(wrapper).props("page")).toBe(1);
   });
 
   it("لوحة المفاتيح: الأيسر تالية والأيمن سابقة وHome وEnd", async () => {
     const wrapper = await opened(4);
     const section = wrapper.find(".flipper");
     await section.trigger("keydown", { key: "ArrowLeft" });
-    expect(src(wrapper)).toContain("#page=2&");
+    expect(view(wrapper).props("page")).toBe(2);
     await section.trigger("keydown", { key: "PageDown" });
-    expect(src(wrapper)).toContain("#page=3&");
+    expect(view(wrapper).props("page")).toBe(3);
     await section.trigger("keydown", { key: "ArrowRight" });
-    expect(src(wrapper)).toContain("#page=2&");
+    expect(view(wrapper).props("page")).toBe(2);
     await section.trigger("keydown", { key: "End" });
-    expect(src(wrapper)).toContain("#page=4&");
+    expect(view(wrapper).props("page")).toBe(4);
     await section.trigger("keydown", { key: "Home" });
-    expect(src(wrapper)).toContain("#page=1&");
+    expect(view(wrapper).props("page")).toBe(1);
     await section.trigger("keydown", { key: "a" });
-    expect(src(wrapper)).toContain("#page=1&");
+    expect(view(wrapper).props("page")).toBe(1);
   });
 
   it("تحديث المعاينة يعيد التقليب إلى الصفحة الأولى بعدد الصفحات الجديد", async () => {
     post.mockResolvedValueOnce(withPages("j1", 3)).mockResolvedValueOnce(withPages("j2", 6));
-    const wrapper = mount(PdfPreview, { props: { request } });
+    const wrapper = mountStubbed();
     await flushPromises();
     await buttons(wrapper)[1].trigger("click");
-    expect(src(wrapper)).toContain("#page=2&");
+    expect(view(wrapper).props("page")).toBe(2);
     await wrapper.setProps({ request: { ...request, show_key: false } });
     await wrapper.find(".notice button").trigger("click");
     await flushPromises();
-    expect(src(wrapper)).toContain("j2/file?inline=1#page=1&");
+    expect(view(wrapper).props()).toEqual({ url: "/api/v1/pdf/j2/file?inline=1", page: 1, pages: 6 });
     expect(wrapper.find(".pager").text()).toContain("6");
   });
 
-  it("بلا عدد صفحات أو بلا عارض داخلي: لا أزرار تقليب", async () => {
-    post.mockResolvedValue({ ...done("j1"), pages: 0 });
-    const wrapper = mount(PdfPreview, { props: { request } });
-    await flushPromises();
-    expect(wrapper.find(".pager").exists()).toBe(false);
-    expect(src(wrapper)).toBe("/api/v1/pdf/j1/file?inline=1");
-    wrapper.unmount();
-    setActivePinia(createPinia());
+  it("عدد الصفحات معروف: التقليب يعمل ولو لم يعلن المتصفح عارض PDF داخليًا (الرسم على canvas)", async () => {
     viewer(false);
     post.mockResolvedValue(withPages("j3", 4));
-    const other = mount(PdfPreview, { props: { request } });
+    const wrapper = mountStubbed();
     await flushPromises();
-    expect(other.find(".pager").exists()).toBe(false);
-  });
-});
-
-describe("PdfPreview: عارض بصفحة واحدة", () => {
-  it("كل صفحة إطار جديد يفتح عند رقمها، والطبقة تمنع تمرير العارض", async () => {
-    setActivePinia(createPinia());
-    post.mockReset();
-    viewer(true);
-    post.mockResolvedValue({ ...done("j1"), pages: 3 });
-    const wrapper = mount(PdfPreview, { props: { request } });
-    await flushPromises();
-    const first = wrapper.find("iframe").element;
-    expect(wrapper.find(".lock").exists()).toBe(true);
-    await wrapper.findAll(".pager button")[1].trigger("click");
-    expect(wrapper.find("iframe").element).not.toBe(first);
-    expect(wrapper.find("iframe").attributes("src")).toContain("#page=2&");
+    expect(wrapper.find(".pager").exists()).toBe(true);
+    expect(view(wrapper).exists()).toBe(true);
+    expect(wrapper.text()).not.toContain("لا يعرض PDF داخل الصفحة");
   });
 
-  it("بلا عدد صفحات لا طبقة قفل فيبقى العارض قابلًا للتمرير", async () => {
-    setActivePinia(createPinia());
-    post.mockReset();
-    viewer(true);
-    post.mockResolvedValue(done("j1"));
-    const wrapper = mount(PdfPreview, { props: { request } });
+  it("بلا عدد صفحات: عارض المتصفح وحده بلا أزرار ولا مكوّن رسم", async () => {
+    post.mockResolvedValue({ ...done("j1"), pages: 0 });
+    const wrapper = mountStubbed();
     await flushPromises();
-    expect(wrapper.find(".lock").exists()).toBe(false);
+    expect(wrapper.find(".pager").exists()).toBe(false);
+    expect(view(wrapper).exists()).toBe(false);
+    expect(wrapper.find("iframe").attributes("src")).toBe("/api/v1/pdf/j1/file?inline=1");
   });
 });
