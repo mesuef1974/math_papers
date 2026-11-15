@@ -19,9 +19,10 @@ ignore = ["E501", "S101", "S105", "S106", "S603", "S607", "DJ001", "N806"]
 "config/settings/*.py" = ["F403", "F405", "E402"]
 "scripts/**" = ["S", "B"]
 "automation/**" = ["S", "B"]
+"tools/**" = ["S", "B"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["apps", "config", "automation"]
+known-first-party = ["apps", "config", "automation", "tools"]
 
 [tool.ruff.format]
 quote-style = "double"
