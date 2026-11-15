@@ -8,6 +8,7 @@ PostgreSQL + Redis. النشر على Railway (`railway.toml`).
   `selectors.py` قراءة، `api.py` مسارات Ninja، `tests/`.
 - `frontend/src/`: `pages/` (lazy)، `components/`، `stores/` (Pinia)، `api/client.ts` (جلسة + CSRF، لا توكنات في localStorage).
 - `scripts/` بوابات، `automation/` دفتر البطاقات والمشغّل، `security/sensitive_paths.json` المسارات الحسّاسة.
+- `tools/extraction/` خط استخراج أدلة المعلم (شيفرة واختبارات فقط؛ النصوص والمقاطع خارج المستودع بإعداد `book.yaml` لكل كتاب): انظر `README.md` فيه.
 
 ## قواعد
 - DDD + Clean Architecture + SOLID. ORM فقط. Skinny Models / Fat Services. idempotent. > 300ms → مهمة خلفية.
