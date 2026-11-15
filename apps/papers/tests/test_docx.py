@@ -14,7 +14,6 @@ from lxml import etree
 from apps.core.models import AuditLog
 from apps.papers.word import ooxml
 from apps.papers.word.builder import (
-    BRAND_LINE,
     BUNDLE_COVER_TITLE,
     LOGO,
     PATTERN_BAND,
@@ -275,7 +274,9 @@ def test_every_document_carries_platform_logo_and_name(client, kind):
     files = parts_of(build_docx(sample_payload(client, kind, show_key=True)))
     assert LOGO in [data for name, data in files.items() if name.startswith("word/media/")]
     footers = [data.decode("utf-8") for name, data in files.items() if name.startswith("word/footer")]
-    assert footers and all(BRAND_LINE in footer for footer in footers)
+    # التذييل يحمل الشعار المقفل صورةً بدل كلمة «أوراق»
+    assert footers and all("<w:drawing>" in footer for footer in footers)
+    assert all("أوراق ·" not in footer for footer in footers)
     assert all(" PAGE " in footer and " NUMPAGES " in footer for footer in footers)
 
 
