@@ -15,6 +15,8 @@ from apps.core.models import AuditLog
 from apps.papers.word import ooxml
 from apps.papers.word.builder import (
     BUNDLE_COVER_TITLE,
+    COPYRIGHT_NAME,
+    COPYRIGHT_PHONE,
     LOGO,
     PATTERN_BAND,
     build_docx,
@@ -277,6 +279,9 @@ def test_every_document_carries_platform_logo_and_name(client, kind):
     # التذييل يحمل الشعار المقفل صورةً بدل كلمة «أوراق»
     assert footers and all("<w:drawing>" in footer for footer in footers)
     assert all("أوراق ·" not in footer for footer in footers)
+    # سطر الحقوق في كل تذييل: العلامة والاسم والرقم وأيقونة الجوال (رسمان: الشعار والأيقونة)
+    assert all(COPYRIGHT_NAME in footer and COPYRIGHT_PHONE in footer for footer in footers)
+    assert all(footer.count("<w:drawing>") == 2 for footer in footers)
     assert all(" PAGE " in footer and " NUMPAGES " in footer for footer in footers)
 
 

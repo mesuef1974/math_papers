@@ -62,7 +62,7 @@ describe("ألوان الورق المطبوع", () => {
   });
 
   it("التذييل الجاري بلون العلامة، والخلفيات الملوّنة تُطبع كما هي", () => {
-    expect(print).toContain("border-top: 0.9pt solid #8e2433");
+    expect(print).toContain("border-block-start: 0.9pt solid #8e2433");
     expect(print).toContain("print-color-adjust: exact");
   });
 });
@@ -71,7 +71,7 @@ describe("الورقة على الشاشة بقواعد الورق", () => {
   const token = (name: string) => new RegExp(`${name}:\\s*([^;]+);`).exec(tokens)?.[1].trim() ?? "";
 
   it("مقاس الصفحة وهوامشها في المتغيرات تساوي قاعدة الصفحة", () => {
-    const page = print.slice(print.indexOf("@page {"), print.indexOf("@bottom-right"));
+    const page = print.slice(print.indexOf("@page {"), print.indexOf("@bottom-left"));
     expect(page).toContain("size: A4");
     expect(token("--page-width")).toBe(`${PAGE_WIDTH_MM}mm`);
     expect(token("--page-height")).toBe("297mm");

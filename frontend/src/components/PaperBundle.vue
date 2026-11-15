@@ -2,6 +2,7 @@
 import { computed, watchEffect } from "vue";
 import PaperHeader from "@/components/PaperHeader.vue";
 import PaperSheet from "@/components/PaperSheet.vue";
+import PrintFrame from "@/components/PrintFrame.vue";
 import { LEVEL_NAMES, type BundleEntry, type Level, type Paper } from "@/stores/papers";
 import type { PaperHeaderData } from "@/stores/print";
 
@@ -41,42 +42,44 @@ function levelsLabel(levels: BundleEntry["levels"]): string {
 
 <template>
   <div class="bundle">
-    <article class="sheet cover">
-      <PaperHeader :header="coverHeader" compact />
-      <p class="summary">{{ plan.length }} ورقة عمل، {{ total }} مسألة، مرتبة من السهل إلى مهارات التفكير العليا.</p>
-      <div class="table-scroll">
-        <table class="index">
-          <caption>الفهرس</caption>
-          <thead>
-            <tr>
-              <th scope="col">الدرس</th>
-              <th scope="col">العنوان</th>
-              <th scope="col">المسائل</th>
-              <th scope="col">المستويات</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="entry in plan" :key="entry.lesson">
-              <th scope="row" class="code">{{ entry.lesson }}</th>
-              <td class="name">{{ entry.title }}</td>
-              <td class="num">{{ entry.count }}</td>
-              <td class="count">{{ levelsLabel(entry.levels) }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-      <footer class="foot">رقم الحزمة {{ seed }}</footer>
-    </article>
+    <PrintFrame>
+      <article class="sheet cover">
+        <PaperHeader :header="coverHeader" compact />
+        <p class="summary">{{ plan.length }} ورقة عمل، {{ total }} مسألة، مرتبة من السهل إلى مهارات التفكير العليا.</p>
+        <div class="table-scroll">
+          <table class="index">
+            <caption>الفهرس</caption>
+            <thead>
+              <tr>
+                <th scope="col">الدرس</th>
+                <th scope="col">العنوان</th>
+                <th scope="col">المسائل</th>
+                <th scope="col">المستويات</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="entry in plan" :key="entry.lesson">
+                <th scope="row" class="code">{{ entry.lesson }}</th>
+                <td class="name">{{ entry.title }}</td>
+                <td class="num">{{ entry.count }}</td>
+                <td class="count">{{ levelsLabel(entry.levels) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <footer class="foot">رقم الحزمة {{ seed }}</footer>
+      </article>
 
-    <div v-for="paper in papers" :key="paper.lesson_code" class="bundle-sheet">
-      <PaperSheet :paper="paper" :header="header(paper)" :show-key="false" :running-footer="false" />
-    </div>
-
-    <template v-if="showKey">
-      <div v-for="paper in papers" :key="`key-${paper.lesson_code}`" class="bundle-sheet">
-  <PaperSheet :paper="paper" :header="header(paper)" :show-key="true" hide-sheet :running-footer="false" />
+      <div v-for="paper in papers" :key="paper.lesson_code" class="bundle-sheet">
+        <PaperSheet :paper="paper" :header="header(paper)" :show-key="false" :running-footer="false" />
       </div>
-    </template>
+
+      <template v-if="showKey">
+        <div v-for="paper in papers" :key="`key-${paper.lesson_code}`" class="bundle-sheet">
+    <PaperSheet :paper="paper" :header="header(paper)" :show-key="true" hide-sheet :running-footer="false" />
+        </div>
+      </template>
+    </PrintFrame>
   </div>
 </template>
 
