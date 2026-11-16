@@ -11,6 +11,7 @@ from apps.knowledge.domain.grade10_index import Grade10Lesson
 from apps.knowledge.selectors import grade10_index, grade10_lesson
 
 from .domain.calendar_engine import Closure, Plan, Slot, allocate, load_terms, sessions
+from .domain.deck import Deck, LessonContent, build_deck
 from .domain.feedback import ClassOutcome, Decision, decide
 from .domain.semester_plan import (
     TermPlan,
@@ -75,6 +76,20 @@ def decision_of(record: ClassOutcomeRecord) -> Decision:
 def run_reports(owner: AbstractBaseUser, section: str | None = None) -> QuerySet[LessonRunRecord]:
     rows = LessonRunRecord.objects.filter(owner=owner)
     return rows.filter(section=section) if section else rows
+
+
+def lesson_deck(
+    code: str,
+    content: LessonContent,
+    period_minutes: int = DEFAULT_PERIOD_MINUTES,
+    resources: Collection[str] = (),
+) -> Deck:
+    """عرض الدرس: الفهرس المشتق وسير الحصة من هنا، والنصوص والمقصوصات من `content` (خارج المستودع)."""
+    lesson = grade10_lesson(code)
+    if lesson is None:
+        raise KeyError(f"درس غير موجود في الفهرس: {code}")
+    flow = build_flow(period_minutes, profile_from_lesson(lesson), resources=resources)
+    return build_deck(lesson, content, flow)
 
 
 def term_plan() -> TermPlan:
