@@ -140,19 +140,31 @@ def select(
     return sorted(candidates, key=lambda s: (-_score(s, profile, ideal_minutes), s.slug))
 
 
-def _split(chosen: dict[str, Strategy], period: int) -> dict[str, int]:
-    """دقائق كل طور: المثالي مقرَّبًا ومحصورًا في حدّي استراتيجيته، ثم يُوزَّع الفرق بالأقرب إلى مثاليه."""
-    ideal = {p: period * PHASE_WEIGHTS[p] for p in PHASES}
-    minutes = {p: min(max(round(ideal[p]), chosen[p].min), chosen[p].max) for p in PHASES}
-    diff = period - sum(minutes.values())
+def distribute(
+    ideal: dict[str, float], bounds: dict[str, tuple[int, int]], total: int
+) -> dict[str, int] | None:
+    """يوزّع `total` دقيقة على الأطوار: المثالي مقرَّبًا ومحصورًا في الحدّين، ثم يُوزَّع الفرق بالأقرب إلى مثاليه.
+
+    يعيد None إن لم يوجد توزيع صحيح مجموعه `total` ضمن الحدود. الترتيب عند التعادل بترتيب `ideal` فالنتيجة حتمية.
+    """
+    minutes = {p: min(max(round(ideal[p]), bounds[p][0]), bounds[p][1]) for p in ideal}
+    diff = total - sum(minutes.values())
     while diff != 0:
         step = 1 if diff > 0 else -1
-        room = [p for p in PHASES if (minutes[p] < chosen[p].max if step > 0 else minutes[p] > chosen[p].min)]
+        room = [p for p in ideal if (minutes[p] < bounds[p][1] if step > 0 else minutes[p] > bounds[p][0])]
         if not room:
-            raise FlowError(f"لا توزيع للدقائق يساوي {period} ضمن حدود الاستراتيجيات المختارة")
+            return None
         pick = max(room, key=lambda p: (ideal[p] - minutes[p]) * step)
         minutes[pick] += step
         diff -= step
+    return minutes
+
+
+def _split(chosen: dict[str, Strategy], period: int) -> dict[str, int]:
+    ideal = {p: period * PHASE_WEIGHTS[p] for p in PHASES}
+    minutes = distribute(ideal, {p: (chosen[p].min, chosen[p].max) for p in PHASES}, period)
+    if minutes is None:
+        raise FlowError(f"لا توزيع للدقائق يساوي {period} ضمن حدود الاستراتيجيات المختارة")
     return minutes
 
 
