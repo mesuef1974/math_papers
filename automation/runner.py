@@ -165,7 +165,7 @@ def unpushable(path: Path) -> str:
     if not int(ahead or 0):
         return "لا إيداعات فوق origin/main"
     status = sh(["git", "status", "--porcelain"], cwd=path, capture_output=True).stdout.splitlines()
-    dirty = [line[3:] for line in status if line[3:] != ".prepush_receipt"]
+    dirty = [line[3:] for line in status]
     if dirty:
         return "تعديلات غير مودَعة: " + "، ".join(dirty[:5])
     return ""
@@ -178,8 +178,6 @@ def prepush(path: Path, card: str) -> bool:
         check=False,
         env=work_env(card),
     )
-    # الإيصال يُكتب في ملف متتبَّع؛ يُعاد كي لا يبقى الفرع متسخًا بعد الفحص.
-    sh(["git", "restore", "--", ".prepush_receipt"], cwd=path, check=False)
     return proc.returncode == 0
 
 
