@@ -16,7 +16,7 @@
 ```bash
 python automation/ledger.py new "عنوان البطاقة" --body "وصف ما يجب فعله وما يُعدّ نجاحًا"
 python automation/ledger.py ready <card_id>
-python automation/ledger.py list
+python automation/ledger.py list [--state <حالة>]   # بلا الخيار كل البطاقات؛ به بطاقات تلك الحالة وحدها
 python automation/ledger.py show <card_id>
 python automation/runner.py --once            # يلتقط بطاقة واحدة
 python automation/runner.py --dry-run         # يعرض ما سيفعله دون تنفيذ
