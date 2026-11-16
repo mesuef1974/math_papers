@@ -1,5 +1,6 @@
 """عرض الدرس: ترتيب الشرائح من الفهرس وسير الحصة، وسلامة حزمة PPTX (RTL، علاقات، نسب الصور، حتمية)."""
 
+import json
 import re
 import struct
 import zipfile
@@ -19,6 +20,7 @@ from apps.planning.domain.deck import (
     TableSlide,
     TitleSlide,
 )
+from apps.planning.example_clips import load_example_clips
 from apps.planning.pptx_export import HEIGHT, WIDTH, build_pptx, fit
 from apps.planning.selectors import lesson_codes, lesson_deck
 
@@ -196,3 +198,59 @@ def test_every_lesson_builds_a_deck_and_a_valid_package(code):
     text = b" ".join(v for n, v in parts.items() if n.startswith("ppt/slides/slide")).decode("utf-8")
     assert not RAW_BOOK_REFS.search(text)
     assert code in text
+
+
+def _write_clips(root, index: dict[str, list[dict]], sizes: dict[str, tuple[int, int]]):
+    for name, (w, h) in sizes.items():
+        (root / name).write_bytes(_png(w, h))
+    (root / "index.json").write_text(json.dumps(index), encoding="utf-8")
+
+
+def test_loader_reads_main_and_continuation_clips_in_order(tmp_path):
+    _write_clips(
+        tmp_path,
+        {
+            "2.6": [
+                {"n": 2, "page": 7, "file": "a2.png", "cont": ["a2c.png"]},
+                {"n": 1, "page": 6, "file": "a1.png", "cont": []},
+                {"n": 3, "page": 8, "file": None, "cont": []},
+            ]
+        },
+        {"a1.png": (40, 30), "a2.png": (50, 60), "a2c.png": (50, 20)},
+    )
+    clips = load_example_clips(tmp_path, "2.6")
+    assert [(c.n, c.part, c.width_px, c.height_px) for c in clips] == [
+        (1, 1, 40, 30),
+        (2, 1, 50, 60),
+        (2, 2, 50, 20),
+    ]
+    deck = lesson_deck("2.6", _content(examples=clips), 45)
+    titles = [s.title for s in deck.slides if isinstance(s, ExampleSlide)]
+    assert titles == ["مثال 1", "مثال 2", "تابع المثال 2"]
+    cont = [s for s in deck.slides if isinstance(s, ExampleSlide)][2]
+    assert cont.notes == ()
+    assert build_pptx(deck)[:2] == b"PK"
+
+
+def test_loader_errors_are_loud(tmp_path):
+    with pytest.raises(DeckError):
+        load_example_clips(tmp_path, "2.6")  # لا index.json
+    _write_clips(tmp_path, {"2.6": [{"n": 1, "file": "missing.png", "cont": []}]}, {})
+    with pytest.raises(DeckError):
+        load_example_clips(tmp_path, "2.6")  # ملف مذكور غير موجود
+    with pytest.raises(DeckError):
+        load_example_clips(tmp_path, "9.9")  # درس غير مفهرس
+    _write_clips(tmp_path, {"2.6": [{"n": 1, "file": "../x.png", "cont": []}]}, {})
+    with pytest.raises(DeckError):
+        load_example_clips(tmp_path, "2.6")  # خروج من المجلد
+    (tmp_path / "bad.png").write_bytes(b"not a png at all, just text bytes")
+    _write_clips(tmp_path, {"2.6": [{"n": 1, "file": "bad.png", "cont": []}]}, {})
+    with pytest.raises(DeckError):
+        load_example_clips(tmp_path, "2.6")
+
+
+def test_continuation_of_unindexed_example_is_an_error():
+    with pytest.raises(DeckError):
+        lesson_deck(
+            "2.6", _content(examples=(ExampleClip(n=9, png=_png(5, 5), width_px=5, height_px=5, part=2),)), 45
+        )

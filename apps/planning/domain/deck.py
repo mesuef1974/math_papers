@@ -39,14 +39,17 @@ class DeckError(PlanningError):
 
 @dataclass(frozen=True)
 class ExampleClip:
-    """مثال مقصوص من صفحة الكتاب: صورة PNG بأبعادها ورقم المثال في الدرس."""
+    """مثال مقصوص من صفحة الكتاب: صورة PNG بأبعادها ورقم المثال في الدرس. `part` 1 للمثال و2 فما فوق لتتمته («تابع المثال»)."""
 
     n: int
     png: bytes
     width_px: int
     height_px: int
+    part: int = 1
 
     def __post_init__(self) -> None:
+        if self.part < 1:
+            raise DeckError(f"جزء المثال {self.n} غير صالح")
         if self.width_px <= 0 or self.height_px <= 0:
             raise DeckError(f"أبعاد صورة المثال {self.n} غير صالحة")
         if not self.png.startswith(b"\x89PNG\r\n\x1a\n"):
@@ -138,10 +141,10 @@ def _assessment_slide(lesson: Grade10Lesson) -> TableSlide | None:
 
 
 def build_deck(lesson: Grade10Lesson, content: LessonContent, flow: Flow) -> Deck:
-    """ترتيب الشرائح: العنوان، الأهداف، المصطلحات، مثال لكل مقصوص بترتيب رقمه، سير الحصة، التقويم."""
+    """ترتيب الشرائح: العنوان، الأهداف، المصطلحات، مثال لكل مقصوص بترتيب رقمه وتتمته بعده، سير الحصة، التقويم."""
     if not content.title.strip():
         raise DeckError("عنوان الدرس فارغ")
-    numbers = [c.n for c in content.examples]
+    numbers = [(c.n, c.part) for c in content.examples]
     if len(set(numbers)) != len(numbers):
         raise DeckError("رقم مثال مكرر في المقصوصات")
 
@@ -155,8 +158,12 @@ def build_deck(lesson: Grade10Lesson, content: LessonContent, flow: Flow) -> Dec
         slides.append(
             TableSlide("المصطلحات", ("المصطلح", "Term"), tuple((ar, en) for ar, en in content.vocabulary))
         )
-    for clip in sorted(content.examples, key=lambda c: c.n):
-        slides.append(ExampleSlide(f"مثال {clip.n}", clip, _example_notes(lesson, clip.n)))
+    for clip in sorted(content.examples, key=lambda c: (c.n, c.part)):
+        if clip.part == 1:
+            slides.append(ExampleSlide(f"مثال {clip.n}", clip, _example_notes(lesson, clip.n)))
+        else:
+            _example_notes(lesson, clip.n)  # رقم خارج الفهرس خطأ حتى للتتمة
+            slides.append(ExampleSlide(f"تابع المثال {clip.n}", clip, ()))
     slides.append(_flow_slide(flow))
     assessment = _assessment_slide(lesson)
     if assessment is not None:
