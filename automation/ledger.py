@@ -97,7 +97,8 @@ def main(argv: list[str] | None = None) -> int:
     p_ev.add_argument("card")
     p_ev.add_argument("event", choices=STATES)
     p_ev.add_argument("--note", default="")
-    sub.add_parser("list")
+    p_list = sub.add_parser("list")
+    p_list.add_argument("--state", choices=STATES, help="بطاقات هذه الحالة وحدها")
     p_show = sub.add_parser("show")
     p_show.add_argument("card")
     args = ap.parse_args(argv)
@@ -112,7 +113,7 @@ def main(argv: list[str] | None = None) -> int:
         append(args.card, args.event, note=args.note)
         print(f"{args.card} → {args.event}")
     elif args.cmd == "list":
-        for c in all_cards():
+        for c in cards_in(args.state) if args.state else all_cards():
             s, f = state(c), first(c)
             print(f"{c}  {s['event']:<14} {f.get('title', '')}")
     elif args.cmd == "show":
