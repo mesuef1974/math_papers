@@ -1,7 +1,7 @@
 """سطر أوامر الخط: python -m tools.extraction <مجلد الكتاب> <مرحلة> [...]
 
-المراحل: validate (فحص book.yaml)، ocr (تصيير وقراءة؛ ببيئة guide_extract)، layout، images، objectives، examples، checks، all
-(الأربع الأخيرة بعد layout). المخرجات في مجلد الكتاب خارج المستودع، ويطبع كل مرحلة ملخصها العددي.
+المراحل: validate (فحص book.yaml)، ocr (تصيير وقراءة؛ ببيئة guide_extract)، tables (جدول تحليل التمارين)، layout، images، objectives، examples، checks، all
+(الأربع الأخيرة بعد layout؛ وtables قبل layout حين layout.anchor=analysis). المخرجات في مجلد الكتاب خارج المستودع، ويطبع كل مرحلة ملخصها العددي.
 كل مرحلة تتخطى نفسها ما لم تتغير تجزئة مدخلها (`stamps.py`)، و`--force` يعيدها؛ وتصحيحات الكتاب اليدوية (`corrections.py`)
 تُطبَّق على مخرج مرحلتها بأسبابها.
 """
@@ -14,7 +14,7 @@ import sys
 from collections.abc import Callable
 from typing import Any
 
-from . import checks, corrections, examples, images, layout, objectives, stamps
+from . import checks, corrections, examples, images, layout, objectives, stamps, tables
 from .config import Book
 
 
@@ -34,6 +34,15 @@ def _layout(book: Book) -> dict[str, Any]:
     if path.exists():
         return json.loads(path.read_text(encoding="utf-8"))
     return stage_layout(book)
+
+
+def stage_tables(book: Book) -> None:
+    from . import ocr
+
+    result = tables.build(book, lambda p: ocr.boxes(book, p))
+    tables.write(book, result)
+    ocr.release()
+    print(json.dumps(tables.summarize(result), ensure_ascii=False))
 
 
 def stage_layout(book: Book) -> dict[str, Any]:
@@ -94,6 +103,7 @@ def stage_ocr(book: Book) -> None:
 
 STAGES: dict[str, Callable[[Book], Any]] = {
     "ocr": stage_ocr,
+    "tables": stage_tables,
     "layout": stage_layout,
     "images": stage_images,
     "objectives": stage_objectives,
@@ -128,7 +138,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.stage == "validate":
         print("book.yaml سليم:", book.id)
         return 0
-    todo = ["layout", "images", "objectives", "examples", "checks"] if args.stage == "all" else [args.stage]
+    todo = [args.stage]
+    if args.stage == "all":
+        needs_tables = book["layout"]["anchor"] == "analysis" and book.has_dir("tables")
+        todo = [*(["tables"] if needs_tables else []), "layout", "images", "objectives", "examples", "checks"]
     try:
         for name in todo:
             run_stage(book, name, args.force)

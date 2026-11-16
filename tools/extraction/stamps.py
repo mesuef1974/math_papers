@@ -21,6 +21,7 @@ VERSION = 1  # يُرفع حين يتغير منطق مرحلة بلا تغيي�
 # ما تقرؤه كل مرحلة: مجلدات الكتاب (مفاتيح dirs، الغائب منها يُهمَل)، ومراحل سابقة ناتجها مدخل، وهل يدخل ملف PDF
 INPUTS: dict[str, dict[str, Any]] = {
     "ocr": {"dirs": (), "after": (), "pdf": True},
+    "tables": {"dirs": ("ocr", "render"), "after": (), "pdf": False},
     "layout": {"dirs": ("ocr", "tables"), "after": (), "pdf": False},
     "images": {"dirs": (), "after": (), "pdf": True},
     "objectives": {"dirs": ("ocr", "render"), "after": ("layout",), "pdf": False},

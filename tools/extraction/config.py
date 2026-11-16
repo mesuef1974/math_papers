@@ -173,7 +173,12 @@ class Book:
         return key in self.cfg["dirs"]
 
     def output(self, key: str) -> Path:
-        defaults = {"layout": "layout.json", "objectives": "objectives.json", "examples": "examples.json"}
+        defaults = {
+            "layout": "layout.json",
+            "objectives": "objectives.json",
+            "examples": "examples.json",
+            "tables": "tables.json",
+        }
         outputs = self.cfg.get("outputs", {})
         # generic_<اسم> يتقدم على <اسم> حين يشترك الكتاب مع أدوات قديمة في الملف نفسه بصيغة مختلفة
         return self.out / outputs.get(f"generic_{key}", outputs.get(key, defaults[key]))

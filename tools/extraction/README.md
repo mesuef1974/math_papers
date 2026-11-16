@@ -26,6 +26,13 @@ python -m tools.extraction <مجلد الكتاب> all          # layout ثم im
 - `examples`: `max`، `jump`، `pattern`، `numbering: sequence` (حين لا يقرأ OCR أرقام الشارات)، و`dirs.vision` و`dirs.badges` مصدران اختياريان.
 - `exercises`: `max`، `jump`. `outputs.generic_<اسم>` يوجّه مخرجًا إلى ملف آخر حين تشترك أدوات قديمة في الاسم.
 
+## جدول تحليل التمارين (`tables.py`)
+
+مرحلة `tables` (قبل `layout` في `all` حين `layout.anchor: analysis` ويوجد `dirs.tables`): تقرأ صناديق OCR لصفحة فيها `tables.title`
+(الافتراضي «تحليل التمارين») وتحدد الأعمدة من ترويستها، والمثال المدموج رأسيًا من خطوط الجدول الأفقية في صورة الصفحة، وتكتب
+`dirs.tables/NNNN.json` (`rows` و`task_guide`) ثم `tables.json` ملخصًا. لا تحذف ملف صفحة قديمًا. الاختياري في `tables`: `title`،
+`headers` (نص الترويسة إلى `example`/`exercises`/`dok`/`standard`)، `task_levels`، `header_window`، `row_gap`، `dark`، `dark_fraction`.
+
 ## المصدر والحالة
 
 كل حقل مستخرج غلاف `{value, source, status}`: المصدر `guide` أو `derived` أو `library` أو `teacher`، والحالة `ok` أو `review` أو `missing`
