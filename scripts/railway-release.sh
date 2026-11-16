@@ -3,6 +3,14 @@
 # وحاوية preDeploy حاوية عابرة منفصلة — ما يُجمَّع هناك لا يصل هنا (درس حادثة 2026-09-17).
 set -euo pipefail
 
+# حارس الهجرات: الهجرة عمل preDeploy وحده (scripts/railway-predeploy.sh). إن لم يُنفَّذ (إعداد الخدمة في
+# اللوحة لا يقرأ railway.toml مثلًا) فلا تبدأ نسخة على مخطط قديم: migrate --check قراءة فقط، يطبع الهجرات
+# غير المطبّقة ويخرج بغير الصفر، فيفشل البدء وفحص الصحة ويبقى النشر السابق حيًّا. لا هجرة هنا (سباق DDL).
+if ! python manage.py migrate --check --plan; then
+  echo "::error:: هجرات غير مطبّقة أو القاعدة غير متاحة: هل نُفِّذ preDeploy؟ لن تبدأ هذه النسخة." >&2
+  exit 1
+fi
+
 python manage.py collectstatic --noinput --clear
 exec gunicorn config.wsgi:application \
   --bind "0.0.0.0:${PORT:-8000}" \
