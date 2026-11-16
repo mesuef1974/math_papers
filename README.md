@@ -26,7 +26,12 @@ uv pip compile requirements.txt --generate-hashes --python-version 3.12 --python
 ## النشر على Railway
 
 1. مشروع جديد → أضف PostgreSQL وRedis.
-2. خدمة من هذا المستودع: Railway يقرأ `railway.toml` (Dockerfile، preDeploy للهجرات، start للثابت + gunicorn، healthcheck `/health/`).
+2. خدمة من هذا المستودع. الإعداد الفعلي من لوحة الخدمة (Settings → Deploy) لا من `railway.toml`: الخدمات الجديدة لا تقرأ Config as Code
+   (مهمل، وينتهي دعمه للقائم في 2026-12-01)، وقد بقي حقل Pre-deploy فارغًا فلم تُطبَّق هجرات #54 و#59 تلقائيًا (طُبّقت يدويًا 2026-11-16).
+   اضبط في خدمة الويب: Pre-deploy Command = `bash scripts/railway-predeploy.sh`، وPre-deploy Timeout = 300 (الافتراضي 5 يُفشل `migrate`)،
+   وHealthcheck Path = `/health/`، وRestart On Failure بخمس محاولات، وأبقِ Start Command فارغًا (أمر الصورة `CMD` هو `railway-release.sh`).
+   خدمة العامل تُضبط من اللوحة أيضًا بلا Pre-deploy. اللوحة لا يحرسها المستودع، فحارس `migrate --check` في `scripts/railway-release.sh` يُفشل بدء
+   نسخة على قاعدة لم تُهاجَر فيبقى النشر السابق حيًّا. `railway.toml` مرجع للقيم المقصودة لا مصدر الإعداد.
 3. المتغيرات: `SECRET_KEY`، `ALLOWED_HOSTS`، `CSRF_TRUSTED_ORIGINS`، و`DATABASE_URL=${{Postgres.DATABASE_URL}}`، `REDIS_URL=${{Redis.REDIS_URL}}`.
 4. PDF الخادمي: Chromium يأتي من بطاقة Dockerfile (فرع `card/pdf-chromium`)؛ بدونه يرد المسار 503 والطباعة من المتصفح تبقى.
    يحتاج `REDIS_URL` (حالة المهمة مشتركة بين عمّال gunicorn) و`localhost` في `ALLOWED_HOSTS` (كما يحتاجه فحص الصحة)؛
