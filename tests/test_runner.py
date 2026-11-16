@@ -94,7 +94,7 @@ def test_healthy_card_is_pushed_and_recorded(world, monkeypatch):
     monkeypatch.setattr(runner, "sh", shell)
     assert runner.main([]) == 0
     assert names(world) == ["claimed", "coded", "prepush_ok", "pr_opened"]
-    assert shell.ran("git", "push") and shell.ran("git", "restore", "--", ".prepush_receipt")
+    assert shell.ran("git", "push")
     assert not runner.LOCK.exists()
 
 
@@ -106,16 +106,21 @@ def test_branch_without_commits_is_blocked_not_pushed(world, monkeypatch):
     assert not shell.ran("git", "push") and not shell.ran("gh", "pr", "create")
 
 
-def test_uncommitted_work_is_blocked_but_the_receipt_alone_is_not(world, monkeypatch):
-    shell = Shell(status=" M apps/core/services.py\n M .prepush_receipt\n")
+def test_uncommitted_work_is_blocked(world, monkeypatch):
+    shell = Shell(status=" M apps/core/services.py\n")
     monkeypatch.setattr(runner, "sh", shell)
     assert runner.main([]) == 1
     assert "apps/core/services.py" in world[-1][2]["reason"] and not shell.ran("git", "push")
 
-    world.clear()
-    receipt_only = Shell(status=" M .prepush_receipt\n")
-    monkeypatch.setattr(runner, "sh", receipt_only)
-    assert runner.main([]) == 0 and receipt_only.ran("git", "push")
+
+def test_prepush_receipt_stays_out_of_git():
+    """الإيصال يتغيّر مع كل فحص؛ لو تُتبِّع لدخل الطلبات وأفشل فحص الأسرار بتجزئة الرأس."""
+    root = Path(runner.__file__).resolve().parents[1]
+    assert ".prepush_receipt" in (root / ".gitignore").read_text(encoding="utf-8").splitlines()
+    tracked = subprocess.run(
+        ["git", "ls-files", ".prepush_receipt"], cwd=root, capture_output=True, text=True, check=True
+    )
+    assert tracked.stdout.strip() == ""
 
 
 def test_failed_prepush_is_not_pushed(world, monkeypatch):

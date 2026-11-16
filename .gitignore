@@ -16,6 +16,7 @@ automation/.lock
 automation/ledger/*.jsonl
 !automation/ledger/.gitkeep
 .claude/settings.local.json
+.prepush_receipt
 *.log
 *.db
 *.sqlite3
