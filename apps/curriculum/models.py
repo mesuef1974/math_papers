@@ -5,14 +5,51 @@ from __future__ import annotations
 from django.db import models
 
 
+class Course(models.Model):
+    """مقرر: كتاب واحد (صف ومسار وفصل وطبعة). مفتاح الدروس والوحدات والمبادئ التربوية مع رمزها."""
+
+    slug = models.SlugField(max_length=48, unique=True)
+    title = models.CharField(max_length=160)
+    grade = models.PositiveSmallIntegerField()
+    track = models.CharField(max_length=60, blank=True)
+    semester = models.PositiveSmallIntegerField()
+    edition = models.CharField(max_length=32, blank=True)
+    # المقرر الذي تفترضه الواجهة والمسارات حين لا يُحدَّد مقرر؛ واحد على الأكثر
+    is_current = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ["grade", "track", "semester"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["is_current"], condition=models.Q(is_current=True), name="unique_current_course"
+            )
+        ]
+
+    def __str__(self) -> str:
+        return self.title
+
+
 class Lesson(models.Model):
-    code = models.CharField(max_length=8, unique=True)
+    # التوسعة: nullable حتى تعمل النسخة السابقة أثناء النشر؛ تصير مطلوبة في هجرة لاحقة منفصلة.
+    course = models.ForeignKey(
+        Course, on_delete=models.PROTECT, related_name="lessons", null=True, blank=True
+    )
+    code = models.CharField(max_length=8)
     title = models.CharField(max_length=120)
     unit = models.PositiveSmallIntegerField()
     examinable = models.BooleanField(default=True)
 
     class Meta:
-        ordering = ["code"]
+        ordering = ["course_id", "code"]
+        constraints = [
+            models.UniqueConstraint(fields=["course", "code"], name="unique_lesson_per_course"),
+            # ما دام المقرر اختياريًا: الدرس بلا مقرر يبقى فريدًا برمزه كما كان
+            models.UniqueConstraint(
+                fields=["code"],
+                condition=models.Q(course__isnull=True),
+                name="unique_lesson_code_without_course",
+            ),
+        ]
 
     def __str__(self) -> str:
         return f"{self.code} {self.title}"
@@ -22,6 +59,9 @@ class Blueprint(models.Model):
     """جدول مواصفات. is_forecast يعني أنه توقع غير رسمي، فالوزارة لا تصدر جداول للثانوية العامة."""
 
     slug = models.SlugField(max_length=64, unique=True)
+    course = models.ForeignKey(
+        Course, on_delete=models.PROTECT, related_name="blueprints", null=True, blank=True
+    )
     title = models.CharField(max_length=160)
     academic_year = models.CharField(max_length=9)
     semester = models.PositiveSmallIntegerField()

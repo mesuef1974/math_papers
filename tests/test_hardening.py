@@ -7,10 +7,11 @@ import pytest
 from ninja.throttling import UserRateThrottle
 
 from apps.core.models import AuditLog
+from apps.curriculum.courses import DEFAULT_COURSE
 from apps.papers.access import ensure_teacher
 from apps.papers.domain.generators import REGISTRY, ExhaustedError, generate, generator_version
 
-PASSWORD = "Rasm-Bayani-2026"
+PASSWORD = "Rasm-Bayani-2026"  # pragma: allowlist secret
 SLUG = "g12-sci-s1-2026-27-forecast"
 
 
@@ -127,7 +128,7 @@ def test_paper_carries_identity_for_saving_and_replacing(teacher_client):
 
 
 def test_generate_can_be_pinned_to_a_variant():
-    name = REGISTRY["2.4"][0].__name__
+    name = REGISTRY[(DEFAULT_COURSE, "2.4")][0].__name__
     problem = generate("2.4", random.Random(3), variant_name=name)
     assert problem.variant == name
     other = generate("2.4", random.Random(4), variant_name=name)
@@ -137,8 +138,8 @@ def test_generate_can_be_pinned_to_a_variant():
 def test_generator_version_is_stable_and_changes_with_registry():
     before = generator_version()
     assert before == generator_version()
-    REGISTRY.setdefault("9.9", []).append(lambda rng: None)
+    REGISTRY.setdefault((DEFAULT_COURSE, "9.9"), []).append(lambda rng: None)
     try:
         assert generator_version() != before
     finally:
-        del REGISTRY["9.9"]
+        del REGISTRY[(DEFAULT_COURSE, "9.9")]

@@ -13,7 +13,8 @@ from typing import Any
 
 from django.db import transaction
 
-from apps.curriculum.models import Lesson
+from apps.curriculum.courses import GRADE12_SLUG
+from apps.curriculum.models import Course, Lesson
 
 from .domain.schemas import LessonData, PedagogyData, UnitData
 from .models import (
@@ -113,14 +114,14 @@ def _load_lesson(data: LessonData, lessons: dict[str, Lesson], report: LoadRepor
     _sync_children(report, "templates", profile.templates, templates, ExerciseTemplate, **parent)
 
 
-def _load_unit(data: UnitData, report: LoadReport) -> None:
+def _load_unit(data: UnitData, course: Course, report: LoadReport) -> None:
     wanted = {
         "title": data.title,
         "big_idea": data.big_idea,
         "approach": data.approach,
         "context": data.context,
     }
-    unit, created = UnitProfile.objects.get_or_create(unit=data.unit, defaults=wanted)
+    unit, created = UnitProfile.objects.get_or_create(course=course, unit=data.unit, defaults=wanted)
     if created or any(getattr(unit, key) != value for key, value in wanted.items()):
         for key, value in wanted.items():
             setattr(unit, key, value)
@@ -135,9 +136,9 @@ def _load_unit(data: UnitData, report: LoadReport) -> None:
         report.changed["projects"] += 1
 
 
-def _load_pedagogy(data: PedagogyData, report: LoadReport) -> None:
+def _load_pedagogy(data: PedagogyData, course: Course, report: LoadReport) -> None:
     wanted = {"title": data.title, "text": data.text, "order": data.order}
-    note, created = PedagogyNote.objects.get_or_create(slug=data.slug, defaults=wanted)
+    note, created = PedagogyNote.objects.get_or_create(course=course, slug=data.slug, defaults=wanted)
     if created or any(getattr(note, key) != value for key, value in wanted.items()):
         for key, value in wanted.items():
             setattr(note, key, value)
@@ -146,17 +147,19 @@ def _load_pedagogy(data: PedagogyData, report: LoadReport) -> None:
 
 
 @transaction.atomic
-def load_knowledge(data_dir: Path = DATA_DIR) -> LoadReport:
+def load_knowledge(data_dir: Path = DATA_DIR, course_slug: str = GRADE12_SLUG) -> LoadReport:
+    """يحمّل ملفات المجلد إلى مقرر واحد. الملفات المودَعة هنا للثاني عشر، فهو الافتراضي لا «المقرر الحالي»."""
+    course = Course.objects.get(slug=course_slug)
     lessons_data = [LessonData(**_read(p)) for p in sorted((data_dir / "lessons").glob("lesson_*.json"))]
     units_data = [UnitData(**u) for u in _read(data_dir / "units.json")]
     pedagogy_data = [PedagogyData(**n) for n in _read(data_dir / "pedagogy.json")]
-    lessons = {lesson.code: lesson for lesson in Lesson.objects.all()}
+    lessons = {lesson.code: lesson for lesson in Lesson.objects.filter(course=course)}
     report = LoadReport(skipped=sorted(d.lesson for d in lessons_data if d.lesson not in lessons))
     for data in lessons_data:
         if data.lesson in lessons:
             _load_lesson(data, lessons, report)
     for unit in units_data:
-        _load_unit(unit, report)
+        _load_unit(unit, course, report)
     for note in pedagogy_data:
-        _load_pedagogy(note, report)
+        _load_pedagogy(note, course, report)
     return report

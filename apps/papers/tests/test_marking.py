@@ -7,7 +7,7 @@ import pytest
 from apps.papers.domain.generators import REGISTRY
 from apps.papers.domain.marking import allocate, marking
 
-ALL = [(lesson, fn) for lesson, fns in REGISTRY.items() for fn in fns]
+ALL = [(lesson, fn) for (_, lesson), fns in REGISTRY.items() for fn in fns]
 IDS = [fn.__name__ for _, fn in ALL]
 SEEDS = range(40)
 MARKS = range(1, 7)

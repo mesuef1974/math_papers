@@ -9,6 +9,8 @@ from pathlib import Path
 
 from django.db.models import Sum
 
+from apps.curriculum.courses import GRADE12_SLUG
+
 from .domain.grade10_index import Grade10Index, Grade10Lesson
 from .models import ExerciseTemplate
 
@@ -24,11 +26,12 @@ class CoverageRow:
     generators: int  # عدد صيغ المولّدات المتاحة
 
 
-def template_counts() -> dict[tuple[str, str, bool], int]:
-    """(درس، مستوى، رسم) -> مجموع التمارين في القوالب."""
+def template_counts(course: str = GRADE12_SLUG) -> dict[tuple[str, str, bool], int]:
+    """(درس، مستوى، رسم) -> مجموع التمارين في قوالب مقرر واحد."""
     totals: dict[tuple[str, str, bool], int] = {}
     rows = (
-        ExerciseTemplate.objects.exclude(level="")
+        ExerciseTemplate.objects.filter(profile__lesson__course__slug=course)
+        .exclude(level="")
         .values("profile__lesson__code", "level", "representation")
         .annotate(n=Sum("count"))
     )
@@ -38,12 +41,14 @@ def template_counts() -> dict[tuple[str, str, bool], int]:
     return totals
 
 
-def coverage() -> list[CoverageRow]:
+def coverage(course: str = GRADE12_SLUG) -> list[CoverageRow]:
     from apps.papers.domain.generators import variants
 
     result = []
-    for (lesson, level, graph), count in sorted(template_counts().items()):
-        result.append(CoverageRow(lesson, level, graph, count, len(variants(lesson, "essay", level, graph))))
+    for (lesson, level, graph), count in sorted(template_counts(course).items()):
+        result.append(
+            CoverageRow(lesson, level, graph, count, len(variants(lesson, "essay", level, graph, course)))
+        )
     return result
 
 

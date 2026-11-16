@@ -111,10 +111,13 @@ def test_graph_is_served_with_the_part(client):
 
 @pytest.mark.django_db
 def test_graph_options_are_shuffled_with_their_answer(client):
+    from apps.curriculum.courses import DEFAULT_COURSE
     from apps.papers import services
     from apps.papers.domain.generators import REGISTRY
 
-    builder = next(fn for fn in REGISTRY["3.1"] if fn.__name__ == "function_from_derivative_graph")
+    builder = next(
+        fn for fn in REGISTRY[(DEFAULT_COURSE, "3.1")] if fn.__name__ == "function_from_derivative_graph"
+    )
     seen = set()
     for seed in range(40):
         rng = random.Random(seed)
