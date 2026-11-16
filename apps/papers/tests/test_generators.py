@@ -10,7 +10,7 @@ from apps.papers.domain.generators import NO_LIMIT, REGISTRY, available_lessons,
 from apps.papers.domain.graphs import value_at
 
 SEEDS = range(120)
-ALL = [(lesson, fn) for lesson, fns in REGISTRY.items() for fn in fns]
+ALL = [(lesson, fn) for (_, lesson), fns in REGISTRY.items() for fn in fns]
 IDS = [fn.__name__ for _, fn in ALL]
 TOL = 1e-6
 

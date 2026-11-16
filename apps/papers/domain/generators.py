@@ -15,6 +15,8 @@ from typing import Any
 
 import sympy as sp
 
+from apps.curriculum.courses import DEFAULT_COURSE
+
 from .graphs import Graph, Window
 
 x = sp.Symbol("x", real=True)
@@ -59,12 +61,13 @@ class Problem:
 
 
 Generator = Callable[[random.Random], Problem]
-REGISTRY: dict[str, list[Generator]] = {}
+# المفتاح (معرّف المقرر، رمز الدرس): رمز الدرس وحده يتكرر بين المقررات.
+REGISTRY: dict[tuple[str, str], list[Generator]] = {}
 
 
-def variant(lesson: str) -> Callable[[Generator], Generator]:
+def variant(lesson: str, course: str = DEFAULT_COURSE) -> Callable[[Generator], Generator]:
     def register(fn: Generator) -> Generator:
-        REGISTRY.setdefault(lesson, []).append(fn)
+        REGISTRY.setdefault((course, lesson), []).append(fn)
         return fn
 
     return register
@@ -74,25 +77,32 @@ class LevelUnavailableError(LookupError):
     """لا توجد صيغة للدرس بهذا المستوى ونوع السؤال."""
 
 
-def available_lessons() -> set[str]:
-    return set(REGISTRY)
+def available_lessons(course: str = DEFAULT_COURSE) -> set[str]:
+    return {lesson for registered, lesson in REGISTRY if registered == course}
 
 
-def generator_version() -> str:
+def generator_version(course: str = DEFAULT_COURSE) -> str:
     """بصمة مجموعة الصيغ. أي صيغة تُضاف أو تُحذف تغيّر ترتيب الاختيار، فتُحفظ مع كل ورقة لتفسير اختلاف إعادة التوليد."""
-    names = sorted(f"{lesson}:{fn.__name__}" for lesson, fns in REGISTRY.items() for fn in fns)
+    # بصمة كل مقرر من صيغه وحدها: صيغة مقرر جديد لا تغيّر بصمة أوراق الثاني عشر المحفوظة (والصيغة كما قبل المقررات).
+    names = sorted(
+        f"{lesson}:{fn.__name__}"
+        for (registered, lesson), fns in REGISTRY.items()
+        if registered == course
+        for fn in fns
+    )
     return hashlib.sha1("\n".join(names).encode("utf-8"), usedforsecurity=False).hexdigest()[:12]
 
 
 def diversity_report(seeds: int = 60) -> list[dict[str, Any]]:
     """لكل صيغة: كم مسألة مختلفة تعطي عبر بذور متتابعة. يفضح الصيغ ضيقة المعاملات التي تكرر نفسها."""
     rows = []
-    for lesson, fns in sorted(REGISTRY.items()):
+    for (course, lesson), fns in sorted(REGISTRY.items()):
         for fn in fns:
             keys = {fn(random.Random(seed)).key for seed in range(seeds)}  # noqa: S311 — بذور ثابتة لا أمنية
             levels = variant_profile(fn)[0]
             rows.append(
                 {
+                    "course": course,
                     "lesson": lesson,
                     "variant": fn.__name__,
                     "levels": "".join(level for level in LEVEL_NAMES if level in levels),
@@ -122,11 +132,15 @@ def variant_profile(fn: Generator) -> tuple[frozenset[str], bool, bool, bool]:
 
 
 def variants(
-    lesson: str, kind: str = "essay", level: str | None = None, graph: bool = False
+    lesson: str,
+    kind: str = "essay",
+    level: str | None = None,
+    graph: bool = False,
+    course: str = DEFAULT_COURSE,
 ) -> list[Generator]:
     """graph=True يحصر الصيغ في أسئلة الرسم؛ False لا يقيّد."""
     pool = []
-    for fn in REGISTRY.get(lesson, []):
+    for fn in REGISTRY.get((course, lesson), []):
         levels, mcq_ok, essay_ok, has_graph = variant_profile(fn)
         if (
             (mcq_ok if kind == "mcq" else essay_ok)
@@ -137,9 +151,9 @@ def variants(
     return pool
 
 
-def lesson_levels(lesson: str, kind: str = "essay") -> list[str]:
+def lesson_levels(lesson: str, kind: str = "essay", course: str = DEFAULT_COURSE) -> list[str]:
     found: set[str] = set()
-    for fn in variants(lesson, kind):
+    for fn in variants(lesson, kind, course=course):
         found |= variant_profile(fn)[0]
     return [level for level in LEVEL_NAMES if level in found]
 
@@ -156,13 +170,14 @@ def generate(
     level: str | None = None,
     graph: bool = False,
     variant_name: str | None = None,
+    course: str = DEFAULT_COURSE,
 ) -> Problem:
     """يختار صيغة من مولّدات الدرس بالمستوى المطلوب (وبرسم إن طُلب)، ويتفادى ما ظهر في الورقة نفسها.
 
     variant_name يحصر الاختيار في صيغة واحدة بالاسم، فيُبنى نموذج B بالبنية نفسها وأرقام مختلفة.
     """
     avoid = avoid if avoid is not None else set()
-    pool = variants(lesson, kind, level, graph)
+    pool = variants(lesson, kind, level, graph, course)
     if variant_name is not None:
         pool = [fn for fn in pool if fn.__name__ == variant_name]
     if not pool:

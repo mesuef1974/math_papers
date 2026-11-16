@@ -10,10 +10,11 @@ from pathlib import Path
 
 from django.core.management.base import BaseCommand, CommandError
 
+from apps.curriculum.courses import GRADE12_SLUG
 from apps.knowledge.domain.curation import Report, build_lesson, build_pedagogy, build_units
 from apps.knowledge.domain.schemas import LessonData, PedagogyData, UnitData
 
-DATA_DIR = Path(__file__).resolve().parents[2] / "data"
+DATA_DIR = Path(__file__).resolve().parents[2] / "data" / "courses" / GRADE12_SLUG  # مقرر الثاني عشر
 
 
 def _load(path: Path) -> dict:
@@ -26,7 +27,7 @@ def _dump(path: Path, payload: object) -> None:
 
 
 class Command(BaseCommand):
-    help = "ينسّق المستخرج الخاص إلى apps/knowledge/data (بلا نص خام)."
+    help = "ينسّق المستخرج الخاص إلى apps/knowledge/data/courses/g12-sci-s1 (بلا نص خام)."
 
     def add_arguments(self, parser):
         parser.add_argument("--source", required=True, help="مجلد المستخرج الخاص (خارج المستودع)")

@@ -17,7 +17,8 @@ from django.db import transaction
 
 from apps.core.services import record_audit
 from apps.curriculum import selectors
-from apps.curriculum.models import BlueprintItem
+from apps.curriculum.courses import DEFAULT_COURSE
+from apps.curriculum.models import BlueprintItem, Course
 
 from .domain.generators import (
     LEVEL_NAMES,
@@ -60,6 +61,19 @@ class UnknownLessonError(LookupError):
     pass
 
 
+def _course_slug(course: Course | None) -> str:
+    """معرّف المقرر في سجل المولّدات؛ ما بلا مقرر هو مقرر الثاني عشر الذي نشأت عليه البيانات."""
+    return course.slug if course else DEFAULT_COURSE
+
+
+def _resolve_course(slug: str) -> Course:
+    """مقرر بمعرّفه، والفارغ هو المقرر الحالي. المجهول يُعامَل درسًا غير متاح."""
+    try:
+        return selectors.course_by_slug(slug)
+    except selectors.UnknownCourseError as error:
+        raise UnknownLessonError(slug) from error
+
+
 class SavedLimitError(ValueError):
     """بلغ المعلم الحد الأقصى من الأوراق المحفوظة."""
 
@@ -79,6 +93,7 @@ class PartSlot:
     marks: int
     level: str = ""  # فارغ = أي مستوى
     needs_graph: bool = False
+    course: str = DEFAULT_COURSE  # معرّف المقرر: يلزم اختيار المولّد، ولا يدخل الجزء المحفوظ
 
 
 def new_seed() -> int:
@@ -124,16 +139,19 @@ def render_part(problem: Problem, slot: PartSlot, rng: random.Random) -> dict:
 
 def generate_for_slot(item: BlueprintItem, rng: random.Random, used: set[str]) -> Problem:
     """مسألة بمستوى الخانة ورسمها. خانة لا صيغة لها (عُدّلت من لوحة الإدارة) تُملأ بلا قيد بدل إسقاط الاختبار."""
+    course = _course_slug(item.lesson.course)
     try:
-        return generate(item.lesson.code, rng, item.kind, used, item.level or None, item.needs_graph)
+        return generate(
+            item.lesson.code, rng, item.kind, used, item.level or None, item.needs_graph, course=course
+        )
     except LevelUnavailableError:
         logger.warning("خانة الجدول %s بلا صيغة مطابقة؛ تُملأ بلا قيد المستوى والرسم", item.pk)
-        return generate(item.lesson.code, rng, item.kind, used)
+        return generate(item.lesson.code, rng, item.kind, used, course=course)
 
 
-def paper_meta(kind: str, **extra: object) -> dict:
+def paper_meta(kind: str, course: str = DEFAULT_COURSE, **extra: object) -> dict:
     """حقول مشتركة تهم الحفظ وإعادة التوليد."""
-    return {"kind": kind, "generator_version": generator_version(), **extra}
+    return {"kind": kind, "generator_version": generator_version(course), **extra}
 
 
 def build_exam(slug: str, seed: int | None = None, form: str = "A") -> dict:
@@ -141,8 +159,9 @@ def build_exam(slug: str, seed: int | None = None, form: str = "A") -> dict:
     if blueprint is None:
         raise UnknownBlueprintError(slug)
     seed = new_seed() if seed is None else seed
+    course = _course_slug(blueprint.course)
     if form == "B":
-        return build_form_b(build_exam(slug, seed))
+        return build_form_b(build_exam(slug, seed), course)
     rng = random.Random(seed)  # noqa: S311 — بذرة قابلة للإعادة، لا استعمال أمني
     grouped: dict[int, list[BlueprintItem]] = defaultdict(list)
     for item in blueprint.items.all():
@@ -163,6 +182,7 @@ def build_exam(slug: str, seed: int | None = None, form: str = "A") -> dict:
                 item.marks,
                 item.level or "",
                 item.needs_graph,
+                course,
             )
             problem = generate_for_slot(item, rng, used)
             used.add(problem.key)
@@ -172,7 +192,7 @@ def build_exam(slug: str, seed: int | None = None, form: str = "A") -> dict:
             {"number": number, "kind": items[0].kind, "marks": sum(i.marks for i in items), "parts": parts}
         )
     return {
-        **paper_meta("exam", blueprint=blueprint.slug, lesson_code=""),
+        **paper_meta("exam", course, blueprint=blueprint.slug, lesson_code=""),
         "title": blueprint.title,
         "form": "A",
         "seed": seed,
@@ -191,31 +211,40 @@ def build_worksheet(
     level: str | None = None,
     form: str = "A",
     purpose: str = "",
+    course: str = "",
 ) -> dict:
     """ورقة عمل لدرس. purpose=remedial يحصرها في السهل ويسمّيها علاجية، وenrichment في مهارات العليا إثرائية."""
-    lesson = selectors.lessons().filter(code=lesson_code).first()
-    if lesson is None or lesson_code not in available_lessons():
+    course_row = _resolve_course(course)
+    lesson = selectors.lessons(course_row).filter(code=lesson_code).first()
+    if lesson is None or lesson_code not in available_lessons(course_row.slug):
         raise UnknownLessonError(lesson_code)
     seed = new_seed() if seed is None else seed
     if purpose:
         level = PURPOSES[purpose][0]
     if form == "B":
-        return build_form_b(build_worksheet(lesson_code, count, seed, level, purpose=purpose))
+        return build_form_b(
+            build_worksheet(lesson_code, count, seed, level, purpose=purpose, course=course_row.slug),
+            course_row.slug,
+        )
     rng = random.Random(seed)  # noqa: S311 — بذرة قابلة للإعادة، لا استعمال أمني
     used: set[str] = set()
     questions = []
     for number in range(1, count + 1):
         try:
-            problem = generate(lesson.code, rng, BlueprintItem.Kind.ESSAY, used, level)
+            problem = generate(
+                lesson.code, rng, BlueprintItem.Kind.ESSAY, used, level, course=course_row.slug
+            )
         except LevelUnavailableError as error:
             raise UnknownLessonError(lesson_code) from error
         used.add(problem.key)
-        slot = PartSlot("", lesson.code, lesson.title, BlueprintItem.Kind.ESSAY, 0, level or "")
+        slot = PartSlot(
+            "", lesson.code, lesson.title, BlueprintItem.Kind.ESSAY, 0, level or "", course=course_row.slug
+        )
         questions.append(
             {"number": number, "kind": slot.kind, "marks": 0, "parts": [render_part(problem, slot, rng)]}
         )
     return {
-        **paper_meta("worksheet", blueprint="", lesson_code=lesson.code),
+        **paper_meta("worksheet", course_row.slug, blueprint="", lesson_code=lesson.code),
         "title": f"{PURPOSES[purpose][1] if purpose else 'ورقة عمل'}: {lesson.title}"
         + (f" ({LEVEL_NAMES[level]})" if level and not purpose else ""),
         "form": "A",
@@ -228,15 +257,17 @@ def build_worksheet(
     }
 
 
-def build_quiz(lesson_codes: list[str], seed: int | None = None, form: str = "A") -> dict:
+def build_quiz(lesson_codes: list[str], seed: int | None = None, form: str = "A", course: str = "") -> dict:
     """اختبار قصير من 10 لدرس أو درسين: الخانات ثابتة وتتناوب على الدروس، ومستوى غير متاح يُملأ بلا قيد."""
     codes = list(dict.fromkeys(lesson_codes))[:QUIZ_MAX_LESSONS]
-    lessons = {row.code: row for row in selectors.lessons().filter(code__in=codes)}
-    if not codes or any(code not in lessons or code not in available_lessons() for code in codes):
+    course_row = _resolve_course(course)
+    ready = available_lessons(course_row.slug)
+    lessons = {row.code: row for row in selectors.lessons(course_row).filter(code__in=codes)}
+    if not codes or any(code not in lessons or code not in ready for code in codes):
         raise UnknownLessonError(",".join(lesson_codes))
     seed = new_seed() if seed is None else seed
     if form == "B":
-        return build_form_b(build_quiz(codes, seed))
+        return build_form_b(build_quiz(codes, seed, course=course_row.slug), course_row.slug)
     rng = random.Random(seed)  # noqa: S311 — بذرة قابلة للإعادة، لا استعمال أمني
     used: set[str] = set()
     questions = []
@@ -244,18 +275,18 @@ def build_quiz(lesson_codes: list[str], seed: int | None = None, form: str = "A"
     for index, (kind, level, marks) in enumerate(QUIZ_SLOTS):
         lesson = lessons[codes[index % len(codes)]]
         try:
-            problem = generate(lesson.code, rng, kind, used, level)
+            problem = generate(lesson.code, rng, kind, used, level, course=course_row.slug)
         except LevelUnavailableError:
-            problem = generate(lesson.code, rng, kind, used)
+            problem = generate(lesson.code, rng, kind, used, course=course_row.slug)
         used.add(problem.key)
         level_marks[problem.level] += marks
-        slot = PartSlot("", lesson.code, lesson.title, kind, marks, level)
+        slot = PartSlot("", lesson.code, lesson.title, kind, marks, level, course=course_row.slug)
         questions.append(
             {"number": index + 1, "kind": kind, "marks": marks, "parts": [render_part(problem, slot, rng)]}
         )
     names = " و".join(f"{lessons[code].code} {lessons[code].title}" for code in codes)
     return {
-        **paper_meta("quiz", blueprint="", lesson_code=",".join(codes)),
+        **paper_meta("quiz", course_row.slug, blueprint="", lesson_code=",".join(codes)),
         "title": f"اختبار قصير: {names}",
         "form": "A",
         "seed": seed,
@@ -267,7 +298,7 @@ def build_quiz(lesson_codes: list[str], seed: int | None = None, form: str = "A"
     }
 
 
-def build_form_b(paper_a: dict) -> dict:
+def build_form_b(paper_a: dict, course: str = DEFAULT_COURSE) -> dict:
     """النموذج ب من النموذج أ: الخانات نفسها والصيغ نفسها (البنية) بأعداد مختلفة، ولا مسألة مشتركة.
 
     حتمي من بذرة أ، فيُعاد بالرقم نفسه. صيغة لا تعطي بديلًا جديدًا تُستبدل بأي صيغة مطابقة للخانة.
@@ -287,13 +318,23 @@ def build_form_b(paper_a: dict) -> dict:
                 part["marks"],
                 part["slot"]["level"],
                 part["slot"]["needs_graph"],
+                course,
             )
             try:
                 problem = generate(
-                    slot.lesson, rng, slot.kind, avoid, part["level"], slot.needs_graph, part["variant"]
+                    slot.lesson,
+                    rng,
+                    slot.kind,
+                    avoid,
+                    part["level"],
+                    slot.needs_graph,
+                    part["variant"],
+                    course,
                 )
             except (LevelUnavailableError, ExhaustedError):
-                problem = generate(slot.lesson, rng, slot.kind, avoid, slot.level or None, slot.needs_graph)
+                problem = generate(
+                    slot.lesson, rng, slot.kind, avoid, slot.level or None, slot.needs_graph, course=course
+                )
             avoid.add(problem.key)
             avoid.add(problem.fingerprint)
             level_marks[problem.level] += slot.marks
@@ -322,20 +363,32 @@ def save_print_profile(user: AbstractBaseUser, data: dict[str, Any]) -> dict[str
     return print_profile(user)
 
 
-def replacement_part(lesson_code: str, slot: PartSlot, exclude: set[str], seed: int | None = None) -> dict:
+def replacement_part(
+    lesson_code: str, slot: PartSlot, exclude: set[str], seed: int | None = None, course: str = ""
+) -> dict:
     """جزء جديد للخانة نفسها (النوع والمستوى والرسم) يخالف بصمات ما في الورقة. البذرة تعيد الجزء نفسه."""
-    lesson = selectors.lessons().filter(code=lesson_code).first()
-    if lesson is None or lesson_code not in available_lessons():
+    course_row = _resolve_course(course)
+    lesson = selectors.lessons(course_row).filter(code=lesson_code).first()
+    if lesson is None or lesson_code not in available_lessons(course_row.slug):
         raise UnknownLessonError(lesson_code)
     seed = new_seed() if seed is None else seed
     rng = random.Random(seed)  # noqa: S311 — بذرة قابلة للإعادة، لا استعمال أمني
     try:
-        problem = generate(lesson_code, rng, slot.kind, exclude, slot.level or None, slot.needs_graph)
+        problem = generate(
+            lesson_code, rng, slot.kind, exclude, slot.level or None, slot.needs_graph, course=course_row.slug
+        )
     except LevelUnavailableError:
         logger.warning("خانة الاستبدال %s/%s بلا صيغة مطابقة؛ تُملأ بلا قيد", lesson_code, slot.level)
-        problem = generate(lesson_code, rng, slot.kind, exclude)
+        problem = generate(lesson_code, rng, slot.kind, exclude, course=course_row.slug)
     full = PartSlot(
-        slot.label, lesson.code, lesson.title, slot.kind, slot.marks, slot.level, slot.needs_graph
+        slot.label,
+        lesson.code,
+        lesson.title,
+        slot.kind,
+        slot.marks,
+        slot.level,
+        slot.needs_graph,
+        course_row.slug,
     )
     return {**render_part(problem, full, rng), "seed": seed}
 
@@ -466,9 +519,10 @@ def bundle_plan(slug: str) -> list[dict]:
         marks[code] += item.marks
         if item.level:
             level_marks[code][item.level] += item.marks
-    ready = available_lessons()
+    course = _course_slug(blueprint.course)
+    ready = available_lessons(course)
     # درس له مولّد وليس في الجدول (3.4 رسم المنحنيات) يدخل الحزمة بالحد الأدنى وبمستويات متساوية
-    for row in selectors.lessons().filter(code__in=ready - set(marks)):
+    for row in selectors.lessons(blueprint.course).filter(code__in=ready - set(marks)):
         titles[row.code] = row.title
         marks[row.code] = 0
     plan = []
@@ -477,15 +531,24 @@ def bundle_plan(slug: str) -> list[dict]:
             continue
         count = min(BUNDLE_MAX, max(BUNDLE_MIN, 4 + 2 * marks[code]))
         # تمهيد +1 لكل مستوى متاح: الجدول يرجّح لا يحتكر (درس يُختبر سهلًا فقط لا يصير 6/1/1)
-        weights = {level: level_marks[code].get(level, 0) + 1 for level in lesson_levels(code)}
-        levels = split_levels(count, lesson_levels(code), weights)
+        found = lesson_levels(code, course=course)
+        weights = {level: level_marks[code].get(level, 0) + 1 for level in found}
+        levels = split_levels(count, found, weights)
         plan.append({"lesson": code, "title": titles[code], "count": count, "levels": levels})
     return plan
 
 
-def lesson_seed(bundle_seed: int, lesson_code: str) -> int:
-    """بذرة الدرس مشتقة من بذرة الحزمة: الحزمة نفسها تعيد الأوراق نفسها، وكل ورقة قابلة لإعادة التوليد وحدها."""
-    return random.Random(f"{bundle_seed}:{lesson_code}").randrange(MAX_SEED)  # noqa: S311 — حتمية لا أمنية
+def lesson_seed(bundle_seed: int, lesson_code: str, course: str = DEFAULT_COURSE) -> int:
+    """بذرة الدرس مشتقة من بذرة الحزمة: الحزمة نفسها تعيد الأوراق نفسها، وكل ورقة قابلة لإعادة التوليد وحدها.
+
+    صيغة مقرر الثاني عشر كما كانت قبل المقررات حرفيًا (أوراقه المحفوظة تُعاد بالبذرة نفسها)؛ غيره يدخل معرّفه فيها.
+    """
+    text = (
+        f"{bundle_seed}:{lesson_code}"
+        if course == DEFAULT_COURSE
+        else f"{bundle_seed}:{course}:{lesson_code}"
+    )
+    return random.Random(text).randrange(MAX_SEED)  # noqa: S311 — حتمية لا أمنية
 
 
 def build_bundle_item(slug: str, lesson_code: str, bundle_seed: int) -> dict:
@@ -493,24 +556,26 @@ def build_bundle_item(slug: str, lesson_code: str, bundle_seed: int) -> dict:
     entry = next((row for row in bundle_plan(slug) if row["lesson"] == lesson_code), None)
     if entry is None:
         raise UnknownLessonError(lesson_code)
-    key = f"bundle:{generator_version()}:{slug}:{lesson_code}:{bundle_seed}"
+    blueprint_course = selectors.blueprint_with_items(slug).course  # type: ignore[union-attr]  # تحقق منه bundle_plan
+    course = _course_slug(blueprint_course)
+    key = f"bundle:{generator_version(course)}:{slug}:{lesson_code}:{bundle_seed}"
     cached = cache.get(key)
     if cached is not None:
         return cached
-    lesson = selectors.lessons().get(code=lesson_code)
-    seed = lesson_seed(bundle_seed, lesson_code)
+    lesson = selectors.lessons(blueprint_course).get(code=lesson_code)
+    seed = lesson_seed(bundle_seed, lesson_code, course)
     rng = random.Random(seed)  # noqa: S311 — حتمية لا أمنية
     used: set[str] = set()
     questions = []
     for level in LEVEL_NAMES:
         for _ in range(entry["levels"].get(level, 0)):
-            problem = generate(lesson.code, rng, BlueprintItem.Kind.ESSAY, used, level)
+            problem = generate(lesson.code, rng, BlueprintItem.Kind.ESSAY, used, level, course=course)
             used.add(problem.key)
-            slot = PartSlot("", lesson.code, lesson.title, BlueprintItem.Kind.ESSAY, 0, level)
+            slot = PartSlot("", lesson.code, lesson.title, BlueprintItem.Kind.ESSAY, 0, level, course=course)
             part = render_part(problem, slot, rng)
             questions.append({"number": len(questions) + 1, "kind": slot.kind, "marks": 0, "parts": [part]})
     paper = {
-        **paper_meta("worksheet", blueprint=slug, lesson_code=lesson.code),
+        **paper_meta("worksheet", course, blueprint=slug, lesson_code=lesson.code),
         "title": f"ورقة عمل: {lesson.code} {lesson.title}",
         "form": "A",
         "seed": seed,

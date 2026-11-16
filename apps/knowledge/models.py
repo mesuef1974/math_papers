@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from django.db import models
 
-from apps.curriculum.models import Lesson
+from apps.curriculum.models import Course, Lesson
 
 
 class Level(models.TextChoices):
@@ -38,14 +38,47 @@ class Standard(models.Model):
         return self.code
 
 
+class Practice(models.Model):
+    """ممارسة رياضية من ممارسات المنهج مثل MP.4."""
+
+    code = models.CharField(max_length=8, unique=True)
+
+    class Meta:
+        ordering = ["code"]
+
+    def __str__(self) -> str:
+        return self.code
+
+
+class Source(models.TextChoices):
+    AUTHORED = "authored", "صياغتنا من الدليل"
+    EXTRACTED = "extracted", "مستخرج آليًا ومطابق للمعيار الذهبي"
+
+
+class Status(models.TextChoices):
+    DRAFT = "draft", "مسودة"
+    REVIEWED = "reviewed", "مراجَع"
+
+
 class LessonProfile(models.Model):
     lesson = models.OneToOneField(Lesson, on_delete=models.CASCADE, related_name="profile")
+    # أصل ملف الدرس وحالته؛ تنطبق على بنوده كلها (الأهداف والأمثلة والتمارين...).
+    source = models.CharField(max_length=10, choices=Source.choices, default=Source.AUTHORED)
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.REVIEWED)
     title_en = models.CharField(max_length=160, blank=True)
     objective = models.TextField(blank=True)
     rationale = models.TextField(blank=True)  # لماذا نتعلمه
     motivation = models.TextField(blank=True)  # تحفيز بداية الدرس
     self_assessment = models.JSONField(default=list, blank=True)  # أرقام تمارين التقييم الذاتي
     standards = models.ManyToManyField(Standard, related_name="lessons", blank=True)
+    practices = models.ManyToManyField(Practice, related_name="lessons", blank=True)
+    # مواصفة الدرس العددية. فارغ = لم يُستخرج (لا يُخمَّن)، وليس صفرًا.
+    task_basic = models.CharField(max_length=40, blank=True)  # مدى تمارين دليل المهام الأساسي
+    task_advanced = models.CharField(max_length=40, blank=True)
+    quiz_depths = models.JSONField(default=list, blank=True)  # أعماق المعرفة لاختبار الدرس
+    exercises_total = models.PositiveSmallIntegerField(null=True, blank=True)
+    vocab_new = models.PositiveSmallIntegerField(null=True, blank=True)
+    vocab_review = models.PositiveSmallIntegerField(null=True, blank=True)
 
     class Meta:
         ordering = ["lesson__code"]
@@ -96,6 +129,39 @@ class LessonItem(models.Model):
         return f"{self.profile_id} {self.kind} {self.order}"
 
 
+class LessonObjective(models.Model):
+    """هدف تعلم مرتب بمستوى بلوم. النص فارغ للمصادر التي لا يدخل نصها المستودع."""
+
+    profile = models.ForeignKey(LessonProfile, on_delete=models.CASCADE, related_name="objectives")
+    order = models.PositiveSmallIntegerField()
+    bloom = models.CharField(max_length=12)  # قيم Bloom أو unclassified
+    text = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ["profile_id", "order"]
+        constraints = [models.UniqueConstraint(fields=["profile", "order"], name="unique_lesson_objective")]
+
+    def __str__(self) -> str:
+        return f"{self.profile_id} هدف {self.order}"
+
+
+class ExerciseGroup(models.Model):
+    """مجموعة تمارين: مثال الدرس الذي تدرّب عليه وعمقها المعرفي وأرقامها."""
+
+    profile = models.ForeignKey(LessonProfile, on_delete=models.CASCADE, related_name="exercise_groups")
+    order = models.PositiveSmallIntegerField()
+    example = models.PositiveSmallIntegerField()
+    dok = models.PositiveSmallIntegerField()
+    exercises = models.JSONField(default=list)
+
+    class Meta:
+        ordering = ["profile_id", "order"]
+        constraints = [models.UniqueConstraint(fields=["profile", "order"], name="unique_exercise_group")]
+
+    def __str__(self) -> str:
+        return f"{self.profile_id} مثال {self.example} عمق {self.dok}"
+
+
 class Term(models.Model):
     profile = models.ForeignKey(LessonProfile, on_delete=models.CASCADE, related_name="terms")
     ar = models.CharField(max_length=120)
@@ -116,6 +182,7 @@ class WorkedExample(models.Model):
     number = models.PositiveSmallIntegerField()
     skill = models.TextField()
     representation = models.CharField(max_length=60, blank=True)
+    representations = models.JSONField(default=list, blank=True)  # التمثيلات من قائمة مغلقة
     methods = models.JSONField(default=list, blank=True)
 
     class Meta:
@@ -162,14 +229,22 @@ class ExerciseTemplate(models.Model):
 
 
 class UnitProfile(models.Model):
-    unit = models.PositiveSmallIntegerField(unique=True)
+    # التوسعة: nullable حتى تعمل النسخة السابقة أثناء النشر؛ تصير مطلوبة في هجرة لاحقة منفصلة.
+    course = models.ForeignKey(Course, on_delete=models.PROTECT, related_name="units", null=True, blank=True)
+    unit = models.PositiveSmallIntegerField()
     title = models.CharField(max_length=120)
     big_idea = models.TextField(blank=True)
     approach = models.TextField(blank=True)
     context = models.TextField(blank=True)  # تاريخ أو تطبيق يفتتح به الدليل الوحدة
 
     class Meta:
-        ordering = ["unit"]
+        ordering = ["course_id", "unit"]
+        constraints = [
+            models.UniqueConstraint(fields=["course", "unit"], name="unique_unit_per_course"),
+            models.UniqueConstraint(
+                fields=["unit"], condition=models.Q(course__isnull=True), name="unique_unit_without_course"
+            ),
+        ]
 
     def __str__(self) -> str:
         return f"الوحدة {self.unit}: {self.title}"
@@ -189,13 +264,41 @@ class UnitProject(models.Model):
 class PedagogyNote(models.Model):
     """مبدأ تربوي عام من تمهيد الدليل، مثل قاعدة الطرائق الأربع. أساس لتحضير الدروس في المرحلة الثانية."""
 
-    slug = models.SlugField(max_length=48, unique=True)
+    course = models.ForeignKey(
+        Course, on_delete=models.PROTECT, related_name="pedagogy", null=True, blank=True
+    )
+    slug = models.SlugField(max_length=48)
     title = models.CharField(max_length=120)
     text = models.TextField()
     order = models.PositiveSmallIntegerField(default=1)
 
     class Meta:
         ordering = ["order", "slug"]
+        constraints = [
+            models.UniqueConstraint(fields=["course", "slug"], name="unique_pedagogy_per_course"),
+            models.UniqueConstraint(
+                fields=["slug"],
+                condition=models.Q(course__isnull=True),
+                name="unique_pedagogy_without_course",
+            ),
+        ]
 
     def __str__(self) -> str:
         return self.title
+
+
+class KnowledgeRelease(models.Model):
+    """إصدار تحميل: ما حُمِّل لمقرر ولأي نسخة مخطط وبأي تجزئة محتوى. صف جديد حين تتغير التجزئة فقط."""
+
+    course = models.ForeignKey(Course, on_delete=models.PROTECT, related_name="knowledge_releases")
+    schema_version = models.PositiveSmallIntegerField()
+    content_hash = models.CharField(max_length=64)
+    report = models.JSONField(default=dict, blank=True)  # ما تغيّر في هذا التحميل
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at", "-id"]
+        indexes = [models.Index(fields=["course", "-created_at"], name="knowledge_release_latest")]
+
+    def __str__(self) -> str:
+        return f"{self.course_id} {self.content_hash[:8]}"

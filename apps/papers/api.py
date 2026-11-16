@@ -122,6 +122,9 @@ class PaperOut(Schema):
     level: str = ""
 
 
+COURSE_MAX = 48  # حد معرّف المقرر؛ الفارغ هو المقرر الحالي
+
+
 class ExamQuery(Schema):
     blueprint: str
     seed: Seed | None = None
@@ -135,12 +138,14 @@ class WorksheetQuery(Schema):
     level: Literal["K", "A", "R"] | None = None
     form: Form = "A"
     purpose: Literal["", "remedial", "enrichment"] = ""
+    course: str = Field("", max_length=COURSE_MAX)
 
 
 class QuizQuery(Schema):
     lessons: str = Field(min_length=3, max_length=LESSON_CODE_MAX)  # «1.1» أو «1.1,1.2»
     seed: Seed | None = None
     form: Form = "A"
+    course: str = Field("", max_length=COURSE_MAX)
 
 
 class BundleEntryOut(Schema):
@@ -189,6 +194,7 @@ class ReplacePartIn(Schema):
     slot: SlotOut
     exclude: list[Annotated[str, Field(max_length=12)]] = Field([], max_length=200)
     seed: Seed | None = None
+    course: str = Field("", max_length=COURSE_MAX)
 
 
 class ReplacedPartOut(PartOut):
@@ -214,6 +220,8 @@ class RecipeIn(Schema):
     purpose: Literal["", "remedial", "enrichment"] = ""
     seed: Seed
     replacements: list[ReplacementIn] = Field([], max_length=60)
+    # فارغ = المقرر الحالي؛ لا يدخل الوصفة إلا إن مُلئ فلا تتغير بصمات الأوراق المحفوظة قبل المقررات
+    course: str = Field("", max_length=COURSE_MAX)
 
 
 class SavePaperIn(Schema):
@@ -256,8 +264,12 @@ KIND_MISMATCH = "نوع الورقة في الوصفة لا يطابق اللق�
 
 
 @router.get("/lessons", response=list[LessonOut])
-def lessons(request: HttpRequest):
-    ready = available_lessons()
+def lessons(request: HttpRequest, course: str = ""):
+    try:
+        course_row = selectors.course_by_slug(course)
+    except selectors.UnknownCourseError as error:
+        raise HttpError(404, "المقرر غير موجود") from error
+    ready = available_lessons(course_row.slug)
     return [
         {
             "code": row.code,
@@ -265,9 +277,9 @@ def lessons(request: HttpRequest):
             "unit": row.unit,
             "examinable": row.examinable,
             "has_generator": row.code in ready,
-            "levels": lesson_levels(row.code) if row.code in ready else [],
+            "levels": lesson_levels(row.code, course=course_row.slug) if row.code in ready else [],
         }
-        for row in selectors.lessons()
+        for row in selectors.lessons(course_row)
     ]
 
 
@@ -290,7 +302,7 @@ def exam(request: HttpRequest, query: Query[ExamQuery]):
 def worksheet(request: HttpRequest, query: Query[WorksheetQuery]):
     try:
         return services.build_worksheet(
-            query.lesson, query.count, query.seed, query.level, query.form, query.purpose
+            query.lesson, query.count, query.seed, query.level, query.form, query.purpose, query.course
         )
     except services.UnknownLessonError as error:
         raise HttpError(404, "الدرس غير متاح بهذا المستوى") from error
@@ -304,7 +316,7 @@ def quiz(request: HttpRequest, query: Query[QuizQuery]):
     if not 1 <= len(codes) <= services.QUIZ_MAX_LESSONS:
         raise HttpError(422, "الاختبار القصير لدرس واحد أو درسين.")
     try:
-        return services.build_quiz(codes, query.seed, query.form)
+        return services.build_quiz(codes, query.seed, query.form, query.course)
     except services.UnknownLessonError as error:
         raise HttpError(404, "درس غير متاح") from error
     except ExhaustedError as error:
@@ -344,7 +356,9 @@ def replace_part(request: HttpRequest, payload: ReplacePartIn):
         payload.slot.needs_graph,
     )
     try:
-        return services.replacement_part(payload.lesson, slot, set(payload.exclude), payload.seed)
+        return services.replacement_part(
+            payload.lesson, slot, set(payload.exclude), payload.seed, payload.course
+        )
     except services.UnknownLessonError as error:
         raise HttpError(404, "الدرس غير متاح") from error
     except ExhaustedError as error:
@@ -352,7 +366,10 @@ def replace_part(request: HttpRequest, payload: ReplacePartIn):
 
 
 def _recipe_dict(recipe: RecipeIn) -> dict:
-    return recipe.dict()
+    data = recipe.dict()
+    if not data["course"]:
+        del data["course"]  # بصمة الوصفة (recipe_hash) تبقى كما كانت للأوراق بلا مقرر
+    return data
 
 
 @router.get("/saved", response=list[SavedSummaryOut])

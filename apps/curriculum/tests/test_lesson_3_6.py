@@ -29,7 +29,7 @@ def test_seed_is_idempotent():
     assert Lesson.objects.filter(code="3.6").count() == 1
 
 
-def test_knowledge_loader_no_longer_skips_lesson_36():
+def test_knowledge_loader_loads_lesson_36():
     report = load_knowledge()
-    assert report.skipped == []
+    assert report.changed["lessons"] == 0  # الدرس مبذور، فلا يُنشأ ولا يُتخطى
     assert Lesson.objects.get(code="3.6").profile.templates.count() == 15
