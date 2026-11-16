@@ -188,6 +188,23 @@ if REDIS_URL:
         }
     }
 
+# عامل المهام الخلفية (Celery، config/celery.py). الوسيط ومخزن النتائج Redis من REDIS_URL. بلا REDIS_URL
+# (تطوير محلي واختبار) تُنفَّذ المهمة في مكانها فورًا فلا يلزم وسيط ولا عامل. في الإنتاج لا تُستدعى مهمة من مسار
+# الويب قبل قيام خدمة العامل، وإلا بقيت في الطابور؛ CELERY_TASK_ALWAYS_EAGER=1 يعيد التنفيذ الفوري مؤقتًا.
+CELERY_BROKER_URL = REDIS_URL or "memory://"
+CELERY_RESULT_BACKEND = REDIS_URL or "cache+memory://"
+CELERY_TASK_ALWAYS_EAGER = env_bool("CELERY_TASK_ALWAYS_EAGER", not REDIS_URL)
+CELERY_TASK_EAGER_PROPAGATES = True
+# المهمة تُقَرّ بعد إتمامها لا عند استلامها: موت العامل في أثنائها يعيدها إلى الطابور، ولذلك تُكتب idempotent.
+CELERY_TASK_ACKS_LATE = True
+CELERY_TASK_REJECT_ON_WORKER_LOST = True
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1
+CELERY_TASK_SOFT_TIME_LIMIT = 270
+CELERY_TASK_TIME_LIMIT = 300
+CELERY_RESULT_EXPIRES = 3600
+CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
+CELERY_TIMEZONE = TIME_ZONE
+
 SITE_TITLE = "مولّد أوراق الرياضيات"
 SITE_SUBTITLE = "12 علمي وتكنولوجي، الفصل الأول 2026-2027"
 
