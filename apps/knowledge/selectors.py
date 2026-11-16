@@ -9,10 +9,11 @@ from pathlib import Path
 
 from django.db.models import Sum
 
-from apps.curriculum.courses import GRADE12_SLUG
+from apps.curriculum.courses import GRADE10_SLUG, GRADE12_SLUG
 
+from .domain.contract import SCHEMA_VERSION, source_hash, source_slugs
 from .domain.grade10_index import Grade10Index, Grade10Lesson
-from .models import ExerciseTemplate
+from .models import ExerciseTemplate, LessonProfile
 
 GRADE10_INDEX = Path(__file__).resolve().parent / "data" / "grade10_index.json"
 
@@ -60,3 +61,56 @@ def grade10_index() -> Grade10Index:
 
 def grade10_lesson(code: str) -> Grade10Lesson | None:
     return next((lesson for lesson in grade10_index().lessons if lesson.lesson == code), None)
+
+
+def grade10_index_from_tables() -> Grade10Index:
+    """فهرس العاشر مشتقًّا من الجداول التي حمّلها المحمِّل الواحد: يطابق الملف المودَع حين يكون المقرر محمَّلًا."""
+    profiles = (
+        LessonProfile.objects.filter(lesson__course__slug=GRADE10_SLUG)
+        .select_related("lesson")
+        .prefetch_related("standards", "practices", "objectives", "examples", "exercise_groups")
+    )
+    lessons = []
+    for profile in sorted(profiles, key=lambda p: tuple(int(n) for n in p.lesson.code.split("."))):
+        lessons.append(
+            {
+                "lesson": profile.lesson.code,
+                "unit": profile.lesson.unit,
+                "standards": sorted(s.code for s in profile.standards.all()),
+                "practices": sorted(p.code for p in profile.practices.all()),
+                "objectives_bloom": [o.bloom for o in profile.objectives.all()],
+                "examples": [
+                    {"n": e.number, "representations": e.representations} for e in profile.examples.all()
+                ],
+                "analysis": [
+                    {"example": g.example, "dok": g.dok, "exercises": g.exercises}
+                    for g in profile.exercise_groups.all()
+                ],
+                "exercises_total": profile.exercises_total or 0,
+                "task_guide": (
+                    {"basic": profile.task_basic, "advanced": profile.task_advanced}
+                    if profile.task_basic and profile.task_advanced
+                    else None
+                ),
+                "quiz_depths": profile.quiz_depths,
+                "vocabulary": {"new": profile.vocab_new or 0, "review": profile.vocab_review or 0},
+            }
+        )
+    return Grade10Index(lessons=lessons)
+
+
+def knowledge_state() -> dict[str, str]:
+    """حالة كل مقرر ذي مصدر: ok (آخر إصدار يطابق ملفات المصدر) أو stale (تغيّرت الملفات بلا تحميل) أو unloaded."""
+    from apps.curriculum.models import Course
+
+    state = {}
+    for slug in source_slugs():
+        course = Course.objects.filter(slug=slug).first()
+        release = course.knowledge_releases.first() if course else None
+        if release is None:
+            state[slug] = "unloaded"
+        elif release.schema_version != SCHEMA_VERSION or release.content_hash != source_hash(slug):
+            state[slug] = "stale"
+        else:
+            state[slug] = "ok"
+    return state

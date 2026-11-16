@@ -105,6 +105,9 @@ AXES_COOLOFF_TIME = 1  # ساعة
 AXES_LOCKOUT_PARAMETERS = ["username", "ip_address"]
 # عدد الوكلاء الموثوقين أمام التطبيق (Railway = 1). صفر يعني REMOTE_ADDR مباشرة.
 TRUSTED_PROXY_COUNT = int(env("TRUSTED_PROXY_COUNT", "0"))
+# /health/ يذكر حالة معرفة المقررات دائمًا (knowledge). مع 1 يعيد 503 إن تغيّر المصدر بلا تحميل أو لم يُحمَّل؛
+# يُفعَّل في الإنتاج بعد أن يثبت أن preDeploy يشغّل load_course --all، وإلا علّق النسخة الأولى على نشر لم يحمّل بعد.
+KNOWLEDGE_HEALTH_STRICT = env_bool("KNOWLEDGE_HEALTH_STRICT", False)
 AXES_CLIENT_IP_CALLABLE = "apps.core.client_ip.client_ip"
 
 AUTH_PASSWORD_VALIDATORS = [

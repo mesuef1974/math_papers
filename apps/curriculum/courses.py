@@ -5,3 +5,5 @@
 GRADE12_SLUG = "g12-sci-s1"
 GRADE12_TITLE = "الرياضيات: الثاني عشر العلمي والتكنولوجي، الفصل الأول"
 DEFAULT_COURSE = GRADE12_SLUG
+# العاشر، الفصل الأول: كتابه الثاني في المنصة؛ معرفته عددية مشتقة (apps/knowledge/domain/contract.py).
+GRADE10_SLUG = "g10-s1"

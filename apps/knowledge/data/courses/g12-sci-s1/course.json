@@ -1,0 +1,127 @@
+{
+  "schema_version": 1,
+  "course": {
+    "slug": "g12-sci-s1",
+    "title": "الرياضيات: الثاني عشر العلمي والتكنولوجي، الفصل الأول",
+    "grade": 12,
+    "track": "العلمي والتكنولوجي",
+    "semester": 1,
+    "edition": ""
+  },
+  "lessons": [
+    {
+      "code": "1.1",
+      "title": "مفهوم النهاية",
+      "unit": 1,
+      "examinable": true
+    },
+    {
+      "code": "1.2",
+      "title": "حساب النهايات",
+      "unit": 1,
+      "examinable": true
+    },
+    {
+      "code": "1.3",
+      "title": "نهايات الدوال المثلثية",
+      "unit": 1,
+      "examinable": true
+    },
+    {
+      "code": "1.4",
+      "title": "الاتصال",
+      "unit": 1,
+      "examinable": true
+    },
+    {
+      "code": "2.1",
+      "title": "معدل التغير",
+      "unit": 2,
+      "examinable": true
+    },
+    {
+      "code": "2.2",
+      "title": "تعريف المشتقة",
+      "unit": 2,
+      "examinable": true
+    },
+    {
+      "code": "2.3",
+      "title": "قواعد الاشتقاق",
+      "unit": 2,
+      "examinable": true
+    },
+    {
+      "code": "2.4",
+      "title": "قاعدتا الضرب والقسمة",
+      "unit": 2,
+      "examinable": true
+    },
+    {
+      "code": "2.5",
+      "title": "قاعدة السلسلة",
+      "unit": 2,
+      "examinable": true
+    },
+    {
+      "code": "2.6",
+      "title": "مشتقات الأسية واللوغاريتمية",
+      "unit": 2,
+      "examinable": true
+    },
+    {
+      "code": "2.7",
+      "title": "مشتقات الدوال المثلثية",
+      "unit": 2,
+      "examinable": true
+    },
+    {
+      "code": "2.8",
+      "title": "الاشتقاق الضمني",
+      "unit": 2,
+      "examinable": true
+    },
+    {
+      "code": "2.9",
+      "title": "المشتقات من الرتب العليا",
+      "unit": 2,
+      "examinable": true
+    },
+    {
+      "code": "3.1",
+      "title": "الدوال المتزايدة والمتناقصة",
+      "unit": 3,
+      "examinable": true
+    },
+    {
+      "code": "3.2",
+      "title": "القيم القصوى للدوال",
+      "unit": 3,
+      "examinable": true
+    },
+    {
+      "code": "3.3",
+      "title": "التقعر ونقاط الانعطاف",
+      "unit": 3,
+      "examinable": true
+    },
+    {
+      "code": "3.4",
+      "title": "رسم منحنيات الدوال",
+      "unit": 3,
+      "examinable": false
+    },
+    {
+      "code": "3.5",
+      "title": "تطبيقات القيم القصوى",
+      "unit": 3,
+      "examinable": true
+    },
+    {
+      "code": "3.6",
+      "title": "المعدلات المرتبطة",
+      "unit": 3,
+      "examinable": false
+    }
+  ]
+}

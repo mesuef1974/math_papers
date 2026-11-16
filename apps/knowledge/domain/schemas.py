@@ -24,7 +24,12 @@ _FORBIDDEN = re.compile(
     r"For Qatar|Savvas|ISBN|MoE Use|\bPDF\b|\bp\d{3}\b|(?:ص|صفحة|صفحات|الصفحة|الصفحتين)\s*\.?\s*\d",
     re.IGNORECASE,
 )
-STANDARD_CODE = re.compile(r"^12A\.\d{1,2}\.\d{1,2}$")
+STANDARD_CODE = re.compile(r"^(?:12A|10)\.\d{1,2}\.\d{1,2}$")
+PRACTICE_CODE = re.compile(r"^MP\.\d$")
+BLOOM_OR_UNCLASSIFIED = (*BLOOMS, "unclassified")  # الصنف الأخير: بند لم يُصنَّف فلا يُخمَّن
+SOURCES = ("authored", "extracted")  # صياغتنا من الدليل، أو مستخرج آليًا ومطابق للمعيار الذهبي
+STATUSES = ("draft", "reviewed")
+RANGE = re.compile(r"^\d{1,2}(?:\s*[-–]\s*\d{1,2})?(?:\s*[,،]\s*\d{1,2}(?:\s*[-–]\s*\d{1,2})?)*$")
 
 
 def safe_text(value: str) -> str:
@@ -53,10 +58,24 @@ class ItemData(_Strict):
     label: Safe = ""
 
 
+class ObjectiveData(_Strict):
+    bloom: Literal[*BLOOM_OR_UNCLASSIFIED]  # type: ignore[valid-type]
+    text: Safe = ""  # فارغ للمصادر التي لا يدخل نصها المستودع
+
+
+class ExerciseGroupData(_Strict):
+    """صف من تحليل التمارين: مثال وعمق معرفي وأرقام التمارين المرتبطة بهما."""
+
+    example: int = Field(ge=1, le=20)
+    dok: int = Field(ge=1, le=4)
+    exercises: list[int] = Field(min_length=1)
+
+
 class ExampleData(_Strict):
     number: int = Field(ge=1)
-    skill: Safe
+    skill: Safe = ""
     representation: Safe = ""
+    representations: list[Literal["جدول", "بياني", "جبري", "سياق"]] = Field(default_factory=list)
     methods: list[Safe] = Field(default_factory=list)
 
 
@@ -72,10 +91,39 @@ class TemplateData(_Strict):
     category: Literal[*CATEGORIES] = "practice"  # type: ignore[valid-type]
 
 
+def _standard(code: str) -> str:
+    if not STANDARD_CODE.match(code):
+        raise ValueError(f"رمز معيار غير صالح: {code}")
+    return code
+
+
+def _practice(code: str) -> str:
+    if not PRACTICE_CODE.match(code):
+        raise ValueError(f"رمز ممارسة غير صالح: {code}")
+    return code
+
+
+def _range(value: str) -> str:
+    if value and not RANGE.match(value):
+        raise ValueError(f"مدى أرقام غير صالح: {value}")
+    return value
+
+
 class LessonData(_Strict):
-    lesson: str = Field(pattern=r"^\d\.\d$")
+    lesson: str = Field(pattern=r"^\d\.\d{1,2}$")
+    source: Literal[*SOURCES] = "authored"  # type: ignore[valid-type]
+    status: Literal[*STATUSES] = "reviewed"  # type: ignore[valid-type]
     title_en: Safe = ""
-    standards: list[str] = Field(default_factory=list)
+    standards: list[Annotated[str, AfterValidator(_standard)]] = Field(default_factory=list)
+    practices: list[Annotated[str, AfterValidator(_practice)]] = Field(default_factory=list)
+    objectives: list[ObjectiveData] = Field(default_factory=list)
+    exercise_groups: list[ExerciseGroupData] = Field(default_factory=list)
+    task_basic: Annotated[str, AfterValidator(_range)] = ""
+    task_advanced: Annotated[str, AfterValidator(_range)] = ""
+    quiz_depths: list[int] = Field(default_factory=list)
+    exercises_total: int | None = Field(default=None, ge=0, le=99)
+    vocab_new: int | None = Field(default=None, ge=0)
+    vocab_review: int | None = Field(default=None, ge=0)
     objective: Safe = ""
     rationale: Safe = ""
     motivation: Safe = ""

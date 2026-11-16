@@ -6,6 +6,8 @@ set -euo pipefail
 
 echo "== Pre-Deploy =="
 python manage.py migrate --noinput
+# معرفة المقررات (الطبقة المشتقة) تتبع الشيفرة التي نُشرت: idempotent، وتسجّل إصدارًا حين تتغير التجزئة فقط.
+python manage.py load_course --all
 python manage.py check --deploy --fail-level ERROR
 
 if [ -n "${DJANGO_SUPERUSER_USERNAME:-}" ] && [ -n "${DJANGO_SUPERUSER_PASSWORD:-}" ]; then
