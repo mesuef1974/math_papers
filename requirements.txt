@@ -10,3 +10,4 @@ redis>=5.2
 sympy>=1.13
 playwright>=1.49,<1.65  # 1.65 يحتاج libatomic غير الموجودة في صورة slim؛ PDF خادمي: Chromium يطبع صفحة الطباعة؛ المتصفح نفسه يُثبَّت في صورة النشر
 python-docx>=1.1  # تصدير Word: المولّد في apps/papers/word يبني DOCX بمعادلات OMML بلا متصفح
+celery[redis]>=5.4  # عامل المهام الخلفية (خدمة ثانية على Railway بـ scripts/railway-worker.sh)؛ الوسيط Redis من REDIS_URL

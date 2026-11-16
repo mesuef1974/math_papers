@@ -7,6 +7,7 @@ PostgreSQL + Redis. النشر على Railway (`railway.toml`).
 - `config/` إعدادات (base/development/production/testing)، `apps/<app>/` كل تطبيق: `models.py` نحيل، `services.py` كتابة،
   `selectors.py` قراءة، `api.py` مسارات Ninja، `tests/`.
 - `frontend/src/`: `pages/` (lazy)، `components/`، `stores/` (Pinia)، `api/client.ts` (جلسة + CSRF، لا توكنات في localStorage).
+- المهام الخلفية Celery (`config/celery.py`): المهام في `apps/<app>/tasks.py` وتُكتب idempotent (الإقرار بعد الإتمام، فموت العامل يعيدها). الوسيط Redis من `REDIS_URL`، وبلا `REDIS_URL` (تطوير واختبار) تُنفَّذ في مكانها فورًا. العامل خدمة ثانية على Railway أمر بدئها `bash scripts/railway-worker.sh`، وفحصها `python manage.py worker_ping`. لا تُستدعى مهمة من مسار الويب في الإنتاج قبل قيام خدمة العامل. توليد PDF ما زال بخيط داخل خادم الويب (`apps/papers/pdf.py`) حتى يوجد تخزين ملفات مشترك (المرحلة 3 من خطة المناهج).
 - `scripts/` بوابات، `automation/` دفتر البطاقات والمشغّل، `security/sensitive_paths.json` المسارات الحسّاسة.
 - `tools/extraction/` خط استخراج أدلة المعلم (شيفرة واختبارات فقط؛ النصوص والمقاطع خارج المستودع بإعداد `book.yaml` لكل كتاب): انظر `README.md` فيه.
 
@@ -27,6 +28,8 @@ PostgreSQL + Redis. النشر على Railway (`railway.toml`).
 - كل مولّد جديد يحتاج نوع فحص عددي مستقل في `apps/papers/tests/test_generators.py`.
 - توزيع الدرجات في المفتاح مشتق لا مخزَّن: `apps/papers/domain/marking.py` يوزّع درجة الفرع المقالي على خطواته ثم بند «الجواب النهائي» (أصغر وحدة نصف درجة، والخطوات الزائدة تُدمج)، والموضوعي درجته لرمز الإجابة. `PartOut` يعيد حسابه دائمًا فلا يُقبل من العميل، ويعرضه `AnswerKey.vue` و`key_pages` في Word بالصفوف نفسها.
 - فهرس العاشر `apps/knowledge/data/grade10_index.json` مشتق عددي فقط (معايير وممارسات ومستويات بلوم وتمثيلات الأمثلة وصفوف تحليل التمارين و«دليل المهام» وأعماق الاختبار وعدد المصطلحات)، بلا نص دليل: مخطط `domain/grade10_index.py` صارم لا يملك حقلًا نصيًا حرًّا، ويُبنى بـ `python manage.py build_grade10_index --source <مجلد الكتاب خارج المستودع>` ويقرؤه `selectors.grade10_index()`.
+- مقاطع الكتاب في العروض (قرار المالك 2026-11-16، بإذن الوزارة؛ لم يُبنَ بعد): مقاطع الأمثلة والتدريبات المقصوصة من كتاب الطالب تُستعمل في العروض التقديمية وحدها. لا تدخل المستودع؛ مكانها تخزين ملفات خاص ملحق بالإنتاج وفهرسها في القاعدة، وتُقدَّم للمعلمين المسجَّلين خلف `TeacherAuth` بروابط موقّعة قصيرة العمر بلا رابط عام. نص دليل المعلم وهوامشه لا يدخل المستودع ولا الإنتاج، والأوراق والاختبارات تبقى مولَّدة أصليًا بلا مقاطع.
+- خطة توحيد المناهج (المقرر والمحمِّل الواحد والأصول وخط الاستخراج) بمراحلها وشروط انتهائها: `docs/curriculum_platform_plan.md`.
 - الاختبارات بلا Postgres محلي: `DATABASE_URL=sqlite:///test.db python -m pytest --create-db`.
 
 ## الدخول والصلاحيات
