@@ -20,3 +20,4 @@ automation/ledger/*.jsonl
 *.log
 *.db
 *.sqlite3
+.assets/
