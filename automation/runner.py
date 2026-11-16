@@ -27,6 +27,8 @@ ROOT = ledger.ROOT
 WORKTREES = ROOT / ".worktrees"
 LOCK = ROOT / "automation" / ".lock"
 LOCK_STALE_SECONDS = 3 * 60 * 60
+REQUIRED_TOOLS = ("claude", "git", "gh")
+HEARTBEAT_KEEP = 200
 
 # الجلسة الآلية بلا من يوافق: ما لم يُسمح به هنا يُرفض، فبلا هذه القائمة لا اختبار يُشغَّل ولا إيداع يُكتب.
 ALLOWED_TOOLS = [
@@ -205,6 +207,41 @@ def push_and_open_pr(path: Path, branch: str, card: str) -> str:
     return proc.stdout.strip()
 
 
+def heartbeat(outcome: str) -> None:
+    """سطر لكل تشغيل في .worktrees/runner.log: conhost --headless لا يعيد رمز الخروج إلى Task Scheduler،
+    فهذا السجل هو الدليل أن المهمة المجدولة تعمل فعلًا وأن أدواتها على المسار."""
+    WORKTREES.mkdir(exist_ok=True)
+    log = WORKTREES / "runner.log"
+    missing = [tool for tool in REQUIRED_TOOLS if not shutil.which(tool)]
+    line = f"{ledger.now()} {outcome}"
+    if missing:
+        line += f" | غائب عن المسار: {', '.join(missing)}"
+    lines = log.read_text(encoding="utf-8").splitlines() if log.exists() else []
+    log.write_text("\n".join([*lines, line][-HEARTBEAT_KEEP:]) + "\n", encoding="utf-8")
+
+
+def run_card(card: str, model: str | None, max_turns: int) -> tuple[int, str]:
+    """رمز الخروج ووصف ما انتهى إليه التشغيل."""
+    try:
+        ledger.append(card, "claimed", pid=os.getpid())
+        path, branch = make_worktree(card)
+        rc = run_model(path, card, model, max_turns)
+        head = sh(["git", "rev-parse", "HEAD"], cwd=path, capture_output=True).stdout.strip()
+        ledger.append(card, "coded", exit_code=rc, head=head)
+        if reason := unpushable(path):
+            ledger.append(card, "blocked", reason=reason, head=head)
+            return 1, f"{card}: لا دفع: {reason} — راجع .worktrees/{card}.log"
+        if not prepush(path, card):
+            ledger.append(card, "prepush_failed", head=head)
+            return 1, f"{card}: الفحص المحلي فشل — البطاقة تبقى في worktree للمراجعة"
+        ledger.append(card, "prepush_ok", head=head)
+        url = push_and_open_pr(path, branch, card)
+        ledger.append(card, "pr_opened", url=url, head=head)
+        return 0, f"{card}: PR {url}"
+    finally:
+        release_lock()
+
+
 def main(argv: list[str] | None = None) -> int:
     sys.stdout.reconfigure(encoding="utf-8")
     ap = argparse.ArgumentParser()
@@ -215,35 +252,26 @@ def main(argv: list[str] | None = None) -> int:
     args = ap.parse_args(argv)
 
     card = pick_card()
-    if not card:
-        print("لا بطاقات ready")
-        return 0
     if args.dry_run:
-        print(f"سيُلتقط: {card} → worktree .worktrees/{card} → claude → prepush → PR")
+        print(
+            f"سيُلتقط: {card} → worktree .worktrees/{card} → claude → prepush → PR"
+            if card
+            else "لا بطاقات ready"
+        )
         return 0
-    if not acquire_lock():
-        return 0
-    try:
-        ledger.append(card, "claimed", pid=os.getpid())
-        path, branch = make_worktree(card)
-        rc = run_model(path, card, args.model, args.max_turns)
-        head = sh(["git", "rev-parse", "HEAD"], cwd=path, capture_output=True).stdout.strip()
-        ledger.append(card, "coded", exit_code=rc, head=head)
-        if reason := unpushable(path):
-            ledger.append(card, "blocked", reason=reason, head=head)
-            print(f"لا دفع: {reason} — راجع .worktrees/{card}.log")
-            return 1
-        if not prepush(path, card):
-            ledger.append(card, "prepush_failed", head=head)
-            print("الفحص المحلي فشل — البطاقة تبقى في worktree للمراجعة")
-            return 1
-        ledger.append(card, "prepush_ok", head=head)
-        url = push_and_open_pr(path, branch, card)
-        ledger.append(card, "pr_opened", url=url, head=head)
-        print(f"PR: {url}")
-        return 0
-    finally:
-        release_lock()
+    if not card:
+        code, outcome = 0, "لا بطاقات ready"
+    elif not acquire_lock():
+        code, outcome = 0, "مشغّل آخر يعمل"
+    else:
+        try:
+            code, outcome = run_card(card, args.model, args.max_turns)
+        except Exception as exc:
+            heartbeat(f"{card}: خطأ: {exc!r}")
+            raise
+    print(outcome)
+    heartbeat(outcome)
+    return code
 
 
 if __name__ == "__main__":

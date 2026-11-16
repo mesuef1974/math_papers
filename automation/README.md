@@ -29,6 +29,9 @@ python automation/schedule.py remove
 
 - المهمة تشغّل `runner.py` من المجلد الرئيسي للمشروع، فبعد دمج أي تغيير في `automation/` حدّث المجلد الرئيسي
   (`git merge --ff-only origin/main`) وإلا بقي المشغّل على نسخته القديمة.
+- `conhost --headless` لا يعيد رمز الخروج، فـ«Last Result» في Task Scheduler صفر دائمًا. الدليل أن المشغّل يعمل سطر لكل تشغيل
+  في `.worktrees/runner.log` (آخر 200)، يذكر ما انتهى إليه وأي أداة (`claude` أو `git` أو `gh`) غابت عن المسار، ويعرض
+  `schedule.py status` آخره.
 - بلا بطاقة `ready` لا يُستدعى النموذج: التشغيل الدوري لا يستهلك توكنات. الاستهلاك يبدأ حين تضع بطاقة بـ `ledger.py ready`،
   وسقفه `--max-turns` (40)؛ والنموذج الأرخص يُحدَّد بـ `install --model <id>`.
 - الجلسة الآلية تعمل بقائمة صلاحيات صريحة (`ALLOWED_TOOLS`: تعديل الملفات و`python` و`pytest` و`ruff` و`npm --prefix frontend`

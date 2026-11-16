@@ -133,6 +133,24 @@ def test_no_ready_card_never_calls_the_model(world, monkeypatch):
     assert shell.calls == [] and world == []
 
 
+def test_every_run_leaves_a_heartbeat_naming_missing_tools(world, monkeypatch):
+    monkeypatch.setattr(runner, "sh", Shell())
+    monkeypatch.setattr(runner.ledger, "cards_in", lambda *_: [])
+    monkeypatch.setattr(runner.shutil, "which", lambda tool: None if tool == "gh" else tool)
+    monkeypatch.setattr(runner, "HEARTBEAT_KEEP", 3)
+    for _ in range(5):
+        assert runner.main([]) == 0
+    lines = (runner.WORKTREES / "runner.log").read_text(encoding="utf-8").splitlines()
+    assert len(lines) == 3
+    assert "لا بطاقات ready" in lines[-1] and lines[-1].endswith("غائب عن المسار: gh")
+
+
+def test_dry_run_leaves_no_heartbeat(world, monkeypatch):
+    monkeypatch.setattr(runner, "sh", Shell())
+    assert runner.main(["--dry-run"]) == 0
+    assert world == [] and not (runner.WORKTREES / "runner.log").exists()
+
+
 def test_scheduled_task_is_hidden_headless_and_single_instance():
     python = Path(r"D:\مشروع بمسافة\.venv\Scripts\python.exe")
     root = Path(r"D:\مشروع بمسافة")

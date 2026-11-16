@@ -110,7 +110,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.cmd == "install":
         return install(args.minutes, args.model)
     if args.cmd == "status":
-        proc = schtasks("/query", "/tn", TASK, "/fo", "list", "/v")
+        # «Last Result» في Task Scheduler صفر دائمًا خلف conhost؛ آخر سطر في سجل المشغّل هو الدليل.
+        log = ROOT / ".worktrees" / "runner.log"
+        last = log.read_text(encoding="utf-8").splitlines()[-1:] if log.exists() else []
+        print("آخر تشغيل للمشغّل:", last[0] if last else "لا سجل بعد")
+        proc = schtasks("/query", "/tn", TASK, "/fo", "list")
     else:
         proc = schtasks("/delete", "/tn", TASK, "/f")
     print((proc.stdout or proc.stderr).strip())
