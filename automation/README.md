@@ -20,7 +20,20 @@ python automation/ledger.py list
 python automation/ledger.py show <card_id>
 python automation/runner.py --once            # يلتقط بطاقة واحدة
 python automation/runner.py --dry-run         # يعرض ما سيفعله دون تنفيذ
+python automation/schedule.py install         # مهمة MathPapers-Runner المخفية كل 5 دقائق (ببايثون .venv)
+python automation/schedule.py status          # آخر تشغيل ونتيجته
+python automation/schedule.py remove
 ```
+
+## الجدولة والاستهلاك
+
+- المهمة تشغّل `runner.py` من المجلد الرئيسي للمشروع، فبعد دمج أي تغيير في `automation/` حدّث المجلد الرئيسي
+  (`git merge --ff-only origin/main`) وإلا بقي المشغّل على نسخته القديمة.
+- بلا بطاقة `ready` لا يُستدعى النموذج: التشغيل الدوري لا يستهلك توكنات. الاستهلاك يبدأ حين تضع بطاقة بـ `ledger.py ready`،
+  وسقفه `--max-turns` (40)؛ والنموذج الأرخص يُحدَّد بـ `install --model <id>`.
+- الجلسة الآلية تعمل بقائمة صلاحيات صريحة (`ALLOWED_TOOLS`: تعديل الملفات و`python` و`pytest` و`ruff` و`npm --prefix frontend`
+  و`git add/commit/status/diff/log`)، ومخرجاتها في `.worktrees/<card>.log`. فرع بلا إيداع أو بتعديلات غير مودَعة يُسجَّل
+  `blocked` ولا يُدفع. قاعدة الاختبار SQLite مؤقتة خارج المستودع إن لم يُضبط `DATABASE_URL`.
 
 ## قواعد التصميم (من دروس مشروع المدرسة)
 
