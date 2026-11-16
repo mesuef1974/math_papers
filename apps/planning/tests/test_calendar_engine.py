@@ -150,7 +150,7 @@ def test_invalid_inputs_are_rejected():
     with pytest.raises(PlanningError):
         Item("x", 0)
     with pytest.raises(PlanningError):
-        Item("x", 1, "exam")
+        Item("x", 1, "unknown")
     with pytest.raises(PlanningError):
         small_term(end=date(2026, 9, 1))
     with pytest.raises(PlanningError):
