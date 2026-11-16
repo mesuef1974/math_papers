@@ -48,6 +48,7 @@ INSTALLED_APPS = [
     "apps.curriculum",
     "apps.knowledge",
     "apps.papers",
+    "apps.planning",
 ]
 
 MIDDLEWARE = [
