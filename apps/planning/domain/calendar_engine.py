@@ -16,7 +16,7 @@ from datetime import date, timedelta
 from pathlib import Path
 
 CLOSURE_KINDS = ("exam", "break", "holiday", "other")
-ITEM_KINDS = ("lesson", "review", "quiz")
+ITEM_KINDS = ("lesson", "review", "quiz", "orientation", "exam", "project", "support")
 WEEKDAYS = {"mon": 0, "tue": 1, "wed": 2, "thu": 3, "fri": 4, "sat": 5, "sun": 6}
 DEFAULT_WEEKDAYS = (6, 0, 1, 2, 3)  # الأحد إلى الخميس
 MAX_PERIOD = 9
