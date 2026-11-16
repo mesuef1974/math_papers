@@ -34,11 +34,11 @@ def _std(book: Book) -> re.Pattern[str]:
     return re.compile(book["standards"]["pattern"], re.IGNORECASE)
 
 
-def _printed_id(book: Book, text: str) -> str | None:
-    """رقم الدرس المطبوع في افتتاحيته (layout.id_pattern بمجموعتين: الوحدة والدرس) إن وُجد."""
+def _printed_id(book: Book, text: str) -> tuple[int, int] | None:
+    """(الوحدة، الدرس) المطبوعان في افتتاحية الدرس (layout.id_pattern بمجموعتين) إن وُجدا."""
     pat = book["layout"].get("id_pattern")
     m = re.search(pat, text) if pat else None
-    return f"{int(m[1])}.{int(m[2])}" if m else None
+    return (int(m[1]), int(m[2])) if m else None
 
 
 def openers(pages: Pages, book: Book) -> list[int]:
@@ -94,10 +94,10 @@ def lessons(pages: Pages, book: Book, analysis_pages: list[int] | None = None) -
 def _number(out: list[dict[str, Any]], pages: Pages, book: Book) -> None:
     """يرقّم بالرقم المطبوع في الافتتاحية إن كان متفردًا ومتصاعدًا في كل الدروس (source guide)، وإلا بفجوة الوحدات (derived)."""
     printed = [_printed_id(book, pages.get(r["opener"], "")) if r["opener"] else None for r in out]
-    keys = [tuple(map(int, p.split("."))) for p in printed if p]
+    keys = [p for p in printed if p]
     if out and len(keys) == len(out) and keys == sorted(set(keys)):
-        for r, p in zip(out, printed, strict=True):
-            r.update(id=p, unit=int(p.split(".")[0]), id_source="guide")
+        for r, (unit, lesson) in zip(out, keys, strict=True):
+            r.update(id=book.lesson_id(unit, lesson), unit=unit, id_source="guide")
         return
     gap = book["layout"].get("unit_gap", 8)
     unit, k, prev_end = 1, 0, None
@@ -105,7 +105,7 @@ def _number(out: list[dict[str, Any]], pages: Pages, book: Book) -> None:
         if prev_end is not None and r["opener"] and r["opener"] - prev_end > gap:
             unit, k = unit + 1, 0
         k += 1
-        r.update(unit=unit, id=f"{unit}.{k}", id_source="derived")
+        r.update(unit=unit, id=book.lesson_id(unit, k), id_source="derived")
         prev_end = r["end"] or prev_end
 
 

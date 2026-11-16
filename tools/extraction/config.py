@@ -13,7 +13,12 @@ import yaml
 
 ANCHORS = ("opener", "analysis")  # كيف يُعرف الدرس: بصفحة افتتاحه، أو بصفحة جدول تحليل التمارين
 ENDS = ("quiz", "next_opener")  # كيف تنتهي صفحاته: بصفحة اختبار الدرس، أو بما قبل افتتاحية التالي
-LEXICON = Path(__file__).with_name("bloom_lexicon_ar.json")
+HERE = Path(__file__).parent
+FAMILIES = HERE / "families"  # ملفات عائلات التخطيط: يرثها book.yaml بـ extends: <اسم>
+LEXICON = (
+    HERE / "bloom_lexicon_ar.json"
+)  # معجم العربية؛ لغة أخرى تضع bloom_lexicon_<لغة>.json أو تسمّي ملفها بـ bloom_lexicon
+DEFAULT_ID_FORMAT = "{unit}.{lesson}"
 
 _REQUIRED: dict[str, tuple[str, ...]] = {
     "": ("id", "title", "language", "pages", "out", "pdf", "dirs", "markers", "layout", "standards"),
@@ -23,6 +28,52 @@ _REQUIRED: dict[str, tuple[str, ...]] = {
     "layout": ("anchor", "end", "image_min"),
     "standards": ("pattern",),
 }
+
+
+def deep_merge(base: dict[str, Any], over: dict[str, Any]) -> dict[str, Any]:
+    """الخرائط تُدمج مفتاحًا مفتاحًا، وما عداها (قوائم وقيم) يستبدله الابن كله. لا يغيّر مدخليه."""
+    out = dict(base)
+    for key, value in over.items():
+        out[key] = (
+            deep_merge(out[key], value)
+            if isinstance(value, dict) and isinstance(out.get(key), dict)
+            else value
+        )
+    return out
+
+
+def _family_path(ref: str, here: Path) -> Path:
+    if "/" in ref or "\\" in ref or ref.endswith((".yaml", ".yml")):
+        path = Path(ref)
+        return path if path.is_absolute() else here / path
+    return FAMILIES / f"{ref}.yaml"
+
+
+def resolve(path: Path, _chain: tuple[Path, ...] = ()) -> dict[str, Any]:
+    """يقرأ ملف إعداد ويدمج ما يرثه (extends: اسم عائلة أو مسار نسبي لمجلد الملف) تحت قيمه هو. دورة الوراثة خطأ."""
+    path = path.resolve()
+    if path in _chain:
+        raise ValueError("دورة في extends: " + " ← ".join(p.name for p in (*_chain, path)))
+    if not path.exists():
+        raise FileNotFoundError(f"ملف الإعداد غير موجود: {path}")
+    cfg = yaml.safe_load(path.read_text(encoding="utf-8"))
+    if not isinstance(cfg, dict) or "extends" not in cfg:
+        return cfg
+    ref = cfg["extends"]
+    if not isinstance(ref, str) or not ref:
+        raise ValueError("extends يجب أن يكون اسم عائلة أو مسارًا")
+    parent = resolve(_family_path(ref, path.parent), (*_chain, path))
+    return deep_merge(parent, {k: v for k, v in cfg.items() if k != "extends"})
+
+
+def id_format_error(fmt: Any) -> str | None:
+    if not isinstance(fmt, str) or "{unit}" not in fmt or "{lesson}" not in fmt:
+        return "layout.id_format يلزمه {unit} و{lesson}"
+    try:
+        fmt.format(unit=1, lesson=1)
+    except (KeyError, IndexError, ValueError):
+        return "layout.id_format صيغة غير صالحة"
+    return None
 
 
 def validate(cfg: dict[str, Any]) -> list[str]:
@@ -49,6 +100,8 @@ def validate(cfg: dict[str, Any]) -> list[str]:
         errs.append("anchor=analysis يلزمه markers.analysis")
     if layout["end"] == "quiz" and "quiz" not in cfg["markers"]:
         errs.append("end=quiz يلزمه markers.quiz")
+    if "id_format" in layout and (err := id_format_error(layout["id_format"])):
+        errs.append(err)
     w = layout["image_min"]
     if not (isinstance(w, list) and len(w) == 2 and all(isinstance(x, int) and x > 0 for x in w)):
         errs.append("layout.image_min يجب أن يكون [عرض، ارتفاع]")
@@ -79,11 +132,14 @@ class Book:
         path = root / "book.yaml"
         if not path.exists():
             raise FileNotFoundError(f"لا book.yaml في {root}")
-        cfg = yaml.safe_load(path.read_text(encoding="utf-8"))
+        cfg = resolve(path)
         errs = validate(cfg)
         if errs:
             raise ValueError("book.yaml معيب: " + "؛ ".join(errs))
-        return cls(root, cfg)
+        book = cls(root, cfg)
+        if not book.lexicon_path.is_file():
+            raise ValueError(f"book.yaml معيب: معجم بلوم غير موجود: {book.lexicon_path.name}")
+        return book
 
     def __getitem__(self, key: str) -> Any:
         return self.cfg[key]
@@ -99,6 +155,16 @@ class Book:
     def out(self) -> Path:
         out = Path(self.cfg["out"])
         return out if out.is_absolute() else self.root / out
+
+    @property
+    def lexicon_path(self) -> Path:
+        """معجم الأفعال: `bloom_lexicon` (اسم في مجلد الأداة أو مسار) أو bloom_lexicon_<اللغة>.json."""
+        ref = self.cfg.get("bloom_lexicon") or f"bloom_lexicon_{self.cfg['language']}.json"
+        path = Path(ref)
+        return path if path.is_absolute() else HERE / path
+
+    def lesson_id(self, unit: int, lesson: int) -> str:
+        return self.cfg["layout"].get("id_format", DEFAULT_ID_FORMAT).format(unit=unit, lesson=lesson)
 
     def dir(self, key: str) -> Path:
         return self.out / self.cfg["dirs"][key]

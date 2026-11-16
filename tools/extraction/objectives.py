@@ -27,8 +27,9 @@ def settings(book: Book) -> dict[str, Any]:
     return {**DEFAULTS, **book.get("objectives", {})}
 
 
-def lexicon() -> tuple[str, dict[str, tuple[str, float]]]:
-    raw = json.loads(LEXICON.read_text(encoding="utf-8"))
+def lexicon(book: Book | None = None) -> tuple[str, dict[str, tuple[str, float]]]:
+    """معجم أفعال بلوم لكتاب (بلغته أو بما سمّاه bloom_lexicon)؛ بلا كتاب: معجم العربية الافتراضي."""
+    raw = json.loads((book.lexicon_path if book else LEXICON).read_text(encoding="utf-8"))
     return raw["version"], {strip_al(norm(k)): (v[0], v[1]) for k, v in raw["entries"].items()}
 
 
@@ -126,7 +127,7 @@ def build(
     marks_of: Callable[[int, int, float], list[int]] | None = None,
 ) -> dict[str, Any]:
     """نتيجة كل الدروس. boxes_of(صفحة) يعيد الصناديق، وmarks_of(صفحة، y0، y1) مراكز العلامات (اختياري)."""
-    version, lex = lexicon()
+    version, lex = lexicon(book)
     min_conf = settings(book)["min_confidence"]
     result: dict[str, Any] = {"book": book.id, "lexicon_version": version, "lessons": {}}
     for r in layout["lessons"]:
