@@ -7,6 +7,7 @@ from collections.abc import Collection
 from apps.knowledge.domain.grade10_index import Grade10Lesson
 from apps.knowledge.selectors import grade10_index, grade10_lesson
 
+from .domain.deck import Deck, LessonContent, build_deck
 from .domain.strategies import (
     DEFAULT_PERIOD_MINUTES,
     Flow,
@@ -40,3 +41,17 @@ def lesson_flow(
 
 def lesson_codes() -> list[str]:
     return [lesson.lesson for lesson in grade10_index().lessons]
+
+
+def lesson_deck(
+    code: str,
+    content: LessonContent,
+    period_minutes: int = DEFAULT_PERIOD_MINUTES,
+    resources: Collection[str] = (),
+) -> Deck:
+    """عرض الدرس: الفهرس المشتق وسير الحصة من هنا، والنصوص والمقصوصات من `content` (خارج المستودع)."""
+    lesson = grade10_lesson(code)
+    if lesson is None:
+        raise KeyError(f"درس غير موجود في الفهرس: {code}")
+    flow = build_flow(period_minutes, profile_from_lesson(lesson), resources=resources)
+    return build_deck(lesson, content, flow)
