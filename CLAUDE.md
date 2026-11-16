@@ -7,6 +7,7 @@ PostgreSQL + Redis. النشر على Railway (`railway.toml`).
 - `config/` إعدادات (base/development/production/testing)، `apps/<app>/` كل تطبيق: `models.py` نحيل، `services.py` كتابة،
   `selectors.py` قراءة، `api.py` مسارات Ninja، `tests/`.
 - `frontend/src/`: `pages/` (lazy)، `components/`، `stores/` (Pinia)، `api/client.ts` (جلسة + CSRF، لا توكنات في localStorage).
+- المهام الخلفية Celery (`config/celery.py`): المهام في `apps/<app>/tasks.py` وتُكتب idempotent (الإقرار بعد الإتمام، فموت العامل يعيدها). الوسيط Redis من `REDIS_URL`، وبلا `REDIS_URL` (تطوير واختبار) تُنفَّذ في مكانها فورًا. العامل خدمة ثانية على Railway أمر بدئها `bash scripts/railway-worker.sh`، وفحصها `python manage.py worker_ping`. لا تُستدعى مهمة من مسار الويب في الإنتاج قبل قيام خدمة العامل. توليد PDF ما زال بخيط داخل خادم الويب (`apps/papers/pdf.py`) حتى يوجد تخزين ملفات مشترك (المرحلة 3 من خطة المناهج).
 - `scripts/` بوابات، `automation/` دفتر البطاقات والمشغّل، `security/sensitive_paths.json` المسارات الحسّاسة.
 - `tools/extraction/` خط استخراج أدلة المعلم (شيفرة واختبارات فقط؛ النصوص والمقاطع خارج المستودع بإعداد `book.yaml` لكل كتاب): انظر `README.md` فيه.
 
