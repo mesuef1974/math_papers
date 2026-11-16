@@ -83,6 +83,7 @@ def test_committed_units_and_pedagogy_are_valid():
 
 @pytest.mark.django_db
 def test_load_is_idempotent_and_skips_unknown_lessons():
+    Lesson.objects.filter(code="3.6").delete()  # الدرس غير المبذور يُتخطى ويُعلَن في التقرير
     first = load_knowledge()
     assert first.total > 0
     assert first.skipped == ["3.6"]
@@ -91,7 +92,7 @@ def test_load_is_idempotent_and_skips_unknown_lessons():
         km.LessonItem.objects.count(),
         km.ExerciseTemplate.objects.count(),
     )
-    assert counts[0] == Lesson.objects.count() == 18
+    assert counts[0] == Lesson.objects.count() == 18  # 3.6 محذوف هنا عمدًا
     second = load_knowledge()
     assert second.total == 0
     assert (
