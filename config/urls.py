@@ -8,9 +8,11 @@ from apps.assets.api import router as assets_router
 from apps.core.api import api
 from apps.core.views import health, spa
 from apps.papers.api import router as papers_router
+from apps.planning.api import router as planning_router
 
 api.add_router("", papers_router)
 api.add_router("", assets_router)
+api.add_router("", planning_router)
 
 urlpatterns = [
     path(settings.ADMIN_URL, admin.site.urls),

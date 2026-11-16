@@ -7,6 +7,7 @@ export const router = createRouter({
   routes: [
     { path: "/", name: "home", component: () => import("@/pages/HomePage.vue"), meta: { title: "توليد الأوراق" } },
     { path: "/saved", name: "saved", component: () => import("@/pages/SavedPage.vue"), meta: { title: "أوراقي" } },
+    { path: "/decks", name: "decks", component: () => import("@/pages/DecksPage.vue"), meta: { title: "عروض الدروس" } },
     {
       path: "/copilot",
       name: "copilot-automation",

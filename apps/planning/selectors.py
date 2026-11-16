@@ -2,16 +2,20 @@
 
 from __future__ import annotations
 
-from collections.abc import Collection
+import hashlib
+from collections.abc import Collection, Sequence
 
 from django.contrib.auth.models import AbstractBaseUser
-from django.db.models import QuerySet
+from django.db.models import Count, QuerySet
 
+from apps.assets.models import Asset
+from apps.assets.selectors import asset_bytes
+from apps.assets.storage import Storage
 from apps.knowledge.domain.grade10_index import Grade10Lesson
 from apps.knowledge.selectors import grade10_index, grade10_lesson
 
 from .domain.calendar_engine import Closure, Plan, Slot, allocate, load_terms, sessions
-from .domain.deck import Deck, LessonContent, build_deck
+from .domain.deck import Deck, ExampleClip, LessonContent, build_deck
 from .domain.feedback import ClassOutcome, Decision, decide
 from .domain.semester_plan import (
     TermPlan,
@@ -112,3 +116,61 @@ def term1_schedule(slots: Collection[Slot] | None = None) -> tuple[TermPlan, lis
     free = sessions(term, slots or ministry_slots(), lost)
     items = plan_items(plan)
     return plan, items, allocate(items, free)
+
+
+# ───── عروض الدروس المنشورة من الأصول (المرحلة 4) ─────
+DECK_FORMAT = 1  # يُرفع حين يتغير شكل الملف الناتج بلا تغيير في مدخلاته، فيُعاد توليد المخزَّن
+DECK_PERIOD_RANGE = (30, 90)
+PPTX_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+
+
+def deck_assets(course_slug: str, lesson_code: str) -> list[Asset]:
+    """مقاطع أمثلة الدرس المنشورة بترتيب المثال فتتمته."""
+    return list(
+        Asset.objects.filter(course__slug=course_slug, lesson__code=lesson_code, kind=Asset.Kind.EXAMPLE)
+        .select_related("lesson")
+        .order_by("number", "part")
+    )
+
+
+def deck_lessons(course_slug: str) -> list[dict]:
+    """الدروس التي نُشرت لها مقاطع أمثلة: الرمز والعنوان وعدد الأمثلة (التتمات لا تُعدّ أمثلة)."""
+    rows = (
+        Asset.objects.filter(course__slug=course_slug, kind=Asset.Kind.EXAMPLE)
+        .values("lesson__code", "lesson__title", "lesson__unit")
+        .annotate(examples=Count("number", distinct=True), clips=Count("id"))
+    )
+    lessons = [
+        {
+            "lesson": r["lesson__code"],
+            "title": r["lesson__title"],
+            "examples": r["examples"],
+            "clips": r["clips"],
+        }
+        for r in rows
+    ]
+    return sorted(lessons, key=lambda r: [int(p) for p in r["lesson"].split(".")])
+
+
+def deck_key(course_slug: str, lesson_code: str, period_minutes: int, assets: Sequence[Asset]) -> str:
+    """مفتاح الملف في التخزين: يشتق من كل ما يحدد الناتج (الدرس وعنوانه والزمن وتجزئة كل مقطع وصيغة الملف)،
+    فالمدخلات نفسها تعطي المفتاح نفسه ويكون الملف المخزَّن هو الجواب، وتغيّر مقطع أو الزمن يعطي مفتاحًا جديدًا."""
+    digest = hashlib.sha256()
+    digest.update(f"{DECK_FORMAT}|{course_slug}|{lesson_code}|{period_minutes}".encode())
+    for asset in assets:
+        digest.update(f"|{asset.lesson.title}|{asset.number}.{asset.part}:{asset.sha256}".encode())
+    return f"decks/{course_slug}/{lesson_code}-p{period_minutes}-{digest.hexdigest()[:16]}.pptx"
+
+
+def clips_of(assets: Sequence[Asset], storage: Storage | None = None) -> tuple[ExampleClip, ...]:
+    """مقاطع المخزن كمدخلات عرض: الأصل part=0 يصير جزءًا 1 وتتمته 2 فما فوق."""
+    return tuple(
+        ExampleClip(
+            n=a.number,
+            png=asset_bytes(a, storage),
+            width_px=a.width,
+            height_px=a.height,
+            part=a.part + 1,
+        )
+        for a in assets
+    )

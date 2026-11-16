@@ -30,6 +30,7 @@ const navItems = computed(() => {
   const items: { to: string; label: string; icon: IconName }[] = [{ to: "/", label: "توليد الأوراق", icon: "generate" }];
   if (auth.canGenerate) {
     items.push({ to: "/saved", label: "أوراقي", icon: "worksheet" });
+    items.push({ to: "/decks", label: "العروض", icon: "test" });
     items.push({ to: "/copilot", label: "المعاون", icon: "curriculum" });
   }
   items.push({ to: "/about", label: "عن المنصة", icon: "teacher" });

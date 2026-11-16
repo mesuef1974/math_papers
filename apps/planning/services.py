@@ -6,12 +6,16 @@ from datetime import datetime
 
 from django.contrib.auth.models import AbstractBaseUser
 
+from apps.assets.storage import Storage, get_storage
 from apps.papers import services as papers
 
+from . import selectors
 from .domain.calendar_engine import PlanningError
+from .domain.deck import DeckError, LessonContent
 from .domain.feedback import ClassOutcome, Decision
 from .domain.lesson_run import LessonRun
 from .models import ClassOutcomeRecord, LessonRunRecord
+from .pptx_export import build_pptx
 
 REMEDIAL_PER_PERIOD = 5  # أسئلة لكل حصة إعادة تدريس؛ المراجعة السريعة بلا حصة تأخذ حصة واحدة في الحساب
 
@@ -66,3 +70,67 @@ def save_run_report(
             ],
         },
     )
+
+
+# ───── توليد عرض الدرس من الأصول المنشورة (المرحلة 4) ─────
+def _error_key(key: str) -> str:
+    return f"{key}.error"
+
+
+def prepare_deck(course_slug: str, lesson_code: str, period_minutes: int) -> str:
+    """يتحقق من الطلب ويعيد مفتاح الملف في التخزين؛ كل رفض `DeckError` برسالة عربية. لا يكتب شيئًا."""
+    low, high = selectors.DECK_PERIOD_RANGE
+    if not low <= period_minutes <= high:
+        raise DeckError(f"زمن الحصة بين {low} و{high} دقيقة")
+    assets = selectors.deck_assets(course_slug, lesson_code)
+    if not assets:
+        raise DeckError(f"لا مقاطع أمثلة منشورة للدرس {lesson_code} في المقرر {course_slug}")
+    try:
+        selectors.lesson_flow(lesson_code, period_minutes)  # يفشل مبكرًا إن استحال توزيع الزمن
+    except KeyError as error:
+        raise DeckError(f"الدرس {lesson_code} غير موجود في فهرس المقرر") from error
+    except PlanningError as error:
+        raise DeckError(str(error)) from error
+    return selectors.deck_key(course_slug, lesson_code, period_minutes, assets)
+
+
+def deck_state(key: str, storage: Storage | None = None) -> tuple[str, str]:
+    """حالة التوليد من التخزين وحده: (ready, "") أو (failed, سبب) أو (pending, ""). بلا جدول مهام فتصمد لإعادة تشغيل العامل."""
+    storage = storage or get_storage()
+    if storage.exists(key):
+        return "ready", ""
+    if storage.exists(_error_key(key)):
+        return "failed", storage.get(_error_key(key)).decode("utf-8")
+    return "pending", ""
+
+
+def build_lesson_deck(
+    course_slug: str, lesson_code: str, period_minutes: int, storage: Storage | None = None
+) -> str:
+    """يبني ملف PPTX للدرس ويضعه في التخزين تحت مفتاحه المشتق؛ idempotent: الملف الموجود لا يُعاد بناؤه.
+
+    الدرس وأمثلته المقصوصة من التخزين والفهرس المشتق وحدهما: لا أهداف ولا مصطلحات (نص الدليل لا يصعد إلى الإنتاج)."""
+    storage = storage or get_storage()
+    key = prepare_deck(course_slug, lesson_code, period_minutes)
+    if storage.exists(key):
+        return key
+    assets = selectors.deck_assets(course_slug, lesson_code)
+    try:
+        content = LessonContent(title=assets[0].lesson.title, examples=selectors.clips_of(assets, storage))
+        deck = selectors.lesson_deck(lesson_code, content, period_minutes)
+        data = build_pptx(deck)
+    except Exception as error:
+        message = str(error) if isinstance(error, PlanningError) else "تعذّر بناء العرض"
+        storage.put(_error_key(key), message.encode("utf-8"), "text/plain; charset=utf-8")
+        raise
+    storage.put(key, data, selectors.PPTX_CONTENT_TYPE)
+    if storage.exists(_error_key(key)):
+        storage.delete(_error_key(key))
+    return key
+
+
+def clear_deck_failure(key: str, storage: Storage | None = None) -> None:
+    """يمحو أثر فشل سابق قبل إعادة المحاولة فلا تبقى الحالة «failed» أثناء المحاولة الجديدة."""
+    storage = storage or get_storage()
+    if storage.exists(_error_key(key)):
+        storage.delete(_error_key(key))
