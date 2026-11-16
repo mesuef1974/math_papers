@@ -27,7 +27,7 @@ def base_settings(**env: str) -> dict[str, str]:
     proc = subprocess.run(
         [sys.executable, "-c", code],
         cwd=ROOT,
-        env={**clean, "SECRET_KEY": "ci-testing-only", **env},
+        env={**clean, **env},  # SECRET_KEY في البيئة منذ تحميل config.settings.testing
         capture_output=True,
         text=True,
         check=True,
