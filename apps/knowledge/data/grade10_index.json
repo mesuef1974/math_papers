@@ -615,7 +615,9 @@
    "standards": [
     "10.2.2"
    ],
-   "practices": [],
+   "practices": [
+    "MP.3"
+   ],
    "objectives_bloom": [
     "تطبيق",
     "تطبيق"
