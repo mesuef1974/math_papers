@@ -153,7 +153,7 @@ def test_courses_endpoint_lists_every_loaded_course(third_course, teacher_client
         "lesson_count": len(THIRD_LESSONS),
         "has_generators": False,
     }
-    assert [row["has_generators"] for row in rows] == [False, False, True]
+    assert [row["has_generators"] for row in rows] == [True, False, True]  # للعاشر مولّدات الوحدة 1
     assert teacher_client.get(f"/api/v1/lessons?course={THIRD}").json()[3]["code"] == "2.10"
     client.logout()
     assert client.get("/api/v1/courses").status_code == 401

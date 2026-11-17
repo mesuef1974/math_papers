@@ -184,4 +184,6 @@ def test_blueprint_without_generators_is_hidden_and_answers_409(client):
     assert [row["slug"] for row in client.get("/api/v1/blueprints").json()] == [SLUG]
     res = client.get(f"/api/v1/papers/exam?blueprint={pending}&seed=1")
     assert res.status_code == 409 and "مولّدات" in res.json()["detail"]
-    assert client.get(f"/api/v1/papers/bundle-plan?blueprint={pending}").json() == []
+    # حزمة أوراق العمل تسرد من دروس الجدول ما له مولّد وحده، فتكبر مع كل مرحلة مولّدات
+    plan = client.get(f"/api/v1/papers/bundle-plan?blueprint={pending}").json()
+    assert [row["lesson"] for row in plan] == sorted(available_lessons("g10-s1"))

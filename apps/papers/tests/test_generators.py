@@ -352,7 +352,89 @@ def assert_graph_shape(c):
         assert fits(high + 0.2) is False
 
 
+def assert_value(c):
+    """قيمة الدالة عند النقطة: المنحنى يمر بالنقطة المعطاة، أو التعويض يعطي الجواب."""
+    assert number(c["f"], c["at"]) == pytest.approx(float(c["value"]))
+
+
+def assert_parabola_shape(c):
+    """اتجاه الفتحة والاتساع من قيم الدالة نفسها مقارنةً بقيم x² عند النقطة ذاتها."""
+    answer, at_two = c["answer"], number(c["f"], 2)
+    assert ("الأعلى" in answer) == (at_two > number(c["f"], 0))
+    assert ("أضيق" in answer) == (abs(at_two) > 4)
+    assert ("الأعلى" in answer) != ("الأسفل" in answer) and ("أضيق" in answer) != ("أوسع" in answer)
+
+
+def assert_parabola_monotone(c):
+    rising_right = number(c["f"], 2) > number(c["f"], 1)
+    assert rising_right != (number(c["f"], -1) > number(c["f"], -2))
+    assert c["answer"] == ("$x>0$" if rising_right == c["increasing"] else "$x<0$")
+
+
+def assert_vertex(c):
+    """الرأس من التماثل: قيم متساوية على بعدين متساويين عن محور التماثل، وقيمة الرأس طرف لها."""
+    h, k = c["vertex"]
+    assert number(c["f"], h) == pytest.approx(float(k))
+    sides = [number(c["f"], h + d) - k for d in (-3, -1, sp.Rational(1, 2), 1, 3)]
+    assert sides[0] == pytest.approx(sides[4]) and sides[1] == pytest.approx(sides[3])
+    assert all(v > 0 for v in sides) or all(v < 0 for v in sides)
+
+
+def assert_vertex_point(c):
+    assert_vertex(c)
+    px, py = c["point"]
+    assert number(c["f"], px) == pytest.approx(float(py))
+
+
+def assert_translation(c):
+    """موضع أصغر قيمة للدالة المزاحة يحدد اتجاهي الإزاحة ومقداريهما كما في النص."""
+    values = {px: number(c["g"], px) for px in range(-10, 11)}
+    h = min(values, key=values.__getitem__)
+    k = round(values[h])
+    for px in (-2, 0, 3):
+        assert number(c["g"], px + h) - k == pytest.approx(px * px)
+    text = c["text"]
+    assert ("اليمين" in text) == (h > 0) and ("اليسار" in text) == (h < 0)
+    assert ("الأعلى" in text) == (k > 0) and ("الأسفل" in text) == (k < 0)
+    for size in (abs(h), abs(k)):
+        assert {1: "وحدة واحدة", 2: "وحدتين"}.get(size, f"${size}$ وحدات") in text
+
+
+def assert_standard_features(c):
+    answer = c["answer"]
+    assert f"هو ${round(number(c['f'], 0))}$" in answer
+    assert ("الأعلى" in answer) == (number(c["f"], 1000) > 0)
+    assert ("الأعلى" in answer) != ("الأسفل" in answer)
+
+
+def assert_parabola_extreme(c):
+    at, value = c["at"], float(c["value"])
+    assert number(c["f"], at) == pytest.approx(value)
+    sides = [number(c["f"], at + d) for d in (-2, -0.5, 0.5, 2)]
+    is_max = all(v < value for v in sides)
+    assert is_max or all(v > value for v in sides)
+    assert c["answer"] == f"قيمة {'عظمى' if is_max else 'صغرى'} تساوي ${c['value']}$"
+
+
+def assert_compare_maxima(c):
+    """القيمة العظمى للدالة الأولى من قيمها على شبكة تمر بالرأس، ثم المقارنة بالثانية."""
+    f = sp.lambdify(x, c["f"])
+    top = max(f(v) for v in samples(c["low"], c["high"], 1201))
+    name = "f" if top > c["other"] else "g"
+    assert c["answer"] == f"الدالة ${name}$، والفرق ${round(abs(top - c['other']))}$"
+    assert abs(top - c["other"]) >= 1
+
+
 CHECKS = {
+    "value": assert_value,
+    "parabola_shape": assert_parabola_shape,
+    "parabola_monotone": assert_parabola_monotone,
+    "vertex": assert_vertex,
+    "vertex_point": assert_vertex_point,
+    "translation": assert_translation,
+    "standard_features": assert_standard_features,
+    "parabola_extreme": assert_parabola_extreme,
+    "compare_maxima": assert_compare_maxima,
     "shape_signs": assert_shape_signs,
     "second_derivative_test": assert_second_derivative_test,
     "sketch_summary": assert_sketch_summary,
