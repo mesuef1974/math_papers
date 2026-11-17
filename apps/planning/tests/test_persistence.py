@@ -6,6 +6,8 @@ import pytest
 from django.contrib.auth import get_user_model
 from django.db import IntegrityError, transaction
 
+from apps.curriculum.courses import GRADE10_SLUG
+from apps.knowledge.services import load_course
 from apps.planning.domain.calendar_engine import PlanningError
 from apps.planning.domain.feedback import ClassOutcome
 from apps.planning.domain.lesson_run import advance, skip, start
@@ -17,6 +19,12 @@ from apps.planning.services import record_outcome, save_run_report
 pytestmark = pytest.mark.django_db
 
 T0 = datetime(2026, 11, 16, 7, 0, tzinfo=UTC)
+
+
+@pytest.fixture(autouse=True)
+def grade10(db):
+    """السجل يرتبط بدرس في القاعدة: مقرر الخطة (العاشر) محمَّل كما في الإنتاج."""
+    load_course(GRADE10_SLUG)
 
 
 @pytest.fixture
@@ -34,6 +42,15 @@ def test_record_outcome_is_idempotent_per_section_and_lesson(teacher):
     again, created_again = record_outcome(teacher, "10/3", ClassOutcome("1.1", 30, 12))
     assert created and not created_again
     assert ClassOutcomeRecord.objects.count() == 1 and again.correct == 12
+    assert (again.lesson.course.slug, again.lesson.code, again.lesson_code) == (GRADE10_SLUG, "1.1", "1.1")
+
+
+def test_unknown_lesson_is_rejected_before_writing(teacher):
+    with pytest.raises(PlanningError, match="غير موجود في المقرر"):
+        record_outcome(teacher, "10/3", ClassOutcome("9.9", 30, 12))
+    with pytest.raises(PlanningError, match="غير موجود في المقرر"):
+        save_run_report(teacher, "10/3", "9.9", start(build_flow(45), 1000.0), T0)
+    assert not ClassOutcomeRecord.objects.exists() and not LessonRunRecord.objects.exists()
 
 
 def test_record_outcome_updates_the_latest_result_not_a_new_row(teacher):

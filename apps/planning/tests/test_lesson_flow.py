@@ -2,13 +2,13 @@
 
 import pytest
 
-from apps.knowledge.domain.grade10_index import AnalysisRow, Grade10Lesson, VocabularyCount
+from apps.knowledge.domain.course_index import AnalysisRow, LessonIndex, VocabularyCount
 from apps.planning.domain.strategies import PHASES, FlowError
 from apps.planning.selectors import lesson_codes, lesson_flow, lesson_profile, profile_from_lesson
 
 
 def _lesson(bloom, doks):
-    return Grade10Lesson(
+    return LessonIndex(
         lesson="1.1",
         unit=1,
         objectives_bloom=bloom,

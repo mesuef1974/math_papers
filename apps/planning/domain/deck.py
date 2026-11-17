@@ -11,7 +11,7 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass
 
-from apps.knowledge.domain.grade10_index import Grade10Lesson
+from apps.knowledge.domain.course_index import LessonIndex
 
 from .calendar_engine import PlanningError
 from .strategies import Flow
@@ -102,7 +102,7 @@ class Deck:
     slides: tuple[Slide, ...]
 
 
-def _example_notes(lesson: Grade10Lesson, n: int) -> tuple[str, ...]:
+def _example_notes(lesson: LessonIndex, n: int) -> tuple[str, ...]:
     indexed = next((e for e in lesson.examples if e.n == n), None)
     if indexed is None:
         raise DeckError(f"المثال {n} غير موجود في الدرس {lesson.lesson} بالفهرس")
@@ -127,7 +127,7 @@ def _flow_slide(flow: Flow) -> TableSlide:
     )
 
 
-def _assessment_slide(lesson: Grade10Lesson) -> TableSlide | None:
+def _assessment_slide(lesson: LessonIndex) -> TableSlide | None:
     if not lesson.quiz_depths:
         return None
     counts = Counter(lesson.quiz_depths)
@@ -140,7 +140,7 @@ def _assessment_slide(lesson: Grade10Lesson) -> TableSlide | None:
     )
 
 
-def build_deck(lesson: Grade10Lesson, content: LessonContent, flow: Flow) -> Deck:
+def build_deck(lesson: LessonIndex, content: LessonContent, flow: Flow) -> Deck:
     """ترتيب الشرائح: العنوان، الأهداف، المصطلحات، مثال لكل مقصوص بترتيب رقمه وتتمته بعده، سير الحصة، التقويم."""
     if not content.title.strip():
         raise DeckError("عنوان الدرس فارغ")

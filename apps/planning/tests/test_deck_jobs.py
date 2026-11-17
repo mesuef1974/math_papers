@@ -10,7 +10,7 @@ from apps.assets.storage import get_storage
 from apps.assets.tests.conftest import make_png
 from apps.curriculum.courses import GRADE10_SLUG
 from apps.curriculum.models import Lesson
-from apps.knowledge.selectors import grade10_index
+from apps.knowledge.selectors import course_index
 from apps.knowledge.services import load_course
 from apps.planning import selectors, services
 from apps.planning.domain.deck import DeckError
@@ -52,7 +52,7 @@ def g10(db):
 
 
 def test_every_grade10_lesson_builds_a_deck_matching_its_examples(g10):
-    lessons = [lesson for lesson in grade10_index().lessons if lesson.examples]
+    lessons = [lesson for lesson in course_index(GRADE10_SLUG).lessons if lesson.examples]
     assert len(lessons) == 19
     for lesson in lessons:
         _publish(lesson.lesson, [e.n for e in lesson.examples])
@@ -67,7 +67,7 @@ def test_every_grade10_lesson_builds_a_deck_matching_its_examples(g10):
 def test_continuation_clips_get_their_own_slides(g10):
     _publish("2.6", [1, 2], with_cont=(2,))
     key = services.build_lesson_deck(GRADE10_SLUG, "2.6", 45)
-    lesson = next(item for item in grade10_index().lessons if item.lesson == "2.6")
+    lesson = next(item for item in course_index(GRADE10_SLUG).lessons if item.lesson == "2.6")
     assert len(_slides(get_storage().get(key))) == 1 + 3 + 1 + (1 if lesson.quiz_depths else 0)
 
 

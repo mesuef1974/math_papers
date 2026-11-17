@@ -29,7 +29,7 @@ class Bloom(models.TextChoices):
 class Standard(models.Model):
     """معيار من معايير المنهج مثل 12A.3.4."""
 
-    code = models.CharField(max_length=16, unique=True)
+    code = models.CharField(max_length=16, unique=True)  # يحمل صفه في بادئته، ففرادته عامة لكل المقررات
 
     class Meta:
         ordering = ["code"]
@@ -81,7 +81,7 @@ class LessonProfile(models.Model):
     vocab_review = models.PositiveSmallIntegerField(null=True, blank=True)
 
     class Meta:
-        ordering = ["lesson__code"]
+        ordering = ["lesson__course_id", "lesson__unit", "lesson__number", "lesson__code"]
 
     def __str__(self) -> str:
         return f"ملف الدرس {self.lesson_id}"
@@ -229,8 +229,7 @@ class ExerciseTemplate(models.Model):
 
 
 class UnitProfile(models.Model):
-    # التوسعة: nullable حتى تعمل النسخة السابقة أثناء النشر؛ تصير مطلوبة في هجرة لاحقة منفصلة.
-    course = models.ForeignKey(Course, on_delete=models.PROTECT, related_name="units", null=True, blank=True)
+    course = models.ForeignKey(Course, on_delete=models.PROTECT, related_name="units")
     unit = models.PositiveSmallIntegerField()
     title = models.CharField(max_length=120)
     big_idea = models.TextField(blank=True)
@@ -239,12 +238,7 @@ class UnitProfile(models.Model):
 
     class Meta:
         ordering = ["course_id", "unit"]
-        constraints = [
-            models.UniqueConstraint(fields=["course", "unit"], name="unique_unit_per_course"),
-            models.UniqueConstraint(
-                fields=["unit"], condition=models.Q(course__isnull=True), name="unique_unit_without_course"
-            ),
-        ]
+        constraints = [models.UniqueConstraint(fields=["course", "unit"], name="unique_unit_per_course")]
 
     def __str__(self) -> str:
         return f"الوحدة {self.unit}: {self.title}"
@@ -264,24 +258,15 @@ class UnitProject(models.Model):
 class PedagogyNote(models.Model):
     """مبدأ تربوي عام من تمهيد الدليل، مثل قاعدة الطرائق الأربع. أساس لتحضير الدروس في المرحلة الثانية."""
 
-    course = models.ForeignKey(
-        Course, on_delete=models.PROTECT, related_name="pedagogy", null=True, blank=True
-    )
+    course = models.ForeignKey(Course, on_delete=models.PROTECT, related_name="pedagogy")
     slug = models.SlugField(max_length=48)
     title = models.CharField(max_length=120)
     text = models.TextField()
     order = models.PositiveSmallIntegerField(default=1)
 
     class Meta:
-        ordering = ["order", "slug"]
-        constraints = [
-            models.UniqueConstraint(fields=["course", "slug"], name="unique_pedagogy_per_course"),
-            models.UniqueConstraint(
-                fields=["slug"],
-                condition=models.Q(course__isnull=True),
-                name="unique_pedagogy_without_course",
-            ),
-        ]
+        ordering = ["course_id", "order", "slug"]
+        constraints = [models.UniqueConstraint(fields=["course", "slug"], name="unique_pedagogy_per_course")]
 
     def __str__(self) -> str:
         return self.title

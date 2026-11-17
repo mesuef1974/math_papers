@@ -1,0 +1,128 @@
+{
+  "schema_version": 1,
+  "course": {
+    "slug": "g10-s1",
+    "title": "الرياضيات: العاشر، الفصل الأول",
+    "grade": 10,
+    "track": "",
+    "semester": 1,
+    "edition": "",
+    "language": "ar"
+  },
+  "lessons": [
+    {
+      "code": "1.1",
+      "title": "الدرس 1.1",
+      "unit": 1,
+      "examinable": true
+    },
+    {
+      "code": "1.2",
+      "title": "الدرس 1.2",
+      "unit": 1,
+      "examinable": true
+    },
+    {
+      "code": "1.3",
+      "title": "الدرس 1.3",
+      "unit": 1,
+      "examinable": true
+    },
+    {
+      "code": "1.4",
+      "title": "الدرس 1.4",
+      "unit": 1,
+      "examinable": true
+    },
+    {
+      "code": "2.1",
+      "title": "الدرس 2.1",
+      "unit": 2,
+      "examinable": true
+    },
+    {
+      "code": "2.2",
+      "title": "الدرس 2.2",
+      "unit": 2,
+      "examinable": true
+    },
+    {
+      "code": "2.3",
+      "title": "الدرس 2.3",
+      "unit": 2,
+      "examinable": true
+    },
+    {
+      "code": "2.4",
+      "title": "الدرس 2.4",
+      "unit": 2,
+      "examinable": true
+    },
+    {
+      "code": "2.5",
+      "title": "الدرس 2.5",
+      "unit": 2,
+      "examinable": true
+    },
+    {
+      "code": "2.6",
+      "title": "الدرس 2.6",
+      "unit": 2,
+      "examinable": true
+    },
+    {
+      "code": "2.7",
+      "title": "الدرس 2.7",
+      "unit": 2,
+      "examinable": true
+    },
+    {
+      "code": "2.8",
+      "title": "الدرس 2.8",
+      "unit": 2,
+      "examinable": true
+    },
+    {
+      "code": "2.9",
+      "title": "الدرس 2.9",
+      "unit": 2,
+      "examinable": true
+    },
+    {
+      "code": "2.10",
+      "title": "الدرس 2.10",
+      "unit": 2,
+      "examinable": true
+    },
+    {
+      "code": "3.1",
+      "title": "الدرس 3.1",
+      "unit": 3,
+      "examinable": true
+    },
+    {
+      "code": "3.2",
+      "title": "الدرس 3.2",
+      "unit": 3,
+      "examinable": true
+    },
+    {
+      "code": "3.3",
+      "title": "الدرس 3.3",
+      "unit": 3,
+      "examinable": true
+    },
+    {
+      "code": "3.4",
+      "title": "الدرس 3.4",
+      "unit": 3,
+      "examinable": true
+    },
+    {
+      "code": "3.5",
+      "title": "الدرس 3.5",
+      "unit": 3,
+      "examinable": true
+    }
+  ]
+}

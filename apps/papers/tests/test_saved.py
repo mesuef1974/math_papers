@@ -92,6 +92,25 @@ def test_save_roundtrip_is_idempotent_and_audited(client):
     assert detail["paper"] == paper and detail["recipe"]["seed"] == paper["seed"]
     rows = client.get("/api/v1/saved").json()
     assert [row["id"] for row in rows] == [saved["id"]] and "paper" not in rows[0]
+    # الوصفة بلا مقرر تُحفظ على المقرر الحالي، وبصمتها كما كانت قبل عمود المقرر
+    assert saved["course"] == rows[0]["course"] == "g12-sci-s1"
+    assert "course" not in SavedPaper.objects.get().recipe
+
+
+@pytest.mark.django_db
+def test_backfill_links_old_saved_papers_to_their_course(client):
+    import importlib
+
+    from django.apps import apps
+
+    paper = worksheet(client)
+    pk = post(client, "/api/v1/saved", {"paper": paper, "recipe": recipe_for(paper)}).json()["id"]
+    SavedPaper.objects.filter(pk=pk).update(course=None)  # كما كانت قبل الهجرة
+    migration = importlib.import_module("apps.papers.migrations.0005_backfill_saved_paper_course")
+    migration.forwards(apps, None)
+    migration.forwards(apps, None)
+    assert SavedPaper.objects.get(pk=pk).course.slug == "g12-sci-s1"
+    assert client.get("/api/v1/saved").json()[0]["course"] == "g12-sci-s1"
 
 
 @pytest.mark.django_db

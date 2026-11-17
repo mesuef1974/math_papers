@@ -1,4 +1,4 @@
-"""فهرس العاشر المشتق: أرقام ورموز وفئات مغلقة فقط، بلا نص من دليل المعلم.
+"""فهرس المقرر المشتق (لأي كتاب مستخرَج آليًا): أرقام ورموز وفئات مغلقة فقط، بلا نص من دليل المعلم.
 
 المصدر مخرجات خط الاستخراج الخارجية (`tools/extraction`، خارج المستودع). كل حقل هنا إما رقم أو رمز معيار أو قيمة من قائمة مغلقة
 (مستوى بلوم، تمثيل)، أو مدى أرقام نصه أرقام وفواصل فقط. نص الهدف وعنوان المثال ومهارته والمصطلحات لا تدخل الفهرس إطلاقًا:
@@ -12,7 +12,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from .schemas import BLOOMS
+from .schemas import BLOOMS, LESSON_CODE, MAX_UNIT, PRACTICE_CODE, lesson_sort_key
 
 REPRESENTATIONS = ("جدول", "بياني", "جبري", "سياق")
 BLOOM_VALUES = (*BLOOMS, "unclassified")
@@ -49,9 +49,9 @@ class VocabularyCount(_Strict):
     review: int = Field(ge=0)
 
 
-class Grade10Lesson(_Strict):
-    lesson: str = Field(pattern=r"^\d\.\d{1,2}$")
-    unit: int = Field(ge=1, le=3)
+class LessonIndex(_Strict):
+    lesson: str = Field(pattern=LESSON_CODE)
+    unit: int = Field(ge=1, le=MAX_UNIT)
     standards: list[str] = Field(default_factory=list)
     practices: list[str] = Field(default_factory=list)
     objectives_bloom: list[Literal[*BLOOM_VALUES]] = Field(default_factory=list)  # type: ignore[valid-type]
@@ -63,14 +63,19 @@ class Grade10Lesson(_Strict):
     vocabulary: VocabularyCount
 
 
-class Grade10Index(_Strict):
-    book: Literal["grade10"] = "grade10"
+class CourseIndex(_Strict):
     schema_version: Literal[1] = 1
-    lessons: list[Grade10Lesson]
+    lessons: list[LessonIndex]
+
+    def model_post_init(self, __context: object) -> None:
+        codes = [lesson.lesson for lesson in self.lessons]
+        if len(codes) != len(set(codes)):
+            raise ValueError("رمز درس مكرر في الفهرس المشتق")
 
 
-STANDARD = re.compile(r"^10\.\d\.\d{1,2}$")
-PRACTICE = re.compile(r"^MP\.\d$")
+def standard_pattern(grade: int) -> re.Pattern[str]:
+    """معايير صف المقرر وحده (مثل 10.3.2 أو 12A.3.4): رمز صف آخر في مخرج الاستخراج ضجيج قراءة لا يدخل الفهرس."""
+    return re.compile(rf"^{grade}[A-Z]?\.\d{{1,2}}\.\d{{1,2}}$")
 
 
 def _value(field: Any) -> Any:
@@ -99,7 +104,7 @@ def _analysis(rows: list[dict] | None) -> list[dict]:
     return out
 
 
-def build_lesson_index(lesson: dict) -> dict:
+def build_lesson_index(lesson: dict, grade: int) -> dict:
     """يشتق سجل الفهرس من مخرج درس واحد؛ كل ما ليس رقمًا أو فئة مغلقة يُهمَل."""
     vocab = _value(lesson.get("vocabulary")) or []
     guide = _value(lesson.get("task_guide")) or {}
@@ -109,8 +114,8 @@ def build_lesson_index(lesson: dict) -> dict:
     return {
         "lesson": lesson["id"],
         "unit": int(lesson["unit"]),
-        "standards": _clean(_value(lesson.get("standards")), STANDARD),
-        "practices": _clean(_value(lesson.get("practices")), PRACTICE),
+        "standards": _clean(_value(lesson.get("standards")), standard_pattern(grade)),
+        "practices": _clean(_value(lesson.get("practices")), PRACTICE_CODE),
         "objectives_bloom": [
             o.get("bloom") if o.get("bloom") in BLOOMS else "unclassified" for o in objectives
         ],
@@ -133,6 +138,6 @@ def build_lesson_index(lesson: dict) -> dict:
     }
 
 
-def build_index(lessons: list[dict]) -> Grade10Index:
-    ordered = sorted(lessons, key=lambda d: tuple(int(p) for p in d["id"].split(".")))
-    return Grade10Index(lessons=[Grade10Lesson(**build_lesson_index(d)) for d in ordered])
+def build_index(lessons: list[dict], grade: int) -> CourseIndex:
+    ordered = sorted(lessons, key=lambda d: lesson_sort_key(d["id"]))
+    return CourseIndex(lessons=[LessonIndex(**build_lesson_index(d, grade)) for d in ordered])

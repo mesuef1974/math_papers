@@ -1,4 +1,8 @@
-"""نموذجان نحيلان: نتيجة الصف في الدرس وتقرير الحصة. مستوى الشعبة فقط (لا بيانات طلاب فردية: PDPPL). المنطق في services.py."""
+"""نموذجان نحيلان: نتيجة الصف في الدرس وتقرير الحصة. مستوى الشعبة فقط (لا بيانات طلاب فردية: PDPPL). المنطق في services.py.
+
+السجل يرتبط بالدرس نفسه (`lesson`، ومنه مقرره): الرمز «1.1» درس مختلف في كل كتاب، ومعلم يدرّس صفّين لا تتصادم سجلاته.
+`lesson_code` نسخة من الرمز باقية من قبل الربط (تُحذف في طلب لاحق منفصل)؛ `lesson` اختياري في القاعدة حتى تلك الهجرة، والخدمات تملؤه دائمًا.
+"""
 
 from __future__ import annotations
 
@@ -16,6 +20,9 @@ class ClassOutcomeRecord(TimeStampedModel):
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="class_outcomes"
     )
     section = models.CharField(max_length=20)
+    lesson = models.ForeignKey(
+        "curriculum.Lesson", on_delete=models.PROTECT, related_name="class_outcomes", null=True, blank=True
+    )
     lesson_code = models.CharField(max_length=10)
     attempted = models.PositiveSmallIntegerField()
     correct = models.PositiveSmallIntegerField()
@@ -26,7 +33,7 @@ class ClassOutcomeRecord(TimeStampedModel):
         ordering = ["-updated_at", "-id"]
         constraints = [
             models.UniqueConstraint(
-                fields=["owner", "section", "lesson_code"], name="planning_outcome_one_per_section_lesson"
+                fields=["owner", "section", "lesson"], name="planning_outcome_one_per_section_lesson_row"
             ),
             models.CheckConstraint(
                 condition=Q(attempted__gte=1) & Q(correct__lte=F("attempted")),
@@ -43,6 +50,9 @@ class LessonRunRecord(TimeStampedModel):
 
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="lesson_runs")
     section = models.CharField(max_length=20)
+    lesson = models.ForeignKey(
+        "curriculum.Lesson", on_delete=models.PROTECT, related_name="lesson_runs", null=True, blank=True
+    )
     lesson_code = models.CharField(max_length=10)
     period_minutes = models.PositiveSmallIntegerField()
     started_at = models.DateTimeField()
@@ -53,7 +63,7 @@ class LessonRunRecord(TimeStampedModel):
         ordering = ["-started_at", "-id"]
         constraints = [
             models.UniqueConstraint(
-                fields=["owner", "section", "lesson_code", "started_at"], name="planning_run_one_per_start"
+                fields=["owner", "section", "lesson", "started_at"], name="planning_run_one_per_lesson_start"
             ),
         ]
 

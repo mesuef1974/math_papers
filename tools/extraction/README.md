@@ -100,9 +100,11 @@ python -m tools.extraction <مجلد الكتاب> all          # layout ثم im
 ## التحميل والنشر (`publish.py`)
 
 مرحلتا `load` ثم `publish` تصلان الخط بالطبقة القانونية بأوامر الإدارة نفسها في عملية فرعية بلا نافذة (الأداة لا تستورد Django): `load` يشتق
-فهرس الكتاب من سجلات الدروس (`build_grade10_index --lessons-dir`، إن كان `load.index: true`) ثم `load_course <مقرر>`؛ و`publish` يشغّل
+فهرس الكتاب من سجلات الدروس (`build_course_index <مقرر> --lessons-dir`، إن كان `load.index: true`) ثم `load_course <مقرر>`؛ و`publish` يشغّل
 `publish_assets <مقرر> --source dirs.<publish.clips>` فيلزمه المقرر محمَّلًا. الإعداد (اختياري، ووجوده يُدخلهما في `all` بعد `lesson`):
 `load: {course, index}` و`publish: {course, clips}` و`django: {root, python}`. القاعدة والتخزين من بيئة التشغيل (`DATABASE_URL` و`ASSETS_*`)،
 وبصمتهما (لا قيمهما) في ختم المرحلة فلا يُسقط تحميلُ قاعدة محلية تحميلَ الإنتاج. فشل أمر يعيد الرمز 5 ولا يختم المرحلة.
-تحذير: فهرس العاشر يُكتب في المستودع (`apps/knowledge/data/grade10_index.json`)، فراجع `git diff` فيه بعد `load` قبل الإيداع.
+تحذير: فهرس المقرر يُكتب في المستودع (`apps/knowledge/data/courses/<مقرر>/index.json`، ومعه `course.json` بقائمة الدروس)، فراجع `git diff` فيه بعد `load`
+قبل الإيداع. مقرر جديد يلزم إنشاء مجلده مرة يدويًا بـ `manage.py build_course_index <مقرر> --source <مجلد الكتاب> --title … --grade … --semester …`
+(والمسار واللغة إن وُجدا)؛ بعدها تكفي مرحلة `load`.
 

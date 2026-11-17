@@ -2,20 +2,16 @@
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
-from functools import lru_cache
-from pathlib import Path
 
 from django.db.models import Sum
 
-from apps.curriculum.courses import GRADE10_SLUG, GRADE12_SLUG
+from apps.curriculum.courses import GRADE12_SLUG
 
-from .domain.contract import SCHEMA_VERSION, source_hash, source_slugs
-from .domain.grade10_index import Grade10Index, Grade10Lesson
+from .domain.contract import SCHEMA_VERSION, source_hash, source_index, source_slugs
+from .domain.course_index import CourseIndex, LessonIndex
+from .domain.schemas import lesson_sort_key
 from .models import ExerciseTemplate, LessonProfile
-
-GRADE10_INDEX = Path(__file__).resolve().parent / "data" / "grade10_index.json"
 
 
 @dataclass(frozen=True)
@@ -53,25 +49,32 @@ def coverage(course: str = GRADE12_SLUG) -> list[CoverageRow]:
     return result
 
 
-@lru_cache(maxsize=1)
-def grade10_index() -> Grade10Index:
-    """فهرس العاشر المشتق من الملف المودَع (يُتحقق من مخططه عند أول قراءة)."""
-    return Grade10Index(**json.loads(GRADE10_INDEX.read_text(encoding="utf-8")))
+def course_index(course: str) -> CourseIndex:
+    """الفهرس المشتق لمقرر من ملفه المودَع. `KeyError` لمقرر بلا مصدر أو بلا فهرس مشتق (معرفته بصياغتنا)."""
+    index = source_index(course)
+    if index is None:
+        raise KeyError(f"لا فهرس مشتق للمقرر {course}")
+    return index
 
 
-def grade10_lesson(code: str) -> Grade10Lesson | None:
-    return next((lesson for lesson in grade10_index().lessons if lesson.lesson == code), None)
+def lesson_index(course: str, code: str) -> LessonIndex | None:
+    """سجل درس في فهرس مقرره؛ None إن غاب الدرس أو لم يكن للمقرر فهرس مشتق."""
+    try:
+        lessons = course_index(course).lessons
+    except KeyError:
+        return None
+    return next((lesson for lesson in lessons if lesson.lesson == code), None)
 
 
-def grade10_index_from_tables() -> Grade10Index:
-    """فهرس العاشر مشتقًّا من الجداول التي حمّلها المحمِّل الواحد: يطابق الملف المودَع حين يكون المقرر محمَّلًا."""
+def course_index_from_tables(course: str) -> CourseIndex:
+    """فهرس مقرر مشتقًّا من الجداول التي حمّلها المحمِّل الواحد: يطابق الملف المودَع حين يكون المقرر محمَّلًا."""
     profiles = (
-        LessonProfile.objects.filter(lesson__course__slug=GRADE10_SLUG)
+        LessonProfile.objects.filter(lesson__course__slug=course)
         .select_related("lesson")
         .prefetch_related("standards", "practices", "objectives", "examples", "exercise_groups")
     )
     lessons = []
-    for profile in sorted(profiles, key=lambda p: tuple(int(n) for n in p.lesson.code.split("."))):
+    for profile in sorted(profiles, key=lambda p: lesson_sort_key(p.lesson.code)):
         lessons.append(
             {
                 "lesson": profile.lesson.code,
@@ -96,7 +99,7 @@ def grade10_index_from_tables() -> Grade10Index:
                 "vocabulary": {"new": profile.vocab_new or 0, "review": profile.vocab_review or 0},
             }
         )
-    return Grade10Index(lessons=lessons)
+    return CourseIndex(lessons=lessons)
 
 
 def knowledge_state() -> dict[str, str]:

@@ -2,13 +2,18 @@
 
 from __future__ import annotations
 
-from django.db.models import QuerySet
+from django.db.models import Count, QuerySet
 
 from .models import Blueprint, Course, Lesson
 
 
 class UnknownCourseError(LookupError):
     pass
+
+
+def courses() -> QuerySet[Course]:
+    """كل المقررات بعدد دروسها، مرتبة بالصف فالمسار فالفصل."""
+    return Course.objects.annotate(lesson_count=Count("lessons"))
 
 
 def current_course() -> Course | None:

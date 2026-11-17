@@ -1,4 +1,8 @@
-"""قراءة: ملف الدرس الشخصي من فهرس العاشر المشتق وسير الحصة المبني عليه. حتمي، بلا نص دليل ولا توكنز."""
+"""قراءة: ملف الدرس الشخصي من الفهرس المشتق لمقرره وسير الحصة المبني عليه. حتمي، بلا نص دليل ولا توكنز.
+
+كل قراءة تأخذ المقرر: الرمز «2.6» درس مختلف في كل كتاب. الافتراضي `PLAN_COURSE` هو المقرر الذي تملك المنصة خطته
+الفصلية اليوم؛ مسارات العروض تمرّر مقرر الطلب صراحة.
+"""
 
 from __future__ import annotations
 
@@ -11,8 +15,10 @@ from django.db.models import Count, QuerySet
 from apps.assets.models import Asset
 from apps.assets.selectors import asset_bytes
 from apps.assets.storage import Storage
-from apps.knowledge.domain.grade10_index import Grade10Lesson
-from apps.knowledge.selectors import grade10_index, grade10_lesson
+from apps.curriculum.courses import GRADE10_SLUG
+from apps.knowledge.domain.course_index import LessonIndex
+from apps.knowledge.domain.schemas import lesson_sort_key
+from apps.knowledge.selectors import course_index, lesson_index
 
 from .domain.calendar_engine import Closure, Plan, Slot, allocate, load_terms, sessions
 from .domain.deck import Deck, ExampleClip, LessonContent, build_deck
@@ -33,8 +39,10 @@ from .domain.strategies import (
 )
 from .models import ClassOutcomeRecord, LessonRunRecord
 
+PLAN_COURSE = GRADE10_SLUG  # مقرر الخطة الفصلية المودَعة (`domain/semester_plan.py`)
 
-def profile_from_lesson(lesson: Grade10Lesson) -> LessonProfile:
+
+def profile_from_lesson(lesson: LessonIndex) -> LessonProfile:
     """بلوم من أهداف الدرس (غير المصنَّف لا يُحسب) وDOK من صفوف تحليل تمارينه؛ ما لم يُقرأ يبقى فارغًا فلا يُخمَّن."""
     return LessonProfile(
         bloom=frozenset(b for b in lesson.objectives_bloom if b != "unclassified"),
@@ -42,23 +50,28 @@ def profile_from_lesson(lesson: Grade10Lesson) -> LessonProfile:
     )
 
 
-def lesson_profile(code: str) -> LessonProfile:
-    lesson = grade10_lesson(code)
+def _indexed_lesson(code: str, course: str) -> LessonIndex:
+    lesson = lesson_index(course, code)
     if lesson is None:
-        raise KeyError(f"درس غير موجود في الفهرس: {code}")
-    return profile_from_lesson(lesson)
+        raise KeyError(f"درس غير موجود في فهرس المقرر {course}: {code}")
+    return lesson
+
+
+def lesson_profile(code: str, course: str = PLAN_COURSE) -> LessonProfile:
+    return profile_from_lesson(_indexed_lesson(code, course))
 
 
 def lesson_flow(
     code: str,
     period_minutes: int = DEFAULT_PERIOD_MINUTES,
     resources: Collection[str] = (),
+    course: str = PLAN_COURSE,
 ) -> Flow:
-    return build_flow(period_minutes, lesson_profile(code), resources=resources)
+    return build_flow(period_minutes, lesson_profile(code, course), resources=resources)
 
 
-def lesson_codes() -> list[str]:
-    return [lesson.lesson for lesson in grade10_index().lessons]
+def lesson_codes(course: str = PLAN_COURSE) -> list[str]:
+    return [lesson.lesson for lesson in course_index(course).lessons]
 
 
 def outcome_records(owner: AbstractBaseUser, section: str | None = None) -> QuerySet[ClassOutcomeRecord]:
@@ -87,11 +100,10 @@ def lesson_deck(
     content: LessonContent,
     period_minutes: int = DEFAULT_PERIOD_MINUTES,
     resources: Collection[str] = (),
+    course: str = PLAN_COURSE,
 ) -> Deck:
     """عرض الدرس: الفهرس المشتق وسير الحصة من هنا، والنصوص والمقصوصات من `content` (خارج المستودع)."""
-    lesson = grade10_lesson(code)
-    if lesson is None:
-        raise KeyError(f"درس غير موجود في الفهرس: {code}")
+    lesson = _indexed_lesson(code, course)
     flow = build_flow(period_minutes, profile_from_lesson(lesson), resources=resources)
     return build_deck(lesson, content, flow)
 
@@ -99,7 +111,7 @@ def lesson_deck(
 def term_plan() -> TermPlan:
     """خطة الفصل الأول للوزارة بعد مطابقة دروسها وأمثلتها الإثرائية على الفهرس المشتق."""
     plan = load_term_plan()
-    index = grade10_index()
+    index = course_index(PLAN_COURSE)
     check_catalog(
         plan,
         [lesson.lesson for lesson in index.lessons],
@@ -149,7 +161,7 @@ def deck_lessons(course_slug: str) -> list[dict]:
         }
         for r in rows
     ]
-    return sorted(lessons, key=lambda r: [int(p) for p in r["lesson"].split(".")])
+    return sorted(lessons, key=lambda r: lesson_sort_key(r["lesson"]))
 
 
 def deck_key(course_slug: str, lesson_code: str, period_minutes: int, assets: Sequence[Asset]) -> str:
