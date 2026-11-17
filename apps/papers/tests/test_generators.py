@@ -1,5 +1,6 @@
 """كل جواب يُتحقق منه عدديًا بطريقة مستقلة عن طريقة بنائه، عبر بذور كثيرة."""
 
+import math
 import random
 
 import mpmath
@@ -425,7 +426,84 @@ def assert_compare_maxima(c):
     assert abs(top - c["other"]) >= 1
 
 
+def real_roots(expr):
+    """الجذور الحقيقية المختلفة بعزل الجذور الدقيق في sympy، لا بالطريقة التي بُنيت بها المعادلة."""
+    return sorted(float(sp.N(root)) for root in set(sp.Poly(expr, x).real_roots()))
+
+
+def assert_roots(c):
+    want = sorted({float(sp.N(root)) for root in c["roots"]})
+    got = real_roots(c["f"])
+    assert len(got) == len(want) and got == pytest.approx(want, abs=TOL)
+
+
+def assert_solution_count(c):
+    """عدد الحلول من عزل الجذور، والمميز من الفرق بين الجذرين المركبين: a²(r₁-r₂)²."""
+    assert len(real_roots(c["f"])) == c["count"]
+    if "discriminant" in c:
+        poly = sp.Poly(c["f"], x)
+        first, second = poly.all_roots()
+        value = complex(sp.N(poly.LC() ** 2 * (first - second) ** 2))
+        assert value.real == pytest.approx(c["discriminant"]) and abs(value.imag) < TOL
+
+
+def assert_sign_change(c):
+    low, high = c["low"], c["high"]
+    assert high == low + 1 and number(c["f"], low) * number(c["f"], high) < 0
+    assert sum(low < root < high for root in real_roots(c["f"])) == 1
+
+
+def assert_approx_root(c):
+    """الحل الموجب الوحيد يُقرَّب إلى الجواب المكتوب بجزء من عشرة."""
+    positive = [root for root in real_roots(c["f"]) if root > 0]
+    assert len(positive) == 1 and abs(positive[0] - c["value"]) <= 0.05 + TOL
+
+
+def assert_rectangle(c):
+    assert c["width"] > 0 and c["length"] - c["width"] == c["extra"]
+    assert c["width"] * c["length"] == c["area"]
+
+
+def assert_factored_axis(c):
+    assert_roots(c)
+    for d in (1, 2.5):
+        assert number(c["f"], c["axis"] + d) == pytest.approx(number(c["f"], c["axis"] - d))
+
+
+def assert_factored_point(c):
+    assert_roots(c)
+    px, py = c["point"]
+    assert number(c["f"], px) == pytest.approx(float(py))
+
+
+def assert_radical(c):
+    """قيمة المقدار الأصلي تساوي الصورة المبسطة عدديًا، والمجذور بلا عامل مربع كامل."""
+    square, coefficient, radicand = (sp.sympify(c[key]) for key in ("square", "coefficient", "radicand"))
+    for at in (2, 3):
+        simplified = number(coefficient, at) * math.sqrt(number(radicand, at))
+        assert math.sqrt(number(square, at)) == pytest.approx(simplified)
+    free = int(radicand.subs(x, 1))
+    assert free > 1 and all(free % (d * d) for d in range(2, math.isqrt(free) + 1))
+    assert sp.degree(radicand, x) <= 1
+
+
+def assert_perfect_square(c):
+    """ثلاثية الحدود مربع كامل: تنعدم عند نصف معامل x بإشارة معكوسة، وتساوي مربع البعد عنه."""
+    f, at = x**2 + c["b"] * x + c["c"], -sp.Rational(c["b"], 2)
+    assert number(f, at) == pytest.approx(0, abs=TOL)
+    assert number(f, at + 1) == pytest.approx(1) and number(f, at - 2) == pytest.approx(4)
+
+
 CHECKS = {
+    "roots": assert_roots,
+    "solution_count": assert_solution_count,
+    "sign_change": assert_sign_change,
+    "approx_root": assert_approx_root,
+    "rectangle": assert_rectangle,
+    "factored_axis": assert_factored_axis,
+    "factored_point": assert_factored_point,
+    "radical": assert_radical,
+    "perfect_square": assert_perfect_square,
     "value": assert_value,
     "parabola_shape": assert_parabola_shape,
     "parabola_monotone": assert_parabola_monotone,
