@@ -178,6 +178,7 @@ class Book:
             "objectives": "objectives.json",
             "examples": "examples.json",
             "tables": "tables.json",
+            "fusion": "fusion.json",
         }
         outputs = self.cfg.get("outputs", {})
         # generic_<اسم> يتقدم على <اسم> حين يشترك الكتاب مع أدوات قديمة في الملف نفسه بصيغة مختلفة

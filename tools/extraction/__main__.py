@@ -1,6 +1,6 @@
 """سطر أوامر الخط: python -m tools.extraction <مجلد الكتاب> <مرحلة> [...]
 
-المراحل: validate (فحص book.yaml)، ocr (تصيير وقراءة؛ ببيئة guide_extract)، tables (جدول تحليل التمارين)، layout، images، objectives، examples، checks، all
+المراحل: validate (فحص book.yaml)، ocr (تصيير وقراءة؛ ببيئة guide_extract)، tables (جدول تحليل التمارين)، layout، images، objectives، examples، fusion (دمج OCR والرؤية والجدول)، checks، all
 (الأربع الأخيرة بعد layout؛ وtables قبل layout حين layout.anchor=analysis). المخرجات في مجلد الكتاب خارج المستودع، ويطبع كل مرحلة ملخصها العددي.
 كل مرحلة تتخطى نفسها ما لم تتغير تجزئة مدخلها (`stamps.py`)، و`--force` يعيدها؛ وتصحيحات الكتاب اليدوية (`corrections.py`)
 تُطبَّق على مخرج مرحلتها بأسبابها.
@@ -14,7 +14,7 @@ import sys
 from collections.abc import Callable
 from typing import Any
 
-from . import checks, corrections, examples, images, layout, objectives, stamps, tables
+from . import checks, corrections, examples, fusion, images, layout, objectives, stamps, tables
 from .config import Book
 
 
@@ -89,6 +89,12 @@ def stage_examples(book: Book) -> None:
     print(json.dumps(examples.summarize(result), ensure_ascii=False))
 
 
+def stage_fusion(book: Book) -> None:
+    result = fusion.build(book, _layout(book))
+    _write(book.output("fusion"), result)
+    print(json.dumps(fusion.summarize(result), ensure_ascii=False))
+
+
 def stage_checks(book: Book) -> None:
     result = checks.run(book, _layout(book))
     _emit(book, "checks", book.out / "checks.json", result)
@@ -108,12 +114,15 @@ STAGES: dict[str, Callable[[Book], Any]] = {
     "images": stage_images,
     "objectives": stage_objectives,
     "examples": stage_examples,
+    "fusion": stage_fusion,
     "checks": stage_checks,
 }
 
 
 def run_stage(book: Book, name: str, force: bool = False) -> bool:
     """يشغّل مرحلة ما لم يتغير مدخلها منذ آخر تشغيل ناجح (الختم والناتج معًا)؛ يعيد هل عملت."""
+    if "layout" in stamps.INPUTS[name]["after"]:
+        _layout(book)  # ناتجها مدخل الختم: يُبنى قبل حسابه لا بعده، وإلا بطل الختم عند أول تشغيل
     current = stamps.digest(book, name)
     if not force and stamps.is_fresh(book, name, current):
         print(f"== {name}: لم يتغير مدخلها، تُخطيت")
@@ -141,7 +150,15 @@ def main(argv: list[str] | None = None) -> int:
     todo = [args.stage]
     if args.stage == "all":
         needs_tables = book["layout"]["anchor"] == "analysis" and book.has_dir("tables")
-        todo = [*(["tables"] if needs_tables else []), "layout", "images", "objectives", "examples", "checks"]
+        todo = [
+            *(["tables"] if needs_tables else []),
+            "layout",
+            "images",
+            "objectives",
+            "examples",
+            "fusion",
+            "checks",
+        ]
     try:
         for name in todo:
             run_stage(book, name, args.force)

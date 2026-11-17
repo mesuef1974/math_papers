@@ -26,6 +26,7 @@ INPUTS: dict[str, dict[str, Any]] = {
     "images": {"dirs": (), "after": (), "pdf": True},
     "objectives": {"dirs": ("ocr", "render"), "after": ("layout",), "pdf": False},
     "examples": {"dirs": ("ocr", "vision", "badges"), "after": ("layout",), "pdf": False},
+    "fusion": {"dirs": ("ocr", "vision", "tables"), "after": ("layout",), "pdf": False},
     "checks": {"dirs": ("ocr",), "after": ("layout",), "pdf": False},
 }
 

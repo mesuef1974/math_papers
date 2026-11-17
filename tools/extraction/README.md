@@ -33,6 +33,13 @@ python -m tools.extraction <مجلد الكتاب> all          # layout ثم im
 `dirs.tables/NNNN.json` (`rows` و`task_guide`) ثم `tables.json` ملخصًا. لا تحذف ملف صفحة قديمًا. الاختياري في `tables`: `title`،
 `headers` (نص الترويسة إلى `example`/`exercises`/`dok`/`standard`)، `task_levels`، `header_window`، `row_gap`، `dark`، `dark_fraction`.
 
+## دمج المصادر (`fusion.py`)
+
+مرحلة `fusion` (بعد `layout`): لكل درس يدمج أرقام التمارين والأمثلة ورموز الممارسات من OCR والرؤية (`dirs.vision` اختياري) وجدول
+التحليل (`dirs.tables`) في `fusion.json`: ثقة كل رقم `both`/`ocr`/`vision`/`filled`، وما رُفض لخروجه عن سلسلة 1..max (`exercises.max/jump`
+و`examples.max/jump`) وصفحات المراجعة. الاختياري: `practices` (`marker` و`names`) و`fusion` (`degenerate` و`name_tail` و`exercise_pattern`).
+المرحلة التي تعتمد `layout` تبنيه قبل حساب ختمها فلا يبطل الختم عند أول تشغيل.
+
 ## المصدر والحالة
 
 كل حقل مستخرج غلاف `{value, source, status}`: المصدر `guide` أو `derived` أو `library` أو `teacher`، والحالة `ok` أو `review` أو `missing`
