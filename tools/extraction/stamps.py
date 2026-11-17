@@ -14,6 +14,7 @@ from typing import Any
 
 from . import corrections
 from .config import Book
+from .lesson import lessons_dir
 
 FILE = ".stamps.json"
 VERSION = 1  # يُرفع حين يتغير منطق مرحلة بلا تغيير في مدخلاتها، فتُعاد كل الأختام
@@ -33,6 +34,12 @@ INPUTS: dict[str, dict[str, Any]] = {
         "pdf": False,
     },
     "checks": {"dirs": ("ocr",), "after": ("layout",), "pdf": False},
+    "load": {
+        "dirs": (),
+        "after": ("lesson",),
+        "pdf": False,
+    },  # ومجلد سجلات الدروس ووجهة التحميل (انظر digest)
+    "publish": {"dirs": (), "after": (), "pdf": False},  # ومجلد المقاطع (publish.clips) ووجهة التخزين
 }
 
 
@@ -59,7 +66,8 @@ def output_path(book: Book, stage: str) -> Path:
     return book.output(stage)
 
 
-def digest(book: Book, stage: str, pdf: Callable[[Book], Path] | None = None) -> str:
+def digest(book: Book, stage: str, pdf: Callable[[Book], Path] | None = None, target: str = "") -> str:
+    """`target` بصمة وجهة المرحلة (للتحميل والنشر: القاعدة والتخزين)؛ الفارغ لا يدخل التجزئة فلا تتغير أختام غيرهما."""
     spec = INPUTS[stage]
     h = hashlib.sha256()
     h.update(f"{VERSION}|{stage}".encode())
@@ -72,12 +80,16 @@ def digest(book: Book, stage: str, pdf: Callable[[Book], Path] | None = None) ->
     keys = spec["dirs"]
     if stage == "lesson":  # مجلدات رؤية الأمثلة تسمّيها الإعدادات بترتيب أولويتها
         keys = (*keys, *book.get("lesson", {}).get("example_vision", ["badges"]))
-    for key in keys:
-        if not book.has_dir(key):
-            continue
-        root = book.dir(key)
+    roots = {key: book.dir(key) for key in keys if book.has_dir(key)}
+    if stage == "publish" and (clips := book.get("publish", {}).get("clips")) and book.has_dir(clips):
+        roots[clips] = book.dir(clips)
+    if stage == "load":
+        roots["lessons"] = lessons_dir(book)
+    for key, root in roots.items():
         for path in _files(root) if root.is_dir() else ():
             h.update(f"{key}/{path.relative_to(root).as_posix()}:{_file_digest(path)}".encode())
+    if target:
+        h.update(f"target:{target}".encode())
     for prior in spec["after"]:
         path = output_path(book, prior)
         h.update(f"{prior}:{_file_digest(path) if path.exists() else '-'}".encode())

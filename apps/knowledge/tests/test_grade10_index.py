@@ -143,3 +143,18 @@ def test_committed_index_holds_no_arabic_prose():
 def test_selector_finds_a_lesson():
     assert grade10_lesson("3.5").unit == 3
     assert grade10_lesson("9.9") is None
+
+
+def test_index_command_reads_lessons_dir_override(tmp_path):
+    from django.core.management import call_command
+
+    folder = tmp_path / "records"
+    folder.mkdir()
+    (folder / "lesson_2_1.json").write_text(json.dumps(lesson_output()), encoding="utf-8")
+    target = tmp_path / "index.json"
+    call_command("build_grade10_index", source=str(tmp_path), lessons_dir=str(folder), target=str(target))
+    assert [lesson["lesson"] for lesson in json.loads(target.read_text(encoding="utf-8"))["lessons"]] == [
+        "2.1"
+    ]
+    with pytest.raises(Exception, match="lesson_"):
+        call_command("build_grade10_index", source=str(tmp_path), target=str(target))  # لا lessons تحت المصدر

@@ -116,9 +116,10 @@ def validate(cfg: dict[str, Any]) -> list[str]:
             re.compile(cfg.get("examples", {}).get(key, "x"))
         except re.error as e:
             errs.append(f"examples.{key} نمط غير صالح: {e}")
-    from . import reps  # كسول: reps يستورد Book من هذا الملف
+    from . import publish, reps  # كسول: كلاهما يستورد Book من هذا الملف
 
     errs += reps.errors(cfg)
+    errs += publish.errors(cfg)
     return errs
 
 
@@ -183,6 +184,8 @@ class Book:
             "tables": "tables.json",
             "fusion": "fusion.json",
             "lesson": "lessons.json",
+            "load": "load.json",
+            "publish": "publish.json",
         }
         outputs = self.cfg.get("outputs", {})
         # generic_<اسم> يتقدم على <اسم> حين يشترك الكتاب مع أدوات قديمة في الملف نفسه بصيغة مختلفة

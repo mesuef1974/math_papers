@@ -24,6 +24,7 @@ from . import (
     layout,
     lesson,
     objectives,
+    publish,
     reps,
     stamps,
     tables,
@@ -121,6 +122,25 @@ def stage_lesson(book: Book) -> None:
     print(json.dumps(lesson.summarize(result), ensure_ascii=False))
 
 
+def _need(book: Book, stage: str) -> None:
+    if not publish.configured(book, stage):
+        raise publish.PublishError(f"لا قسم {stage} في book.yaml")
+
+
+def stage_load(book: Book) -> None:
+    _need(book, "load")
+    result = publish.build_load(book, lesson.lessons_dir(book))
+    publish.write_result(book, "load", result)
+    print(json.dumps(publish.summarize(result), ensure_ascii=False))
+
+
+def stage_publish(book: Book) -> None:
+    _need(book, "publish")
+    result = publish.build_publish(book)
+    publish.write_result(book, "publish", result)
+    print(json.dumps(publish.summarize(result), ensure_ascii=False))
+
+
 def stage_checks(book: Book) -> None:
     result = checks.run(book, _layout(book))
     _emit(book, "checks", book.out / "checks.json", result)
@@ -171,14 +191,17 @@ STAGES: dict[str, Callable[[Book], Any]] = {
     "fusion": stage_fusion,
     "checks": stage_checks,
     "lesson": stage_lesson,
+    "load": stage_load,
+    "publish": stage_publish,
 }
+TARGETED = ("load", "publish")  # مراحل لها وجهة خارج مجلد الكتاب: ختمها يشمل بصمة الوجهة
 
 
 def run_stage(book: Book, name: str, force: bool = False) -> bool:
     """يشغّل مرحلة ما لم يتغير مدخلها منذ آخر تشغيل ناجح (الختم والناتج معًا)؛ يعيد هل عملت."""
     if "layout" in stamps.INPUTS[name]["after"]:
         _layout(book)  # ناتجها مدخل الختم: يُبنى قبل حسابه لا بعده، وإلا بطل الختم عند أول تشغيل
-    current = stamps.digest(book, name)
+    current = stamps.digest(book, name, target=publish.target_token(name) if name in TARGETED else "")
     if not force and stamps.is_fresh(book, name, current):
         print(f"== {name}: لم يتغير مدخلها، تُخطيت")
         return False
@@ -229,6 +252,8 @@ def main(argv: list[str] | None = None) -> int:
             "fusion",
             "checks",
             "lesson",
+            # الأقسام المعرَّفة في book.yaml فقط؛ load قبل publish لأن النشر يلزمه المقرر محمَّلًا
+            *(s for s in TARGETED if publish.configured(book, s)),
         ]
     try:
         for name in todo:
@@ -236,6 +261,9 @@ def main(argv: list[str] | None = None) -> int:
     except corrections.CorrectionError as e:
         print(f"تصحيح مرفوض: {e}", file=sys.stderr)
         return 3
+    except publish.PublishError as e:
+        print(f"تعذّر التحميل أو النشر: {e}", file=sys.stderr)
+        return 5
     return 0
 
 
