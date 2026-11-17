@@ -23,11 +23,13 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument("--source", required=True, help="مجلد كتاب العاشر (خارج المستودع)")
         parser.add_argument("--target", default=str(TARGET), help="ملف الفهرس الناتج")
+        parser.add_argument("--lessons-dir", help="مجلد سجلات الدروس إن لم يكن lessons تحت المصدر")
 
-    def handle(self, *args, source, target, **options):
-        files = sorted((Path(source) / "lessons").glob("lesson_*.json"))
+    def handle(self, *args, source, target, lessons_dir=None, **options):
+        folder = Path(lessons_dir) if lessons_dir else Path(source) / "lessons"
+        files = sorted(folder.glob("lesson_*.json"))
         if not files:
-            raise CommandError("لا ملفات lessons/lesson_*.json في المصدر")
+            raise CommandError(f"لا ملفات lesson_*.json في {folder}")
         index = build_index([json.loads(f.read_text(encoding="utf-8")) for f in files])
         out = Path(target)
         out.parent.mkdir(parents=True, exist_ok=True)

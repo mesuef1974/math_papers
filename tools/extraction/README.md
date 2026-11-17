@@ -33,6 +33,41 @@ python -m tools.extraction <مجلد الكتاب> all          # layout ثم im
 `dirs.tables/NNNN.json` (`rows` و`task_guide`) ثم `tables.json` ملخصًا. لا تحذف ملف صفحة قديمًا. الاختياري في `tables`: `title`،
 `headers` (نص الترويسة إلى `example`/`exercises`/`dok`/`standard`)، `task_levels`، `header_window`، `row_gap`، `dark`، `dark_fraction`.
 
+## دمج المصادر (`fusion.py`)
+
+مرحلة `fusion` (بعد `layout`): لكل درس يدمج أرقام التمارين والأمثلة ورموز الممارسات من OCR والرؤية (`dirs.vision` اختياري) وجدول
+التحليل (`dirs.tables`) في `fusion.json`: ثقة كل رقم `both`/`ocr`/`vision`/`filled`، وما رُفض لخروجه عن سلسلة 1..max (`exercises.max/jump`
+و`examples.max/jump`) وصفحات المراجعة. الاختياري: `practices` (`marker` و`names`) و`fusion` (`degenerate` و`name_tail` و`exercise_pattern`).
+المرحلة التي تعتمد `layout` تبنيه قبل حساب ختمها فلا يبطل الختم عند أول تشغيل.
+
+## سجل الدرس والمفردات والانحدار (`lesson.py`، `vocabulary.py`، `regression.py`)
+
+مرحلة `lesson` (آخر `all`): تجمع لكل درس `lessons/lesson_X_Y.json` (`dirs.lessons`، افتراضًا `lessons` في مجلد الكتاب) من layout وobjectives
+والدمج والجدول ورؤية الأمثلة والمفردات، ثم `lessons.json` ملخصًا. كل حقل غلاف `{value, source, status}`. الإعداد `lesson`:
+`example_vision` (مفاتيح `dirs` بترتيب الأولوية؛ أول مجلد فيه ملف الصفحة يغلب)، `overrides` (ملف في `dirs.gold` يصحّح تمثيلات مثال بسببه)،
+`representation_note`، `schema_version`، `library_fields`، `pending_fields`. المفردات من `dirs.vocab/NNNN.json` (review وnew وflat) مدموجة بنص OCR
+ومصحَّحة هجاءً بـ `dirs.gold/lesson_*.json`؛ تشغيل الرؤية نفسه خارج الخط. الانحدار على الذهبي (`regression_vs_gold` و`regression_soft`)
+يُكتب في السجل إن وُجد `dirs.gold`، ولا يدخل الحقول.
+
+## تمثيلات الأمثلة بالرؤية (`reps.py`)
+
+سلسلة تمريرات تُحسِّن قائمة تمثيلات كل مثال (جدول/بياني/جبري/سياق حياتي) بأسئلة نعم/لا على مقطعه المصغّر (`dirs.crops/<صفحة>_<ك>_thumb.png`)،
+كل تمريرة تقرأ مجلد رؤية (`src`) وتكتب آخر (`dst`) فلا يُمَسّ السابق، ثم تتمة «تابع المثال n» من أعلى صفحة الطالب التالية. الرؤية نفسها مُحقَنة
+(`ask(صورة، سؤال، مخطط) -> dict`) فلا يلزم المنطق نموذجًا في الاختبار. الإعداد `reps`: `questions` (تتقدم على `reps.QUESTIONS`)، `passes`
+(`kind`: `replace` بسؤال واحد بلا تصويت أو `add` بأغلبية ثلاث إجابات لأن النموذج غير حتمي؛ مع `src` و`dst` و`lessons` و`previous` و`questions`)،
+و`continuation` (`dst` و`groups` بمصادر مرتبة وأسئلة، وعتبات الصورة). `reps.run` يشغّل الكل مستأنَفًا، و`reps.evaluate` يقيس الإصدارات على
+الذهبي. تُشغَّل بـ `python -m tools.extraction <كتاب> reps` فوق خادم الرؤية أدناه.
+
+## مراحل الرؤية وخادمها (`vision.py`، `llama.py`)
+
+أربع مراحل مستأنَفة خارج `all` وأختامها (تُشغَّل وتُغلق خادم llama محليًا آليًا، بلا نافذة): `vision_pages` (أرقام الأمثلة والتمارين ورموز MP لكل
+صفحة مصيَّرة → `dirs.vision`؛ `--pages من إلى`)، و`vision_examples` (شارات «مثال» ومقاطع الرأس والمصغّرة وتمثيلات القاعدة → `dirs.badges` و`dirs.crops`؛
+`--lessons 1.1 ...`)، و`vision_vocab` (بطاقة المصطلحات من افتتاحية كل درس → `dirs.vocab`)، و`reps`. المنطق يأخذ `ask(صورة، سؤال، مخطط)` مُحقَنًا
+(`llama.asker`) فيُختبر بجواب مختلق. الإعداد `vision` اختياري: `questions` (بالمعرّف)، `models_for` (حجم النموذج لكل مرحلة؛ الافتراضي pages وvocab
+`small` وexamples وreps `large`)، `examples` (هندسة الشارات: badge وright_x وthumb_x)، `vocab.card_box`، وإعداد المحرك (`engine` و`vendor` و`models_dir`
+و`models` و`contexts` و`port` و`ttl` و`max_life`؛ الافتراضي محرك LM Studio ومجلد `~/.cache/guide_extract/models`). فشل التشغيل يعيد الرمز 4. على كرت
+8 غ.ب لا تُشغَّل مع PaddleOCR معًا.
+
 ## المصدر والحالة
 
 كل حقل مستخرج غلاف `{value, source, status}`: المصدر `guide` أو `derived` أو `library` أو `teacher`، والحالة `ok` أو `review` أو `missing`
@@ -61,3 +96,13 @@ python -m tools.extraction <مجلد الكتاب> all          # layout ثم im
 
 كل مرحلة تحسب تجزئة مدخلها (الإعداد المدموج والتصحيحات ومحتوى المجلدات والنواتج السابقة وملف PDF) وتحفظها في `.stamps.json`
 بمجلد الكتاب، وتتخطى نفسها إن طابق الختم وكان ناتجها موجودًا؛ `--force` يعيد التشغيل.
+
+## التحميل والنشر (`publish.py`)
+
+مرحلتا `load` ثم `publish` تصلان الخط بالطبقة القانونية بأوامر الإدارة نفسها في عملية فرعية بلا نافذة (الأداة لا تستورد Django): `load` يشتق
+فهرس الكتاب من سجلات الدروس (`build_grade10_index --lessons-dir`، إن كان `load.index: true`) ثم `load_course <مقرر>`؛ و`publish` يشغّل
+`publish_assets <مقرر> --source dirs.<publish.clips>` فيلزمه المقرر محمَّلًا. الإعداد (اختياري، ووجوده يُدخلهما في `all` بعد `lesson`):
+`load: {course, index}` و`publish: {course, clips}` و`django: {root, python}`. القاعدة والتخزين من بيئة التشغيل (`DATABASE_URL` و`ASSETS_*`)،
+وبصمتهما (لا قيمهما) في ختم المرحلة فلا يُسقط تحميلُ قاعدة محلية تحميلَ الإنتاج. فشل أمر يعيد الرمز 5 ولا يختم المرحلة.
+تحذير: فهرس العاشر يُكتب في المستودع (`apps/knowledge/data/grade10_index.json`)، فراجع `git diff` فيه بعد `load` قبل الإيداع.
+
