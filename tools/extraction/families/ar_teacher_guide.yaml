@@ -1,0 +1,16 @@
+# عائلة تخطيط: دليل معلم عربي ممسوح بلا طبقة نص (PaddleOCR) بمجلد ناتج بتخطيط واحد.
+# الكتاب يرث هذا الملف بـ `extends: ar_teacher_guide` ويكتب ما يخصه فقط (المعرّف والعنوان والمسار والعلامات والمعيار).
+# الدمج مفتاحًا مفتاحًا: الخرائط تُدمج، والقوائم والقيم يستبدلها الكتاب كلها.
+language: ar
+dirs:
+  ocr: guide_paddle       # نص PaddleOCR لكل صفحة
+  render: guide_pages     # تصيير 220 dpi
+  student_pages: student_pages
+  boxes: opener_boxes
+  vision: hybrid
+bloom_lexicon: bloom_lexicon_ar.json
+layout:
+  unit_gap: 8
+objectives:
+  column: right
+  gap: 8

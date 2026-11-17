@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     "axes",
     "apps.core",
     "apps.curriculum",
+    "apps.assets",
     "apps.knowledge",
     "apps.papers",
     "apps.planning",
@@ -218,3 +219,14 @@ LOGGING = {
     "handlers": {"console": {"class": "logging.StreamHandler", "formatter": "plain"}},
     "root": {"handlers": ["console"], "level": env("LOG_LEVEL", "INFO")},
 }
+
+# تخزين الأصول (مقاطع العروض). local: قرص للتطوير والاختبار. s3: حاوية متوافقة مع S3 (Railway Bucket) في الإنتاج.
+ASSETS_STORAGE = env("ASSETS_STORAGE", "local")
+ASSETS_LOCAL_ROOT = Path(env("ASSETS_LOCAL_ROOT", str(BASE_DIR / ".assets")))
+ASSETS_S3_ENDPOINT = env("ASSETS_S3_ENDPOINT", "")
+ASSETS_S3_BUCKET = env("ASSETS_S3_BUCKET", "")
+ASSETS_S3_REGION = env("ASSETS_S3_REGION", "auto")
+ASSETS_S3_ACCESS_KEY_ID = env("ASSETS_S3_ACCESS_KEY_ID", "")
+ASSETS_S3_SECRET_ACCESS_KEY = env("ASSETS_S3_SECRET_ACCESS_KEY", "")
+ASSETS_S3_PATH_STYLE = env_bool("ASSETS_S3_PATH_STYLE", False)  # False = عنوان الحاوية في اسم المضيف
+ASSET_LINK_TTL = int(env("ASSET_LINK_TTL", "300"))  # عمر الرابط الموقّع بالثواني
