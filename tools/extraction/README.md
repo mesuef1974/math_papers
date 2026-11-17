@@ -40,6 +40,15 @@ python -m tools.extraction <مجلد الكتاب> all          # layout ثم im
 و`examples.max/jump`) وصفحات المراجعة. الاختياري: `practices` (`marker` و`names`) و`fusion` (`degenerate` و`name_tail` و`exercise_pattern`).
 المرحلة التي تعتمد `layout` تبنيه قبل حساب ختمها فلا يبطل الختم عند أول تشغيل.
 
+## سجل الدرس والمفردات والانحدار (`lesson.py`، `vocabulary.py`، `regression.py`)
+
+مرحلة `lesson` (آخر `all`): تجمع لكل درس `lessons/lesson_X_Y.json` (`dirs.lessons`، افتراضًا `lessons` في مجلد الكتاب) من layout وobjectives
+والدمج والجدول ورؤية الأمثلة والمفردات، ثم `lessons.json` ملخصًا. كل حقل غلاف `{value, source, status}`. الإعداد `lesson`:
+`example_vision` (مفاتيح `dirs` بترتيب الأولوية؛ أول مجلد فيه ملف الصفحة يغلب)، `overrides` (ملف في `dirs.gold` يصحّح تمثيلات مثال بسببه)،
+`representation_note`، `schema_version`، `library_fields`، `pending_fields`. المفردات من `dirs.vocab/NNNN.json` (review وnew وflat) مدموجة بنص OCR
+ومصحَّحة هجاءً بـ `dirs.gold/lesson_*.json`؛ تشغيل الرؤية نفسه خارج الخط. الانحدار على الذهبي (`regression_vs_gold` و`regression_soft`)
+يُكتب في السجل إن وُجد `dirs.gold`، ولا يدخل الحقول.
+
 ## المصدر والحالة
 
 كل حقل مستخرج غلاف `{value, source, status}`: المصدر `guide` أو `derived` أو `library` أو `teacher`، والحالة `ok` أو `review` أو `missing`

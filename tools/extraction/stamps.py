@@ -27,6 +27,11 @@ INPUTS: dict[str, dict[str, Any]] = {
     "objectives": {"dirs": ("ocr", "render"), "after": ("layout",), "pdf": False},
     "examples": {"dirs": ("ocr", "vision", "badges"), "after": ("layout",), "pdf": False},
     "fusion": {"dirs": ("ocr", "vision", "tables"), "after": ("layout",), "pdf": False},
+    "lesson": {
+        "dirs": ("ocr", "vision", "tables", "gold", "vocab"),
+        "after": ("layout", "objectives"),
+        "pdf": False,
+    },
     "checks": {"dirs": ("ocr",), "after": ("layout",), "pdf": False},
 }
 
@@ -64,7 +69,10 @@ def digest(book: Book, stage: str, pdf: Callable[[Book], Path] | None = None) ->
         h.update(_file_digest(corr).encode())
     if stage == "objectives":
         h.update(_file_digest(book.lexicon_path).encode())
-    for key in spec["dirs"]:
+    keys = spec["dirs"]
+    if stage == "lesson":  # مجلدات رؤية الأمثلة تسمّيها الإعدادات بترتيب أولويتها
+        keys = (*keys, *book.get("lesson", {}).get("example_vision", ["badges"]))
+    for key in keys:
         if not book.has_dir(key):
             continue
         root = book.dir(key)

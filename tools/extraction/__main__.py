@@ -1,6 +1,6 @@
 """سطر أوامر الخط: python -m tools.extraction <مجلد الكتاب> <مرحلة> [...]
 
-المراحل: validate (فحص book.yaml)، ocr (تصيير وقراءة؛ ببيئة guide_extract)، tables (جدول تحليل التمارين)، layout، images، objectives، examples، fusion (دمج OCR والرؤية والجدول)، checks، all
+المراحل: validate (فحص book.yaml)، ocr (تصيير وقراءة؛ ببيئة guide_extract)، tables (جدول تحليل التمارين)، layout، images، objectives، examples، fusion (دمج OCR والرؤية والجدول)، checks، lesson (سجل الدرس)، all
 (الأربع الأخيرة بعد layout؛ وtables قبل layout حين layout.anchor=analysis). المخرجات في مجلد الكتاب خارج المستودع، ويطبع كل مرحلة ملخصها العددي.
 كل مرحلة تتخطى نفسها ما لم تتغير تجزئة مدخلها (`stamps.py`)، و`--force` يعيدها؛ وتصحيحات الكتاب اليدوية (`corrections.py`)
 تُطبَّق على مخرج مرحلتها بأسبابها.
@@ -14,7 +14,18 @@ import sys
 from collections.abc import Callable
 from typing import Any
 
-from . import checks, corrections, examples, fusion, images, layout, objectives, stamps, tables
+from . import (
+    checks,
+    corrections,
+    examples,
+    fusion,
+    images,
+    layout,
+    lesson,
+    objectives,
+    stamps,
+    tables,
+)
 from .config import Book
 
 
@@ -95,6 +106,18 @@ def stage_fusion(book: Book) -> None:
     print(json.dumps(fusion.summarize(result), ensure_ascii=False))
 
 
+def stage_lesson(book: Book) -> None:
+    path = book.output("objectives")
+    objectives = (
+        json.loads(path.read_text(encoding="utf-8"))
+        if path.exists()
+        else {"lexicon_version": None, "lessons": {}}
+    )
+    result = lesson.run(book, _layout(book), objectives)
+    _write(book.output("lesson"), result)
+    print(json.dumps(lesson.summarize(result), ensure_ascii=False))
+
+
 def stage_checks(book: Book) -> None:
     result = checks.run(book, _layout(book))
     _emit(book, "checks", book.out / "checks.json", result)
@@ -116,6 +139,7 @@ STAGES: dict[str, Callable[[Book], Any]] = {
     "examples": stage_examples,
     "fusion": stage_fusion,
     "checks": stage_checks,
+    "lesson": stage_lesson,
 }
 
 
@@ -158,6 +182,7 @@ def main(argv: list[str] | None = None) -> int:
             "examples",
             "fusion",
             "checks",
+            "lesson",
         ]
     try:
         for name in todo:
