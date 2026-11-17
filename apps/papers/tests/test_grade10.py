@@ -22,12 +22,21 @@ from apps.planning.domain.semester_plan import load_term_plan
 
 FINAL = "g10-s1-2026-27-final"
 UNIT_1 = {"1.1", "1.2", "1.3"}
-# خانات الوحدة 1 في جدول المواصفات: (السؤال، الدرس، النوع، المستوى)
-UNIT_1_SLOTS = [
+UNIT_2A = {"2.1", "2.2", "2.3", "2.5", "2.6"}
+READY = UNIT_1 | UNIT_2A
+# خانات الوحدتين 1 و2 (أ) في جدول المواصفات بترتيب الورقة: (السؤال، الدرس، النوع، المستوى)
+READY_SLOTS = [
     (1, "1.1", "mcq", "K"),
     (2, "1.2", "mcq", "A"),
+    (3, "2.1", "mcq", "K"),
+    (4, "2.2", "mcq", "K"),
+    (5, "2.3", "mcq", "K"),
+    (6, "2.5", "mcq", "A"),
     (11, "1.3", "essay", "K"),
     (11, "1.2", "essay", "K"),
+    (12, "2.6", "essay", "A"),
+    (13, "2.5", "essay", "A"),
+    (14, "2.2", "essay", "K"),
 ]
 
 
@@ -41,6 +50,8 @@ def test_scope_guard_reports_each_kind_of_violation():
     plan = load_term_plan()
     sample = REGISTRY[(GRADE10_SLUG, "1.1")][0]
     added = {"2.5": 5, "1.4": 1, "2.6": None}
+    # الدروس المضافة قد يكون لها مولّدات حقيقية: تُستبدل صيغها مؤقتًا ثم يُعاد السجلّان كما كانا.
+    registry, examples = dict(REGISTRY), dict(SKILL_EXAMPLES)
     try:
         for lesson, example in added.items():
             REGISTRY[(GRADE10_SLUG, lesson)] = [sample]
@@ -48,9 +59,9 @@ def test_scope_guard_reports_each_kind_of_violation():
                 SKILL_EXAMPLES[(GRADE10_SLUG, lesson, sample.__name__)] = example
         found = out_of_scope(GRADE10_SLUG, plan.enrichment_lessons, plan.enrichment_examples)
     finally:
-        for lesson in added:
-            del REGISTRY[(GRADE10_SLUG, lesson)]
-            SKILL_EXAMPLES.pop((GRADE10_SLUG, lesson, sample.__name__), None)
+        for store, saved in ((REGISTRY, registry), (SKILL_EXAMPLES, examples)):
+            store.clear()
+            store.update(saved)
     name = sample.__name__
     assert found == [f"1.4:{name} درس إثرائي", f"2.5:{name} مثال إثرائي 5", f"2.6:{name} بلا رقم مثال"]
 
@@ -63,12 +74,12 @@ def test_declared_examples_exist_in_the_book_index():
         assert number in examples[lesson], (lesson, name, number)
 
 
-def test_unit_one_lessons_have_generators():
-    assert UNIT_1 <= available_lessons(GRADE10_SLUG)
+def test_ready_lessons_have_generators():
+    assert READY <= available_lessons(GRADE10_SLUG)
 
 
-@pytest.mark.parametrize(("question", "lesson", "kind", "level"), UNIT_1_SLOTS)
-def test_unit_one_slots_have_several_variants(question, lesson, kind, level):
+@pytest.mark.parametrize(("question", "lesson", "kind", "level"), READY_SLOTS)
+def test_ready_slots_have_several_variants(question, lesson, kind, level):
     """لكل خانة صيغتان على الأقل بمستواها ونوعها، فلا يتكرر السؤال نفسه في كل نموذج."""
     assert len(variants(lesson, kind, level, course=GRADE10_SLUG)) >= 2, (question, lesson)
 
@@ -85,15 +96,15 @@ def test_twenty_question_worksheet_for_every_grade10_lesson_and_level():
 
 
 @pytest.mark.django_db
-def test_blueprint_slots_of_unit_one_are_filled_at_their_level():
-    """خانات الوحدة 1 في الجدول المحمَّل تُملأ بنوعها ومستواها دون الرجوع إلى التوليد بلا قيد."""
+def test_blueprint_slots_of_ready_units_are_filled_at_their_level():
+    """خانات الوحدتين 1 و2 (أ) في الجدول المحمَّل تُملأ بنوعها ومستواها دون الرجوع إلى التوليد بلا قيد."""
     load_all()
     items = list(
-        BlueprintItem.objects.filter(blueprint__slug=FINAL, lesson__code__in=UNIT_1)
+        BlueprintItem.objects.filter(blueprint__slug=FINAL, lesson__code__in=READY)
         .select_related("lesson__course")
         .order_by("question_number", "position")
     )
-    assert [(i.question_number, i.lesson.code, i.kind, i.level) for i in items] == UNIT_1_SLOTS
+    assert [(i.question_number, i.lesson.code, i.kind, i.level) for i in items] == READY_SLOTS
     for seed in range(40):
         rng, used = random.Random(seed), set()
         for item in items:
@@ -115,8 +126,19 @@ def test_blueprint_slots_of_unit_one_are_filled_at_their_level():
 
 
 @pytest.mark.django_db
-def test_grade10_worksheet_is_built_for_a_unit_one_lesson():
+@pytest.mark.parametrize("lesson", ["1.3", "2.3", "2.5"])
+def test_grade10_worksheet_is_built_for_a_ready_lesson(lesson):
     load_all()
-    paper = services.build_worksheet("1.3", 8, 5, course=GRADE10_SLUG)
+    paper = services.build_worksheet(lesson, 8, 5, course=GRADE10_SLUG)
     assert len(paper["questions"]) == 8
-    assert {part["lesson"] for q in paper["questions"] for part in q["parts"]} == {"1.3"}
+    assert {part["lesson"] for q in paper["questions"] for part in q["parts"]} == {lesson}
+
+
+def test_vertex_form_in_lesson_2_5_keeps_leading_coefficient_one():
+    """المثال 5 من الدرس 2.5 (صيغة الرأس بمعامل رئيس غير الواحد) إثرائي: صيغة الرأس تبقى بمعامل واحد."""
+    from apps.papers.domain.generators import x
+    from apps.papers.domain.grade10_problems import vertex_form_by_completing_the_square
+
+    for seed in range(60):
+        check = vertex_form_by_completing_the_square(random.Random(seed)).check
+        assert check["f"].coeff(x, 2) == 1
