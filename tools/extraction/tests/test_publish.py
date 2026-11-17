@@ -72,7 +72,7 @@ def test_book_with_bad_publish_config_is_rejected(tmp_path):
 def test_load_builds_index_from_lessons_dir_then_loads(tmp_path, recorder, capsys):
     toy(tmp_path, load=LOAD)
     assert main([str(tmp_path), "load"]) == 0
-    assert [c[0] for c in recorder.calls] == ["build_grade10_index", "load_course"]
+    assert [c[0] for c in recorder.calls] == ["build_course_index", "load_course"]
     index_call = recorder.calls[0]
     assert index_call[index_call.index("--lessons-dir") + 1] == str(tmp_path / "lessons")
     assert recorder.calls[1] == ["load_course", "g10-s1"]

@@ -24,12 +24,21 @@ _FORBIDDEN = re.compile(
     r"For Qatar|Savvas|ISBN|MoE Use|\bPDF\b|\bp\d{3}\b|(?:ص|صفحة|صفحات|الصفحة|الصفحتين)\s*\.?\s*\d",
     re.IGNORECASE,
 )
-STANDARD_CODE = re.compile(r"^(?:12A|10)\.\d{1,2}\.\d{1,2}$")
+# رمز المعيار: صف (1 إلى 12) ثم حرف مسار اختياري ثم مجال ورقم، مثل 10.3.2 و12A.3.4 و7.1.12
+STANDARD_CODE = re.compile(r"^(?:[1-9]|1[0-2])[A-Z]?\.\d{1,2}\.\d{1,2}$")
+# رمز الدرس «وحدة.درس»، والوحدة حتى خانتين (كتب بعشر وحدات فأكثر)
+LESSON_CODE = r"^[1-9]\d?\.[1-9]\d?$"
+MAX_UNIT = 30
 PRACTICE_CODE = re.compile(r"^MP\.\d$")
 BLOOM_OR_UNCLASSIFIED = (*BLOOMS, "unclassified")  # الصنف الأخير: بند لم يُصنَّف فلا يُخمَّن
 SOURCES = ("authored", "extracted")  # صياغتنا من الدليل، أو مستخرج آليًا ومطابق للمعيار الذهبي
 STATUSES = ("draft", "reviewed")
 RANGE = re.compile(r"^\d{1,2}(?:\s*[-–]\s*\d{1,2})?(?:\s*[,،]\s*\d{1,2}(?:\s*[-–]\s*\d{1,2})?)*$")
+
+
+def lesson_sort_key(code: str) -> tuple[int, ...]:
+    """ترتيب عددي لرمز الدرس: 1.10 بعد 1.9 لا قبل 1.2."""
+    return tuple(int(part) for part in code.split("."))
 
 
 def safe_text(value: str) -> str:
@@ -110,7 +119,7 @@ def _range(value: str) -> str:
 
 
 class LessonData(_Strict):
-    lesson: str = Field(pattern=r"^\d\.\d{1,2}$")
+    lesson: str = Field(pattern=LESSON_CODE)
     source: Literal[*SOURCES] = "authored"  # type: ignore[valid-type]
     status: Literal[*STATUSES] = "reviewed"  # type: ignore[valid-type]
     title_en: Safe = ""
@@ -142,7 +151,7 @@ class ProjectData(_Strict):
 
 
 class UnitData(_Strict):
-    unit: int = Field(ge=1)
+    unit: int = Field(ge=1, le=MAX_UNIT)
     title: Safe
     big_idea: Safe = ""
     approach: Safe = ""

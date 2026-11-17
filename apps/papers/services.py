@@ -402,8 +402,17 @@ def recipe_hash(recipe: dict) -> str:
     return hashlib.sha1(canonical.encode("utf-8"), usedforsecurity=False).hexdigest()
 
 
+def _recipe_course(recipe: dict) -> Course | None:
+    """مقرر الوصفة (الفارغ = الحالي)؛ None إن لم يعد موجودًا فلا يمنع ذلك حفظ الورقة."""
+    try:
+        return selectors.course_by_slug(recipe.get("course", ""))
+    except selectors.UnknownCourseError:
+        return None
+
+
 def _summary(snapshot: dict, recipe: dict) -> dict:
     return {
+        "course": _recipe_course(recipe),
         "kind": snapshot["kind"],
         "blueprint": snapshot.get("blueprint", ""),
         "lesson_code": snapshot.get("lesson_code", ""),

@@ -1,6 +1,6 @@
 """مرحلتا load وpublish: تصلان خط الاستخراج بالطبقة القانونية في Django بأوامر الإدارة نفسها، فلا منطق ثانٍ للتحميل ولا للرفع.
 
-- `load`: يشتق فهرس الكتاب من سجلات الدروس (`build_grade10_index`، إن كان `load.index` مفعّلًا) ثم يحمّل المقرر بالمحمِّل الواحد (`load_course`).
+- `load`: يشتق فهرس الكتاب من سجلات الدروس (`build_course_index <المقرر>`، إن كان `load.index` مفعّلًا) ثم يحمّل المقرر بالمحمِّل الواحد (`load_course`).
 - `publish`: ينشر مقاطع الأمثلة (`dirs.<publish.clips>`) إلى تخزين الأصول (`publish_assets`)؛ يلزمه المقرر محمَّلًا فيأتي بعد `load`.
 
 الأمران يعملان على قاعدة البيانات والتخزين اللذين تحددهما بيئة التشغيل (`DATABASE_URL` و`ASSETS_*`)، كأنهما شُغِّلا يدويًا. الشيفرة هنا لا
@@ -117,7 +117,15 @@ def build_load(book: Book, lessons_dir: Path, run: Runner | None = None) -> dict
     index = None
     if cfg.get("index", False):
         index = run(
-            book, ["build_grade10_index", "--source", str(book.root), "--lessons-dir", str(lessons_dir)]
+            book,
+            [
+                "build_course_index",
+                cfg["course"],
+                "--source",
+                str(book.root),
+                "--lessons-dir",
+                str(lessons_dir),
+            ],
         )
     loaded = run(book, ["load_course", cfg["course"]])
     return {"course": cfg["course"], "index": index, "load": loaded}

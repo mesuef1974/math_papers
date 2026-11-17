@@ -1,10 +1,13 @@
 """العقد القانوني لمعرفة المقرر (رقم النسخة 1): الصيغة الوحيدة التي يقرؤها المحمِّل.
 
-مقرر = بيانات المقرر وقائمة دروسه (رمز وعنوان ووحدة) وملف معرفة لكل درس ووحدات ومبادئ تربوية. المصادر الممكنة:
-- مجلد في `apps/knowledge/data/courses/<المقرر>/` (`course.json` و`units.json` و`pedagogy.json` و`lessons/lesson_*.json`)
-  وهو للثاني عشر، نصه بصياغتنا؛
-- محوِّل من مصدر مشتق عدديًا (فهرس العاشر): لا نص دليل فيه، فحقوله النصية فارغة وبنوده أرقام وفئات مغلقة.
-تجزئة المحتوى (`content_hash`) تُحسب من العقد بعد التحقق، فهي واحدة أيًّا كان المصدر.
+مقرر = بيانات المقرر وقائمة دروسه (رمز وعنوان ووحدة) وملف معرفة لكل درس ووحدات ومبادئ تربوية.
+المصدر مجلد لكل مقرر `apps/knowledge/data/courses/<المقرر>/`، ووجود `course.json` فيه هو ما يسجّل المقرر: إضافة كتاب
+مجلدٌ جديد بلا تعديل شيفرة. في المجلد:
+- `course.json` (إلزامي): بيانات المقرر وقائمة دروسه؛
+- `lessons/lesson_*.json` و`units.json` و`pedagogy.json` (اختيارية): معرفة بصياغتنا؛
+- `index.json` (اختياري): فهرس مشتق عدديًا من خط الاستخراج (`course_index.py`)، بلا نص دليل، فحقول دروسه النصية فارغة.
+الدرس الواحد له مصدر واحد: ملف بصياغتنا أو سجل في الفهرس المشتق، لا كلاهما.
+تجزئة المحتوى (`content_hash`) تُحسب من العقد بعد التحقق، فهي واحدة أيًّا كان شكل المصدر.
 """
 
 from __future__ import annotations
@@ -17,10 +20,10 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from apps.curriculum.courses import GRADE10_SLUG, GRADE12_SLUG
-
-from .grade10_index import Grade10Index
+from .course_index import CourseIndex, LessonIndex
 from .schemas import (
+    LESSON_CODE,
+    MAX_UNIT,
     ExampleData,
     ExerciseGroupData,
     LessonData,
@@ -31,7 +34,9 @@ from .schemas import (
 
 SCHEMA_VERSION = 1
 COURSES_DIR = Path(__file__).resolve().parents[1] / "data" / "courses"
-GRADE10_INDEX_FILE = Path(__file__).resolve().parents[1] / "data" / "grade10_index.json"
+MANIFEST = "course.json"
+INDEX = "index.json"
+LANGUAGES = ("ar", "en")
 
 
 class _Strict(BaseModel):
@@ -39,18 +44,19 @@ class _Strict(BaseModel):
 
 
 class CourseMeta(_Strict):
-    slug: str = Field(pattern=r"^[a-z0-9-]+$", max_length=48)
-    title: str = Field(max_length=160)
+    slug: str = Field(pattern=r"^[a-z0-9]+(?:-[a-z0-9]+)*$", max_length=48)
+    title: str = Field(min_length=1, max_length=160)
     grade: int = Field(ge=1, le=12)
-    track: str = ""
+    track: str = Field(default="", max_length=60)
     semester: int = Field(ge=1, le=3)
-    edition: str = ""
+    edition: str = Field(default="", max_length=32)
+    language: Literal[*LANGUAGES] = "ar"  # type: ignore[valid-type]
 
 
 class LessonRef(_Strict):
-    code: str = Field(pattern=r"^\d\.\d{1,2}$")
-    title: str = Field(max_length=120)
-    unit: int = Field(ge=1)
+    code: str = Field(pattern=LESSON_CODE)
+    title: str = Field(min_length=1, max_length=120)
+    unit: int = Field(ge=1, le=MAX_UNIT)
     examinable: bool = True
 
 
@@ -66,9 +72,21 @@ class CourseKnowledge(_Strict):
         codes = [lesson.code for lesson in self.lessons]
         if len(codes) != len(set(codes)):
             raise ValueError("رمز درس مكرر في قائمة الدروس")
-        orphans = sorted(p.lesson for p in self.profiles if p.lesson not in set(codes))
+        mismatched = sorted(ref.code for ref in self.lessons if int(ref.code.split(".")[0]) != ref.unit)
+        if mismatched:
+            raise ValueError(f"وحدة الدرس لا تطابق رمزه: {', '.join(mismatched)}")
+        profiled = [p.lesson for p in self.profiles]
+        if len(profiled) != len(set(profiled)):
+            raise ValueError("أكثر من ملف معرفة للدرس الواحد")
+        orphans = sorted(set(profiled) - set(codes))
         if orphans:
             raise ValueError(f"ملف معرفة لدرس غير مذكور في قائمة الدروس: {', '.join(orphans)}")
+        units = [unit.unit for unit in self.units]
+        if len(units) != len(set(units)):
+            raise ValueError("رقم وحدة مكرر")
+        slugs = [note.slug for note in self.pedagogy]
+        if len(slugs) != len(set(slugs)):
+            raise ValueError("معرّف مبدأ تربوي مكرر")
 
     def content_hash(self) -> str:
         """sha256 للمحتوى المعيَّر: لا يتأثر بترتيب المفاتيح ولا بأسطر الملف ولا بمصدره."""
@@ -80,92 +98,94 @@ def _read(path: Path):
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def profile_from_index(lesson: LessonIndex) -> LessonData:
+    """سجل فهرس مشتق → ملف معرفة الدرس. لا نص: الأهداف بلوم فقط وحقول النص فارغة."""
+    return LessonData(
+        lesson=lesson.lesson,
+        source="extracted",
+        status="reviewed",  # الفهرس لا يُودَع قبل مطابقته للمعيار الذهبي
+        standards=lesson.standards,
+        practices=lesson.practices,
+        objectives=[ObjectiveData(bloom=b) for b in lesson.objectives_bloom],
+        examples=[ExampleData(number=e.n, representations=list(e.representations)) for e in lesson.examples],
+        exercise_groups=[
+            ExerciseGroupData(example=a.example, dok=a.dok, exercises=list(a.exercises))
+            for a in lesson.analysis
+        ],
+        task_basic=lesson.task_guide.basic if lesson.task_guide else "",
+        task_advanced=lesson.task_guide.advanced if lesson.task_guide else "",
+        quiz_depths=list(lesson.quiz_depths),
+        exercises_total=lesson.exercises_total,
+        vocab_new=lesson.vocabulary.new,
+        vocab_review=lesson.vocabulary.review,
+    )
+
+
+def read_index(directory: Path) -> CourseIndex | None:
+    path = directory / INDEX
+    return CourseIndex(**_read(path)) if path.is_file() else None
+
+
 def read_course_dir(directory: Path) -> CourseKnowledge:
-    manifest = _read(directory / "course.json")
-    return CourseKnowledge(
+    manifest = _read(directory / MANIFEST)
+    profiles = [LessonData(**_read(p)) for p in sorted((directory / "lessons").glob("lesson_*.json"))]
+    index = read_index(directory)
+    if index is not None:
+        profiles += [profile_from_index(lesson) for lesson in index.lessons]
+    units = directory / "units.json"
+    pedagogy = directory / "pedagogy.json"
+    knowledge = CourseKnowledge(
         schema_version=manifest["schema_version"],
         course=manifest["course"],
         lessons=manifest["lessons"],
-        profiles=[LessonData(**_read(p)) for p in sorted((directory / "lessons").glob("lesson_*.json"))],
-        units=[UnitData(**u) for u in _read(directory / "units.json")],
-        pedagogy=[PedagogyData(**n) for n in _read(directory / "pedagogy.json")],
-    )
-
-
-def grade10_to_contract(index: Grade10Index) -> CourseKnowledge:
-    """يحوّل فهرس العاشر المشتق إلى العقد. لا نص: العنوان «الدرس <رمز>» والأهداف بلوم فقط."""
-    profiles = []
-    for lesson in index.lessons:
-        profiles.append(
-            LessonData(
-                lesson=lesson.lesson,
-                source="extracted",
-                status="reviewed",  # الفهرس مطابق للمعيار الذهبي (36 من 36) قبل أن يُودَع
-                standards=lesson.standards,
-                practices=lesson.practices,
-                objectives=[ObjectiveData(bloom=b) for b in lesson.objectives_bloom],
-                examples=[
-                    ExampleData(number=e.n, representations=list(e.representations)) for e in lesson.examples
-                ],
-                exercise_groups=[
-                    ExerciseGroupData(example=a.example, dok=a.dok, exercises=list(a.exercises))
-                    for a in lesson.analysis
-                ],
-                task_basic=lesson.task_guide.basic if lesson.task_guide else "",
-                task_advanced=lesson.task_guide.advanced if lesson.task_guide else "",
-                quiz_depths=list(lesson.quiz_depths),
-                exercises_total=lesson.exercises_total,
-                vocab_new=lesson.vocabulary.new,
-                vocab_review=lesson.vocabulary.review,
-            )
-        )
-    return CourseKnowledge(
-        course=CourseMeta(
-            slug=GRADE10_SLUG,
-            title="الرياضيات: العاشر، الفصل الأول",
-            grade=10,
-            semester=1,
-        ),
-        lessons=[
-            LessonRef(code=lesson.lesson, title=f"الدرس {lesson.lesson}", unit=lesson.unit)
-            for lesson in index.lessons
-        ],
         profiles=profiles,
+        units=[UnitData(**u) for u in _read(units)] if units.is_file() else [],
+        pedagogy=[PedagogyData(**n) for n in _read(pedagogy)] if pedagogy.is_file() else [],
     )
+    if knowledge.course.slug != directory.name:
+        raise ValueError(f"اسم المجلد {directory.name} لا يطابق معرّف المقرر {knowledge.course.slug}")
+    return knowledge
 
 
-def _grade10() -> CourseKnowledge:
-    return grade10_to_contract(Grade10Index(**_read(GRADE10_INDEX_FILE)))
+def source_slugs(root: Path | None = None) -> list[str]:
+    """المقررات ذات المصدر: كل مجلد فيه `course.json`، بترتيب ثابت."""
+    root = root or COURSES_DIR
+    return sorted(p.parent.name for p in root.glob(f"*/{MANIFEST}"))
 
 
-def _grade12() -> CourseKnowledge:
-    return read_course_dir(COURSES_DIR / GRADE12_SLUG)
+def course_dir(slug: str, root: Path | None = None) -> Path:
+    root = root or COURSES_DIR
+    if slug not in source_slugs(root):
+        raise KeyError(f"لا مصدر معرفة للمقرر {slug}؛ المتاح: {', '.join(source_slugs(root))}")
+    return root / slug
 
 
-# المقرر -> (قارئ المصدر، الملفات التي تحدد تجزئته لتخزين حسابها مؤقتًا)
-SOURCES = {
-    GRADE12_SLUG: (_grade12, lambda: sorted((COURSES_DIR / GRADE12_SLUG).rglob("*.json"))),
-    GRADE10_SLUG: (_grade10, lambda: [GRADE10_INDEX_FILE]),
-}
+def read_source(slug: str, root: Path | None = None) -> CourseKnowledge:
+    return read_course_dir(course_dir(slug, root))
 
 
-def source_slugs() -> list[str]:
-    return list(SOURCES)
+def _signature(directory: Path) -> tuple:
+    files = sorted(directory.rglob("*.json"))
+    return tuple((str(f), f.stat().st_size, f.stat().st_mtime_ns) for f in files)
 
 
-def read_source(slug: str) -> CourseKnowledge:
-    if slug not in SOURCES:
-        raise KeyError(f"لا مصدر معرفة للمقرر {slug}؛ المتاح: {', '.join(SOURCES)}")
-    return SOURCES[slug][0]()
+@lru_cache(maxsize=64)
+def _hash_for(directory: str, signature: tuple) -> str:
+    return read_course_dir(Path(directory)).content_hash()
 
 
-@lru_cache(maxsize=16)
-def _hash_for(slug: str, signature: tuple) -> str:
-    return read_source(slug).content_hash()
-
-
-def source_hash(slug: str) -> str:
+def source_hash(slug: str, root: Path | None = None) -> str:
     """تجزئة مصدر المقرر الحالية على القرص. يُخزَّن حسابها بتوقيع الملفات (المسار والحجم والتعديل)."""
-    files = SOURCES[slug][1]()
-    signature = tuple((str(f), f.stat().st_size, f.stat().st_mtime_ns) for f in files)
-    return _hash_for(slug, signature)
+    directory = course_dir(slug, root)
+    return _hash_for(str(directory), _signature(directory))
+
+
+@lru_cache(maxsize=64)
+def _index_for(directory: str, signature: tuple) -> CourseIndex | None:
+    return read_index(Path(directory))
+
+
+def source_index(slug: str, root: Path | None = None) -> CourseIndex | None:
+    """الفهرس المشتق لمقرر كما في ملفه (None لمقرر بلا فهرس مشتق)؛ يُعاد التحقق منه حين يتغير الملف فقط."""
+    directory = course_dir(slug, root)
+    return _index_for(str(directory), _signature(directory))

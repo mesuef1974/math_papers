@@ -27,6 +27,19 @@ Seed = Annotated[int, Field(ge=0, le=services.MAX_SEED)]
 LESSON_CODE_MAX = SavedPaper._meta.get_field("lesson_code").max_length
 
 
+class CourseOut(Schema):
+    slug: str
+    title: str
+    grade: int
+    track: str
+    semester: int
+    edition: str
+    language: str
+    is_current: bool
+    lesson_count: int
+    has_generators: bool
+
+
 class LessonOut(Schema):
     code: str
     title: str
@@ -239,6 +252,7 @@ class SavedPatchIn(Schema):
 class SavedSummaryOut(Schema):
     id: int
     title: str
+    course: str  # معرّف مقرر الورقة؛ فارغ لورقة لم تُربط بعد
     kind: str
     blueprint: str
     lesson_code: str
@@ -249,6 +263,10 @@ class SavedSummaryOut(Schema):
     generator_version: str
     created_at: datetime
     updated_at: datetime
+
+    @staticmethod
+    def resolve_course(obj: SavedPaper) -> str:
+        return obj.course.slug if obj.course_id else ""
 
 
 class SavedPaperOut(SavedSummaryOut):
@@ -261,6 +279,26 @@ REPLACE_EXHAUSTED = "تعذر إيجاد مسألة مختلفة لهذه الخ
 SAVED_LIMIT = f"بلغت الحد الأقصى ({services.MAX_SAVED_PER_USER} ورقة). احذف بعض الأوراق القديمة."
 SAVED_CONFLICT = "هذا التعديل يجعل الورقة نسخة من ورقة محفوظة أخرى."
 KIND_MISMATCH = "نوع الورقة في الوصفة لا يطابق اللقطة."
+
+
+@router.get("/courses", response=list[CourseOut])
+def courses(request: HttpRequest):
+    """المقررات المحمَّلة: ما تبني عليه الواجهة اختيار الكتاب، و`has_generators` يميّز ما له مولّدات أوراق."""
+    return [
+        {
+            "slug": row.slug,
+            "title": row.title,
+            "grade": row.grade,
+            "track": row.track,
+            "semester": row.semester,
+            "edition": row.edition,
+            "language": row.language,
+            "is_current": row.is_current,
+            "lesson_count": row.lesson_count,
+            "has_generators": bool(available_lessons(row.slug)),
+        }
+        for row in selectors.courses()
+    ]
 
 
 @router.get("/lessons", response=list[LessonOut])

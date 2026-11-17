@@ -46,8 +46,8 @@ def print_profile(user: AbstractBaseUser) -> dict[str, Any]:
 
 def saved_papers(user: AbstractBaseUser) -> QuerySet[SavedPaper]:
     """قائمة أوراق المعلم بلا لقطاتها (الأعمدة المختصرة تكفي القائمة)."""
-    return SavedPaper.objects.filter(owner=user).defer("snapshot", "recipe")
+    return SavedPaper.objects.filter(owner=user).select_related("course").defer("snapshot", "recipe")
 
 
 def saved_paper(user: AbstractBaseUser, pk: int) -> SavedPaper | None:
-    return SavedPaper.objects.filter(owner=user, pk=pk).first()
+    return SavedPaper.objects.filter(owner=user, pk=pk).select_related("course").first()

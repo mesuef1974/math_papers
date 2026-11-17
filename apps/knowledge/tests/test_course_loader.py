@@ -13,14 +13,14 @@ from apps.curriculum.models import Course, Lesson
 from apps.knowledge import models as km
 from apps.knowledge.domain import contract
 from apps.knowledge.domain.contract import CourseKnowledge, read_source, source_hash, source_slugs
-from apps.knowledge.selectors import grade10_index, grade10_index_from_tables, knowledge_state
+from apps.knowledge.selectors import course_index, course_index_from_tables, knowledge_state
 from apps.knowledge.services import load_all, load_contract, load_course
 
 pytestmark = pytest.mark.django_db
 
 
 def test_both_sources_validate_against_one_contract():
-    assert source_slugs() == [GRADE12_SLUG, GRADE10_SLUG]
+    assert source_slugs() == [GRADE10_SLUG, GRADE12_SLUG]  # كل مجلد فيه course.json، بترتيب ثابت
     for slug in source_slugs():
         knowledge = read_source(slug)
         assert isinstance(knowledge, CourseKnowledge) and knowledge.schema_version == 1
@@ -99,7 +99,7 @@ def test_grade10_enters_with_no_guide_text():
 
 def test_grade10_index_is_derivable_from_the_tables():
     load_course(GRADE10_SLUG)
-    assert grade10_index_from_tables().model_dump() == grade10_index().model_dump()
+    assert course_index_from_tables(GRADE10_SLUG).model_dump() == course_index(GRADE10_SLUG).model_dump()
 
 
 def test_loader_repairs_drift_in_new_tables():
@@ -147,6 +147,14 @@ def test_command_loads_one_or_all_and_rejects_bad_input(capsys):
 # --- /health/ ---
 
 
+def _copied_courses(tmp_path, monkeypatch):
+    """نسخة من مجلدات المقررات يُعدَّل فيها بأمان؛ المصادر تُكتشف من الجذر وقت النداء."""
+    root = tmp_path / "courses"
+    shutil.copytree(contract.COURSES_DIR, root)
+    monkeypatch.setattr(contract, "COURSES_DIR", root)
+    return root
+
+
 def test_health_reports_unloaded_then_ok(client):
     body = client.get("/health/").json()
     assert body["status"] == "degraded" and set(body["knowledge"].values()) == {"unloaded"}
@@ -169,9 +177,7 @@ def test_health_is_503_when_strict_and_not_loaded(client):
 
 @override_settings(KNOWLEDGE_HEALTH_STRICT=True)
 def test_health_turns_red_when_a_source_file_changes_without_loading(client, tmp_path, monkeypatch):
-    copy = tmp_path / "grade10_index.json"
-    shutil.copy(contract.GRADE10_INDEX_FILE, copy)
-    monkeypatch.setattr(contract, "GRADE10_INDEX_FILE", copy)
+    copy = _copied_courses(tmp_path, monkeypatch) / GRADE10_SLUG / contract.INDEX
     load_all()
     assert client.get("/health/").status_code == 200
 
@@ -187,9 +193,7 @@ def test_health_turns_red_when_a_source_file_changes_without_loading(client, tmp
 
 
 def test_source_hash_tracks_file_changes_not_calls(tmp_path, monkeypatch):
-    copy = tmp_path / "grade10_index.json"
-    shutil.copy(contract.GRADE10_INDEX_FILE, copy)
-    monkeypatch.setattr(contract, "GRADE10_INDEX_FILE", copy)
+    copy = _copied_courses(tmp_path, monkeypatch) / GRADE10_SLUG / contract.INDEX
     before = source_hash(GRADE10_SLUG)
     assert source_hash(GRADE10_SLUG) == before
     data = json.loads(copy.read_text(encoding="utf-8"))

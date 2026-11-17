@@ -16,7 +16,7 @@ from apps.curriculum.courses import GRADE12_SLUG
 from apps.curriculum.models import Course, Lesson
 
 from .domain.contract import SCHEMA_VERSION, CourseKnowledge, CourseMeta, read_source, source_slugs
-from .domain.schemas import LessonData, PedagogyData, UnitData
+from .domain.schemas import LessonData, PedagogyData, UnitData, lesson_sort_key
 from .models import (
     ExerciseGroup,
     ExerciseTemplate,
@@ -186,7 +186,12 @@ def _sync_course(meta: CourseMeta, report: LoadReport) -> Course:
 def _sync_lessons(contract: CourseKnowledge, course: Course, report: LoadReport) -> dict[str, Lesson]:
     existing = {lesson.code: lesson for lesson in Lesson.objects.filter(course=course)}
     for ref in contract.lessons:
-        wanted = {"title": ref.title, "unit": ref.unit, "examinable": ref.examinable}
+        wanted = {
+            "title": ref.title,
+            "unit": ref.unit,
+            "number": lesson_sort_key(ref.code)[1],
+            "examinable": ref.examinable,
+        }
         lesson = existing.get(ref.code)
         if lesson is None:
             existing[ref.code] = Lesson.objects.create(course=course, code=ref.code, **wanted)

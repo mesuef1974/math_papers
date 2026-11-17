@@ -47,12 +47,43 @@ def test_two_courses_hold_lessons_with_the_same_code():
     assert selectors.lessons().get(code="1.1") == first  # بلا مقرر: الحالي
 
 
-def test_duplicate_code_in_one_course_or_without_course_is_rejected():
+def test_duplicate_code_in_one_course_is_rejected_and_course_is_required():
     with pytest.raises(IntegrityError), transaction.atomic():
         Lesson.objects.create(course=Course.objects.get(slug=GRADE12_SLUG), code="1.1", title="مكرر", unit=1)
-    Lesson.objects.create(course=None, code="9.1", title="بلا مقرر", unit=9)
     with pytest.raises(IntegrityError), transaction.atomic():
-        Lesson.objects.create(course=None, code="9.1", title="مكرر", unit=9)
+        Lesson.objects.create(course=None, code="9.1", title="بلا مقرر", unit=9)
+    with pytest.raises(IntegrityError), transaction.atomic():
+        Blueprint.objects.create(
+            slug="no-course",
+            course=None,
+            title="بلا مقرر",
+            academic_year="2026-2027",
+            semester=1,
+            total_marks=10,
+        )
+    with pytest.raises(IntegrityError), transaction.atomic():
+        UnitProfile.objects.create(course=None, unit=9, title="بلا مقرر")
+    with pytest.raises(IntegrityError), transaction.atomic():
+        PedagogyNote.objects.create(course=None, slug="no-course", title="بلا مقرر", text="نص")
+
+
+def test_backfill_migrations_number_lessons_and_are_idempotent():
+    from django.apps import apps
+
+    number_migration = importlib.import_module(
+        "apps.curriculum.migrations.0011_backfill_lesson_number_and_course"
+    )
+    knowledge_migration = importlib.import_module("apps.knowledge.migrations.0006_backfill_course")
+    planning_migration = importlib.import_module("apps.planning.migrations.0003_backfill_lesson")
+    # دروس الثاني عشر زُرعت قبل عمود الرقم: الهجرة ملأته من الرمز
+    seeded = {row.code: row.number for row in Lesson.objects.filter(course__slug=GRADE12_SLUG)}
+    assert seeded["1.1"] == 1 and seeded["2.9"] == 9 and 0 not in seeded.values()
+    Lesson.objects.filter(code="2.9").update(number=0)
+    for _ in range(2):
+        number_migration.forwards(apps, None)
+        knowledge_migration.forwards(apps, None)
+        planning_migration.forwards(apps, None)
+    assert Lesson.objects.get(course__slug=GRADE12_SLUG, code="2.9").number == 9
 
 
 def test_only_one_course_is_current():

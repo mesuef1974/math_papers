@@ -1,4 +1,4 @@
-"""فهرس العاشر المشتق: المخطط صارم، والباني يُبقي الأرقام والفئات المغلقة فقط، والملف المودَع سليم ولا نص دليل فيه."""
+"""الفهرس المشتق للمقرر (والعاشر أول مقرر به): المخطط صارم، والباني يُبقي الأرقام والفئات المغلقة فقط، والملف المودَع سليم ولا نص دليل فيه."""
 
 import json
 import re
@@ -6,14 +6,18 @@ import re
 import pytest
 from pydantic import ValidationError
 
-from apps.knowledge.domain.grade10_index import (
+from apps.curriculum.courses import GRADE10_SLUG, GRADE12_SLUG
+from apps.knowledge.domain.contract import COURSES_DIR, INDEX, read_course_dir
+from apps.knowledge.domain.course_index import (
     BLOOM_VALUES,
-    Grade10Index,
-    Grade10Lesson,
+    CourseIndex,
+    LessonIndex,
     build_index,
     build_lesson_index,
 )
-from apps.knowledge.selectors import GRADE10_INDEX, grade10_index, grade10_lesson
+from apps.knowledge.selectors import course_index, lesson_index
+
+GRADE10_INDEX = COURSES_DIR / GRADE10_SLUG / INDEX
 
 
 def field(value):
@@ -62,7 +66,7 @@ def lesson_output(**over):
 
 
 def test_builder_keeps_only_numbers_and_closed_categories():
-    rec = build_lesson_index(lesson_output())
+    rec = build_lesson_index(lesson_output(), 10)
     assert rec["standards"] == ["10.2.2"]
     assert rec["objectives_bloom"] == ["تطبيق", "unclassified"]
     assert [e["n"] for e in rec["examples"]] == [1, 2]
@@ -76,35 +80,35 @@ def test_builder_keeps_only_numbers_and_closed_categories():
     assert rec["task_guide"] == {"basic": "1-4, 9", "advanced": "2-9"}
     assert rec["quiz_depths"] == [1, 2, 2]
     assert rec["vocabulary"] == {"new": 2, "review": 1}
-    assert Grade10Lesson(**rec)
+    assert LessonIndex(**rec)
 
 
 def test_no_source_text_survives_the_builder():
-    dumped = json.dumps(build_lesson_index(lesson_output()), ensure_ascii=False)
+    dumped = json.dumps(build_lesson_index(lesson_output(), 10), ensure_ascii=False)
     for leaked in ("نص هدف", "عنوان", "معادلة", "solution", "استعمال"):
         assert leaked not in dumped
 
 
 def test_task_guide_that_is_not_a_numeric_range_is_dropped():
     bad = lesson_output(task_guide=field({"basic": "انظر الدليل", "advanced": "2-9"}))
-    assert build_lesson_index(bad)["task_guide"] is None
+    assert build_lesson_index(bad, 10)["task_guide"] is None
 
 
 def test_schema_rejects_free_text_and_unknown_fields():
-    rec = build_lesson_index(lesson_output())
+    rec = build_lesson_index(lesson_output(), 10)
     with pytest.raises(ValidationError):
-        Grade10Lesson(**rec | {"title": "عنوان الدرس"})
+        LessonIndex(**rec | {"title": "عنوان الدرس"})
     with pytest.raises(ValidationError):
-        Grade10Lesson(**rec | {"objectives_bloom": ["نص حر"]})
+        LessonIndex(**rec | {"objectives_bloom": ["نص حر"]})
     with pytest.raises(ValidationError):
-        Grade10Lesson(**rec | {"task_guide": {"basic": "نص", "advanced": "1-2"}})
+        LessonIndex(**rec | {"task_guide": {"basic": "نص", "advanced": "1-2"}})
     with pytest.raises(ValidationError):
-        Grade10Lesson(**rec | {"examples": [{"n": 1, "representations": ["غير معروف"]}]})
+        LessonIndex(**rec | {"examples": [{"n": 1, "representations": ["غير معروف"]}]})
 
 
 def test_index_orders_lessons_numerically():
     lessons = [lesson_output(id="2.10"), lesson_output(id="2.2"), lesson_output(id="1.4")]
-    assert [x.lesson for x in build_index(lessons).lessons] == ["1.4", "2.2", "2.10"]
+    assert [x.lesson for x in build_index(lessons, 10).lessons] == ["1.4", "2.2", "2.10"]
 
 
 # --- الملف المودَع ---
@@ -113,7 +117,7 @@ EXPECTED = ["1.1", "1.2", "1.3", "1.4"] + [f"2.{n}" for n in range(1, 11)] + [f"
 
 
 def test_committed_index_is_valid_and_complete():
-    index = grade10_index()
+    index = course_index(GRADE10_SLUG)
     assert [x.lesson for x in index.lessons] == EXPECTED
     for lesson in index.lessons:
         assert lesson.unit == int(lesson.lesson[0])
@@ -129,7 +133,7 @@ def test_committed_index_is_valid_and_complete():
 
 def test_committed_index_roundtrips_byte_for_byte():
     raw = GRADE10_INDEX.read_text(encoding="utf-8")
-    again = json.dumps(Grade10Index(**json.loads(raw)).model_dump(), ensure_ascii=False, indent=1) + "\n"
+    again = json.dumps(CourseIndex(**json.loads(raw)).model_dump(), ensure_ascii=False, indent=1) + "\n"
     assert raw == again
 
 
@@ -140,9 +144,28 @@ def test_committed_index_holds_no_arabic_prose():
     assert set(strings) <= allowed
 
 
-def test_selector_finds_a_lesson():
-    assert grade10_lesson("3.5").unit == 3
-    assert grade10_lesson("9.9") is None
+def test_selector_finds_a_lesson_in_its_own_course():
+    assert lesson_index(GRADE10_SLUG, "3.5").unit == 3
+    assert lesson_index(GRADE10_SLUG, "9.9") is None
+    # الرمز نفسه في مقرر بلا فهرس مشتق أو بلا مصدر ليس درس العاشر
+    assert lesson_index(GRADE12_SLUG, "3.5") is None
+    assert lesson_index("g7-s1", "3.5") is None
+    with pytest.raises(KeyError, match="لا فهرس مشتق"):
+        course_index(GRADE12_SLUG)
+
+
+def test_builder_keeps_only_the_standards_of_the_course_grade():
+    record = lesson_output(standards=field(["10.2.2", "9.1.4", "12A.3.4", "نص"]))
+    assert build_lesson_index(record, 10)["standards"] == ["10.2.2"]
+    assert build_lesson_index(record, 12)["standards"] == ["12A.3.4"]
+    assert build_lesson_index(record, 9)["standards"] == ["9.1.4"]
+
+
+def test_index_accepts_two_digit_units_and_rejects_duplicates():
+    late = build_lesson_index(lesson_output(id="12.3", unit=12), 10)
+    assert LessonIndex(**late).unit == 12
+    with pytest.raises(ValidationError, match="مكرر"):
+        CourseIndex(lessons=[late, late])
 
 
 def test_index_command_reads_lessons_dir_override(tmp_path):
@@ -151,10 +174,39 @@ def test_index_command_reads_lessons_dir_override(tmp_path):
     folder = tmp_path / "records"
     folder.mkdir()
     (folder / "lesson_2_1.json").write_text(json.dumps(lesson_output()), encoding="utf-8")
-    target = tmp_path / "index.json"
-    call_command("build_grade10_index", source=str(tmp_path), lessons_dir=str(folder), target=str(target))
-    assert [lesson["lesson"] for lesson in json.loads(target.read_text(encoding="utf-8"))["lessons"]] == [
+    courses = tmp_path / "courses"
+    new_course = {"title": "الرياضيات: السابع، الفصل الثاني", "grade": 10, "semester": 2}
+    common = {"source": str(tmp_path), "courses_dir": str(courses)}
+    with pytest.raises(Exception, match="--title"):
+        call_command(
+            "build_course_index", "g7-s2", lessons_dir=str(folder), **common
+        )  # مقرر جديد بلا بياناته
+    call_command("build_course_index", "g7-s2", lessons_dir=str(folder), **common, **new_course)
+    target = courses / "g7-s2"
+    assert [x["lesson"] for x in json.loads((target / INDEX).read_text(encoding="utf-8"))["lessons"]] == [
         "2.1"
     ]
+    knowledge = read_course_dir(target)
+    assert knowledge.course.slug == "g7-s2" and knowledge.course.language == "ar"
+    assert [(ref.code, ref.title, ref.unit) for ref in knowledge.lessons] == [("2.1", "الدرس 2.1", 2)]
+    assert [p.source for p in knowledge.profiles] == ["extracted"]
+
+    # إعادة البناء: درس جديد يُضاف، والعنوان المعدَّل يدويًا يبقى، والملفات تُكتب بايتًا ببايت
+    manifest = json.loads((target / "course.json").read_text(encoding="utf-8"))
+    manifest["lessons"][0]["title"] = "عنوان مراجَع"
+    (target / "course.json").write_text(json.dumps(manifest, ensure_ascii=False), encoding="utf-8")
+    (folder / "lesson_2_10.json").write_text(json.dumps(lesson_output(id="2.10")), encoding="utf-8")
+    (folder / "lesson_2_2.json").write_text(json.dumps(lesson_output(id="2.2")), encoding="utf-8")
+    call_command("build_course_index", "g7-s2", lessons_dir=str(folder), **common)
+    first = {f.name: f.read_bytes() for f in target.iterdir()}
+    refs = read_course_dir(target).lessons
+    assert [(ref.code, ref.title) for ref in refs] == [
+        ("2.1", "عنوان مراجَع"),
+        ("2.2", "الدرس 2.2"),
+        ("2.10", "الدرس 2.10"),
+    ]
+    call_command("build_course_index", "g7-s2", lessons_dir=str(folder), **common)
+    assert {f.name: f.read_bytes() for f in target.iterdir()} == first
+
     with pytest.raises(Exception, match="lesson_"):
-        call_command("build_grade10_index", source=str(tmp_path), target=str(target))  # لا lessons تحت المصدر
+        call_command("build_course_index", "g7-s2", **common)  # لا lessons تحت المصدر

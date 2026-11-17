@@ -7,6 +7,8 @@ from datetime import datetime
 from django.contrib.auth.models import AbstractBaseUser
 
 from apps.assets.storage import Storage, get_storage
+from apps.curriculum import selectors as curriculum
+from apps.curriculum.models import Lesson
 from apps.papers import services as papers
 
 from . import selectors
@@ -35,15 +37,27 @@ def _section(value: str) -> str:
     return section
 
 
+def _lesson(course: str, code: str) -> Lesson:
+    """درس السجل في مقرره؛ الرمز وحده لا يكفي فهو يتكرر بين الكتب."""
+    try:
+        lesson = curriculum.lessons(curriculum.course_by_slug(course)).filter(code=code).first()
+    except curriculum.UnknownCourseError as error:
+        raise PlanningError(f"المقرر غير موجود: {course}") from error
+    if lesson is None:
+        raise PlanningError(f"الدرس {code} غير موجود في المقرر {course}")
+    return lesson
+
+
 def record_outcome(
-    owner: AbstractBaseUser, section: str, outcome: ClassOutcome
+    owner: AbstractBaseUser, section: str, outcome: ClassOutcome, course: str = selectors.PLAN_COURSE
 ) -> tuple[ClassOutcomeRecord, bool]:
-    """يحفظ آخر نتيجة لشعبة في درس؛ idempotent: التكرار يحدّث السجل نفسه ولا يضاعفه."""
+    """يحفظ آخر نتيجة لشعبة في درس من مقرر؛ idempotent: التكرار يحدّث السجل نفسه ولا يضاعفه."""
     return ClassOutcomeRecord.objects.update_or_create(
         owner=owner,
         section=_section(section),
-        lesson_code=outcome.lesson_id,
+        lesson=_lesson(course, outcome.lesson_id),
         defaults={
+            "lesson_code": outcome.lesson_id,
             "attempted": outcome.attempted,
             "correct": outcome.correct,
             "pace": outcome.pace,
@@ -53,15 +67,21 @@ def record_outcome(
 
 
 def save_run_report(
-    owner: AbstractBaseUser, section: str, lesson_code: str, run: LessonRun, started_at: datetime
+    owner: AbstractBaseUser,
+    section: str,
+    lesson_code: str,
+    run: LessonRun,
+    started_at: datetime,
+    course: str = selectors.PLAN_COURSE,
 ) -> tuple[LessonRunRecord, bool]:
     """يحفظ تقرير حصة (المخطط مقابل الفعلي لكل طور)؛ المفتاح بداية الحصة فتكرار الحفظ لا يضاعف التقرير."""
     return LessonRunRecord.objects.update_or_create(
         owner=owner,
         section=_section(section),
-        lesson_code=lesson_code,
+        lesson=_lesson(course, lesson_code),
         started_at=started_at,
         defaults={
+            "lesson_code": lesson_code,
             "period_minutes": run.flow.period_minutes,
             "finished": run.finished,
             "phases": [
@@ -86,7 +106,8 @@ def prepare_deck(course_slug: str, lesson_code: str, period_minutes: int) -> str
     if not assets:
         raise DeckError(f"لا مقاطع أمثلة منشورة للدرس {lesson_code} في المقرر {course_slug}")
     try:
-        selectors.lesson_flow(lesson_code, period_minutes)  # يفشل مبكرًا إن استحال توزيع الزمن
+        # يفشل مبكرًا إن غاب الدرس من فهرس مقرره أو استحال توزيع الزمن
+        selectors.lesson_flow(lesson_code, period_minutes, course=course_slug)
     except KeyError as error:
         raise DeckError(f"الدرس {lesson_code} غير موجود في فهرس المقرر") from error
     except PlanningError as error:
@@ -117,7 +138,7 @@ def build_lesson_deck(
     assets = selectors.deck_assets(course_slug, lesson_code)
     try:
         content = LessonContent(title=assets[0].lesson.title, examples=selectors.clips_of(assets, storage))
-        deck = selectors.lesson_deck(lesson_code, content, period_minutes)
+        deck = selectors.lesson_deck(lesson_code, content, period_minutes, course=course_slug)
         data = build_pptx(deck)
     except Exception as error:
         message = str(error) if isinstance(error, PlanningError) else "تعذّر بناء العرض"
