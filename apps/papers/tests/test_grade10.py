@@ -23,8 +23,9 @@ from apps.planning.domain.semester_plan import load_term_plan
 FINAL = "g10-s1-2026-27-final"
 UNIT_1 = {"1.1", "1.2", "1.3"}
 UNIT_2A = {"2.1", "2.2", "2.3", "2.5", "2.6"}
-READY = UNIT_1 | UNIT_2A
-# خانات الوحدتين 1 و2 (أ) في جدول المواصفات بترتيب الورقة: (السؤال، الدرس، النوع، المستوى)
+UNIT_2B = {"2.7", "2.8", "2.9", "2.10"}
+READY = UNIT_1 | UNIT_2A | UNIT_2B
+# خانات الوحدتين 1 و2 في جدول المواصفات بترتيب الورقة: (السؤال، الدرس، النوع، المستوى)
 READY_SLOTS = [
     (1, "1.1", "mcq", "K"),
     (2, "1.2", "mcq", "A"),
@@ -32,11 +33,16 @@ READY_SLOTS = [
     (4, "2.2", "mcq", "K"),
     (5, "2.3", "mcq", "K"),
     (6, "2.5", "mcq", "A"),
+    (7, "2.7", "mcq", "A"),
+    (8, "2.9", "mcq", "K"),
     (11, "1.3", "essay", "K"),
     (11, "1.2", "essay", "K"),
     (12, "2.6", "essay", "A"),
     (13, "2.5", "essay", "A"),
     (14, "2.2", "essay", "K"),
+    (15, "2.7", "essay", "K"),
+    (16, "2.8", "essay", "A"),
+    (17, "2.10", "essay", "A"),
 ]
 
 
@@ -97,7 +103,7 @@ def test_twenty_question_worksheet_for_every_grade10_lesson_and_level():
 
 @pytest.mark.django_db
 def test_blueprint_slots_of_ready_units_are_filled_at_their_level():
-    """خانات الوحدتين 1 و2 (أ) في الجدول المحمَّل تُملأ بنوعها ومستواها دون الرجوع إلى التوليد بلا قيد."""
+    """خانات الوحدتين 1 و2 في الجدول المحمَّل تُملأ بنوعها ومستواها دون الرجوع إلى التوليد بلا قيد."""
     load_all()
     items = list(
         BlueprintItem.objects.filter(blueprint__slug=FINAL, lesson__code__in=READY)
@@ -126,7 +132,7 @@ def test_blueprint_slots_of_ready_units_are_filled_at_their_level():
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize("lesson", ["1.3", "2.3", "2.5"])
+@pytest.mark.parametrize("lesson", ["1.3", "2.3", "2.5", "2.7", "2.9", "2.10"])
 def test_grade10_worksheet_is_built_for_a_ready_lesson(lesson):
     load_all()
     paper = services.build_worksheet(lesson, 8, 5, course=GRADE10_SLUG)

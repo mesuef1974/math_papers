@@ -1,7 +1,9 @@
 """كل جواب يُتحقق منه عدديًا بطريقة مستقلة عن طريقة بنائه، عبر بذور كثيرة."""
 
 import math
+import operator
 import random
+from fractions import Fraction
 
 import mpmath
 import pytest
@@ -494,7 +496,120 @@ def assert_perfect_square(c):
     assert number(f, at + 1) == pytest.approx(1) and number(f, at - 2) == pytest.approx(4)
 
 
+def denominators(c):
+    """جداء مقامات طرفي المعادلة النسبية كما كُتبت، قبل أي اختصار."""
+    return sp.denom(sp.together(c["lhs"])) * sp.denom(sp.together(c["rhs"]))
+
+
+def assert_rational_equation(c):
+    """الحلول جذور بسط الفرق بين الطرفين بعد اختصاره؛ وغير المقبول يُعدِم مقامًا ويحقق المعادلة بلا مقامات."""
+    numerator, _ = sp.fraction(sp.cancel(sp.together(c["lhs"] - c["rhs"])))
+    want = sorted(float(value) for value in c["solutions"])
+    assert real_roots(numerator) == pytest.approx(want, abs=TOL)
+    for value in c["solutions"]:
+        assert denominators(c).subs(x, value) != 0
+        assert number(c["lhs"] - c["rhs"], value) == pytest.approx(0, abs=TOL)
+    extraneous = c.get("extraneous", ())
+    for value in extraneous:
+        assert denominators(c).subs(x, value) == 0
+    if "cleared" in c:
+        every = sorted(float(value) for value in (*c["solutions"], *extraneous))
+        assert real_roots(c["cleared"]) == pytest.approx(every, abs=TOL)
+
+
+def assert_excluded_values(c):
+    assert real_roots(denominators(c)) == pytest.approx(sorted(float(v) for v in c["values"]), abs=TOL)
+
+
+def assert_work_rate(c):
+    """مجموع معدّلي العمل المنفردين يساوي معدّل العمل معًا، والنسبة بين المدتين كما في النص."""
+    first, second = c["times"]
+    assert first > 0 and second > 0 and c["answer"] in c["times"]
+    assert 1 / first + 1 / second == pytest.approx(1 / c["together"])
+    if "ratio" in c:
+        assert first == c["ratio"] * second
+
+
+def assert_system(c):
+    """حلول النظام من حلّال sympy لا من طريقة البناء: الأزواج الحقيقية المختلفة وعددها."""
+    found = sorted(
+        {
+            (float(sp.N(px)), float(sp.N(py)))
+            for px, py in sp.solve(c["equations"], [x, y])
+            if sp.im(px) == 0 and sp.im(py) == 0
+        }
+    )
+    if "count" in c:
+        assert len(found) == c["count"]
+    if "solutions" in c:
+        want = sorted((float(px), float(py)) for px, py in c["solutions"])
+        assert len(found) == len(want)
+        for got, expected in zip(found, want, strict=True):
+            assert got == pytest.approx(expected, abs=TOL)
+
+
+COMPARE = {"<": operator.lt, ">": operator.gt, "<=": operator.le, ">=": operator.ge}
+
+
+def horner(expr, at):
+    value = Fraction(0)
+    for coefficient in sp.Poly(expr, x).all_coeffs():
+        value = value * at + Fraction(int(coefficient.p), int(coefficient.q))
+    return value
+
+
+def in_piece(at, piece):
+    low, high, closed_low, closed_high = piece
+    above = low is None or at > low or (closed_low and at == low)
+    below = high is None or at < high or (closed_high and at == high)
+    return above and below
+
+
+def assert_inequality(c):
+    """على شبكة كثيفة تضم الأطراف: الانتماء إلى الفترات المكتوبة يساوي تحقق الشروط كلها بحساب كسري تام."""
+    for step in range(-60, 61):
+        at = Fraction(step, 4)
+        holds = all(COMPARE[op](horner(expr, at), 0) for expr, op in c["conditions"])
+        assert holds == any(in_piece(at, piece) for piece in c["pieces"]), at
+
+
+def assert_circle(c):
+    """نقاط تبعد عن المركز طول نصف القطر تحقق المعادلة، والمركز لا يحققها، والنقاط المعطاة على الدائرة."""
+    (h, k), length = c["center"], math.sqrt(c["radius2"])
+
+    def value(px, py):
+        return float(c["equation"].subs({x: px, y: py}))
+
+    for degrees in range(0, 360, 40):
+        angle = math.radians(degrees)
+        assert value(h + length * math.cos(angle), k + length * math.sin(angle)) == pytest.approx(0, abs=TOL)
+    assert value(h, k) == pytest.approx(-c["radius2"])
+    given = c.get("points", ())
+    for px, py in given:
+        assert math.hypot(px - h, py - k) == pytest.approx(length)
+    if c.get("diameter"):
+        (x1, y1), (x2, y2) = given
+        assert ((x1 + x2) / 2, (y1 + y2) / 2) == (h, k)
+        assert math.dist((x1, y1), (x2, y2)) == pytest.approx(2 * length)
+
+
+def assert_circle_position(c):
+    (h, k), (px, py) = c["center"], c["point"]
+    distance, length = math.hypot(px - h, py - k), math.sqrt(c["radius2"])
+    if math.isclose(distance, length, abs_tol=TOL):
+        assert c["position"] == "on"
+    else:
+        assert c["position"] == ("inside" if distance < length else "outside")
+
+
 CHECKS = {
+    "rational_equation": assert_rational_equation,
+    "excluded_values": assert_excluded_values,
+    "work_rate": assert_work_rate,
+    "system": assert_system,
+    "inequality": assert_inequality,
+    "circle": assert_circle,
+    "circle_position": assert_circle_position,
     "roots": assert_roots,
     "solution_count": assert_solution_count,
     "sign_change": assert_sign_change,
