@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import random
-from collections.abc import Callable
+from collections.abc import Callable, Collection, Mapping
 from dataclasses import dataclass, field, replace
 from functools import cache
 from typing import Any
@@ -63,14 +63,40 @@ class Problem:
 Generator = Callable[[random.Random], Problem]
 # المفتاح (معرّف المقرر، رمز الدرس): رمز الدرس وحده يتكرر بين المقررات.
 REGISTRY: dict[tuple[str, str], list[Generator]] = {}
+# رقم مثال الكتاب الذي تقيس الصيغة مهارته، بمفتاح (مقرر، درس، اسم الصيغة). يلزم كل مقرر له نطاق اختبار:
+# فيه أمثلة إثرائية لا يُبنى عليها سؤال (انظر out_of_scope).
+SKILL_EXAMPLES: dict[tuple[str, str, str], int] = {}
 
 
-def variant(lesson: str, course: str = DEFAULT_COURSE) -> Callable[[Generator], Generator]:
+def variant(
+    lesson: str, course: str = DEFAULT_COURSE, example: int | None = None
+) -> Callable[[Generator], Generator]:
     def register(fn: Generator) -> Generator:
         REGISTRY.setdefault((course, lesson), []).append(fn)
+        if example is not None:
+            SKILL_EXAMPLES[(course, lesson, fn.__name__)] = example
         return fn
 
     return register
+
+
+def out_of_scope(
+    course: str, enrichment_lessons: Collection[str], enrichment_examples: Mapping[str, Collection[int]]
+) -> list[str]:
+    """صيغ المقرر الخارجة عن نطاق الاختبار: درس إثرائي، أو مثال إثرائي، أو صيغة لم تصرّح بمثالها."""
+    found = []
+    for (registered, lesson), fns in sorted(REGISTRY.items()):
+        if registered != course:
+            continue
+        for fn in fns:
+            example = SKILL_EXAMPLES.get((course, lesson, fn.__name__))
+            if lesson in enrichment_lessons:
+                found.append(f"{lesson}:{fn.__name__} درس إثرائي")
+            elif example is None:
+                found.append(f"{lesson}:{fn.__name__} بلا رقم مثال")
+            elif example in enrichment_examples.get(lesson, ()):
+                found.append(f"{lesson}:{fn.__name__} مثال إثرائي {example}")
+    return found
 
 
 class LevelUnavailableError(LookupError):
@@ -1144,5 +1170,6 @@ def minimum_sum_of_squares(rng: random.Random) -> Problem:
     )
 
 
-# مولّدات الرسوم والمستويات في وحدتين مستقلتين تسجّلان نفسيهما في REGISTRY عند الاستيراد.
+# مولّدات الرسوم والمستويات ومقرر العاشر في وحدات مستقلة تسجّل نفسها في REGISTRY عند الاستيراد.
 from . import graph_problems, level_problems, sketch_problems  # noqa: E402, F401, I001
+from . import grade10_problems  # noqa: E402, F401, I001
