@@ -18,7 +18,7 @@ from django.db import transaction
 from apps.core.services import record_audit
 from apps.curriculum import selectors
 from apps.curriculum.courses import DEFAULT_COURSE
-from apps.curriculum.models import BlueprintItem, Course
+from apps.curriculum.models import Blueprint, BlueprintItem, Course
 
 from .domain.generators import (
     LEVEL_NAMES,
@@ -29,6 +29,7 @@ from .domain.generators import (
     generate,
     generator_version,
     lesson_levels,
+    variants,
 )
 from .domain.marking import marking
 from .models import PrintProfile, SavedPaper
@@ -55,6 +56,10 @@ QUIZ_MAX_LESSONS = 2
 
 class UnknownBlueprintError(LookupError):
     pass
+
+
+class BlueprintNotReadyError(LookupError):
+    """في الجدول خانة لدرس بلا مولّد من نوعها: جدول مقرر لم تُبنَ مولّداته بعد."""
 
 
 class UnknownLessonError(LookupError):
@@ -154,10 +159,26 @@ def paper_meta(kind: str, course: str = DEFAULT_COURSE, **extra: object) -> dict
     return {"kind": kind, "generator_version": generator_version(course), **extra}
 
 
+def blueprint_ready(blueprint: Blueprint) -> bool:
+    """كل خانة لها مولّد من نوعها في مقررها (المستوى والرسم يُرخيان عند التوليد، والنوع لا)."""
+    return all(
+        variants(item.lesson.code, item.kind, course=_course_slug(item.lesson.course))
+        for item in blueprint.items.all()
+    )
+
+
+def ready_blueprints() -> list[Blueprint]:
+    """الجداول المعروضة للتوليد: جدول يُحمَّل قبل مولّدات مقرره يبقى في القاعدة ولا يُعرض حتى تكتمل."""
+    rows = selectors.blueprints().prefetch_related("items__lesson__course")
+    return [blueprint for blueprint in rows if blueprint_ready(blueprint)]
+
+
 def build_exam(slug: str, seed: int | None = None, form: str = "A") -> dict:
     blueprint = selectors.blueprint_with_items(slug)
     if blueprint is None:
         raise UnknownBlueprintError(slug)
+    if not blueprint_ready(blueprint):
+        raise BlueprintNotReadyError(slug)
     seed = new_seed() if seed is None else seed
     course = _course_slug(blueprint.course)
     if form == "B":

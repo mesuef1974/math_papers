@@ -13,9 +13,16 @@ from typing import Any
 from django.db import transaction
 
 from apps.curriculum.courses import GRADE12_SLUG
-from apps.curriculum.models import Course, Lesson
+from apps.curriculum.models import Blueprint, BlueprintItem, Course, Lesson
 
-from .domain.contract import SCHEMA_VERSION, CourseKnowledge, CourseMeta, read_source, source_slugs
+from .domain.contract import (
+    SCHEMA_VERSION,
+    BlueprintData,
+    CourseKnowledge,
+    CourseMeta,
+    read_source,
+    source_slugs,
+)
 from .domain.schemas import LessonData, PedagogyData, UnitData, lesson_sort_key
 from .models import (
     ExerciseGroup,
@@ -204,6 +211,53 @@ def _sync_lessons(contract: CourseKnowledge, course: Course, report: LoadReport)
     return existing
 
 
+class BlueprintOwnerError(ValueError):
+    """جدول مواصفات بالمعرّف نفسه يملكه مقرر آخر: المعرّف فريد في المنصة كلها."""
+
+
+def _sync_blueprint(
+    data: BlueprintData, course: Course, lessons: dict[str, Lesson], report: LoadReport
+) -> None:
+    """جدول من العقد → `Blueprint` وخاناته: ينشئ ويحدّث ويحذف الخانة الزائدة، ولا يمسّ جدولًا ليس في العقد."""
+    wanted = data.model_dump(exclude={"slug", "items"})
+    blueprint = Blueprint.objects.filter(slug=data.slug).first()
+    if blueprint is None:
+        blueprint = Blueprint.objects.create(slug=data.slug, course=course, **wanted)
+        report.changed["blueprints"] += 1
+    elif blueprint.course_id != course.pk:
+        raise BlueprintOwnerError(f"جدول المواصفات {data.slug} يملكه مقرر آخر غير {course.slug}")
+    elif any(getattr(blueprint, key) != value for key, value in wanted.items()):
+        for key, value in wanted.items():
+            setattr(blueprint, key, value)
+        blueprint.save()
+        report.changed["blueprints"] += 1
+
+    extra = {(item.question_number, item.position): item for item in blueprint.items.all()}
+    for row in data.items:
+        slot = (row.question_number, row.position)
+        fields = {
+            "lesson_id": lessons[row.lesson].pk,
+            "kind": row.kind,
+            "marks": row.marks,
+            "level": row.level,
+            "needs_graph": row.needs_graph,
+        }
+        item = extra.pop(slot, None)
+        if item is None:
+            BlueprintItem.objects.create(
+                blueprint=blueprint, question_number=slot[0], position=slot[1], **fields
+            )
+            report.changed["blueprint_items"] += 1
+        elif any(getattr(item, key) != value for key, value in fields.items()):
+            for key, value in fields.items():
+                setattr(item, key, value)
+            item.save()
+            report.changed["blueprint_items"] += 1
+    if extra:
+        BlueprintItem.objects.filter(pk__in=[item.pk for item in extra.values()]).delete()
+        report.changed["blueprint_items"] += len(extra)
+
+
 def latest_release(course: Course) -> KnowledgeRelease | None:
     return course.knowledge_releases.first()
 
@@ -220,6 +274,8 @@ def load_contract(contract: CourseKnowledge) -> LoadReport:
         _load_unit(unit, course, report)
     for note in contract.pedagogy:
         _load_pedagogy(note, course, report)
+    for blueprint in contract.blueprints:
+        _sync_blueprint(blueprint, course, lessons, report)
     previous = latest_release(course)
     if previous is None or previous.content_hash != report.content_hash:
         KnowledgeRelease.objects.create(
