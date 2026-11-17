@@ -12,8 +12,13 @@ class UnknownCourseError(LookupError):
 
 
 def courses() -> QuerySet[Course]:
-    """كل المقررات بعدد دروسها، مرتبة بالصف فالمسار فالفصل."""
-    return Course.objects.annotate(lesson_count=Count("lessons"))
+    """كل المقررات بعدد دروسها، مرتبة بالصف فالمسار فالفصل فالطبعة.
+
+    الترتيب صريح: Django يُسقط `Meta.ordering` من استعلام التجميع (GROUP BY)، فيعود الترتيب لقاعدة البيانات.
+    """
+    return Course.objects.annotate(lesson_count=Count("lessons")).order_by(
+        "grade", "track", "semester", "edition"
+    )
 
 
 def current_course() -> Course | None:
