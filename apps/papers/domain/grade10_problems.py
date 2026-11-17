@@ -98,7 +98,9 @@ def parabola_opening_and_width(rng: random.Random) -> Problem:
     a = scale(rng)
 
     def describe(up: bool, narrow: bool) -> str:
-        return f"يفتح إلى {UP if up else DOWN}، وهو {'أضيق' if narrow else 'أوسع'} من التمثيل البياني للدالة $g$"
+        return (
+            f"يفتح إلى {UP if up else DOWN}، وهو {'أضيق' if narrow else 'أوسع'} من التمثيل البياني للدالة $g$"
+        )
 
     up, narrow = bool(a > 0), bool(abs(a) > 1)
     answer = describe(up, narrow)
@@ -211,8 +213,7 @@ def vertex_text(h: int, k: int) -> str:
 
 def translation_text(h: int, k: int) -> str:
     return (
-        f"إزاحة {units(abs(h))} إلى {RIGHT if h > 0 else LEFT}، "
-        f"و{units(abs(k))} إلى {UP if k > 0 else DOWN}"
+        f"إزاحة {units(abs(h))} إلى {RIGHT if h > 0 else LEFT}، و{units(abs(k))} إلى {UP if k > 0 else DOWN}"
     )
 
 
@@ -223,8 +224,7 @@ def vertex_and_axis_from_vertex_form(rng: random.Random) -> Problem:
     k = rng.choice([n for n in range(-8, 9) if n not in (0, h, -h)])
     return Problem(
         "1.2",
-        "حدّد إحداثيي رأس القطع المكافئ ومعادلة محور التماثل للدالة "
-        f"$f(x)={vertex_form(a, h, k)}$.",
+        f"حدّد إحداثيي رأس القطع المكافئ ومعادلة محور التماثل للدالة $f(x)={vertex_form(a, h, k)}$.",
         vertex_text(h, k),
         (vertex_text(-h, k), vertex_text(h, -k), vertex_text(k, h)),
         (

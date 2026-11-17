@@ -23,7 +23,12 @@ from apps.planning.domain.semester_plan import load_term_plan
 FINAL = "g10-s1-2026-27-final"
 UNIT_1 = {"1.1", "1.2", "1.3"}
 # خانات الوحدة 1 في جدول المواصفات: (السؤال، الدرس، النوع، المستوى)
-UNIT_1_SLOTS = [(1, "1.1", "mcq", "K"), (2, "1.2", "mcq", "A"), (11, "1.3", "essay", "K"), (11, "1.2", "essay", "K")]
+UNIT_1_SLOTS = [
+    (1, "1.1", "mcq", "K"),
+    (2, "1.2", "mcq", "A"),
+    (11, "1.3", "essay", "K"),
+    (11, "1.2", "essay", "K"),
+]
 
 
 def test_no_generator_is_built_on_enrichment_content():
@@ -95,11 +100,15 @@ def test_blueprint_slots_of_unit_one_are_filled_at_their_level():
             assert variants(item.lesson.code, item.kind, item.level, item.needs_graph, course=GRADE10_SLUG)
             problem = services.generate_for_slot(item, rng, used)
             used.add(problem.key)
-            slot = services.PartSlot("", item.lesson.code, item.lesson.title, item.kind, item.marks, item.level)
+            slot = services.PartSlot(
+                "", item.lesson.code, item.lesson.title, item.kind, item.marks, item.level
+            )
             part = services.render_part(problem, slot, rng)
             assert part["stem"] and part["steps"] and part["level"] == item.level
             if item.kind == BlueprintItem.Kind.MCQ:
-                assert len(set(part["options"])) == 4 and part["options"][part["answer_index"]] == part["answer"]
+                assert (
+                    len(set(part["options"])) == 4 and part["options"][part["answer_index"]] == part["answer"]
+                )
             else:
                 assert sum(row["marks"] for row in part["marking"]) == item.marks
         assert len(used) == len(items)
