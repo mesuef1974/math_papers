@@ -1,5 +1,6 @@
 """سطر أوامر الخط: python -m tools.extraction <مجلد الكتاب> <مرحلة> [...]
 
+مراحل الرؤية (خادم llama محلي يُشغَّل ويُغلق آليًا؛ مستأنَفة، وخارج `all` وأختامها): vision_pages، vision_examples، vision_vocab، reps (انظر `vision.py` و`reps.py`)؛ وتقبل `--pages A Z` و`--lessons 1.1 ...`.
 المراحل: validate (فحص book.yaml)، ocr (تصيير وقراءة؛ ببيئة guide_extract)، tables (جدول تحليل التمارين)، layout، images، objectives، examples، fusion (دمج OCR والرؤية والجدول)، checks، lesson (سجل الدرس)، all
 (الأربع الأخيرة بعد layout؛ وtables قبل layout حين layout.anchor=analysis). المخرجات في مجلد الكتاب خارج المستودع، ويطبع كل مرحلة ملخصها العددي.
 كل مرحلة تتخطى نفسها ما لم تتغير تجزئة مدخلها (`stamps.py`)، و`--force` يعيدها؛ وتصحيحات الكتاب اليدوية (`corrections.py`)
@@ -23,8 +24,10 @@ from . import (
     layout,
     lesson,
     objectives,
+    reps,
     stamps,
     tables,
+    vision,
 )
 from .config import Book
 
@@ -130,6 +133,34 @@ def stage_ocr(book: Book) -> None:
     print(json.dumps({"rendered": ocr.render(book), "read": ocr.run(book)}, ensure_ascii=False))
 
 
+def _with_vision(book: Book, stage: str, run: Callable[[Any], dict[str, Any]]) -> None:
+    from . import llama
+
+    with llama.serve(book, vision.model_size(book, stage)) as server:
+        print(json.dumps(run(llama.asker(server)), ensure_ascii=False))
+
+
+def run_vision_stage(book: Book, name: str, pages: list[int] | None, lessons: list[str] | None) -> None:
+    print(f"== {name}")
+    if name == "vision_pages":
+        first, last = pages or [1, book["pages"]]
+        _with_vision(book, "pages", lambda ask: vision.run_pages(book, ask, first, last))
+    elif name == "vision_examples":
+        _with_vision(book, "examples", lambda ask: vision.run_examples(book, ask, lessons))
+    elif name == "vision_vocab":
+        _with_vision(
+            book,
+            "vocab",
+            lambda ask: vision.run_vocab(
+                book, ask, [p for p in vision.opener_pages(book) if not pages or pages[0] <= p <= pages[1]]
+            ),
+        )
+    else:
+        _with_vision(book, "reps", lambda ask: reps.run(book, ask))
+
+
+VISION_STAGES = ("vision_pages", "vision_examples", "vision_vocab", "reps")
+
 STAGES: dict[str, Callable[[Book], Any]] = {
     "ocr": stage_ocr,
     "tables": stage_tables,
@@ -160,7 +191,15 @@ def run_stage(book: Book, name: str, force: bool = False) -> bool:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="python -m tools.extraction", description=__doc__)
     ap.add_argument("book", help="مجلد الكتاب (فيه book.yaml)")
-    ap.add_argument("stage", choices=["validate", "all", *STAGES])
+    ap.add_argument("stage", choices=["validate", "all", *STAGES, *VISION_STAGES])
+    ap.add_argument(
+        "--pages",
+        nargs=2,
+        type=int,
+        metavar=("من", "إلى"),
+        help="نطاق صفحات لمرحلتي vision_pages وvision_vocab",
+    )
+    ap.add_argument("--lessons", nargs="+", help="دروس vision_examples (مثل 1.1 1.2)؛ الافتراضي كلها")
     ap.add_argument("--force", action="store_true", help="يتجاوز أختام المراحل ويعيد التشغيل")
     args = ap.parse_args(argv)
     try:
@@ -170,6 +209,13 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     if args.stage == "validate":
         print("book.yaml سليم:", book.id)
+        return 0
+    if args.stage in VISION_STAGES:
+        try:
+            run_vision_stage(book, args.stage, args.pages, args.lessons)
+        except (OSError, RuntimeError) as e:
+            print(f"تعذّر تشغيل الرؤية: {e}", file=sys.stderr)
+            return 4
         return 0
     todo = [args.stage]
     if args.stage == "all":

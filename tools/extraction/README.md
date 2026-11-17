@@ -56,7 +56,17 @@ python -m tools.extraction <مجلد الكتاب> all          # layout ثم im
 (`ask(صورة، سؤال، مخطط) -> dict`) فلا يلزم المنطق نموذجًا في الاختبار. الإعداد `reps`: `questions` (تتقدم على `reps.QUESTIONS`)، `passes`
 (`kind`: `replace` بسؤال واحد بلا تصويت أو `add` بأغلبية ثلاث إجابات لأن النموذج غير حتمي؛ مع `src` و`dst` و`lessons` و`previous` و`questions`)،
 و`continuation` (`dst` و`groups` بمصادر مرتبة وأسئلة، وعتبات الصورة). `reps.run` يشغّل الكل مستأنَفًا، و`reps.evaluate` يقيس الإصدارات على
-الذهبي. ربطها بخادم الرؤية المحلي وبمرحلة في سطر الأوامر يأتي مع مشغّلي الرؤية.
+الذهبي. تُشغَّل بـ `python -m tools.extraction <كتاب> reps` فوق خادم الرؤية أدناه.
+
+## مراحل الرؤية وخادمها (`vision.py`، `llama.py`)
+
+أربع مراحل مستأنَفة خارج `all` وأختامها (تُشغَّل وتُغلق خادم llama محليًا آليًا، بلا نافذة): `vision_pages` (أرقام الأمثلة والتمارين ورموز MP لكل
+صفحة مصيَّرة → `dirs.vision`؛ `--pages من إلى`)، و`vision_examples` (شارات «مثال» ومقاطع الرأس والمصغّرة وتمثيلات القاعدة → `dirs.badges` و`dirs.crops`؛
+`--lessons 1.1 ...`)، و`vision_vocab` (بطاقة المصطلحات من افتتاحية كل درس → `dirs.vocab`)، و`reps`. المنطق يأخذ `ask(صورة، سؤال، مخطط)` مُحقَنًا
+(`llama.asker`) فيُختبر بجواب مختلق. الإعداد `vision` اختياري: `questions` (بالمعرّف)، `models_for` (حجم النموذج لكل مرحلة؛ الافتراضي pages وvocab
+`small` وexamples وreps `large`)، `examples` (هندسة الشارات: badge وright_x وthumb_x)، `vocab.card_box`، وإعداد المحرك (`engine` و`vendor` و`models_dir`
+و`models` و`contexts` و`port` و`ttl` و`max_life`؛ الافتراضي محرك LM Studio ومجلد `~/.cache/guide_extract/models`). فشل التشغيل يعيد الرمز 4. على كرت
+8 غ.ب لا تُشغَّل مع PaddleOCR معًا.
 
 ## المصدر والحالة
 
