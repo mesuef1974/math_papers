@@ -118,6 +118,7 @@ def test_committed_index_is_valid_and_complete():
     for lesson in index.lessons:
         assert lesson.unit == int(lesson.lesson[0])
         assert lesson.examples, lesson.lesson
+        assert lesson.practices, lesson.lesson
         assert lesson.analysis, lesson.lesson
         assert set(lesson.objectives_bloom) <= set(BLOOM_VALUES)
         example_numbers = {e.n for e in lesson.examples}

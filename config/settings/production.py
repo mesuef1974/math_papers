@@ -6,6 +6,9 @@ DEBUG = False
 # خلف وكيل Railway: الطلب يصل HTTP والـ X-Forwarded-Proto يحمل https.
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 SECURE_SSL_REDIRECT = env_bool("SECURE_SSL_REDIRECT", True)
+# فحص صحة Railway يطلب /health/ بـ HTTP من داخل الشبكة بلا X-Forwarded-Proto ولا يقبل إلا 200: تحويله 301 يُفشل
+# كل نشر (حادثة 2026-11-16). الاستثناء لمسار الصحة وحده، وجسمه بلا أسرار؛ كل مسار آخر يبقى محوَّلًا إلى HTTPS.
+SECURE_REDIRECT_EXEMPT = [r"^health/$"]
 TRUSTED_PROXY_COUNT = int(env("TRUSTED_PROXY_COUNT", "1"))
 SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
