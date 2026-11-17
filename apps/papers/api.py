@@ -323,7 +323,7 @@ def lessons(request: HttpRequest, course: str = ""):
 
 @router.get("/blueprints", response=list[BlueprintOut])
 def blueprints(request: HttpRequest):
-    return list(selectors.blueprints())
+    return services.ready_blueprints()
 
 
 @router.get("/papers/exam", response=PaperOut)
@@ -332,6 +332,8 @@ def exam(request: HttpRequest, query: Query[ExamQuery]):
         return services.build_exam(query.blueprint, query.seed, query.form)
     except services.UnknownBlueprintError as error:
         raise HttpError(404, "جدول المواصفات غير موجود") from error
+    except services.BlueprintNotReadyError as error:
+        raise HttpError(409, "جدول المواصفات لم تكتمل مولّدات دروسه بعد") from error
     except ExhaustedError as error:
         raise HttpError(409, EXHAUSTED) from error
 

@@ -172,3 +172,16 @@ def test_every_blueprint_slot_has_a_matching_variant():
     for item in BlueprintItem.objects.filter(blueprint__slug=SLUG).select_related("lesson"):
         assert item.level, item
         assert variants(item.lesson.code, item.kind, item.level, item.needs_graph), item
+
+
+def test_blueprint_without_generators_is_hidden_and_answers_409(client):
+    """جدول العاشر يُحمَّل قبل مولّداته: لا يُعرض للتوليد، وطلبه المباشر 409 لا خطأ خادم."""
+    from apps.knowledge.services import load_all
+
+    load_all()
+    pending = "g10-s1-2026-27-final"
+    assert Blueprint.objects.filter(slug=pending).exists()
+    assert [row["slug"] for row in client.get("/api/v1/blueprints").json()] == [SLUG]
+    res = client.get(f"/api/v1/papers/exam?blueprint={pending}&seed=1")
+    assert res.status_code == 409 and "مولّدات" in res.json()["detail"]
+    assert client.get(f"/api/v1/papers/bundle-plan?blueprint={pending}").json() == []
