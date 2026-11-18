@@ -92,7 +92,9 @@ def test_grade10_enters_with_no_guide_text():
         assert not profile.items.exists() and not profile.terms.exists() and not profile.templates.exists()
         assert all(o.text == "" for o in profile.objectives.all())
         assert all(e.skill == "" for e in profile.examples.all())
-        assert profile.lesson.title and profile.lesson.title != f"الدرس {profile.lesson.code}"  # عنوان الكتاب لا العنوان المؤقت
+        assert (
+            profile.lesson.title and profile.lesson.title != f"الدرس {profile.lesson.code}"
+        )  # عنوان الكتاب لا العنوان المؤقت
     assert not km.UnitProfile.objects.filter(course__slug=GRADE10_SLUG).exists()
     assert not km.PedagogyNote.objects.filter(course__slug=GRADE10_SLUG).exists()
 
