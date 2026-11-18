@@ -6,7 +6,12 @@
 - `course.json` (إلزامي): بيانات المقرر وقائمة دروسه؛
 - `lessons/lesson_*.json` و`units.json` و`pedagogy.json` (اختيارية): معرفة بصياغتنا؛
 - `index.json` (اختياري): فهرس مشتق عدديًا من خط الاستخراج (`course_index.py`)، بلا نص دليل، فحقول دروسه النصية فارغة؛
-- `blueprints.json` (اختياري): جداول مواصفات المقرر، أرقام فقط (سؤال وموضع ودرس ونوع ودرجة ومستوى)، بلا نص من وثيقة.
+- `blueprints.json` (اختياري): جداول مواصفات المقرر للاختبارات الأربعة في السنة (منتصف كل فصل ونهايته ونطاقه)،
+  أرقام فقط (سؤال وموضع ودرس ونوع ودرجة ومستوى)، بلا نص من وثيقة؛
+- `sources.json` (اختياري): الملفات المصدرية خارج المستودع بتجزئاتها، وإليها يشير كل ما اشتُق منها بمعرّفها؛
+- `term_plan.json` (اختياري): الخطة الفصلية للوزارة (أسابيع وبنود وحصص وإثرائي)؛
+- `past_exams.json` و`coverage.json` (اختياريان): اختبارات سابقة مسقَطة على الدروس، وتغطية المذكرات والحلول، أعدادًا فقط.
+التقويم الأكاديمي مشترك بين المقررات: ملف لكل سنة في `apps/knowledge/data/calendars/`.
 الدرس الواحد له مصدر واحد: ملف بصياغتنا أو سجل في الفهرس المشتق، لا كلاهما.
 تجزئة المحتوى (`content_hash`) تُحسب من العقد بعد التحقق، فهي واحدة أيًّا كان شكل المصدر. مقرر بلا جداول تجزئته كما كانت
 قبل دخول الجداول العقد.
@@ -33,12 +38,31 @@ from .schemas import (
     PedagogyData,
     UnitData,
 )
+from .sources import (
+    ASSESSMENTS,
+    SCOPES,
+    YEAR,
+    CalendarData,
+    CoverageData,
+    PastExamData,
+    SlotData,
+    SourceData,
+    TermPlanData,
+    repeated_slots,
+)
 
 SCHEMA_VERSION = 1
 COURSES_DIR = Path(__file__).resolve().parents[1] / "data" / "courses"
+CALENDARS_DIR = Path(__file__).resolve().parents[1] / "data" / "calendars"
 MANIFEST = "course.json"
 INDEX = "index.json"
 BLUEPRINTS = "blueprints.json"
+SOURCES = "sources.json"
+TERM_PLAN = "term_plan.json"
+PAST_EXAMS = "past_exams.json"
+COVERAGE = "coverage.json"
+# أقسام العقد الاختيارية: الفارغ منها خارج التجزئة، فدخول قسم جديد العقدَ لا يُصدر إصدارًا لمقرر لا يملكه
+OPTIONAL = ("blueprints", "sources", "term_plan", "past_exams", "coverage")
 LANGUAGES = ("ar", "en")
 SLUG = r"^[a-z0-9]+(?:-[a-z0-9]+)*$"
 
@@ -53,6 +77,7 @@ class CourseMeta(_Strict):
     grade: int = Field(ge=1, le=12)
     track: str = Field(default="", max_length=60)
     semester: int = Field(ge=1, le=3)
+    academic_year: str = Field(pattern=YEAR)
     edition: str = Field(default="", max_length=32)
     language: Literal[*LANGUAGES] = "ar"  # type: ignore[valid-type]
 
@@ -64,16 +89,7 @@ class LessonRef(_Strict):
     examinable: bool = True
 
 
-class BlueprintItemData(_Strict):
-    """خانة في جدول المواصفات: فرع من سؤال يقيس درسًا بنوع ودرجة ومستوى."""
-
-    question_number: int = Field(ge=1, le=99)
-    position: int = Field(default=1, ge=1, le=9)
-    lesson: str = Field(pattern=LESSON_CODE)
-    kind: Literal["mcq", "essay"]
-    marks: int = Field(ge=1, le=50)
-    level: Literal["K", "A", "R"] | None = None  # None = أي مستوى
-    needs_graph: bool = False
+BlueprintItemData = SlotData  # اسم قديم: خانة جدول المواصفات
 
 
 class BlueprintData(_Strict):
@@ -81,13 +97,15 @@ class BlueprintData(_Strict):
     title: str = Field(min_length=1, max_length=160)
     academic_year: str = Field(pattern=r"^\d{4}-\d{4}$")
     semester: int = Field(ge=1, le=3)
+    assessment: Literal[*ASSESSMENTS] = "final"  # type: ignore[valid-type]
+    scope: Literal[*SCOPES] = "full"  # type: ignore[valid-type]
     total_marks: int = Field(ge=1, le=200)
     is_forecast: bool
-    items: list[BlueprintItemData] = Field(min_length=1)
+    source: str | None = None  # معرّف ملفه في sources.json
+    items: list[SlotData] = Field(min_length=1)
 
     def model_post_init(self, __context: object) -> None:
-        slots = [(item.question_number, item.position) for item in self.items]
-        repeated = sorted({slot for slot in slots if slots.count(slot) > 1})
+        repeated = repeated_slots(self.items)
         if repeated:
             raise ValueError(f"خانة مكررة في جدول المواصفات {self.slug}: {repeated}")
         total = sum(item.marks for item in self.items)
@@ -103,6 +121,10 @@ class CourseKnowledge(_Strict):
     units: list[UnitData] = Field(default_factory=list)
     pedagogy: list[PedagogyData] = Field(default_factory=list)
     blueprints: list[BlueprintData] = Field(default_factory=list)
+    sources: list[SourceData] = Field(default_factory=list)
+    term_plan: TermPlanData | None = None
+    past_exams: list[PastExamData] = Field(default_factory=list)
+    coverage: list[CoverageData] = Field(default_factory=list)
 
     def model_post_init(self, __context: object) -> None:
         codes = [lesson.code for lesson in self.lessons]
@@ -124,6 +146,9 @@ class CourseKnowledge(_Strict):
         if len(slugs) != len(set(slugs)):
             raise ValueError("معرّف مبدأ تربوي مكرر")
         self._check_blueprints()
+        self._check_sources()
+        self._check_term_plan()
+        self._check_evidence()
 
     def _check_blueprints(self) -> None:
         """بند الجدول لدرس من المقرر يدخل الاختبار: الدرس الإثرائي (`examinable: false`) لا يُسأل عنه."""
@@ -140,12 +165,68 @@ class CourseKnowledge(_Strict):
             if excluded:
                 raise ValueError(f"الجدول {blueprint.slug} يسأل عن درس غير اختباري: {', '.join(excluded)}")
 
+    def _check_sources(self) -> None:
+        """كل إشارة إلى ملف مصدر تسمّي ملفًا مذكورًا في sources.json من النوع الصحيح، والملف لا يُسجَّل مرتين."""
+        slugs = [source.slug for source in self.sources]
+        if len(slugs) != len(set(slugs)):
+            raise ValueError("معرّف ملف مصدر مكرر")
+        hashes = [source.sha256 for source in self.sources]
+        if len(hashes) != len(set(hashes)):
+            raise ValueError("ملف مصدر مسجَّل مرتين بتجزئة واحدة")
+        kinds = {source.slug: source.kind for source in self.sources}
+        refs = [(b.source, ("blueprint",), f"جدول {b.slug}") for b in self.blueprints]
+        refs += [(e.source, ("past_exam",), f"اختبار {e.slug}") for e in self.past_exams]
+        refs += [(c.source, ("notes", "solutions"), "تغطية") for c in self.coverage]
+        if self.term_plan is not None:
+            refs.append((self.term_plan.source, ("term_plan",), "الخطة الفصلية"))
+        for slug, allowed, owner in refs:
+            if slug is None:
+                continue
+            if slug not in kinds:
+                raise ValueError(f"{owner} يشير إلى ملف غير مذكور في sources.json: {slug}")
+            if kinds[slug] not in allowed:
+                raise ValueError(
+                    f"{owner} يشير إلى ملف من نوع {kinds[slug]}، والمطلوب {' أو '.join(allowed)}"
+                )
+
+    def _check_term_plan(self) -> None:
+        """الخطة تتحقق بمحرك التخطيط، ودروسها وأمثلتها الإثرائية من المقرر، والدرس الإثرائي غير اختباري."""
+        if self.term_plan is None:
+            return
+        from apps.planning.domain.semester_plan import check_catalog
+
+        plan = self.term_plan.to_domain(self.course.semester)
+        examples = {p.lesson: [e.number for e in p.examples] for p in self.profiles}
+        check_catalog(plan, [ref.code for ref in self.lessons], examples)
+        examinable = {ref.code: ref.examinable for ref in self.lessons}
+        wrong = sorted(code for code in plan.enrichment_lessons if examinable[code])
+        if wrong:
+            raise ValueError(f"درس إثرائي في الخطة مُعلَّم اختباريًا في قائمة الدروس: {', '.join(wrong)}")
+
+    def _check_evidence(self) -> None:
+        codes = {ref.code for ref in self.lessons}
+        names = [exam.slug for exam in self.past_exams]
+        if len(names) != len(set(names)):
+            raise ValueError("معرّف اختبار سابق مكرر")
+        for exam in self.past_exams:
+            unknown = sorted({item.lesson for item in exam.items} - codes)
+            if unknown:
+                raise ValueError(f"الاختبار {exam.slug} مسقَط على درس خارج المقرر: {', '.join(unknown)}")
+        sources = [c.source for c in self.coverage]
+        if len(sources) != len(set(sources)):
+            raise ValueError("تغطية مكررة للملف الواحد")
+        for cover in self.coverage:
+            unknown = sorted({row.lesson for row in cover.lessons} - codes)
+            if unknown:
+                raise ValueError(f"تغطية {cover.source} لدرس خارج المقرر: {', '.join(unknown)}")
+
     def content_hash(self) -> str:
         """sha256 للمحتوى المعيَّر: لا يتأثر بترتيب المفاتيح ولا بأسطر الملف ولا بمصدره."""
-        payload = self.model_dump()
-        if not self.blueprints:
-            # القائمة الفارغة خارج التجزئة: دخول الحقل العقدَ لا يُصدر إصدارًا جديدًا لمقرر بلا جداول
-            del payload["blueprints"]
+        payload = self.model_dump(mode="json")
+        for key in OPTIONAL:
+            if not payload[key]:
+                # القسم الفارغ خارج التجزئة: دخول الحقل العقدَ لا يُصدر إصدارًا جديدًا لمقرر لا يملكه
+                del payload[key]
         canonical = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
         return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
@@ -191,6 +272,11 @@ def read_course_dir(directory: Path) -> CourseKnowledge:
     units = directory / "units.json"
     pedagogy = directory / "pedagogy.json"
     blueprints = directory / BLUEPRINTS
+    optional = {
+        name: _read(directory / name)
+        for name in (SOURCES, TERM_PLAN, PAST_EXAMS, COVERAGE)
+        if (directory / name).is_file()
+    }
     knowledge = CourseKnowledge(
         schema_version=manifest["schema_version"],
         course=manifest["course"],
@@ -199,6 +285,10 @@ def read_course_dir(directory: Path) -> CourseKnowledge:
         units=[UnitData(**u) for u in _read(units)] if units.is_file() else [],
         pedagogy=[PedagogyData(**n) for n in _read(pedagogy)] if pedagogy.is_file() else [],
         blueprints=[BlueprintData(**b) for b in _read(blueprints)] if blueprints.is_file() else [],
+        sources=[SourceData(**x) for x in optional.get(SOURCES, [])],
+        term_plan=TermPlanData(**optional[TERM_PLAN]) if TERM_PLAN in optional else None,
+        past_exams=[PastExamData(**x) for x in optional.get(PAST_EXAMS, [])],
+        coverage=[CoverageData(**x) for x in optional.get(COVERAGE, [])],
     )
     if knowledge.course.slug != directory.name:
         raise ValueError(f"اسم المجلد {directory.name} لا يطابق معرّف المقرر {knowledge.course.slug}")
@@ -247,3 +337,15 @@ def source_index(slug: str, root: Path | None = None) -> CourseIndex | None:
     """الفهرس المشتق لمقرر كما في ملفه (None لمقرر بلا فهرس مشتق)؛ يُعاد التحقق منه حين يتغير الملف فقط."""
     directory = course_dir(slug, root)
     return _index_for(str(directory), _signature(directory))
+
+
+def read_calendars(root: Path | None = None) -> list[CalendarData]:
+    """تقاويم السنوات الأكاديمية بترتيب السنة: ملف `<السنة>.json` لكل سنة، واسمه يطابق سنته."""
+    root = root or CALENDARS_DIR
+    calendars = []
+    for path in sorted(root.glob("*.json")):
+        calendar = CalendarData(**_read(path))
+        if calendar.year != path.stem:
+            raise ValueError(f"اسم ملف التقويم {path.name} لا يطابق سنته {calendar.year}")
+        calendars.append(calendar)
+    return calendars

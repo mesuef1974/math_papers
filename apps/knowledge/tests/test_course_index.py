@@ -116,6 +116,7 @@ def test_index_orders_lessons_numerically():
 EXPECTED = ["1.1", "1.2", "1.3", "1.4"] + [f"2.{n}" for n in range(1, 11)] + [f"3.{n}" for n in range(1, 6)]
 
 
+@pytest.mark.usefixtures("loaded_courses")
 def test_committed_index_is_valid_and_complete():
     index = course_index(GRADE10_SLUG)
     assert [x.lesson for x in index.lessons] == EXPECTED
@@ -144,6 +145,7 @@ def test_committed_index_holds_no_arabic_prose():
     assert set(strings) <= allowed
 
 
+@pytest.mark.usefixtures("loaded_courses")
 def test_selector_finds_a_lesson_in_its_own_course():
     assert lesson_index(GRADE10_SLUG, "3.5").unit == 3
     assert lesson_index(GRADE10_SLUG, "9.9") is None
@@ -175,7 +177,12 @@ def test_index_command_reads_lessons_dir_override(tmp_path):
     folder.mkdir()
     (folder / "lesson_2_1.json").write_text(json.dumps(lesson_output()), encoding="utf-8")
     courses = tmp_path / "courses"
-    new_course = {"title": "الرياضيات: السابع، الفصل الثاني", "grade": 10, "semester": 2}
+    new_course = {
+        "title": "الرياضيات: السابع، الفصل الثاني",
+        "grade": 10,
+        "semester": 2,
+        "academic_year": "2026-2027",
+    }
     common = {"source": str(tmp_path), "courses_dir": str(courses)}
     with pytest.raises(Exception, match="--title"):
         call_command(

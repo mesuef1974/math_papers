@@ -11,6 +11,8 @@ from posixpath import dirname, join, normpath
 import pytest
 from lxml import etree
 
+from apps.curriculum.courses import GRADE10_SLUG  # noqa: E402
+from apps.knowledge.domain.contract import read_source  # noqa: E402
 from apps.planning.domain.deck import (
     BulletsSlide,
     DeckError,
@@ -22,7 +24,10 @@ from apps.planning.domain.deck import (
 )
 from apps.planning.example_clips import load_example_clips
 from apps.planning.pptx_export import HEIGHT, WIDTH, build_pptx, fit
-from apps.planning.selectors import lesson_codes, lesson_deck
+from apps.planning.selectors import lesson_deck
+
+pytestmark = pytest.mark.usefixtures("loaded_courses")
+G10_CODES = [ref.code for ref in read_source(GRADE10_SLUG).lessons]  # عند الجمع: من العقد لا من القاعدة
 
 A = "{http://schemas.openxmlformats.org/drawingml/2006/main}"
 P = "{http://schemas.openxmlformats.org/presentationml/2006/main}"
@@ -191,7 +196,7 @@ def test_pptx_is_deterministic():
     assert build_pptx(deck) == build_pptx(deck)
 
 
-@pytest.mark.parametrize("code", lesson_codes())
+@pytest.mark.parametrize("code", G10_CODES)
 def test_every_lesson_builds_a_deck_and_a_valid_package(code):
     deck = lesson_deck(code, _content(examples=()), 45)
     parts = _parts(build_pptx(deck))

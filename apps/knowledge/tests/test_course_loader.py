@@ -38,7 +38,7 @@ def test_content_hash_is_stable_and_sensitive():
 
 
 def test_contract_rejects_bad_shapes():
-    base = read_source(GRADE10_SLUG).model_dump()
+    base = read_source(GRADE10_SLUG).model_dump(mode="json")  # الخطة الفصلية فيها تواريخ
     with pytest.raises(ValidationError, match="مكرر"):
         CourseKnowledge(**{**base, "lessons": base["lessons"] + base["lessons"][:1]})
     with pytest.raises(ValidationError, match="غير مذكور"):

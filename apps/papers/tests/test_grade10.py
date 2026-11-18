@@ -6,6 +6,7 @@ import pytest
 
 from apps.curriculum.courses import GRADE10_SLUG
 from apps.curriculum.models import BlueprintItem
+from apps.knowledge.domain.contract import read_source
 from apps.knowledge.selectors import course_index
 from apps.knowledge.services import load_all
 from apps.papers import services
@@ -18,7 +19,6 @@ from apps.papers.domain.generators import (
     out_of_scope,
     variants,
 )
-from apps.planning.domain.semester_plan import load_term_plan
 
 FINAL = "g10-s1-2026-27-final"
 UNIT_1 = {"1.1", "1.2", "1.3"}
@@ -47,13 +47,13 @@ READY_SLOTS = [
 
 
 def test_no_generator_is_built_on_enrichment_content():
-    plan = load_term_plan()
+    plan = read_source(GRADE10_SLUG).term_plan.to_domain(1)
     assert out_of_scope(GRADE10_SLUG, plan.enrichment_lessons, plan.enrichment_examples) == []
 
 
 def test_scope_guard_reports_each_kind_of_violation():
     """الحارس نفسه: مثال إثرائي، ودرس إثرائي، وصيغة بلا رقم مثال، كلٌّ يُبلَّغ باسمه."""
-    plan = load_term_plan()
+    plan = read_source(GRADE10_SLUG).term_plan.to_domain(1)
     sample = REGISTRY[(GRADE10_SLUG, "1.1")][0]
     added = {"2.5": 5, "1.4": 1, "2.6": None}
     # الدروس المضافة قد يكون لها مولّدات حقيقية: تُستبدل صيغها مؤقتًا ثم يُعاد السجلّان كما كانا.
@@ -72,6 +72,7 @@ def test_scope_guard_reports_each_kind_of_violation():
     assert found == [f"1.4:{name} درس إثرائي", f"2.5:{name} مثال إثرائي 5", f"2.6:{name} بلا رقم مثال"]
 
 
+@pytest.mark.usefixtures("loaded_courses")
 def test_declared_examples_exist_in_the_book_index():
     examples = {row.lesson: {e.n for e in row.examples} for row in course_index(GRADE10_SLUG).lessons}
     declared = {key: n for key, n in SKILL_EXAMPLES.items() if key[0] == GRADE10_SLUG}

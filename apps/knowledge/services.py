@@ -12,14 +12,16 @@ from typing import Any
 
 from django.db import transaction
 
+from apps.curriculum import services as curriculum
 from apps.curriculum.courses import GRADE12_SLUG
-from apps.curriculum.models import Blueprint, BlueprintItem, Course, Lesson
+from apps.curriculum.models import Course, Lesson
+from apps.curriculum.services import OwnerError
 
 from .domain.contract import (
     SCHEMA_VERSION,
-    BlueprintData,
     CourseKnowledge,
     CourseMeta,
+    read_calendars,
     read_source,
     source_slugs,
 )
@@ -211,51 +213,7 @@ def _sync_lessons(contract: CourseKnowledge, course: Course, report: LoadReport)
     return existing
 
 
-class BlueprintOwnerError(ValueError):
-    """جدول مواصفات بالمعرّف نفسه يملكه مقرر آخر: المعرّف فريد في المنصة كلها."""
-
-
-def _sync_blueprint(
-    data: BlueprintData, course: Course, lessons: dict[str, Lesson], report: LoadReport
-) -> None:
-    """جدول من العقد → `Blueprint` وخاناته: ينشئ ويحدّث ويحذف الخانة الزائدة، ولا يمسّ جدولًا ليس في العقد."""
-    wanted = data.model_dump(exclude={"slug", "items"})
-    blueprint = Blueprint.objects.filter(slug=data.slug).first()
-    if blueprint is None:
-        blueprint = Blueprint.objects.create(slug=data.slug, course=course, **wanted)
-        report.changed["blueprints"] += 1
-    elif blueprint.course_id != course.pk:
-        raise BlueprintOwnerError(f"جدول المواصفات {data.slug} يملكه مقرر آخر غير {course.slug}")
-    elif any(getattr(blueprint, key) != value for key, value in wanted.items()):
-        for key, value in wanted.items():
-            setattr(blueprint, key, value)
-        blueprint.save()
-        report.changed["blueprints"] += 1
-
-    extra = {(item.question_number, item.position): item for item in blueprint.items.all()}
-    for row in data.items:
-        slot = (row.question_number, row.position)
-        fields = {
-            "lesson_id": lessons[row.lesson].pk,
-            "kind": row.kind,
-            "marks": row.marks,
-            "level": row.level,
-            "needs_graph": row.needs_graph,
-        }
-        item = extra.pop(slot, None)
-        if item is None:
-            BlueprintItem.objects.create(
-                blueprint=blueprint, question_number=slot[0], position=slot[1], **fields
-            )
-            report.changed["blueprint_items"] += 1
-        elif any(getattr(item, key) != value for key, value in fields.items()):
-            for key, value in fields.items():
-                setattr(item, key, value)
-            item.save()
-            report.changed["blueprint_items"] += 1
-    if extra:
-        BlueprintItem.objects.filter(pk__in=[item.pk for item in extra.values()]).delete()
-        report.changed["blueprint_items"] += len(extra)
+BlueprintOwnerError = OwnerError  # اسم قديم: جدول مواصفات يملكه مقرر آخر
 
 
 def latest_release(course: Course) -> KnowledgeRelease | None:
@@ -274,8 +232,15 @@ def load_contract(contract: CourseKnowledge) -> LoadReport:
         _load_unit(unit, course, report)
     for note in contract.pedagogy:
         _load_pedagogy(note, course, report)
+    sources = curriculum.sync_sources(course, contract.sources, report.changed)
     for blueprint in contract.blueprints:
-        _sync_blueprint(blueprint, course, lessons, report)
+        curriculum.sync_blueprint(blueprint, course, lessons, sources, report.changed)
+    if contract.term_plan is not None:
+        curriculum.sync_term_plan(contract.term_plan, course, lessons, sources, report.changed)
+    for exam in contract.past_exams:
+        curriculum.sync_past_exam(exam, course, lessons, sources, report.changed)
+    for cover in contract.coverage:
+        curriculum.sync_coverage(cover, lessons, sources, report.changed)
     previous = latest_release(course)
     if previous is None or previous.content_hash != report.content_hash:
         KnowledgeRelease.objects.create(
@@ -292,7 +257,18 @@ def load_course(slug: str) -> LoadReport:
     return load_contract(read_source(slug))
 
 
+@transaction.atomic
+def load_calendars() -> Counter:
+    """تقاويم السنوات الأكاديمية (مشتركة بين المقررات) → الجداول. idempotent."""
+    changed: Counter = Counter()
+    for calendar in read_calendars():
+        curriculum.sync_calendar(calendar, changed)
+    return changed
+
+
 def load_all() -> dict[str, LoadReport]:
+    """التقاويم ثم كل المقررات ذات المصدر؛ التقرير للمقررات (التقاويم يطبع تقريرها `load_course --all`)."""
+    load_calendars()
     return {slug: load_course(slug) for slug in source_slugs()}
 
 

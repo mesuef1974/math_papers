@@ -1,0 +1,19 @@
+[
+ {
+  "slug": "g10-s1-teacher-guide",
+  "kind": "teacher_guide",
+  "title": "دليل المعلم: الرياضيات، العاشر، الفصل الأول",
+  "academic_year": "2026-2027",
+  "digest": "sha256:35bf9bcefd6b3f97acfbf39ca4f3b23b732f391bb2736a8dd08864638ec5e8eb",
+  "pages": 287
+ },
+ {
+  "slug": "g10-s1-term-plan",
+  "kind": "term_plan",
+  "title": "الخطة الفصلية للوزارة: العاشر، الفصل الأول",
+  "academic_year": "2026-2027",
+  "digest": "sha256:0b0bd36335dc9924069e15ccc8b2c5b5c787af0edb6b16cb69a163c4ba1188bc",
+  "pages": 4,
+  "note": "الخطة الفصلية للمستوى العاشر، الفصل الأول (نموذج الوزارة ES-ESM-P3-F1، إصدار 30-05-2024): الأسابيع والبنود وأعداد الحصص فقط، بلا نص من الوثيقة"
+ }
+]
