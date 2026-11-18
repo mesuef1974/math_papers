@@ -8,7 +8,7 @@ PostgreSQL + Redis. النشر على Railway (`railway.toml`).
   `selectors.py` قراءة، `api.py` مسارات Ninja، `tests/`.
 - `frontend/src/`: `pages/` (lazy)، `components/`، `stores/` (Pinia)، `api/client.ts` (جلسة + CSRF، لا توكنات في localStorage).
 - المهام الخلفية Celery (`config/celery.py`): المهام في `apps/<app>/tasks.py` وتُكتب idempotent (الإقرار بعد الإتمام، فموت العامل يعيدها). الوسيط Redis من `REDIS_URL`، وبلا `REDIS_URL` (تطوير واختبار) تُنفَّذ في مكانها فورًا. العامل خدمة ثانية على Railway أمر بدئها `bash scripts/railway-worker.sh`، وفحصها `python manage.py worker_ping`. لا تُستدعى مهمة من مسار الويب في الإنتاج قبل قيام خدمة العامل. توليد PDF ما زال بخيط داخل خادم الويب (`apps/papers/pdf.py`) حتى يوجد تخزين ملفات مشترك (المرحلة 3 من خطة المناهج).
-- `scripts/` بوابات، `automation/` دفتر البطاقات والمشغّل، `security/sensitive_paths.json` المسارات الحسّاسة.
+- `scripts/` بوابات، `automation/` دفتر البطاقات والمشغّل ومزامنة الدفتر مع GitHub (`sync.py`)، `security/sensitive_paths.json` المسارات الحسّاسة.
 - `tools/extraction/` خط استخراج أدلة المعلم (شيفرة واختبارات فقط؛ النصوص والمقاطع خارج المستودع بإعداد `book.yaml` لكل كتاب): انظر `README.md` فيه.
 
 ## قواعد
@@ -19,9 +19,9 @@ PostgreSQL + Redis. النشر على Railway (`railway.toml`).
 - قبل أي دفع: `python scripts/prepush_check.py`.
 
 ## ما لا تفعله
-- لا `git push` ولا `gh pr merge` ولا `railway` من الجلسة؛ المشغّل والبوابات يفعلان ذلك (`.claude/hooks/guard_git.py` يحجب).
+- لا `git push` ولا `gh pr merge` ولا `railway` من الجلسة؛ المشغّل والبوابات يفعلان ذلك. الحارس `.claude/hooks/guard_git.py` يحجب كل `git push` (القاعدة `push-any`، عدا `--dry-run`) إلا بإذن المالك الصريح مكتوبًا في `GUARD_GIT_ALLOW='<الإذن وتاريخه>'`، و`.claude/settings.json` يحجب `gh pr merge` و`railway` في Bash وPowerShell (`tests/test_guard_git.py`).
 - الدمج بعد اعتماد المالك وحده: حين يقول «اعتمد N» وتخضرّ الفحوص يُكتب سطر الاعتماد، ثم `python scripts/merge_gate.py N --repo <المستودع> --enable` يفعّل الدمج التلقائي وGitHub يدمج. ما ترفضه البوابة (مسارات محظورة، فحص فاشل) يبقى دمجًا يدويًا للمالك، ولا التفاف عليها.
-- لا تعديل على `.github/`، `scripts/*gate*`, `security/`, lockfiles, `Dockerfile`, `railway.toml` داخل بطاقة عادية.
+- لا تعديل على `.github/`، `scripts/*gate*`, `security/`, lockfiles, `Dockerfile`, `railway.toml` داخل بطاقة عادية. الحرّاس أنفسهم (`merge_gate.ALWAYS_FORBIDDEN`: ومنها `.claude/hooks/` و`automation/*.py` وسكربتات الفحص) لا يدفعها المشغّل ولا تُدمج آليًا.
 
 ## نطاق المحتوى
 - المسائل تُولَّد أصليًا في `apps/papers/domain/generators.py`، ولا يدخل هنا نص من كتاب Savvas أو من الاختبارات أو الخطة الفصلية.
