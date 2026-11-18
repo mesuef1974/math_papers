@@ -476,5 +476,8 @@ def test_training_note_only_on_a_forecast_cover():
 
 def test_number_range_reads_left_to_right_in_arabic_text():
     title = isolate_number_ranges("اختبار نهاية الفصل الأول: العاشر، 2026-2027")
-    assert title == f"اختبار نهاية الفصل الأول: العاشر، {ooxml.LRM}2026-2027"
+    assert title == f"اختبار نهاية الفصل الأول: العاشر، {ooxml.LRM}2026-2027{ooxml.RLM}"
+    # التذييل يضمّ العنوان المعزول ثم « – 10» (الصف): RLM تُنهي تشغيل اليسار إلى اليمين قبله فلا يُسحب الرقم إليه.
+    footer = " – ".join((title, "10"))
+    assert footer.endswith(f"2026-2027{ooxml.RLM} – 10")
     assert isolate_number_ranges("الدرس 3.5") == "الدرس 3.5"
