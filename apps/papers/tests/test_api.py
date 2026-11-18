@@ -174,11 +174,13 @@ def test_every_blueprint_slot_has_a_matching_variant():
         assert variants(item.lesson.code, item.kind, item.level, item.needs_graph), item
 
 
-def test_blueprint_without_generators_is_hidden_and_answers_409(client):
-    """جدول العاشر يُحمَّل قبل مولّداته: لا يُعرض للتوليد، وطلبه المباشر 409 لا خطأ خادم."""
+def test_blueprint_without_generators_is_hidden_and_answers_409(client, monkeypatch):
+    """جدول يُحمَّل قبل مولّداته: لا يُعرض للتوليد، وطلبه المباشر 409 لا خطأ خادم (يُحجب درس 3.5 مؤقتًا)."""
     from apps.knowledge.services import load_all
+    from apps.papers.domain.generators import REGISTRY
 
     load_all()
+    monkeypatch.delitem(REGISTRY, ("g10-s1", "3.5"))
     pending = "g10-s1-2026-27-final"
     assert Blueprint.objects.filter(slug=pending).exists()
     assert [row["slug"] for row in client.get("/api/v1/blueprints").json()] == [SLUG]

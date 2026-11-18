@@ -8,10 +8,12 @@
 الجذرية، 2.5 إكمال المربع، 2.6 القانون العام والمميز.
 الوحدة 2 (ب): 2.7 المعادلات النسبية، 2.8 الأنظمة الخطية-التربيعية، 2.9 المتباينات التربيعية، 2.10 معادلة
 الدائرة.
+الوحدة 3: 3.3 تشابه المثلثات، 3.4 تشابه المثلثات القائمة والمتوسط الهندسي، 3.5 المستقيمات المتوازية وتناسب الأضلاع.
 """
 
 from __future__ import annotations
 
+import itertools
 import math
 import random
 from typing import Any
@@ -2199,4 +2201,692 @@ def solve_line_and_circle_system(rng: random.Random) -> Problem:
         ),
         "A",
         {"type": "system", "equations": (y - line, x**2 + y**2 - r2), "solutions": (first, second)},
+    )
+
+
+# الوحدة 3، تشابه المثلثات: 3.3 تشابه المثلثات، 3.4 تشابه المثلثات القائمة، 3.5 المستقيمات المتوازية والتناسب.
+# المسائل بلا رسم؛ الأشكال موصوفة بأسماء الرؤوس والأطوال في النص. أمثلة الكتاب الإثرائية بلا صيغ: 3.3 (1 و2)،
+# 3.4 (6)، 3.5 (4 و5: نظرية منصّف الزاوية).
+CM, METER = "سم", "م"
+LETTERS = ("A", "B", "C", "D", "E")
+LETTER_SETS = (LETTERS, ("P", "Q", "R", "S", "T"), ("K", "L", "M", "N", "X"))
+
+
+def triangle(name: str) -> str:
+    return rf"\triangle {name}"
+
+
+def lengths(value: Any, unit: str = CM) -> str:
+    return with_unit(sp.nsimplify(value), unit)
+
+
+def length_wrongs(value: Any, *candidates: Any, unit: str = CM) -> tuple[str, ...]:
+    """ثلاثة بدائل أطوال موجبة مختلفة عن الجواب: الأخطاء الشائعة أولًا ثم قيم قريبة."""
+    seen, result = {sp.nsimplify(value)}, []
+    for candidate in (*candidates, value + 1, value - 1, value + 2, 2 * value, value + 3, value - 2):
+        shown = sp.nsimplify(candidate)
+        if shown > 0 and shown not in seen:
+            seen.add(shown)
+            result.append(lengths(shown, unit))
+    return tuple(result[:3])
+
+
+def text_wrongs(answer: str, *candidates: str) -> tuple[str, ...]:
+    """بدائل نصية مختلفة عن الجواب وبعضها عن بعض."""
+    seen, result = {answer}, []
+    for candidate in candidates:
+        if candidate not in seen:
+            seen.add(candidate)
+            result.append(candidate)
+    return tuple(result[:3])
+
+
+def reduced_pair(rng: random.Random, low: int, high: int) -> tuple[int, int]:
+    """نسبة u:v بعددين صحيحين أوليين فيما بينهما ومختلفين."""
+    while True:
+        u, v = rng.randint(low, high), rng.randint(low, high)
+        if u != v and math.gcd(u, v) == 1:
+            return u, v
+
+
+# الدرس 3.3: تشابه المثلثات
+CRITERIA = {
+    "AA": "تطابق زاويتين (AA)",
+    "SSS": "تناسب أطوال الأضلاع الثلاثة (SSS)",
+    "SAS": "تناسب طولي ضلعين وتساوي الزاوية المحصورة بينهما (SAS)",
+}
+NOT_ENOUGH = "المعطيات لا تكفي لإثبات التشابه"
+SIDE_TRIPLES = (
+    (3, 4, 5),
+    (4, 5, 6),
+    (4, 6, 7),
+    (5, 6, 7),
+    (5, 7, 9),
+    (6, 7, 8),
+    (6, 8, 9),
+    (7, 8, 10),
+    (5, 8, 10),
+    (7, 9, 11),
+)
+FACTORS = (2, 3, 4, 5)
+NAMES = (("A", "B", "C"), ("D", "E", "F"), ("K", "L", "M"), ("P", "Q", "R"), ("X", "Y", "Z"))
+
+
+def pair_of_triangles(rng: random.Random) -> tuple[tuple[str, str, str], tuple[str, str, str]]:
+    first, second = rng.sample(NAMES, 2)
+    return first, second
+
+
+@variant("3.3", G10, example=3)
+def triangle_similarity_criterion(rng: random.Random) -> Problem:
+    (a1, b1, c1), (a2, b2, c2) = pair_of_triangles(rng)
+    kind = rng.choice(list(CRITERIA))
+    k = rng.choice(FACTORS)
+    question = "ما المبرهنة التي تُستعمل لإثبات أن المثلثين متشابهان؟"
+    if kind == "AA":
+        first = rng.randint(35, 85)
+        second = rng.choice([n for n in range(30, 95, 5) if n != first and first + n < 170])
+        stem = (
+            f"في المثلث ${a1}{b1}{c1}$ قياس $\\angle {a1}={first}^\\circ$ وقياس $\\angle {b1}={second}^\\circ$، "
+            f"وفي المثلث ${a2}{b2}{c2}$ قياس $\\angle {b2}={first}^\\circ$ وقياس $\\angle {c2}={second}^\\circ$. {question}"
+        )
+        data = {"first": {"angles": (first, second)}, "second": {"angles": (first, second)}}
+        reason = (
+            "زاويتان في المثلث الأول تساويان زاويتين في المثلث الثاني (ليستا بالترتيب نفسه، "
+            "والترتيب لا يهم في AA)."
+        )
+    elif kind == "SSS":
+        sides = rng.choice(SIDE_TRIPLES)
+        scaled = tuple(k * s for s in sides)
+        stem = (
+            f"في المثلث ${a1}{b1}{c1}$: ${a1}{b1}={sides[0]}$ سم و${b1}{c1}={sides[1]}$ سم و${c1}{a1}={sides[2]}$ سم. "
+            f"وفي المثلث ${a2}{b2}{c2}$: ${a2}{b2}={scaled[0]}$ سم و${b2}{c2}={scaled[1]}$ سم و${c2}{a2}={scaled[2]}$ سم. "
+            f"{question}"
+        )
+        data = {"first": {"sides": sides}, "second": {"sides": scaled}}
+        reason = (
+            f"النسب بين الأضلاع المتناظرة متساوية: ${scaled[0]}\\div{sides[0]}={scaled[1]}\\div{sides[1]}"
+            f"={scaled[2]}\\div{sides[2]}={k}$."
+        )
+    else:
+        p, q = rng.choice(SIDE_TRIPLES)[:2]
+        angle = rng.choice(range(40, 130, 5))
+        stem = (
+            f"في المثلث ${a1}{b1}{c1}$: ${a1}{b1}={p}$ سم و${a1}{c1}={q}$ سم وقياس $\\angle {a1}={angle}^\\circ$. "
+            f"وفي المثلث ${a2}{b2}{c2}$: ${a2}{b2}={k * p}$ سم و${a2}{c2}={k * q}$ سم وقياس $\\angle {a2}={angle}^\\circ$. "
+            f"{question}"
+        )
+        data = {
+            "first": {"sides": (p, q), "angle": angle},
+            "second": {"sides": (k * p, k * q), "angle": angle},
+        }
+        reason = (
+            f"الضلعان متناسبان: ${k * p}\\div{p}={k * q}\\div{q}={k}$، والزاوية $\\angle {a1}$ محصورة بين الضلعين "
+            f"وتساوي $\\angle {a2}$."
+        )
+    answer = CRITERIA[kind]
+    return Problem(
+        "3.3",
+        stem,
+        answer,
+        (*[CRITERIA[name] for name in CRITERIA if name != kind], NOT_ENOUGH),
+        (
+            "نفحص المعطيات: أي عناصر متناظرة في المثلثين معلومة (زوايا أم أضلاع)؟",
+            reason,
+            f"إذن المثلثان متشابهان بالمبرهنة: {answer}.",
+        ),
+        "K",
+        {"type": "criterion", "kind": kind, **data},
+    )
+
+
+@variant("3.3", G10, example=4)
+def missing_side_in_similar_triangles(rng: random.Random) -> Problem:
+    (a1, b1, c1), (a2, b2, c2) = pair_of_triangles(rng)
+    k = rng.choice([2, 3, 4, sp.Rational(3, 2), sp.Rational(5, 2)])
+    step = 2 if isinstance(k, sp.Rational) else 1
+    p, q = rng.sample([n for n in range(4, 15) if n % step == 0], 2)
+    big_p, big_q = k * p, k * q
+    return Problem(
+        "3.3",
+        f"المثلثان ${a1}{b1}{c1}$ و${a2}{b2}{c2}$ متشابهان ($\\triangle {a1}{b1}{c1}\\sim\\triangle {a2}{b2}{c2}$). "
+        f"إذا كان ${a1}{b1}={p}$ سم و${b1}{c1}={q}$ سم و${a2}{b2}={big_p}$ سم، فما طول ${b2}{c2}$؟",
+        lengths(big_q),
+        length_wrongs(big_q, q + (big_p - p), big_p + q, sp.Rational(q) / k),
+        (
+            "الأضلاع المتناظرة في المثلثين المتشابهين متناسبة: "
+            f"$\\dfrac{{{a2}{b2}}}{{{a1}{b1}}}=\\dfrac{{{b2}{c2}}}{{{b1}{c1}}}$",
+            f"نعوّض: $\\dfrac{{{big_p}}}{{{p}}}=\\dfrac{{{b2}{c2}}}{{{q}}}$، فمعامل التكبير $\\dfrac{{{big_p}}}{{{p}}}={tex(k)}$.",
+            f"${b2}{c2}={tex(k)}\\times {q}={tex(big_q)}$ سم.",
+        ),
+        "K",
+        {"type": "similar_sides", "first": (p, q), "second": (big_p, big_q), "asked": 1},
+    )
+
+
+@variant("3.3", G10, example=4)
+def perimeter_of_similar_triangle(rng: random.Random) -> Problem:
+    (a1, b1, c1), (a2, b2, c2) = pair_of_triangles(rng)
+    k = rng.choice([2, 3, 4, 5, sp.Rational(3, 2), sp.Rational(5, 2)])
+    mult = 2 if isinstance(k, sp.Rational) else 1
+    base = tuple(s * mult for s in rng.choice(SIDE_TRIPLES))
+    scale_up = tuple(k * s for s in base)
+    perimeter, big_perimeter = sum(base), sum(scale_up)
+    return Problem(
+        "3.3",
+        f"المثلث ${a1}{b1}{c1}$ أطوال أضلاعه ${base[0]}$ سم و${base[1]}$ سم و${base[2]}$ سم، وهو يشابه المثلث "
+        f"${a2}{b2}{c2}$ حيث ${a2}{b2}$ يناظر ${a1}{b1}$ وطوله ${scale_up[0]}$ سم. أوجد محيط المثلث ${a2}{b2}{c2}$.",
+        lengths(big_perimeter),
+        length_wrongs(
+            big_perimeter,
+            perimeter,
+            scale_up[0] + base[1] + base[2],
+            perimeter + 3 * (scale_up[0] - base[0]),
+        ),
+        (
+            f"معامل التشابه بين الضلعين المتناظرين: $\\dfrac{{{scale_up[0]}}}{{{base[0]}}}={tex(k)}$",
+            f"محيط المثلث ${a1}{b1}{c1}$ يساوي ${base[0]}+{base[1]}+{base[2]}={perimeter}$ سم.",
+            f"النسبة بين محيطي مثلثين متشابهين تساوي معامل التشابه، فمحيط ${a2}{b2}{c2}$ يساوي "
+            f"${tex(k)}\\times {perimeter}={big_perimeter}$ سم.",
+        ),
+        "A",
+        {"type": "similar_sides", "first": base, "second": scale_up, "perimeter": (perimeter, big_perimeter)},
+    )
+
+
+@variant("3.3", G10, example=4)
+def side_from_similar_triangles_algebraic(rng: random.Random) -> Problem:
+    (a1, b1, c1), (a2, b2, c2) = pair_of_triangles(rng)
+    while True:
+        k, q = rng.choice([2, 3]), rng.randint(2, 9)
+        p, x0, m = rng.randint(1, 4), rng.randint(2, 9), rng.randint(k + 1, k + 3)
+        n = (m - k) * x0 - k * p
+        if n >= 1:
+            break
+    first, second = x + p, m * x - n
+    shown_first, shown_second = f"x+{p}", f"{m}x-{n}"
+    value = k * (x0 + p)
+    return Problem(
+        "3.3",
+        f"المثلثان ${a1}{b1}{c1}$ و${a2}{b2}{c2}$ متشابهان ($\\triangle {a1}{b1}{c1}\\sim\\triangle {a2}{b2}{c2}$). "
+        f"إذا كان ${a1}{b1}={shown_first}$ سم و${a2}{b2}={shown_second}$ سم و${b1}{c1}={q}$ سم و${b2}{c2}={k * q}$ سم، "
+        f"فما طول ${a2}{b2}$؟",
+        lengths(value),
+        length_wrongs(value, x0, x0 + p, k * x0),
+        (
+            "الأضلاع المتناظرة متناسبة: "
+            f"$\\dfrac{{{a1}{b1}}}{{{a2}{b2}}}=\\dfrac{{{b1}{c1}}}{{{b2}{c2}}}$، "
+            f"أي $\\dfrac{{{shown_first}}}{{{shown_second}}}=\\dfrac{{{q}}}{{{k * q}}}=\\dfrac{{1}}{{{k}}}$",
+            f"نضرب طرفًا في وسط: ${k}({shown_first})={shown_second}$، أي ${k}x+{k * p}={m}x-{n}$",
+            f"نحلّ المعادلة: ${m - k}x={k * p + n}$، إذن $x={x0}$.",
+            f"${a2}{b2}={m}({x0})-{n}={value}$ سم.",
+        ),
+        "A",
+        {
+            "type": "similar_algebra",
+            "proportion": (first, second, q, k * q),
+            "x": x0,
+            "value": value,
+            "expr": second,
+        },
+    )
+
+
+# (الجسم المطلوب ارتفاعه، الجسم المعلوم، ضمير ارتفاع المعلوم)
+SHADOW_SCENES = (
+    ("عمود إنارة", "عصا", "ها"),
+    ("شجرة", "عمود", "ه"),
+    ("برج اتصالات", "لوحة", "ها"),
+    ("مبنى", "سارية", "ها"),
+    ("جدار", "كرسي", "ه"),
+)
+
+
+@variant("3.3", G10, example=5)
+def height_from_shadows(rng: random.Random) -> Problem:
+    target, known, pronoun = rng.choice(SHADOW_SCENES)
+    h, s = rng.choice([(1, 2), (2, 3), (3, 2), (2, 5), (3, 4), (4, 3), (5, 4), (3, 5), (6, 5)])
+    t = rng.randint(3, 14)
+    big_h, big_s = h * t, s * t
+    return Problem(
+        "3.3",
+        f"في اللحظة نفسها من النهار، يبلغ طول ظل {known} ارتفاع{pronoun} ${h}$ م ما مقداره ${s}$ م، "
+        f"ويبلغ طول ظل {target} ما مقداره ${big_s}$ م. ما ارتفاع {target}؟",
+        lengths(big_h, METER),
+        length_wrongs(big_h, big_s + h - s, big_s - h, big_s - s, unit=METER),
+        (
+            "أشعة الشمس متوازية، فالمثلثان القائمان (الجسم وظله) فيهما زاوية ارتفاع الشمس نفسها وزاوية قائمة، "
+            "فهما متشابهان بتطابق زاويتين.",
+            f"نسبة الارتفاع إلى الظل واحدة في المثلثين. نفرض ارتفاع {target} $=y$: "
+            f"$\\dfrac{{{h}}}{{{s}}}=\\dfrac{{y}}{{{big_s}}}$",
+            f"$y=\\dfrac{{{h}\\times {big_s}}}{{{s}}}={big_h}$ م.",
+        ),
+        "A",
+        {"type": "proportion", "pairs": ((h, s), (big_h, big_s)), "value": big_h},
+    )
+
+
+# الدرس 3.4: تشابه المثلثات القائمة والمتوسط الهندسي
+RIGHT_NAMES = (("A", "B", "C", "D"), ("P", "Q", "R", "S"), ("K", "L", "M", "N"), ("X", "Y", "Z", "W"))
+# (u, v، المقياس): AD=s·u² وDB=s·v² وu²+v² مربع كامل، فكل أطوال الشكل أعداد صحيحة.
+PROJECTION_SHAPES = (
+    tuple(((3, 4), s) for s in (1, 2, 3, 4))
+    + tuple(((4, 3), s) for s in (1, 2, 3, 4))
+    + (
+        ((6, 8), 1),
+        ((8, 6), 1),
+    )
+)
+# أزواج (AD, DB) جداؤها مربع كامل: (a·u², a·v²)
+SQUARE_PRODUCT_PAIRS = tuple(
+    (a * u * u, a * v * v)
+    for a in (1, 2, 3, 5)
+    for u, v in ((1, 2), (1, 3), (2, 3), (1, 4), (2, 5), (3, 4), (1, 5), (3, 5))
+    if a * v * v <= 90
+)
+
+
+def right_triangle_values(shape: tuple[tuple[int, int], int]) -> dict[str, int]:
+    """مثلث قائم الزاوية عند C وD أسفل العمود منه على الوتر: أطوال كل القطع أعداد صحيحة بالبناء."""
+    (u, v), scale_ = shape
+    ad, db, hypotenuse = scale_ * u * u, scale_ * v * v, math.isqrt(u * u + v * v)
+    return {
+        "AD": ad,
+        "DB": db,
+        "CD": scale_ * u * v,
+        "AB": ad + db,
+        "AC": scale_ * u * hypotenuse,
+        "BC": scale_ * v * hypotenuse,
+    }
+
+
+def legs_for_angle(degrees: int, at_a: bool) -> tuple[float, float]:
+    """(AC, BC) لمثلث قائم في C وتره 1 وقياس الزاوية عند A (أو عند B) بالدرجات المعطاة."""
+    adjacent, opposite = math.cos(math.radians(degrees)), math.sin(math.radians(degrees))
+    return (adjacent, opposite) if at_a else (opposite, adjacent)
+
+
+@variant("3.4", G10, example=1)
+def similarity_statement_with_altitude(rng: random.Random) -> Problem:
+    a, b, c, d = rng.choice(RIGHT_NAMES)
+    common = rng.choice([a, b])
+    degrees = rng.randint(25, 65)
+    # abc قائم في c، وd أسفل العمود من c على ab: abc ~ acd (الزاوية a مشتركة) وabc ~ cbd (الزاوية b مشتركة).
+    sequence = (a, c, d) if common == a else (c, b, d)
+    mapping = f"${a}\\to {sequence[0]}$ و${b}\\to {sequence[1]}$ و${c}\\to {sequence[2]}$"
+    orders = [order for order in itertools.permutations(sequence) if order != sequence]
+    rng.shuffle(orders)
+    options = [f"${triangle(''.join(order))}$" for order in orders]
+    return Problem(
+        "3.4",
+        f"في المثلث ${a}{b}{c}$ القائم الزاوية في ${c}$ رُسم العمود ${c}{d}$ على الوتر ${a}{b}$ (حيث ${d}$ على ${a}{b}$). "
+        f"أكمل عبارة التشابه بالترتيب الصحيح للرؤوس المتناظرة: $\\triangle {a}{b}{c}\\sim$ ... "
+        f"علمًا بأن الزاوية ${common}$ مشتركة بين المثلثين وقياسها ${degrees}^\\circ$.",
+        f"${triangle(''.join(sequence))}$",
+        tuple(options[:3]),
+        (
+            f"المثلثان قائمان: القائمة في ${triangle(a + b + c)}$ عند ${c}$، وفي المثلث الآخر عند ${d}$ "
+            f"(لأن ${c}{d}\\perp {a}{b}$).",
+            f"الزاوية ${common}$ مشتركة، فالمثلثان متشابهان بتطابق زاويتين، والرؤوس المتناظرة: {mapping}.",
+            f"إذن $\\triangle {a}{b}{c}\\sim{triangle(''.join(sequence))}$.",
+        ),
+        "K",
+        {
+            "type": "similarity_statement",
+            # ساقان بوتر واحد تجعلان قياس الزاوية المشتركة المذكورة في النص
+            "legs": legs_for_angle(degrees, common == a),
+            "names": (a, b, c, d),
+            "answer": sequence,
+            "wrong": tuple(orders[:3]),
+        },
+    )
+
+
+@variant("3.4", G10, example=2)
+def leg_from_projection(rng: random.Random) -> Problem:
+    values = right_triangle_values(rng.choice(PROJECTION_SHAPES))
+    a, b, c, d = rng.choice(RIGHT_NAMES)
+    which = rng.choice(["AC", "BC"])
+    projection = values["AD" if which == "AC" else "DB"]
+    leg = values[which]
+    leg_name, near = (f"{a}{c}", f"{a}{d}") if which == "AC" else (f"{b}{c}", f"{d}{b}")
+    return Problem(
+        "3.4",
+        f"في المثلث ${a}{b}{c}$ القائم الزاوية في ${c}$ رُسم العمود ${c}{d}$ على الوتر ${a}{b}$. "
+        f"إذا كان ${near}={projection}$ سم و${a}{b}={values['AB']}$ سم، فما طول ${leg_name}$؟",
+        lengths(leg),
+        length_wrongs(leg, projection * values["AB"], values["AB"] - projection, values["CD"]),
+        (
+            "طول كل ساق هو المتوسط الهندسي بين طول الوتر وطول مسقط الساق عليه: "
+            f"${leg_name}^2={near}\\times {a}{b}$",
+            f"${leg_name}^2={projection}\\times {values['AB']}={projection * values['AB']}$",
+            f"${leg_name}=\\sqrt{{{projection * values['AB']}}}={leg}$ سم.",
+        ),
+        "K",
+        {
+            "type": "altitude",
+            "legs": (values["AC"], values["BC"]),
+            "asked": which,
+            "value": leg,
+            "given": {"AD" if which == "AC" else "DB": projection, "AB": values["AB"]},
+        },
+    )
+
+
+@variant("3.4", G10, example=4)
+def altitude_as_geometric_mean(rng: random.Random) -> Problem:
+    first, second = rng.sample(rng.choice(SQUARE_PRODUCT_PAIRS), 2)
+    a, b, c, d = rng.choice(RIGHT_NAMES)
+    height = math.isqrt(first * second)
+    return Problem(
+        "3.4",
+        f"في المثلث ${a}{b}{c}$ القائم الزاوية في ${c}$ رُسم العمود ${c}{d}$ على الوتر ${a}{b}$. "
+        f"إذا كان ${a}{d}={first}$ سم و${d}{b}={second}$ سم، فما طول ${c}{d}$؟",
+        lengths(height),
+        length_wrongs(height, sp.Rational(first + second, 2), first * second, first + second),
+        (
+            "طول العمود النازل من رأس القائمة على الوتر هو المتوسط الهندسي بين طولي قطعتي الوتر: "
+            f"${c}{d}^2={a}{d}\\times {d}{b}$",
+            f"${c}{d}^2={first}\\times {second}={first * second}$",
+            f"${c}{d}=\\sqrt{{{first * second}}}={height}$ سم.",
+        ),
+        "K",
+        {"type": "geometric_mean", "parts": (first, second), "value": height},
+    )
+
+
+@variant("3.4", G10, example=4)
+def altitude_from_two_legs(rng: random.Random) -> Problem:
+    values = right_triangle_values(((3, 4), rng.randint(1, 6)))
+    a, b, c, d = rng.choice(RIGHT_NAMES)
+    first, second = rng.sample((values["AC"], values["BC"]), 2)
+    height, hypotenuse = values["CD"], values["AB"]
+    projection = sp.Rational(first * first, hypotenuse)
+    return Problem(
+        "3.4",
+        f"في المثلث ${a}{b}{c}$ القائم الزاوية في ${c}$ رُسم العمود ${c}{d}$ على الوتر ${a}{b}$. "
+        f"إذا كان ${a}{c}={first}$ سم و${b}{c}={second}$ سم، فما طول ${c}{d}$؟",
+        lengths(height),
+        length_wrongs(height, sp.Rational(first * second, 2), first + second - hypotenuse, projection),
+        (
+            f"نجد الوتر بنظرية فيثاغورس: ${a}{b}=\\sqrt{{{first}^2+{second}^2}}={hypotenuse}$ سم.",
+            f"من ${a}{c}^2={a}{d}\\times {a}{b}$ نجد مسقط ${a}{c}$ على الوتر: "
+            f"${a}{d}=\\dfrac{{{first}^2}}{{{hypotenuse}}}={tex(projection)}$ سم، "
+            f"و${d}{b}={hypotenuse}-{tex(projection)}={tex(hypotenuse - projection)}$ سم.",
+            f"${c}{d}^2={a}{d}\\times {d}{b}={tex(projection * (hypotenuse - projection))}$، إذن ${c}{d}={height}$ سم.",
+        ),
+        "A",
+        {"type": "altitude", "legs": (first, second), "asked": "CD", "value": height},
+    )
+
+
+# (المكان، ما يُنشأ عموديًا على الوتر، اسمه)
+PATH_SCENES = (
+    ("حديقة مثلثة قائمة الزاوية", "ممرٌّ مستقيم", "هذا الممر"),
+    ("قطعة أرض مثلثة قائمة الزاوية", "سورٌ فاصل", "هذا السور"),
+    ("لوحة إعلانات مثلثة قائمة الزاوية", "دعامةٌ مستقيمة", "هذه الدعامة"),
+)
+
+
+@variant("3.4", G10, example=5)
+def geometric_mean_in_context(rng: random.Random) -> Problem:
+    first, second = rng.sample(rng.choice(SQUARE_PRODUCT_PAIRS), 2)
+    place, support, short = rng.choice(PATH_SCENES)
+    total, height = first + second, math.isqrt(first * second)
+    return Problem(
+        "3.4",
+        f"في {place} أُنشئ {support} من رأس الزاوية القائمة عموديًا على الوتر، فقسم الوتر إلى قطعتين "
+        f"طولاهما ${first}$ م و${second}$ م. ما طول {short}؟",
+        lengths(height, METER),
+        length_wrongs(height, sp.Rational(total, 2), first * second, total, unit=METER),
+        (
+            "المثلثان الصغيران الناتجان عن الخط العمودي متشابهان مع المثلث الكبير، فطول الخط هو المتوسط الهندسي "
+            "بين طولي قطعتي الوتر.",
+            f"الطول $=\\sqrt{{{first}\\times {second}}}=\\sqrt{{{first * second}}}={height}$ م.",
+        ),
+        "A",
+        {"type": "geometric_mean", "parts": (first, second), "value": height},
+    )
+
+
+# الدرس 3.5: المستقيمات المتوازية وتناسب الأضلاع (منصّف الزاوية: المثالان 4 و5 إثرائيان فلا صيغ لهما)
+def parallel_values(rng: random.Random, small: int = 2, large: int = 7) -> tuple[int, int, int, int]:
+    """(AD, DB, AE, EC) بنسبة واحدة u:v؛ DE موازٍ لـ BC."""
+    u, v = reduced_pair(rng, small, large)
+    s, t = rng.randint(1, 3), rng.randint(1, 3)
+    return u * s, v * s, u * t, v * t
+
+
+@variant("3.5", G10, example=1)
+def segment_from_parallel_line(rng: random.Random) -> Problem:
+    ad, db, ae, ec = parallel_values(rng)
+    a, b, c, d, e = rng.choice(LETTER_SETS)
+    given = {"AD": ad, "DB": db, "AE": ae, "EC": ec}
+    names = {"AD": f"{a}{d}", "DB": f"{d}{b}", "AE": f"{a}{e}", "EC": f"{e}{c}"}
+    unknown = rng.choice(["EC", "DB", "AE"])
+    top, bottom_one, bottom_two = (
+        given[n]
+        for n in {"EC": ("AE", "DB", "AD"), "DB": ("AD", "EC", "AE"), "AE": ("AD", "EC", "DB")}[unknown]
+    )
+    value = given[unknown]
+    facts = " و".join(f"${names[n]}={given[n]}$ سم" for n in given if n != unknown)
+
+    def label(n: str) -> str:
+        return names[n] if n == unknown else str(given[n])
+
+    return Problem(
+        "3.5",
+        f"في المثلث ${a}{b}{c}$ تقع النقطة ${d}$ على ${a}{b}$ والنقطة ${e}$ على ${a}{c}$، والقطعة ${d}{e}$ توازي ${b}{c}$. "
+        f"إذا كان {facts}، فما طول ${names[unknown]}$؟",
+        lengths(value),
+        length_wrongs(
+            value,
+            top + bottom_one - bottom_two,
+            sp.Rational(top * bottom_two, bottom_one),
+            sp.Rational(bottom_one * bottom_two, top),
+        ),
+        (
+            "المستقيم الموازي لأحد أضلاع المثلث يقسم الضلعين الآخرين إلى أجزاء متناسبة: "
+            f"$\\dfrac{{{a}{d}}}{{{d}{b}}}=\\dfrac{{{a}{e}}}{{{e}{c}}}$",
+            f"نعوّض: $\\dfrac{{{label('AD')}}}{{{label('DB')}}}=\\dfrac{{{label('AE')}}}{{{label('EC')}}}$",
+            f"نضرب طرفًا في وسط: ${names[unknown]}=\\dfrac{{{top}\\times {bottom_one}}}{{{bottom_two}}}={value}$ سم.",
+        ),
+        "K",
+        {"type": "parallel_division", "values": given, "asked": unknown, "value": value},
+    )
+
+
+@variant("3.5", G10, example=3)
+def midsegment_length(rng: random.Random) -> Problem:
+    a, b, c, d, e = rng.choice(LETTER_SETS)
+    half = rng.randint(3, 25)
+    base = 2 * half
+    know_base = rng.choice([True, False])
+    value, given = (half, base) if know_base else (base, half)
+    given_text = f"${b}{c}={base}$ سم" if know_base else f"${d}{e}={half}$ سم"
+    asked_name = f"{d}{e}" if know_base else f"{b}{c}"
+    return Problem(
+        "3.5",
+        f"في المثلث ${a}{b}{c}$ النقطة ${d}$ منتصف ${a}{b}$ والنقطة ${e}$ منتصف ${a}{c}$. "
+        f"إذا كان {given_text}، فما طول ${asked_name}$؟",
+        lengths(value),
+        length_wrongs(value, given, base + half, abs(base - half)),
+        (
+            f"القطعة ${d}{e}$ تصل بين منتصفي ضلعين في المثلث، فهي توازي الضلع الثالث وطولها نصف طوله: "
+            f"${d}{e}=\\dfrac{{1}}{{2}}{b}{c}$",
+            f"إذن ${asked_name}={value}$ سم.",
+        ),
+        "K",
+        {
+            "type": "midsegment",
+            "base": base,
+            "mid": half,
+            "asked": "DE" if know_base else "BC",
+            "value": value,
+        },
+    )
+
+
+@variant("3.5", G10, example=3)
+def parallel_line_with_whole_side(rng: random.Random) -> Problem:
+    ad, db, ae, ec = parallel_values(rng, 2, 6)
+    a, b, c, d, e = rng.choice(LETTER_SETS)
+    whole, side = ad + db, ae + ec
+    unknown = rng.choice(["AE", "EC", "AC"])
+    value = {"AE": ae, "EC": ec, "AC": side}[unknown]
+    names = {"AE": f"{a}{e}", "EC": f"{e}{c}", "AC": f"{a}{c}"}
+    if unknown == "AC":
+        given = f"${a}{d}={ad}$ سم و${a}{b}={whole}$ سم و${a}{e}={ae}$ سم"
+        wrong = (sp.Rational(ae * db, ad), ae + db, sp.Rational(ae * ad, whole))
+        finish = f"${a}{c}={a}{e}+{e}{c}={ae}+{ec}={side}$ سم."
+        method = (
+            f"من التناسب $\\dfrac{{{a}{d}}}{{{d}{b}}}=\\dfrac{{{a}{e}}}{{{e}{c}}}$ نجد "
+            f"${e}{c}=\\dfrac{{{ae}\\times {db}}}{{{ad}}}={ec}$ سم."
+        )
+    else:
+        given = f"${a}{d}={ad}$ سم و${a}{b}={whole}$ سم و${a}{c}={side}$ سم"
+        wrong = (
+            (sp.Rational(side * ad, db), side - ad, sp.Rational(side * db, whole))
+            if unknown == "AE"
+            else (sp.Rational(side * db, ad), ae, side - db)
+        )
+        method = (
+            f"نفرض ${a}{e}=y$ فيكون ${e}{c}={side}-y$، ومن التناسب "
+            f"$\\dfrac{{{ad}}}{{{db}}}=\\dfrac{{y}}{{{side}-y}}$ نجد ${db}y={ad}({side}-y)$، أي ${whole}y={ad * side}$، "
+            f"إذن ${a}{e}={ae}$ سم."
+        )
+        finish = f"${a}{e}={ae}$ سم." if unknown == "AE" else f"${e}{c}={a}{c}-{a}{e}={side}-{ae}={ec}$ سم."
+    return Problem(
+        "3.5",
+        f"في المثلث ${a}{b}{c}$ تقع ${d}$ على ${a}{b}$ و${e}$ على ${a}{c}$ والقطعة ${d}{e}$ توازي ${b}{c}$. "
+        f"إذا كان {given}، فما طول ${names[unknown]}$؟",
+        lengths(value),
+        length_wrongs(value, *wrong),
+        (
+            f"نجد ${d}{b}={a}{b}-{a}{d}={db}$ سم، ثم نستعمل التناسب الناتج عن توازي ${d}{e}$ و${b}{c}$: "
+            f"$\\dfrac{{{a}{d}}}{{{d}{b}}}=\\dfrac{{{a}{e}}}{{{e}{c}}}$",
+            method,
+            finish,
+        ),
+        "A",
+        {
+            "type": "parallel_division",
+            "values": {"AD": ad, "DB": db, "AE": ae, "EC": ec},
+            "asked": unknown,
+            "value": value,
+        },
+    )
+
+
+@variant("3.5", G10, example=3)
+def medial_triangle_perimeter(rng: random.Random) -> Problem:
+    a, b, c = rng.choice([("A", "B", "C"), ("P", "Q", "R"), ("K", "L", "M")])
+    d, e, f = {"A": ("D", "E", "F"), "P": ("S", "T", "U"), "K": ("N", "X", "Y")}[a]
+    sides = rng.choice(
+        [
+            (8, 10, 12),
+            (12, 14, 18),
+            (10, 16, 18),
+            (14, 18, 20),
+            (16, 20, 24),
+            (6, 8, 10),
+            (20, 24, 28),
+            (18, 22, 26),
+        ]
+    )
+    perimeter = sum(sides) // 2
+    return Problem(
+        "3.5",
+        f"في المثلث ${a}{b}{c}$: ${a}{b}={sides[0]}$ سم و${b}{c}={sides[1]}$ سم و${c}{a}={sides[2]}$ سم. "
+        f"النقاط ${d}$ و${e}$ و${f}$ منتصفات ${a}{b}$ و${b}{c}$ و${c}{a}$ على الترتيب. أوجد محيط المثلث ${d}{e}{f}$.",
+        lengths(perimeter),
+        length_wrongs(perimeter, sum(sides), sides[0] // 2 + sides[1] // 2, sum(sides) // 4),
+        (
+            f"كل ضلع في المثلث ${d}{e}{f}$ يصل بين منتصفي ضلعين في المثلث الكبير، فطوله نصف طول الضلع الثالث.",
+            f"${d}{e}=\\dfrac{{{sides[2]}}}{{2}}={sides[2] // 2}$ سم، و${e}{f}=\\dfrac{{{sides[0]}}}{{2}}={sides[0] // 2}$ سم، "
+            f"و${f}{d}=\\dfrac{{{sides[1]}}}{{2}}={sides[1] // 2}$ سم.",
+            f"المحيط $={sides[2] // 2}+{sides[0] // 2}+{sides[1] // 2}={perimeter}$ سم.",
+        ),
+        "A",
+        {"type": "medial_perimeter", "sides": sides, "value": perimeter},
+    )
+
+
+@variant("3.5", G10, example=2)
+def parallel_line_find_x(rng: random.Random) -> Problem:
+    a, b, c, d, e = rng.choice(LETTER_SETS)
+    while True:
+        u, v = reduced_pair(rng, 2, 6)
+        x0, unit_one, unit_two = rng.randint(2, 9), rng.randint(2, 4), rng.randint(1, 3)
+        m1, m2 = rng.randint(1, 4), rng.randint(1, 4)
+        db, ad0, ec, ae0 = v * unit_one, u * unit_one, v * unit_two, u * unit_two
+        n1, n2 = ad0 - m1 * x0, ae0 - m2 * x0
+        if m1 * ec != m2 * db and abs(n1) <= 12 and abs(n2) <= 12:
+            break
+    shown_ad, shown_ae = f"{lead(m1)}x{signed(n1)}", f"{lead(m2)}x{signed(n2)}"
+    ad_expr, ae_expr = m1 * x + n1, m2 * x + n2
+    whole = ad0 + db
+    coefficient, constant = m1 * ec - m2 * db, n2 * db - n1 * ec
+    return Problem(
+        "3.5",
+        f"في المثلث ${a}{b}{c}$ تقع ${d}$ على ${a}{b}$ و${e}$ على ${a}{c}$ بحيث ${d}{e}\\parallel {b}{c}$. "
+        f"إذا كان ${a}{d}={shown_ad}$ سم و${d}{b}={db}$ سم و${a}{e}={shown_ae}$ سم و${e}{c}={ec}$ سم، "
+        f"فأوجد قيمة $x$ ثم طول ${a}{b}$.",
+        f"$x={x0}$ و${a}{b}={whole}$ سم",
+        (
+            f"$x={x0 + 1}$ و${a}{b}={whole + m1}$ سم",
+            f"$x={x0 - 1}$ و${a}{b}={whole - m1}$ سم",
+            f"$x={x0}$ و${a}{b}={ad0}$ سم",
+        ),
+        (
+            f"توازي ${d}{e}$ و${b}{c}$ يعطي التناسب $\\dfrac{{{a}{d}}}{{{d}{b}}}=\\dfrac{{{a}{e}}}{{{e}{c}}}$، "
+            f"أي $\\dfrac{{{shown_ad}}}{{{db}}}=\\dfrac{{{shown_ae}}}{{{ec}}}$",
+            f"نضرب طرفًا في وسط: ${ec}({shown_ad})={db}({shown_ae})$، أي ${tex(sp.expand(ec * ad_expr))}={tex(sp.expand(db * ae_expr))}$",
+            f"نجمع الحدود المتشابهة: ${coefficient}x={constant}$، إذن $x=\\dfrac{{{constant}}}{{{coefficient}}}={x0}$.",
+            f"${a}{d}={m1}({x0}){signed(n1)}={ad0}$ سم، فـ${a}{b}={a}{d}+{d}{b}={ad0}+{db}={whole}$ سم.",
+        ),
+        "R",
+        {"type": "parallel_algebra", "proportion": (ad_expr, db, ae_expr, ec), "x": x0, "total": whole},
+    )
+
+
+TRANSVERSALS = (
+    ("ثلاثة شوارع متوازية يقطعها شارعان", "الشارع الأول", "الشارع الثاني"),
+    ("ثلاثة أسلاك متوازية يقطعها ساقان", "الساق الأولى", "الساق الثانية"),
+    ("ثلاث قنوات ري متوازية يقطعها طريقان", "الطريق الأول", "الطريق الثاني"),
+)
+
+
+@variant("3.5", G10, example=3)
+def parallel_lines_two_transversals(rng: random.Random) -> Problem:
+    scene, first, second = rng.choice(TRANSVERSALS)
+    u, v = reduced_pair(rng, 2, 8)
+    s, t = rng.randint(1, 4), rng.randint(2, 6)
+    if s == t:
+        s += 1
+    p, q = u * s, v * s
+    one, two, total = u * t, v * t, (u + v) * t
+    answer = f"${one}$ م و${two}$ م"
+    return Problem(
+        "3.5",
+        f"{scene}. على {first} تحدد المستقيمات المتوازية الثلاثة قطعتين طولاهما ${p}$ م و${q}$ م، "
+        f"وعلى {second} المسافة بين المستقيمين الأول والثالث ${total}$ م. "
+        f"أوجد طولي القطعتين اللتين تحددهما المستقيمات الثلاثة على {second}.",
+        answer,
+        text_wrongs(
+            answer,
+            f"${two}$ م و${one}$ م",
+            f"${total - p}$ م و${total - q}$ م",
+            f"${one + 1}$ م و${two - 1}$ م",
+            f"${total // 2}$ م و${total - total // 2}$ م",
+            f"${one + 2}$ م و${two - 2}$ م",
+        ),
+        (
+            "المستقيمات المتوازية التي تقطع قاطعين تقسمهما إلى أجزاء متناسبة: النسبة بين القطعتين على أحد القاطعين تساوي "
+            "النسبة بين القطعتين المناظرتين على الآخر.",
+            f"نفرض القطعتين $a$ و$b$ حيث $a+b={total}$ و$\\dfrac{{a}}{{b}}=\\dfrac{{{p}}}{{{q}}}$",
+            f"مجموع أجزاء النسبة ${p}+{q}={p + q}$، فـ$a=\\dfrac{{{p}}}{{{p + q}}}\\times {total}={one}$ م و$b={total}-{one}={two}$ م.",
+        ),
+        "R",
+        {"type": "transversals", "first": (p, q), "second": (one, two), "total": total},
     )

@@ -243,8 +243,23 @@ def test_health_stays_ok_for_both_courses(client):
 # --- العرض للتوليد: جدول بلا مولّدات لا يُعرض ولا يُسقط المسار ---
 
 
-def test_blueprint_without_generators_is_loaded_but_not_offered():
+def test_complete_grade10_blueprint_is_offered_and_builds_a_full_exam():
+    """بعد المرحلة 5 كل خانات جدول العاشر لها مولّدات: يُعرض ويولَّد اختبارًا كاملًا بـ18 سؤالًا و50 درجة."""
     load_all()
+    assert {blueprint.slug for blueprint in papers.ready_blueprints()} == {G12_FORECAST, FINAL}
+    for seed in range(1, 6):
+        paper = papers.build_exam(FINAL, seed=seed)
+        assert [q["number"] for q in paper["questions"]] == list(range(1, 19))
+        assert sum(q["marks"] for q in paper["questions"]) == paper["total_marks"] == 50
+        assert paper["level_marks"] == {"K": 25, "A": 20, "R": 5}
+
+
+def test_blueprint_without_generators_is_loaded_but_not_offered(monkeypatch):
+    """يُحجب درس 3.5 مؤقتًا: جدول العاشر كامل المولّدات منذ المرحلة 5، فيُحاكى غيابها."""
+    from apps.papers.domain.generators import REGISTRY
+
+    load_all()
+    monkeypatch.delitem(REGISTRY, (GRADE10_SLUG, "3.5"))
     assert [blueprint.slug for blueprint in papers.ready_blueprints()] == [G12_FORECAST]
     assert not papers.blueprint_ready(Blueprint.objects.get(slug=FINAL))
     with pytest.raises(papers.BlueprintNotReadyError):
