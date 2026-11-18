@@ -85,6 +85,8 @@ class Blueprint(models.Model):
 
 class BlueprintItem(AssessmentSlot):
     blueprint = models.ForeignKey(Blueprint, on_delete=models.CASCADE, related_name="items")
+    # مجموعة دروس الوزارة التي تملك الخانة (مثل «2a»): النموذج ب يبدّل دروس المجموعة بين خاناتها. فارغ = بلا تدوير.
+    group = models.CharField(max_length=16, blank=True, default="", db_default="")
 
     class Meta(AssessmentSlot.Meta):
         constraints = [

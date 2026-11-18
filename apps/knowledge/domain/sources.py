@@ -66,6 +66,12 @@ class SlotData(Strict):
     needs_graph: bool = False
 
 
+class BlueprintSlotData(SlotData):
+    """خانة جدول مواصفات: ومعها مجموعة دروس الوزارة التي تملكها (فارغ = بلا تدوير في النموذج ب)."""
+
+    group: str = Field(default="", max_length=16, pattern=r"^[a-z0-9]*$")
+
+
 def repeated_slots(items: list[SlotData]) -> list[tuple[int, int]]:
     slots = [(item.question_number, item.position) for item in items]
     return sorted({slot for slot in slots if slots.count(slot) > 1})

@@ -128,7 +128,15 @@ def sync_blueprint(
     wanted = data.model_dump(exclude={"slug", "items", "source"})
     wanted["source"] = _source(sources, data.source)
     blueprint = _owned(Blueprint, data.slug, course, wanted, changed, "blueprints")
-    sync_slots(BlueprintItem, {"blueprint": blueprint}, data.items, lessons, changed, "blueprint_items")
+    sync_slots(
+        BlueprintItem,
+        {"blueprint": blueprint},
+        data.items,
+        lessons,
+        changed,
+        "blueprint_items",
+        extra=("group",),
+    )
     return blueprint
 
 

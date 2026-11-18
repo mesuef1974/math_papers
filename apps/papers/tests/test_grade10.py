@@ -166,3 +166,49 @@ def test_full_exam_carries_the_course_grade_and_real_lesson_titles():
         titles = {part["lesson_title"] for q in paper["questions"] for part in q["parts"]}
         assert not any(title.startswith("الدرس ") for title in titles)
     assert services.build_worksheet("3.5", 2, 5, course=GRADE10_SLUG)["grade"] == "الصف 10"
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("seed", [1, 7, 42])
+def test_form_b_rotates_lessons_within_each_ministry_group(seed):
+    """النموذج ب يبدّل دروس كل مجموعة بين خاناتها: النوع والدرجة والمستوى ثابتة، ودروس المجموعة كلها مغطاة،
+    وأغلب الفروع بدرس غير درسها في أ، وفروع السؤال الواحد بدروس مختلفة."""
+    load_all()
+    group_of = {
+        (item.question_number, item.position): item.group
+        for item in BlueprintItem.objects.filter(blueprint__slug=FINAL)
+    }
+    paper_a = services.build_exam(FINAL, seed)
+    paper_b = services.build_exam(FINAL, seed, "B")
+    assert paper_b == services.build_exam(FINAL, seed, "B")  # حتمي من البذرة
+    assert paper_a["level_marks"] == paper_b["level_marks"] == {"K": 25, "A": 20, "R": 5}
+    covered_a: dict[str, set[str]] = {}
+    covered_b: dict[str, set[str]] = {}
+    moved = 0
+    for qa, qb in zip(paper_a["questions"], paper_b["questions"], strict=True):
+        lessons_b = [part["lesson"] for part in qb["parts"]]
+        assert len(set(lessons_b)) == len(lessons_b)
+        for index, (pa, pb) in enumerate(zip(qa["parts"], qb["parts"], strict=True)):
+            group = group_of[(qa["number"], index + 1)]
+            assert (pa["slot"]["kind"], pa["marks"], pa["level"]) == (
+                pb["slot"]["kind"],
+                pb["marks"],
+                pb["level"],
+            )
+            covered_a.setdefault(group, set()).add(pa["lesson"])
+            covered_b.setdefault(group, set()).add(pb["lesson"])
+            moved += pa["lesson"] != pb["lesson"]
+    assert covered_b == covered_a  # كل درس في مجموعته، ولا يغيب درس
+    assert moved >= 17  # 3.5 وحده يملك مستوى R في مجموعته فيبقى
+
+
+@pytest.mark.django_db
+def test_grade12_form_b_keeps_its_lessons():
+    """جدول بلا مجموعات (الثاني عشر المبذور) لا يدور: ب يكرر دروس أ بأعداد جديدة."""
+    load_all()
+    slug = next(b.slug for b in services.ready_blueprints() if b.course.slug != GRADE10_SLUG)
+    lessons = [
+        [part["lesson"] for q in services.build_exam(slug, 3, form)["questions"] for part in q["parts"]]
+        for form in ("A", "B")
+    ]
+    assert lessons[0] == lessons[1]

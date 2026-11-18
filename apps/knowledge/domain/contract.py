@@ -42,10 +42,10 @@ from .sources import (
     ASSESSMENTS,
     SCOPES,
     YEAR,
+    BlueprintSlotData,
     CalendarData,
     CoverageData,
     PastExamData,
-    SlotData,
     SourceData,
     TermPlanData,
     repeated_slots,
@@ -89,7 +89,7 @@ class LessonRef(_Strict):
     examinable: bool = True
 
 
-BlueprintItemData = SlotData  # اسم قديم: خانة جدول المواصفات
+BlueprintItemData = BlueprintSlotData  # اسم قديم: خانة جدول المواصفات
 
 
 class BlueprintData(_Strict):
@@ -102,12 +102,21 @@ class BlueprintData(_Strict):
     total_marks: int = Field(ge=1, le=200)
     is_forecast: bool
     source: str | None = None  # معرّف ملفه في sources.json
-    items: list[SlotData] = Field(min_length=1)
+    items: list[BlueprintSlotData] = Field(min_length=1)
 
     def model_post_init(self, __context: object) -> None:
         repeated = repeated_slots(self.items)
         if repeated:
             raise ValueError(f"خانة مكررة في جدول المواصفات {self.slug}: {repeated}")
+        grouped = {bool(item.group) for item in self.items}
+        if len(grouped) > 1:
+            raise ValueError(f"الجدول {self.slug}: المجموعة لكل الخانات أو لا لأي منها")
+        groups = [
+            {item.group for item in self.items if item.question_number == q}
+            for q in {i.question_number for i in self.items}
+        ]
+        if any(len(g) > 1 for g in groups):
+            raise ValueError(f"الجدول {self.slug}: فروع السؤال الواحد في مجموعة واحدة")
         total = sum(item.marks for item in self.items)
         if total != self.total_marks:
             raise ValueError(f"درجات بنود الجدول {self.slug} مجموعها {total} والمعلن {self.total_marks}")

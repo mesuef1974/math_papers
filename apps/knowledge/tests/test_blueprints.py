@@ -107,6 +107,16 @@ def test_contract_rejects_bad_blueprints():
         CourseKnowledge(**data)
 
     data = grade10()
+    final(data)["items"][0]["group"] = ""
+    with pytest.raises(ValidationError, match="المجموعة لكل الخانات أو لا لأي منها"):
+        CourseKnowledge(**data)
+
+    data = grade10()
+    final(data)["items"][11]["group"] = "2a"  # الفرع الثاني من السؤال 11 (مجموعة الوحدة 1)
+    with pytest.raises(ValidationError, match="فروع السؤال الواحد في مجموعة واحدة"):
+        CourseKnowledge(**data)
+
+    data = grade10()
     data["blueprints"].append(final(data))
     with pytest.raises(ValidationError, match="معرّف جدول مواصفات مكرر"):
         CourseKnowledge(**data)
@@ -121,7 +131,14 @@ def test_contract_rejects_bad_blueprints():
     ):
         with pytest.raises(ValidationError):
             BlueprintData(**{**base, **change})
-    for change in ({"kind": "oral"}, {"level": "X"}, {"marks": 0}, {"marks": 2.5}, {"stem": "نص سؤال"}):
+    for change in (
+        {"kind": "oral"},
+        {"level": "X"},
+        {"marks": 0},
+        {"marks": 2.5},
+        {"stem": "نص سؤال"},
+        {"group": "الوحدة 2"},  # المجموعة رمز قصير لا نص
+    ):
         with pytest.raises(ValidationError):
             BlueprintData(**{**base, "items": [{**base["items"][0], **change}]})
 
@@ -158,6 +175,16 @@ def test_loader_writes_the_blueprint_and_second_load_changes_nothing():
     assert {item.lesson.course.slug for item in items} == {GRADE10_SLUG}
     assert all(item.lesson.examinable for item in items)
     assert not blueprint.items.filter(lesson__code__in=ENRICHMENT).exists()
+    # مجموعات الوزارة الأربع كما في الجدول: الوحدة 2 مقسومة بأرقام الأسئلة
+    groups = {item.group: set() for item in items}
+    for item in items:
+        groups[item.group].add(item.lesson.code)
+    assert groups == {
+        "1": {"1.1", "1.2", "1.3"},
+        "2a": {"2.1", "2.2", "2.3", "2.5", "2.6"},
+        "2b": {"2.7", "2.8", "2.9", "2.10"},
+        "3": {"3.3", "3.4", "3.5"},
+    }
     eleven = [(i.position, i.lesson.code, i.marks) for i in items if i.question_number == 11]
     assert eleven == [(1, "1.3", 3), (2, "1.2", 2)]
 
