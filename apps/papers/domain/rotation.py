@@ -39,13 +39,13 @@ def rotate(slots: Sequence[RotationSlot], fits: Fits, rng: random.Random) -> dic
     return result
 
 
-def _rotate_group(
-    slots: list[RotationSlot], fits: Fits, rng: random.Random
-) -> dict[tuple[int, int], str]:
+def _rotate_group(slots: list[RotationSlot], fits: Fits, rng: random.Random) -> dict[tuple[int, int], str]:
     lessons = list(dict.fromkeys(slot.lesson for slot in slots))
     options = []
     for slot in slots:
-        fitting = [code for code in lessons if code == slot.lesson or fits(code, slot.kind, slot.level, slot.graph)]
+        fitting = [
+            code for code in lessons if code == slot.lesson or fits(code, slot.kind, slot.level, slot.graph)
+        ]
         options.append(fitting)
     best: list[tuple[str, ...]] = []
     best_score = (-1, -1)

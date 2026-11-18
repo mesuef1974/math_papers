@@ -46,7 +46,6 @@ from .sources import (
     CalendarData,
     CoverageData,
     PastExamData,
-    SlotData,
     SourceData,
     TermPlanData,
     repeated_slots,
@@ -112,7 +111,10 @@ class BlueprintData(_Strict):
         grouped = {bool(item.group) for item in self.items}
         if len(grouped) > 1:
             raise ValueError(f"الجدول {self.slug}: المجموعة لكل الخانات أو لا لأي منها")
-        groups = [{item.group for item in self.items if item.question_number == q} for q in {i.question_number for i in self.items}]
+        groups = [
+            {item.group for item in self.items if item.question_number == q}
+            for q in {i.question_number for i in self.items}
+        ]
         if any(len(g) > 1 for g in groups):
             raise ValueError(f"الجدول {self.slug}: فروع السؤال الواحد في مجموعة واحدة")
         total = sum(item.marks for item in self.items)

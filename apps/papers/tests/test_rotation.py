@@ -49,4 +49,6 @@ def test_groups_do_not_mix_and_ungrouped_slots_stay():
 
 def test_rotation_is_deterministic_from_the_seed():
     slots = [slot(n, 0, "g", f"1.{n}") for n in range(1, 6)]
-    assert rotate(slots, everything_fits, random.Random(9)) == rotate(slots, everything_fits, random.Random(9))
+    assert rotate(slots, everything_fits, random.Random(9)) == rotate(
+        slots, everything_fits, random.Random(9)
+    )

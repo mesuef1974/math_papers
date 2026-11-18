@@ -129,7 +129,13 @@ def sync_blueprint(
     wanted["source"] = _source(sources, data.source)
     blueprint = _owned(Blueprint, data.slug, course, wanted, changed, "blueprints")
     sync_slots(
-        BlueprintItem, {"blueprint": blueprint}, data.items, lessons, changed, "blueprint_items", extra=("group",)
+        BlueprintItem,
+        {"blueprint": blueprint},
+        data.items,
+        lessons,
+        changed,
+        "blueprint_items",
+        extra=("group",),
     )
     return blueprint
 

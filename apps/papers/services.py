@@ -41,7 +41,10 @@ logger = logging.getLogger(__name__)
 MAX_SEED = 2**31 - 1
 PART_LABELS = "ABCDEFGH"
 OPTION_LABELS = "ABCD"  # تطابق ترتيب عرض الخيارات في الواجهة
-FORMS = ("A", "B")  # نموذجان متكافئان: ب بالبنية والصيغ نفسها وأعداد مختلفة، والاختبار ذو المجموعات يدوّر دروسه
+FORMS = (
+    "A",
+    "B",
+)  # نموذجان متكافئان: ب بالبنية والصيغ نفسها وأعداد مختلفة، والاختبار ذو المجموعات يدوّر دروسه
 PURPOSES = {"remedial": ("K", "ورقة علاجية"), "enrichment": ("R", "ورقة إثرائية")}
 # الاختبار القصير من 10: أربعة موضوعية بدرجة وسؤالان مقاليان بثلاث، بمستويات متدرجة
 QUIZ_SLOTS = (
@@ -372,7 +375,9 @@ def build_form_b(
     for question in paper_a["questions"]:
         parts = []
         for index, part in enumerate(question["parts"]):
-            code, title = (lessons or {}).get((question["number"], index), (part["lesson"], part["lesson_title"]))
+            code, title = (lessons or {}).get(
+                (question["number"], index), (part["lesson"], part["lesson_title"])
+            )
             slot = PartSlot(
                 part["label"],
                 code,

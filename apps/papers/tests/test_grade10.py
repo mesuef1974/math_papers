@@ -190,7 +190,11 @@ def test_form_b_rotates_lessons_within_each_ministry_group(seed):
         assert len(set(lessons_b)) == len(lessons_b)
         for index, (pa, pb) in enumerate(zip(qa["parts"], qb["parts"], strict=True)):
             group = group_of[(qa["number"], index + 1)]
-            assert (pa["slot"]["kind"], pa["marks"], pa["level"]) == (pb["slot"]["kind"], pb["marks"], pb["level"])
+            assert (pa["slot"]["kind"], pa["marks"], pa["level"]) == (
+                pb["slot"]["kind"],
+                pb["marks"],
+                pb["level"],
+            )
             covered_a.setdefault(group, set()).add(pa["lesson"])
             covered_b.setdefault(group, set()).add(pb["lesson"])
             moved += pa["lesson"] != pb["lesson"]
