@@ -1,0 +1,287 @@
+{
+ "source": "g12-sci-s1-term-plan",
+ "sessions_per_week": 6,
+ "class_during_exams": {
+  "start": "2026-10-13",
+  "end": "2026-10-22",
+  "note": "الخطة تضع في أسبوعي اختبارات منتصف الفصل أربع حصص في كل أسبوع، فالحصص تُعقد رغم الإغلاق. النافذة من تقويم الصفين 10 و11 (تقويم الثاني عشر غير مسجَّل)"
+ },
+ "lost_days": [
+  "2026-10-14",
+  "2026-10-15",
+  "2026-10-21",
+  "2026-10-22"
+ ],
+ "enrichment_lessons": [
+  "3.6"
+ ],
+ "enrichment_examples": {
+  "2.2": [
+   6
+  ],
+  "2.6": [
+   5
+  ],
+  "2.8": [
+   4,
+   5
+  ],
+  "2.9": [
+   6
+  ],
+  "3.5": [
+   4
+  ]
+ },
+ "notes": [
+  "حصص الأسبوعين 7 و8 أربع لا ست، واليومان الفاقدان غير محددين في الخطة: افتُرض الأربعاء والخميس. أثره في تواريخ الحصص لا في ترتيبها ولا أعدادها",
+  "خلية زمن الأسبوع 14 بلا يوم نهايته في الوثيقة: عُيّن بالأحد الوحيد بعد الأسبوع 13"
+ ],
+ "weeks": [
+  {
+   "n": 1,
+   "start": "2026-08-30",
+   "end": "2026-09-03",
+   "items": [
+    {
+     "kind": "orientation",
+     "periods": 2
+    },
+    {
+     "kind": "lesson",
+     "lesson": "1.1",
+     "periods": 4
+    }
+   ]
+  },
+  {
+   "n": 2,
+   "start": "2026-09-06",
+   "end": "2026-09-10",
+   "items": [
+    {
+     "kind": "lesson",
+     "lesson": "1.2",
+     "periods": 4
+    },
+    {
+     "kind": "lesson",
+     "lesson": "1.3",
+     "periods": 2
+    }
+   ]
+  },
+  {
+   "n": 3,
+   "start": "2026-09-13",
+   "end": "2026-09-17",
+   "items": [
+    {
+     "kind": "lesson",
+     "lesson": "1.3",
+     "periods": 1
+    },
+    {
+     "kind": "lesson",
+     "lesson": "1.4",
+     "periods": 4
+    },
+    {
+     "kind": "quiz",
+     "unit": 1,
+     "periods": 1
+    }
+   ]
+  },
+  {
+   "n": 4,
+   "start": "2026-09-20",
+   "end": "2026-09-24",
+   "items": [
+    {
+     "kind": "lesson",
+     "lesson": "2.1",
+     "periods": 4
+    },
+    {
+     "kind": "lesson",
+     "lesson": "2.2",
+     "periods": 2
+    }
+   ]
+  },
+  {
+   "n": 5,
+   "start": "2026-09-27",
+   "end": "2026-10-01",
+   "items": [
+    {
+     "kind": "lesson",
+     "lesson": "2.2",
+     "periods": 1
+    },
+    {
+     "kind": "lesson",
+     "lesson": "2.3",
+     "periods": 3
+    },
+    {
+     "kind": "lesson",
+     "lesson": "2.4",
+     "periods": 2
+    }
+   ]
+  },
+  {
+   "n": 6,
+   "start": "2026-10-04",
+   "end": "2026-10-08",
+   "items": [
+    {
+     "kind": "lesson",
+     "lesson": "2.4",
+     "periods": 1
+    },
+    {
+     "kind": "lesson",
+     "lesson": "2.5",
+     "periods": 3
+    },
+    {
+     "kind": "lesson",
+     "lesson": "2.6",
+     "periods": 2
+    }
+   ]
+  },
+  {
+   "n": 7,
+   "start": "2026-10-11",
+   "end": "2026-10-15",
+   "items": [
+    {
+     "kind": "lesson",
+     "lesson": "2.6",
+     "periods": 1
+    },
+    {
+     "kind": "lesson",
+     "lesson": "2.7",
+     "periods": 3
+    }
+   ]
+  },
+  {
+   "n": 8,
+   "start": "2026-10-18",
+   "end": "2026-10-22",
+   "items": [
+    {
+     "kind": "lesson",
+     "lesson": "2.7",
+     "periods": 1
+    },
+    {
+     "kind": "lesson",
+     "lesson": "2.8",
+     "periods": 3
+    }
+   ]
+  },
+  {
+   "n": 10,
+   "start": "2026-11-01",
+   "end": "2026-11-05",
+   "items": [
+    {
+     "kind": "lesson",
+     "lesson": "2.9",
+     "periods": 4
+    },
+    {
+     "kind": "quiz",
+     "unit": 2,
+     "periods": 1
+    },
+    {
+     "kind": "lesson",
+     "lesson": "3.1",
+     "periods": 1
+    }
+   ]
+  },
+  {
+   "n": 11,
+   "start": "2026-11-08",
+   "end": "2026-11-12",
+   "items": [
+    {
+     "kind": "lesson",
+     "lesson": "3.1",
+     "periods": 3
+    },
+    {
+     "kind": "lesson",
+     "lesson": "3.2",
+     "periods": 3
+    }
+   ]
+  },
+  {
+   "n": 12,
+   "start": "2026-11-15",
+   "end": "2026-11-19",
+   "items": [
+    {
+     "kind": "lesson",
+     "lesson": "3.2",
+     "periods": 1
+    },
+    {
+     "kind": "lesson",
+     "lesson": "3.3",
+     "periods": 4
+    },
+    {
+     "kind": "lesson",
+     "lesson": "3.4",
+     "periods": 1
+    }
+   ]
+  },
+  {
+   "n": 13,
+   "start": "2026-11-22",
+   "end": "2026-11-26",
+   "items": [
+    {
+     "kind": "lesson",
+     "lesson": "3.4",
+     "periods": 2
+    },
+    {
+     "kind": "lesson",
+     "lesson": "3.5",
+     "periods": 4
+    }
+   ]
+  },
+  {
+   "n": 14,
+   "start": "2026-11-29",
+   "end": "2026-12-03",
+   "items": [
+    {
+     "kind": "quiz",
+     "unit": 3,
+     "periods": 1
+    },
+    {
+     "kind": "review",
+     "scope": "final",
+     "periods": 5
+    }
+   ]
+  }
+ ]
+}
