@@ -21,6 +21,7 @@ export interface Blueprint {
   title: string;
   total_marks: number;
   is_forecast: boolean;
+  course: string; // معرّف مقرر الجدول
 }
 
 export interface Graph {
@@ -117,6 +118,7 @@ export interface Recipe {
   purpose: Purpose;
   seed: number;
   replacements: Replacement[];
+  course?: string; // فارغ أو غائب في الأوراق المحفوظة قبل المقررات = المقرر الحالي في الخادم
 }
 
 export interface BundleEntry {
@@ -146,8 +148,12 @@ export function accessMessage(error: unknown): string | null {
   return null;
 }
 
+// رقم آخر طلب لخيارات المقرر: تبديل المقرر سريعًا لا يترك دروس مقرر سابق وصل ردّه متأخرًا.
+let optionsTicket = 0;
+
 export const usePapersStore = defineStore("papers", {
   state: () => ({
+    course: "", // المقرر الذي حُمّلت دروسه وجداوله، ويُرسل مع كل توليد
     lessons: [] as Lesson[],
     blueprints: [] as Blueprint[],
     paper: null as Paper | null,
@@ -170,20 +176,27 @@ export const usePapersStore = defineStore("papers", {
     modified: (state) => (state.recipe?.replacements.length ?? 0) > 0,
   },
   actions: {
-    async loadOptions() {
+    // دروس المقرر المختار وجداوله وحدها؛ رمز الدرس «2.6» درس مختلف في كل كتاب.
+    async loadOptions(course = "") {
+      const ticket = ++optionsTicket;
       this.optionsLoading = true;
+      this.error = "";
       try {
-        [this.lessons, this.blueprints] = await Promise.all([
-          api.get<Lesson[]>("/lessons"),
+        const [lessons, blueprints] = await Promise.all([
+          api.get<Lesson[]>(course ? `/lessons?${query({ course })}` : "/lessons"),
           api.get<Blueprint[]>("/blueprints"),
         ]);
+        if (ticket !== optionsTicket) return; // ردّ مقرر سابق وصل بعد تبديل أحدث: لا يكتب فوقه
+        this.course = course;
+        this.lessons = lessons;
+        this.blueprints = course ? blueprints.filter((row) => row.course === course) : blueprints;
       } catch (error) {
         this.error = accessMessage(error) ?? "تعذر تحميل الدروس. أعد تحميل الصفحة.";
       } finally {
-        this.optionsLoading = false;
+        if (ticket === optionsTicket) this.optionsLoading = false;
       }
     },
-    async fetchPaper(path: string, base: Omit<Recipe, "seed" | "replacements" | "form">, twin = false) {
+    async fetchPaper(path: string, base: Omit<Recipe, "seed" | "replacements" | "form" | "course">, twin = false) {
       this.loading = true;
       this.error = "";
       try {
@@ -191,7 +204,7 @@ export const usePapersStore = defineStore("papers", {
         const first = await api.get<Paper>(path);
         this.paper = first;
         this.twin = twin ? await api.get<Paper>(`${path}&${query({ seed: first.seed, form: "B" })}`) : null;
-        this.recipe = { ...base, form: "A", seed: first.seed, replacements: [] };
+        this.recipe = { ...base, form: "A", seed: first.seed, replacements: [], ...(this.course ? { course: this.course } : {}) };
         this.savedId = null;
         this.savedTitle = "";
       } catch (error) {
@@ -218,7 +231,7 @@ export const usePapersStore = defineStore("papers", {
       // الغرض يحدد المستوى في الخادم؛ لا يُرسل مستوى معه حتى لا يتعارضا.
       const effectiveLevel = purpose ? "" : level;
       return this.fetchPaper(
-        `/papers/worksheet?${query({ lesson, count, seed, level: effectiveLevel, purpose })}`,
+        `/papers/worksheet?${query({ lesson, count, seed, level: effectiveLevel, purpose, course: this.course })}`,
         { kind: "worksheet", blueprint: "", lesson_code: lesson, count, level: effectiveLevel, purpose },
         twin,
       );
@@ -228,7 +241,7 @@ export const usePapersStore = defineStore("papers", {
       const codes = [...new Set(lessons.filter(Boolean))].slice(0, QUIZ_MAX_LESSONS);
       const lesson_code = codes.join(",");
       return this.fetchPaper(
-        `/papers/quiz?${query({ lessons: lesson_code, seed })}`,
+        `/papers/quiz?${query({ lessons: lesson_code, seed, course: this.course })}`,
         { kind: "quiz", blueprint: "", lesson_code, count: 0, level: "", purpose: "" },
         twin,
       );
@@ -249,6 +262,8 @@ export const usePapersStore = defineStore("papers", {
           marks: old.marks,
           slot: old.slot,
           exclude,
+          // مقرر الورقة نفسها لا المختار الآن: ورقة محفوظة من كتاب آخر تُستبدل من كتابها
+          ...(this.recipe.course ? { course: this.recipe.course } : {}),
         });
         question.parts.splice(index, 1, part);
         this.recipe.replacements.push({ question: questionNumber, label, seed, fingerprint: part.fingerprint });

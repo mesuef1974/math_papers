@@ -33,6 +33,7 @@ class CourseOut(Schema):
     grade: int
     track: str
     semester: int
+    academic_year: str
     edition: str
     language: str
     is_current: bool
@@ -54,6 +55,11 @@ class BlueprintOut(Schema):
     title: str
     total_marks: int
     is_forecast: bool
+    course: str  # معرّف مقرر الجدول: الواجهة تعرض جداول المقرر المختار وحده
+
+    @staticmethod
+    def resolve_course(obj) -> str:
+        return obj.course.slug if obj.course_id else ""
 
 
 class GraphOut(Schema):
@@ -292,6 +298,7 @@ def courses(request: HttpRequest):
             "grade": row.grade,
             "track": row.track,
             "semester": row.semester,
+            "academic_year": row.academic_year,
             "edition": row.edition,
             "language": row.language,
             "is_current": row.is_current,

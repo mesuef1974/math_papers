@@ -175,7 +175,7 @@ def blueprint_ready(blueprint: Blueprint) -> bool:
 
 def ready_blueprints() -> list[Blueprint]:
     """الجداول المعروضة للتوليد: جدول يُحمَّل قبل مولّدات مقرره يبقى في القاعدة ولا يُعرض حتى تكتمل."""
-    rows = selectors.blueprints().prefetch_related("items__lesson__course")
+    rows = selectors.blueprints().select_related("course").prefetch_related("items__lesson__course")
     return [blueprint for blueprint in rows if blueprint_ready(blueprint)]
 
 
