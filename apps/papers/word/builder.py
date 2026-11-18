@@ -117,8 +117,9 @@ NUMBER_RANGE = re.compile(r"\d+(?:\s*[-–/]\s*\d+)+")
 
 def isolate_number_ranges(text: str) -> str:
     """في فقرة عربية يقلب Word المدى «2026-2027» إلى «2027-2026» (الأرقام بعد حرف عربي أرقام عربية والشرطة لا تصلها)؛
-    علامة LRM قبله تجعله تشغيلًا من اليسار إلى اليمين. نظير isolateNumberRanges في utils/bidi.ts."""
-    return NUMBER_RANGE.sub(lambda match: f"{x.LRM}{match.group(0)}", text)
+    علامة LRM قبله تجعله تشغيلًا من اليسار إلى اليمين، وRLM بعده تُنهيه فلا يُسحب إليه رقم يليه
+    (التذييل «العاشر، 2026-2027 – 10» كان يُقرأ «العاشر، 10 – 2026-2027»). نظير isolateNumberRanges في utils/bidi.ts."""
+    return NUMBER_RANGE.sub(lambda match: f"{x.LRM}{match.group(0)}{x.RLM}", text)
 
 
 def header_of(paper: dict, profile: dict, date: str, section: str, multi: bool) -> dict:
