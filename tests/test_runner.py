@@ -1,5 +1,6 @@
 """المشغّل المجدوَل: الجلسة الآلية تملك صلاحية الاختبار والإيداع، وما لا يصلح للدفع لا يُدفع، والمهمة مخفية."""
 
+import json
 import subprocess
 import xml.etree.ElementTree as ET
 from datetime import datetime
@@ -10,15 +11,17 @@ import pytest
 from automation import runner, schedule
 
 CARD = "20260101-abcdef"
+HEAD = "a" * 40
 NS = {"t": "http://schemas.microsoft.com/windows/2004/02/mit/task"}
 
 
 class Shell:
     """بديل runner.sh: يسجّل الأوامر ويجيب بما ضُبط لكل أمر."""
 
-    def __init__(self, ahead="1", status="", prepush=0):
+    def __init__(self, ahead="1", status="", prepush=0, changed="", receipt=None):
         self.calls: list[tuple[list[str], dict]] = []
-        self.ahead, self.status, self.prepush = ahead, status, prepush
+        self.ahead, self.status, self.prepush, self.changed = ahead, status, prepush, changed
+        self.receipt = {"head": HEAD, "checks": {"ruff": "ok", "tests": "ok"}} if receipt is None else receipt
 
     def __call__(self, cmd, cwd=None, check=True, **kw):
         self.calls.append((cmd, kw))
@@ -28,11 +31,17 @@ class Shell:
         elif cmd[:2] == ["git", "status"]:
             out = self.status
         elif cmd[:2] == ["git", "rev-parse"]:
-            out = "a" * 40
+            out = HEAD
+        elif cmd[:2] == ["git", "diff"]:
+            out = self.changed
+        elif cmd[:3] == ["git", "worktree", "add"]:
+            Path(cmd[5]).mkdir(parents=True)
         elif cmd[:3] == ["gh", "pr", "create"]:
             out = "https://example.invalid/pull/1"
         elif "scripts/prepush_check.py" in cmd:
             code = self.prepush
+            if self.receipt:
+                (Path(cwd) / ".prepush_receipt").write_text(json.dumps(self.receipt), encoding="utf-8")
         return subprocess.CompletedProcess(cmd, code, stdout=out, stderr="")
 
     def ran(self, *prefix: str) -> bool:
@@ -52,6 +61,7 @@ def world(tmp_path, monkeypatch):
     monkeypatch.setattr(
         runner.ledger, "append", lambda card, event, **data: events.append((card, event, data))
     )
+    monkeypatch.setattr(runner.sync, "quiet", lambda *_: "")
     monkeypatch.delenv("DATABASE_URL", raising=False)
     return events
 
@@ -64,9 +74,10 @@ def test_model_command_grants_tests_and_commits_but_never_push():
     cmd = runner.model_command("sonnet", 12)
     allowed = cmd[cmd.index("--allowedTools") + 1 : cmd.index("--disallowedTools")]
     denied = cmd[cmd.index("--disallowedTools") + 1 :]
-    assert {"Edit", "Bash(python *)", "Bash(git add *)", "Bash(git commit *)"} <= set(allowed)
-    assert not any("push" in tool or "gh pr" in tool or "railway" in tool for tool in allowed)
-    assert {"Bash(git push*)", "Bash(gh pr merge*)", "Bash(railway*)"} <= set(denied)
+    assert {"Edit", "Bash(python -m pytest *)", "Bash(git add *)", "Bash(git commit *)"} <= set(allowed)
+    assert "Bash(python *)" not in allowed, "بايثون مطلق يفتح كل ما حُجب"
+    assert not any("git push" in tool or "(gh" in tool or "railway" in tool for tool in allowed)
+    assert {"Bash(git push*)", "Bash(gh pr merge*)", "Bash(gh *)", "Bash(railway*)"} <= set(denied)
     assert cmd[1] == "-p" and cmd[cmd.index("--max-turns") + 1] == "12"
     assert cmd[cmd.index("--model") + 1] == "sonnet"
 
@@ -80,12 +91,46 @@ def test_work_env_puts_project_python_first_and_a_test_database(monkeypatch):
     assert runner.work_env(CARD)["DATABASE_URL"] == "postgres://x"
 
 
+def test_model_env_cannot_publish_but_the_runner_env_can(monkeypatch):
+    monkeypatch.setenv("GIT_CONFIG_COUNT", "1")
+    monkeypatch.setenv("GIT_CONFIG_KEY_0", "core.quotepath")
+    monkeypatch.setenv("GIT_CONFIG_VALUE_0", "false")
+    monkeypatch.delenv("GH_TOKEN", raising=False)
+    env = runner.model_env(CARD)
+    assert env["GIT_CONFIG_COUNT"] == "2" and env["GIT_CONFIG_KEY_0"] == "core.quotepath"
+    assert (env["GIT_CONFIG_KEY_1"], env["GIT_CONFIG_VALUE_1"]) == (
+        "remote.origin.pushurl",
+        runner.PUSH_DISABLED,
+    )
+    assert env["GH_TOKEN"] == env["GITHUB_TOKEN"] == runner.GH_NO_AUTH
+    own = runner.work_env(CARD)
+    assert "GH_TOKEN" not in own and own["GIT_CONFIG_COUNT"] == "1"
+
+
+def test_push_disabled_url_really_stops_git_push(tmp_path, monkeypatch):
+    """git حقيقي: ببيئة النموذج يفشل الدفع إلى مستودع محلي يقبله ببيئة المشغّل."""
+    for name in ("GIT_CONFIG_COUNT", "GIT_CONFIG_KEY_0", "GIT_CONFIG_VALUE_0"):
+        monkeypatch.delenv(name, raising=False)
+    remote, work = tmp_path / "remote.git", tmp_path / "work"
+
+    def git(*args, env=None, cwd=work):
+        return subprocess.run(["git", *args], cwd=cwd, env=env, capture_output=True, text=True)
+
+    git("init", "--bare", str(remote), cwd=tmp_path)
+    git("init", str(work), cwd=tmp_path)
+    git("remote", "add", "origin", str(remote))
+    git("-c", "user.name=t", "-c", "user.email=t@example.invalid", "commit", "--allow-empty", "-m", "x")
+    assert git("push", "origin", "HEAD:refs/heads/a", env=runner.model_env(CARD)).returncode != 0
+    assert git("push", "origin", "HEAD:refs/heads/a", env=runner.work_env(CARD)).returncode == 0
+
+
 def test_prompt_goes_through_stdin_and_output_is_logged(world, monkeypatch):
     shell = Shell()
     monkeypatch.setattr(runner, "sh", shell)
     assert runner.main([]) == 0
     model_call = next(kw for cmd, kw in shell.calls if "--allowedTools" in cmd)
     assert "عنوان" in model_call["input"] and "DATABASE_URL" in model_call["env"]
+    assert model_call["env"]["GH_TOKEN"] == runner.GH_NO_AUTH
     assert (runner.WORKTREES / f"{CARD}.log").exists()
 
 
@@ -111,6 +156,60 @@ def test_uncommitted_work_is_blocked(world, monkeypatch):
     monkeypatch.setattr(runner, "sh", shell)
     assert runner.main([]) == 1
     assert "apps/core/services.py" in world[-1][2]["reason"] and not shell.ran("git", "push")
+
+
+def test_branch_touching_a_guard_is_blocked_before_the_check_runs(world, monkeypatch):
+    shell = Shell(changed="apps/core/services.py\nscripts/prepush_check.py\n")
+    monkeypatch.setattr(runner, "sh", shell)
+    assert runner.main([]) == 1
+    assert names(world)[-1] == "blocked" and "scripts/prepush_check.py" in world[-1][2]["reason"]
+    assert not shell.ran("git", "push")
+    assert not any("scripts/prepush_check.py" in cmd for cmd, _ in shell.calls)
+
+
+@pytest.mark.parametrize(
+    "path",
+    [".github/workflows/quality-gate.yml", ".claude/hooks/guard_git.py", "automation/runner.py"],
+)
+def test_ci_hooks_and_the_runner_itself_are_guarded(path):
+    assert runner.path_forbidden(path, runner.ALWAYS_FORBIDDEN)
+
+
+def test_runner_check_is_strict_about_missing_tools(world, monkeypatch):
+    shell = Shell()
+    monkeypatch.setattr(runner, "sh", shell)
+    runner.main([])
+    check = next(cmd for cmd, _ in shell.calls if "scripts/prepush_check.py" in cmd)
+    assert "--allow-missing" not in check
+    assert world[-2][1] == "prepush_ok" and world[-2][2]["checks"] == ["ruff", "tests"]
+
+
+@pytest.mark.parametrize(
+    "receipt",
+    [
+        {},
+        {"head": "b" * 40, "checks": {"tests": "ok"}},
+        {"head": HEAD, "checks": {"tests": "ok", "secrets": "missing"}},  # pragma: allowlist secret
+        {"head": HEAD, "checks": {}},
+    ],
+    ids=["no-receipt", "other-head", "unmeasured-check", "no-checks"],
+)
+def test_no_push_without_a_receipt_for_this_head(world, monkeypatch, receipt):
+    shell = Shell(receipt=receipt)
+    monkeypatch.setattr(runner, "sh", shell)
+    assert runner.main([]) == 1
+    assert names(world)[-1] == "prepush_failed" and not shell.ran("git", "push")
+
+
+def test_idle_run_reports_what_the_sync_wrote(world, monkeypatch):
+    monkeypatch.setattr(runner, "sh", Shell())
+    monkeypatch.setattr(runner.ledger, "cards_in", lambda *_: [])
+    monkeypatch.setattr(runner.sync, "quiet", lambda *_: "x → merged (#7)")
+    # CI بلا claude على المسار، فالنبض يُلحق «غائب عن المسار»؛ الاختبار عن المزامنة وحدها.
+    monkeypatch.setattr(runner.shutil, "which", lambda tool: f"/usr/bin/{tool}")
+    assert runner.main([]) == 0
+    log = (runner.WORKTREES / "runner.log").read_text(encoding="utf-8").strip()
+    assert log.endswith("لا بطاقات ready | مزامنة: x → merged (#7)")
 
 
 def test_prepush_receipt_stays_out_of_git():

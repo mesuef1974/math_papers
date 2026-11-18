@@ -19,7 +19,10 @@ from apps.core.services import record_audit
 from apps.curriculum import selectors
 from apps.curriculum.courses import DEFAULT_COURSE, grade_label
 from apps.curriculum.models import Blueprint, BlueprintItem, Course
+from apps.knowledge import selectors as knowledge_selectors
 
+from .domain.answer_positions import balanced_positions
+from .domain.book_source import book_source
 from .domain.generators import (
     LEVEL_NAMES,
     ExhaustedError,
@@ -29,6 +32,7 @@ from .domain.generators import (
     generate,
     generator_version,
     lesson_levels,
+    skill_example,
     variants,
 )
 from .domain.marking import marking
@@ -113,6 +117,13 @@ def new_seed() -> int:
     return secrets.randbelow(MAX_SEED)
 
 
+def _book_source(course: str, lesson: str, name: str) -> dict | None:
+    """مصدر فكرة الجزء في كتاب الطالب: مثال الصيغة وصفحته المطبوعة من فهرس المقرر."""
+    number = skill_example(course, lesson, name)
+    page = knowledge_selectors.example_page(course, lesson, number) if number is not None else None
+    return book_source(number, page)
+
+
 def render_part(problem: Problem, slot: PartSlot, rng: random.Random) -> dict:
     options: list[str] = []
     option_graphs: list[dict] = []
@@ -147,7 +158,31 @@ def render_part(problem: Problem, slot: PartSlot, rng: random.Random) -> dict:
         "variant": problem.variant,
         "fingerprint": problem.fingerprint,
         "slot": {"kind": slot.kind, "level": slot.level, "needs_graph": slot.needs_graph},
+        # المصدر يُضاف حين يُعرف فقط: أوراق الصيغ بلا مثال (الثاني عشر) تبقى كما كانت بايتًا ببايت (البصمات الذهبية)
+        **({"source": source} if (source := _book_source(slot.course, slot.lesson, problem.variant)) else {}),
     }
+
+
+def balance_answers(questions: list[dict], rng: random.Random) -> None:
+    """يوزّع مواضع الإجابة الصحيحة في موضوعيات الورقة على الرموز بالتساوي وبلا تتابع طويل (`answer_positions`).
+
+    الصحيح وحده يُنقل إلى موضعه، والمشتتات على ترتيبها. مولّد أعداد خاص به: المسائل لا تتغير بوجوده.
+    """
+    width = len(OPTION_LABELS)
+    parts = [
+        part
+        for question in questions
+        for part in question["parts"]
+        if part["answer_index"] >= 0 and len(part["options"]) == width
+    ]
+    for part, target in zip(parts, balanced_positions(len(parts), width, rng), strict=True):
+        current = part["answer_index"]
+        for key in ("options", "option_graphs"):
+            if part[key]:
+                part[key].insert(target, part[key].pop(current))
+        part["answer_index"] = target
+        if part["option_graphs"]:
+            part["answer"] = f"الخيار ({OPTION_LABELS[target]})"
 
 
 def generate_for_slot(item: BlueprintItem, rng: random.Random, used: set[str]) -> Problem:
@@ -226,6 +261,7 @@ def build_exam(slug: str, seed: int | None = None, form: str = "A") -> dict:
         questions.append(
             {"number": number, "kind": items[0].kind, "marks": sum(i.marks for i in items), "parts": parts}
         )
+    balance_answers(questions, random.Random(f"answer-positions-{seed}"))  # noqa: S311 — حتمية لا أمنية
     return {
         **paper_meta("exam", course, blueprint=blueprint.slug, lesson_code=""),
         "title": blueprint.title,
@@ -349,6 +385,7 @@ def build_quiz(lesson_codes: list[str], seed: int | None = None, form: str = "A"
         questions.append(
             {"number": index + 1, "kind": kind, "marks": marks, "parts": [render_part(problem, slot, rng)]}
         )
+    balance_answers(questions, random.Random(f"answer-positions-{seed}"))  # noqa: S311 — حتمية لا أمنية
     names = " و".join(f"{lessons[code].code} {lessons[code].title}" for code in codes)
     return {
         **paper_meta("quiz", course_row.slug, blueprint="", lesson_code=",".join(codes)),
@@ -412,6 +449,7 @@ def build_form_b(
             level_marks[problem.level] += slot.marks
             parts.append(render_part(problem, slot, rng))
         questions.append({**question, "parts": parts})
+    balance_answers(questions, random.Random(f"answer-positions-{paper_a['seed']}:B"))  # noqa: S311 — حتمية لا أمنية
     return {
         **paper_a,
         "form": "B",

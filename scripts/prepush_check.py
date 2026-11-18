@@ -6,7 +6,7 @@ detect-secrets على ما تغيّر، pytest سريع (-x -q)، وبناء ا�
 
 الاستعمال:  python scripts/prepush_check.py [--base origin/main] [--frontend] [--allow-missing]
 الخروج:     0 كل ما قيس نجح، 1 فحص فشل، 3 أداة غائبة بلا --allow-missing (لا نجاح صامت).
-يكتب بصمة النجاح في .prepush_receipt (HEAD + الوقت) ليقرأها runner.py.
+يكتب بصمة النجاح في .prepush_receipt (HEAD + الوقت + ما قيس)؛ runner.py لا يدفع إلا ببصمة على رأس الفرع نفسه.
 """
 
 from __future__ import annotations
@@ -22,7 +22,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 OK, FAIL, MISSING = "ok", "fail", "missing"
-TEST_ENV = {"DJANGO_SETTINGS_MODULE": "config.settings.testing", "SECRET_KEY": "ci-testing-only"}
+TEST_ENV = {
+    "DJANGO_SETTINGS_MODULE": "config.settings.testing",
+    "SECRET_KEY": "ci-testing-only",  # pragma: allowlist secret — مفتاح اختبار معلن لا سرّ
+}
 
 
 def run(cmd: list[str], env: dict[str, str] | None = None, cwd: Path = ROOT) -> subprocess.CompletedProcess:
