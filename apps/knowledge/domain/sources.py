@@ -25,6 +25,8 @@ SOURCE_KINDS = (
     "solutions",
 )
 ASSESSMENTS = ("midterm", "final")
+# جدول المواصفات قد يكون لاختبار الملحق (إعادة نهاية الفصل)؛ الخطة الفصلية لا تجدوله
+BLUEPRINT_ASSESSMENTS = (*ASSESSMENTS, "makeup")
 SCOPES = ("full", "first_half", "second_half")
 PLAN_ITEM_KINDS = ("lesson", "review", "quiz", "orientation", "exam", "project", "support")
 CLOSURE_KINDS = ("exam", "break", "holiday", "other")

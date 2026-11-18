@@ -39,7 +39,7 @@ from .schemas import (
     UnitData,
 )
 from .sources import (
-    ASSESSMENTS,
+    BLUEPRINT_ASSESSMENTS,
     SCOPES,
     YEAR,
     BlueprintSlotData,
@@ -97,7 +97,7 @@ class BlueprintData(_Strict):
     title: str = Field(min_length=1, max_length=160)
     academic_year: str = Field(pattern=r"^\d{4}-\d{4}$")
     semester: int = Field(ge=1, le=3)
-    assessment: Literal[*ASSESSMENTS] = "final"  # type: ignore[valid-type]
+    assessment: Literal[*BLUEPRINT_ASSESSMENTS] = "final"  # type: ignore[valid-type]
     scope: Literal[*SCOPES] = "full"  # type: ignore[valid-type]
     total_marks: int = Field(ge=1, le=200)
     is_forecast: bool
