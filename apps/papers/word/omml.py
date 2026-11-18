@@ -58,6 +58,11 @@ SYMBOLS = {
     "exists": "∃",
     "emptyset": "∅",
     "prime": "′",
+    "angle": "∠",
+    "triangle": "△",
+    "parallel": "∥",
+    "perp": "⊥",
+    "sim": "∼",
 }
 BLACKBOARD = {"R": "ℝ", "N": "ℕ", "Z": "ℤ", "Q": "ℚ", "C": "ℂ"}
 FUNCTIONS = {

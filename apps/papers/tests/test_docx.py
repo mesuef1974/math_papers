@@ -55,6 +55,24 @@ def test_limit_fraction_and_scripts_become_native_omml():
     assert "→" in "".join(root.itertext())
 
 
+STRUCTURAL = {"begin", "end", "hline", "left", "lim", "frac", "dfrac", "sqrt", "mathbb", "n"}
+
+
+def test_every_command_in_the_generators_converts_to_a_symbol_not_its_name():
+    """أمر LaTeX لا يعرفه المحوّل يُكتب باسمه نصًّا (\\angle كانت «angle»)؛ كل أمر في المولّدات له رمز."""
+    from pathlib import Path
+
+    domain = Path(__file__).resolve().parents[1] / "domain"
+    names = set()
+    for source in domain.glob("*.py"):
+        names |= set(re.findall(r"\\\\([A-Za-z]+)", source.read_text(encoding="utf-8")))
+    assert "angle" in names
+    for name in sorted(names - STRUCTURAL):
+        text = "".join(parse(f"\\{name} A").itertext())
+        assert name not in text, name
+    assert "∠" in "".join(parse(r"\angle K").itertext())
+
+
 def test_cases_and_delimiters_and_roots():
     cases = parse(r"f(x)=\begin{cases} 2x+1 & x<3 \\ 5 & x\ge 3 \end{cases}")
     assert len(cases.findall(f".//{M}mr")) == 2
