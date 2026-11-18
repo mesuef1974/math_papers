@@ -32,6 +32,7 @@ from .domain.generators import (
     variants,
 )
 from .domain.marking import marking
+from .domain.rotation import RotationSlot, rotate
 from .models import PrintProfile, SavedPaper
 from .selectors import PROFILE_FIELDS, print_profile, saved_paper
 
@@ -40,7 +41,7 @@ logger = logging.getLogger(__name__)
 MAX_SEED = 2**31 - 1
 PART_LABELS = "ABCDEFGH"
 OPTION_LABELS = "ABCD"  # تطابق ترتيب عرض الخيارات في الواجهة
-FORMS = ("A", "B")  # نموذجان متكافئان: ب بالبنية والصيغ نفسها وأعداد مختلفة
+FORMS = ("A", "B")  # نموذجان متكافئان: ب بالبنية والصيغ نفسها وأعداد مختلفة، والاختبار ذو المجموعات يدوّر دروسه
 PURPOSES = {"remedial": ("K", "ورقة علاجية"), "enrichment": ("R", "ورقة إثرائية")}
 # الاختبار القصير من 10: أربعة موضوعية بدرجة وسؤالان مقاليان بثلاث، بمستويات متدرجة
 QUIZ_SLOTS = (
@@ -188,7 +189,7 @@ def build_exam(slug: str, seed: int | None = None, form: str = "A") -> dict:
     seed = new_seed() if seed is None else seed
     course = _course_slug(blueprint.course)
     if form == "B":
-        return build_form_b(build_exam(slug, seed), course)
+        return build_form_b(build_exam(slug, seed), course, rotated_lessons(blueprint, seed, course))
     rng = random.Random(seed)  # noqa: S311 — بذرة قابلة للإعادة، لا استعمال أمني
     grouped: dict[int, list[BlueprintItem]] = defaultdict(list)
     for item in blueprint.items.all():
@@ -229,6 +230,36 @@ def build_exam(slug: str, seed: int | None = None, form: str = "A") -> dict:
         "questions": questions,
         "level": "",
     }
+
+
+def rotated_lessons(blueprint: Blueprint, seed: int, course: str) -> dict[tuple[int, int], tuple[str, str]]:
+    """درس كل فرع في النموذج ب (رقم السؤال، ترتيب الفرع) → (الرمز، العنوان): تبديل داخل مجموعة الوزارة (`group`).
+
+    حتمي من البذرة. جدول بلا مجموعات (الثاني عشر) يبقى على دروس أ.
+    """
+    items = list(blueprint.items.all())
+    titles = {item.lesson.code: item.lesson.title for item in items}
+    order: dict[int, int] = defaultdict(int)
+    slots = []
+    for item in items:
+        index = order[item.question_number]
+        order[item.question_number] += 1
+        slots.append(
+            RotationSlot(
+                (item.question_number, index),
+                item.group,
+                item.lesson.code,
+                item.kind,
+                item.level or "",
+                item.needs_graph,
+            )
+        )
+
+    def fits(code: str, kind: str, level: str, graph: bool) -> bool:
+        return bool(variants(code, kind, level or None, graph, course))
+
+    chosen = rotate(slots, fits, random.Random(f"{seed}:rotate"))  # noqa: S311 — حتمية لا أمنية
+    return {key: (code, titles[code]) for key, code in chosen.items()}
 
 
 def build_worksheet(
@@ -325,8 +356,12 @@ def build_quiz(lesson_codes: list[str], seed: int | None = None, form: str = "A"
     }
 
 
-def build_form_b(paper_a: dict, course: str = DEFAULT_COURSE) -> dict:
+def build_form_b(
+    paper_a: dict, course: str = DEFAULT_COURSE, lessons: dict[tuple[int, int], tuple[str, str]] | None = None
+) -> dict:
     """النموذج ب من النموذج أ: الخانات نفسها والصيغ نفسها (البنية) بأعداد مختلفة، ولا مسألة مشتركة.
+
+    lessons (الاختبار ذو المجموعات) يعطي فرعًا درسًا غير درسه في أ: يُولَّد بمستوى الخانة ونوعها بلا قيد الصيغة.
 
     حتمي من بذرة أ، فيُعاد بالرقم نفسه. صيغة لا تعطي بديلًا جديدًا تُستبدل بأي صيغة مطابقة للخانة.
     """
@@ -336,11 +371,12 @@ def build_form_b(paper_a: dict, course: str = DEFAULT_COURSE) -> dict:
     level_marks: dict[str, int] = defaultdict(int)
     for question in paper_a["questions"]:
         parts = []
-        for part in question["parts"]:
+        for index, part in enumerate(question["parts"]):
+            code, title = (lessons or {}).get((question["number"], index), (part["lesson"], part["lesson_title"]))
             slot = PartSlot(
                 part["label"],
-                part["lesson"],
-                part["lesson_title"],
+                code,
+                title,
                 part["slot"]["kind"],
                 part["marks"],
                 part["slot"]["level"],
@@ -355,7 +391,7 @@ def build_form_b(paper_a: dict, course: str = DEFAULT_COURSE) -> dict:
                     avoid,
                     part["level"],
                     slot.needs_graph,
-                    part["variant"],
+                    part["variant"] if code == part["lesson"] else None,
                     course,
                 )
             except (LevelUnavailableError, ExhaustedError):
