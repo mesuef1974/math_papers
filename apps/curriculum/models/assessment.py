@@ -9,10 +9,11 @@ from .sources import SourceDocument
 
 
 class Assessment(models.TextChoices):
-    """الاختبارات الأربعة في السنة: منتصف كل فصل ونهايته (والفصل من المقرر)."""
+    """الاختبارات الأربعة في السنة: منتصف كل فصل ونهايته (والفصل من المقرر)، وملحق النهاية لمن يعيده."""
 
     MIDTERM = "midterm", "منتصف الفصل"
     FINAL = "final", "نهاية الفصل"
+    MAKEUP = "makeup", "ملحق نهاية الفصل"
 
 
 class Scope(models.TextChoices):

@@ -207,7 +207,7 @@ def test_past_exams_and_coverage_load_as_numbers_and_stay_idempotent():
 @pytest.mark.django_db
 def test_blueprint_records_its_assessment_scope_and_one_official_per_exam():
     load_all()
-    final = Blueprint.objects.get(course__slug=GRADE10_SLUG, is_forecast=False)
+    final = Blueprint.objects.get(course__slug=GRADE10_SLUG, is_forecast=False, assessment="final")
     assert (final.assessment, final.scope) == ("final", "full")
     with pytest.raises(IntegrityError), transaction.atomic():
         Blueprint.objects.create(
@@ -219,6 +219,12 @@ def test_blueprint_records_its_assessment_scope_and_one_official_per_exam():
             total_marks=50,
             is_forecast=False,
         )
+    makeup = Blueprint.objects.get(course=final.course, is_forecast=False, assessment="makeup")
+    assert (makeup.academic_year, makeup.semester, makeup.scope) == (
+        final.academic_year,
+        final.semester,
+        "full",
+    )
     Blueprint.objects.create(  # المتوقَّع قد يتعدد للاختبار نفسه
         slug="g10-forecast",
         course=final.course,

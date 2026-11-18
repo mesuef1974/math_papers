@@ -17,6 +17,7 @@ from apps.papers import services as papers
 pytestmark = pytest.mark.django_db
 
 FINAL = "g10-s1-2026-27-final"
+MAKEUP = "g10-s1-2026-27-makeup"
 G12_FORECAST = "g12-sci-s1-2026-27-forecast"
 ENRICHMENT = {"1.4", "2.4", "3.1", "3.2"}
 # مجموعات جدول الوزارة: الدروس، ثم (عدد الموضوعي، درجته، عدد المقالي، درجته)
@@ -33,7 +34,7 @@ def grade10() -> dict:
 
 
 def final(data: dict) -> dict:
-    (blueprint,) = data["blueprints"]
+    (blueprint,) = [b for b in data["blueprints"] if b["slug"] == FINAL]
     return blueprint
 
 
@@ -166,7 +167,7 @@ def test_course_without_blueprints_keeps_its_content_hash():
 
 def test_loader_writes_the_blueprint_and_second_load_changes_nothing():
     report = load_course(GRADE10_SLUG)
-    assert report.changed["blueprints"] == 1 and report.changed["blueprint_items"] == 19
+    assert report.changed["blueprints"] == 2 and report.changed["blueprint_items"] == 19 + 22
     blueprint = Blueprint.objects.get(slug=FINAL)
     assert blueprint.course.slug == GRADE10_SLUG and not blueprint.is_forecast
     assert (blueprint.total_marks, blueprint.academic_year, blueprint.semester) == (50, "2026-2027", 1)
@@ -261,7 +262,7 @@ def test_grade12_seeded_blueprint_and_release_are_untouched():
     assert (
         list(seeded.items.values_list("pk", "lesson_id", "kind", "marks", "level", "needs_graph")) == before
     )
-    assert Blueprint.objects.count() == 2
+    assert Blueprint.objects.count() == 3  # الثاني عشر المبذور ونهاية العاشر وملحقه
 
 
 def test_health_stays_ok_for_both_courses(client):
@@ -275,12 +276,43 @@ def test_health_stays_ok_for_both_courses(client):
 def test_complete_grade10_blueprint_is_offered_and_builds_a_full_exam():
     """بعد المرحلة 5 كل خانات جدول العاشر لها مولّدات: يُعرض ويولَّد اختبارًا كاملًا بـ18 سؤالًا و50 درجة."""
     load_all()
-    assert {blueprint.slug for blueprint in papers.ready_blueprints()} == {G12_FORECAST, FINAL}
+    assert {blueprint.slug for blueprint in papers.ready_blueprints()} == {G12_FORECAST, FINAL, MAKEUP}
     for seed in range(1, 6):
         paper = papers.build_exam(FINAL, seed=seed)
         assert [q["number"] for q in paper["questions"]] == list(range(1, 19))
         assert sum(q["marks"] for q in paper["questions"]) == paper["total_marks"] == 50
         assert paper["level_marks"] == {"K": 25, "A": 20, "R": 5}
+
+
+def test_makeup_blueprint_follows_the_appendix_map():
+    """جدول الملحق من خارطة ملحق 2024-2025 بدروس 2026-2027: 3-1 الإثرائي مستبدل بدروس الوحدة 3، وفرع 2-8 محذوف (50 درجة)."""
+    data = next(b for b in read_source(GRADE10_SLUG).blueprints if b.slug == MAKEUP)
+    assert (data.assessment, data.scope, data.academic_year, data.total_marks) == (
+        "makeup",
+        "full",
+        "2026-2027",
+        50,
+    )
+    assert len(data.items) == 22 and {item.question_number for item in data.items} == set(range(1, 19))
+    assert [item.lesson for item in data.items if item.kind == "mcq"] == [
+        "1.1", "1.2", "1.3", "2.1", "2.2", "2.8", "2.9", "2.10", "3.3", "3.5",
+    ]  # fmt: skip
+    assert not {item.lesson for item in data.items} & ENRICHMENT
+
+    load_all()
+    blueprint = Blueprint.objects.get(slug=MAKEUP)
+    final_exam = Blueprint.objects.get(slug=FINAL)
+    # الجدولان رسميان للمقرر والسنة والفصل والنطاق نفسها: نوع الاختبار يفرّقهما في قيد التفرد
+    assert (blueprint.course_id, blueprint.academic_year, blueprint.scope) == (
+        final_exam.course_id, final_exam.academic_year, final_exam.scope,
+    )  # fmt: skip
+    assert (blueprint.assessment, final_exam.assessment) == ("makeup", "final")
+    for seed in range(1, 4):
+        a = papers.build_exam(MAKEUP, seed=seed)
+        b = papers.build_exam(MAKEUP, seed=a["seed"], form="B")
+        for paper in (a, b):
+            assert [q["number"] for q in paper["questions"]] == list(range(1, 19))
+            assert paper["total_marks"] == 50 and paper["level_marks"] == {"K": 24, "A": 26}
 
 
 def test_blueprint_without_generators_is_loaded_but_not_offered(monkeypatch):
