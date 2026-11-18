@@ -48,10 +48,7 @@ class SavedPaper(TimeStampedModel):
 
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="saved_papers")
     # مقرر الورقة (من وصفتها، والفارغ فيها المقرر الحالي يوم الحفظ): تُفرز به قائمة معلم يدرّس أكثر من كتاب.
-    # التوسعة: اختياري حتى تعمل النسخة السابقة أثناء النشر؛ يصير مطلوبًا في هجرة لاحقة منفصلة.
-    course = models.ForeignKey(
-        "curriculum.Course", on_delete=models.PROTECT, related_name="saved_papers", null=True, blank=True
-    )
+    course = models.ForeignKey("curriculum.Course", on_delete=models.PROTECT, related_name="saved_papers")
     title = models.CharField(max_length=200)
     kind = models.CharField(max_length=10, choices=Kind.choices)
     blueprint = models.CharField(max_length=80, blank=True)

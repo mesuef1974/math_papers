@@ -98,19 +98,29 @@ def test_save_roundtrip_is_idempotent_and_audited(client):
 
 
 @pytest.mark.django_db
-def test_backfill_links_old_saved_papers_to_their_course(client):
+def test_course_is_required_and_the_guard_migration_is_idempotent(client):
     import importlib
 
     from django.apps import apps
+    from django.db import IntegrityError, transaction
 
     paper = worksheet(client)
     pk = post(client, "/api/v1/saved", {"paper": paper, "recipe": recipe_for(paper)}).json()["id"]
-    SavedPaper.objects.filter(pk=pk).update(course=None)  # كما كانت قبل الهجرة
-    migration = importlib.import_module("apps.papers.migrations.0005_backfill_saved_paper_course")
-    migration.forwards(apps, None)
-    migration.forwards(apps, None)
+    guard = importlib.import_module("apps.papers.migrations.0006_saved_paper_course_guard")
+    guard.forwards(apps, None)
+    guard.forwards(apps, None)
     assert SavedPaper.objects.get(pk=pk).course.slug == "g12-sci-s1"
     assert client.get("/api/v1/saved").json()[0]["course"] == "g12-sci-s1"
+    with pytest.raises(IntegrityError), transaction.atomic():
+        SavedPaper.objects.filter(pk=pk).update(course=None)
+
+
+@pytest.mark.django_db
+def test_unknown_recipe_course_is_rejected_not_saved_without_course(client):
+    paper = worksheet(client)
+    res = post(client, "/api/v1/saved", {"paper": paper, "recipe": {**recipe_for(paper), "course": "nope"}})
+    assert res.status_code == 422
+    assert not SavedPaper.objects.exists()
 
 
 @pytest.mark.django_db

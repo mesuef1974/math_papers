@@ -25,3 +25,7 @@ if not env("DATABASE_URL"):
     from django.core.exceptions import ImproperlyConfigured
 
     raise ImproperlyConfigured("DATABASE_URL مطلوب في الإنتاج")
+
+# الصحة 503 حين تكون معرفة مقرر stale أو unloaded: preDeploy يحمّلها قبل الحركة (ثبت في نشر #79 و#81)، فنسخة لم تُحمَّل
+# معرفتها لا تجتاز فحص Railway وتبقى السابقة. يُطفأ بـ KNOWLEDGE_HEALTH_STRICT=0 عند الحاجة.
+KNOWLEDGE_HEALTH_STRICT = env_bool("KNOWLEDGE_HEALTH_STRICT", True)
