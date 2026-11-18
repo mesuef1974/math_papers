@@ -3,6 +3,8 @@
 
 الصلاحيات: النموذج يكتب الشيفرة ويشغّل الاختبارات فقط. الدفع وفتح الطلب يفعلهما هذا السكربت بعد نجاح
 prepush_check.py، والدمج بوابة CI وطابور الدمج. حارس .claude/hooks/guard_git.py يحجب ما يتسرّب.
+قائمة الأدوات تضيّق لا تعزل (اختبار يكتبه النموذج يشغّل ما يشاء)، فبيئة الجلسة الآلية نفسها بلا دفع
+(`model_env`: عنوان دفع معطَّل ورمز gh غير صالح)، والفرع الذي يمسّ حارسًا أو ملف CI لا يُدفع آليًا.
 
     python automation/runner.py --once [--dry-run] [--max-turns 40] [--model <id>]
 يُجدوَل كل N دقائق (automation/schedule.py)؛ قفل automation/.lock يمنع تشغيلين متوازيين.
@@ -12,6 +14,7 @@ prepush_check.py، والدمج بوابة CI وطابور الدمج. حارس 
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import shutil
 import subprocess
@@ -21,7 +24,10 @@ import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 import ledger  # noqa: E402
+import sync  # noqa: E402
+from merge_gate import ALWAYS_FORBIDDEN, path_forbidden  # noqa: E402
 
 ROOT = ledger.ROOT
 WORKTREES = ROOT / ".worktrees"
@@ -29,6 +35,8 @@ LOCK = ROOT / "automation" / ".lock"
 LOCK_STALE_SECONDS = 3 * 60 * 60
 REQUIRED_TOOLS = ("claude", "git", "gh")
 HEARTBEAT_KEEP = 200
+PUSH_DISABLED = "push-disabled://runner-model"
+GH_NO_AUTH = "runner-model-no-auth"
 
 # الجلسة الآلية بلا من يوافق: ما لم يُسمح به هنا يُرفض، فبلا هذه القائمة لا اختبار يُشغَّل ولا إيداع يُكتب.
 ALLOWED_TOOLS = [
@@ -37,7 +45,10 @@ ALLOWED_TOOLS = [
     "Write",
     "Glob",
     "Grep",
-    "Bash(python *)",
+    "Bash(python manage.py *)",
+    "Bash(python -m pytest *)",
+    "Bash(python -m ruff *)",
+    "Bash(python scripts/prepush_check.py *)",
     "Bash(pytest *)",
     "Bash(ruff *)",
     "Bash(npm --prefix frontend *)",
@@ -53,7 +64,7 @@ DISALLOWED_TOOLS = [
     "Bash(git merge*)",
     "Bash(git rebase*)",
     "Bash(gh pr merge*)",
-    "Bash(gh pr create*)",
+    "Bash(gh *)",
     "Bash(railway*)",
     "Bash(rm -rf*)",
     "WebFetch",
@@ -127,6 +138,18 @@ def work_env(card: str) -> dict[str, str]:
     return env
 
 
+def model_env(card: str) -> dict[str, str]:
+    """بيئة الجلسة الآلية: بيئة العمل بلا قدرة على النشر. git يدفع إلى عنوان معطَّل، وgh برمز غير صالح
+    (يسبق الرمز المخزَّن)، فلا يدفع النموذج ولا يفتح طلبًا ولو من داخل بايثون. الجلب يبقى يعمل."""
+    env = work_env(card)
+    count = int(env.get("GIT_CONFIG_COUNT") or 0)
+    env[f"GIT_CONFIG_KEY_{count}"] = "remote.origin.pushurl"
+    env[f"GIT_CONFIG_VALUE_{count}"] = PUSH_DISABLED
+    env["GIT_CONFIG_COUNT"] = str(count + 1)
+    env["GH_TOKEN"] = env["GITHUB_TOKEN"] = GH_NO_AUTH
+    return env
+
+
 def model_command(model: str | None, max_turns: int) -> list[str]:
     """النص يُمرَّر على الدخل القياسي: الخيارات متعددة القيم تبتلع أي وسيط موضعي يليها."""
     cmd = [shutil.which("claude") or "claude", "-p", "--max-turns", str(max_turns)]
@@ -149,7 +172,7 @@ def run_model(path: Path, card: str, model: str | None, max_turns: int) -> int:
         check=False,
         input=prompt,
         capture_output=True,
-        env=work_env(card),
+        env=model_env(card),
     )
     # مخرجات الجلسة الآلية بجوار شجرة العمل (المجلد خارج git) لمراجعة ما فعله النموذج.
     log = WORKTREES / f"{card}.log"
@@ -168,17 +191,28 @@ def unpushable(path: Path) -> str:
     dirty = [line[3:] for line in status]
     if dirty:
         return "تعديلات غير مودَعة: " + "، ".join(dirty[:5])
+    changed = sh(
+        ["git", "diff", "--name-only", "origin/main...HEAD"], cwd=path, capture_output=True
+    ).stdout.split()
+    guarded = [f for f in changed if path_forbidden(f, ALWAYS_FORBIDDEN)]
+    if guarded:
+        # الفحص المحلي يُشغَّل من نسخة الفرع: فرع عدّل الحارس أو الفحص لا يشهد لنفسه.
+        return "الفرع يمسّ مسارات محروسة (دفعها بيد المالك): " + "، ".join(guarded[:5])
     return ""
 
 
-def prepush(path: Path, card: str) -> bool:
-    proc = sh(
-        [sys.executable, "scripts/prepush_check.py", "--allow-missing"],
-        cwd=path,
-        check=False,
-        env=work_env(card),
-    )
-    return proc.returncode == 0
+def prepush(path: Path, card: str, head: str) -> dict[str, str] | None:
+    """الفحص الصارم (أداة غائبة فشل، لا نجاح صامت) ثم بصمته: ما قيس، وعلى أي رأس. None = لا يُدفع."""
+    receipt = path / ".prepush_receipt"
+    receipt.unlink(missing_ok=True)
+    proc = sh([sys.executable, "scripts/prepush_check.py"], cwd=path, check=False, env=work_env(card))
+    if proc.returncode != 0 or not receipt.exists():
+        return None
+    data = json.loads(receipt.read_text(encoding="utf-8"))
+    checks = data.get("checks") or {}
+    if data.get("head") != head or not checks or any(v != "ok" for v in checks.values()):
+        return None
+    return checks
 
 
 def push_and_open_pr(path: Path, branch: str, card: str) -> str:
@@ -229,10 +263,11 @@ def run_card(card: str, model: str | None, max_turns: int) -> tuple[int, str]:
         if reason := unpushable(path):
             ledger.append(card, "blocked", reason=reason, head=head)
             return 1, f"{card}: لا دفع: {reason} — راجع .worktrees/{card}.log"
-        if not prepush(path, card):
+        checks = prepush(path, card, head)
+        if checks is None:
             ledger.append(card, "prepush_failed", head=head)
             return 1, f"{card}: الفحص المحلي فشل — البطاقة تبقى في worktree للمراجعة"
-        ledger.append(card, "prepush_ok", head=head)
+        ledger.append(card, "prepush_ok", head=head, checks=sorted(checks))
         url = push_and_open_pr(path, branch, card)
         ledger.append(card, "pr_opened", url=url, head=head)
         return 0, f"{card}: PR {url}"
@@ -257,8 +292,9 @@ def main(argv: list[str] | None = None) -> int:
             else "لا بطاقات ready"
         )
         return 0
+    synced = sync.quiet()
     if not card:
-        code, outcome = 0, "لا بطاقات ready"
+        code, outcome = 0, "لا بطاقات ready" + (f" | مزامنة: {synced}" if synced else "")
     elif not acquire_lock():
         code, outcome = 0, "مشغّل آخر يعمل"
     else:

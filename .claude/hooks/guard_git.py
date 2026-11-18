@@ -10,6 +10,7 @@
   add-all          add -A/--all/-u بلا مسارٍ صريح، وadd . (مساراتٌ صريحةٌ وحدَها)
   commit-all       commit -a/--all
   stash            stash (عدا list وshow) — المكدّسُ مشترك
+  push-any         كلُّ `git push` (عدا `--dry-run`): الدفعُ نشرٌ في مستودعٍ عامّ، فبإذن المالك الصريح وحدَه (قرارُه 2026-11-18)
   push-main        الدفعُ إلى main/master (وبلا وجهةٍ وأنت عليه)
   push-force       push --force/-f/--force-with-lease/--force-if-includes/+refspec
   push-delete      push --delete/-d/:ref/--prune/--mirror
@@ -172,7 +173,7 @@ class Ctx:
 
 
 LOCAL_RULES = frozenset(
-    {"add-all", "commit-all", "stash", "push-main", "no-verify", "reset-hard", "branch-delete"}
+    {"add-all", "commit-all", "stash", "push-any", "push-main", "no-verify", "reset-hard", "branch-delete"}
     | {"tag-delete", "ref-delete", "history-rewrite", "clean-force", "discard-all"}
 )
 CD_COMMANDS = frozenset({"cd", "pushd", "chdir", "set-location", "sl"})
@@ -646,6 +647,15 @@ def _stash(sub: str, args: list[str], ctx: Ctx) -> str | None:
     return "لا `git stash` — المكدّسُ مشترك: تخبّئ أنت ويستخرج غيرُك. استعمل إيداعاً مؤقّتاً."
 
 
+def _push_any(sub: str, args: list[str], ctx: Ctx) -> str | None:
+    if sub != "push":
+        return None
+    o = parse_opts(args, sub)
+    if "--dry-run" in o.longs or "-n" in o.shorts:
+        return None
+    return "لا `git push` من الجلسة بلا إذن المالك الصريح بهذا الدفع — المشغّلُ يدفع البطاقاتِ الآليّة، والجلسةُ تدفع بإذنٍ يُكتب في التجاوز."
+
+
 def _push_main(sub: str, args: list[str], ctx: Ctx) -> str | None:
     if sub != "push":
         return None
@@ -785,6 +795,7 @@ GIT_RULES: dict[str, Callable[[str, list[str], Ctx], str | None]] = {
     "add-all": _add_all,
     "commit-all": _commit_all,
     "stash": _stash,
+    "push-any": _push_any,
     "push-main": _push_main,
     "push-force": _push_force,
     "push-delete": _push_delete,
