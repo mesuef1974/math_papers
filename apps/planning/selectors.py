@@ -77,13 +77,13 @@ def lesson_codes(course: str = PLAN_COURSE) -> list[str]:
 
 
 def outcome_records(owner: AbstractBaseUser, section: str | None = None) -> QuerySet[ClassOutcomeRecord]:
-    rows = ClassOutcomeRecord.objects.filter(owner=owner)
+    rows = ClassOutcomeRecord.objects.filter(owner=owner).select_related("lesson")
     return rows.filter(section=section) if section else rows
 
 
 def outcome_of(record: ClassOutcomeRecord) -> ClassOutcome:
     return ClassOutcome(
-        record.lesson_code, record.attempted, record.correct, record.pace, frozenset(record.obstacles)
+        record.lesson.code, record.attempted, record.correct, record.pace, frozenset(record.obstacles)
     )
 
 
@@ -93,7 +93,7 @@ def decision_of(record: ClassOutcomeRecord) -> Decision:
 
 
 def run_reports(owner: AbstractBaseUser, section: str | None = None) -> QuerySet[LessonRunRecord]:
-    rows = LessonRunRecord.objects.filter(owner=owner)
+    rows = LessonRunRecord.objects.filter(owner=owner).select_related("lesson")
     return rows.filter(section=section) if section else rows
 
 

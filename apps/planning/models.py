@@ -1,7 +1,7 @@
 """نموذجان نحيلان: نتيجة الصف في الدرس وتقرير الحصة. مستوى الشعبة فقط (لا بيانات طلاب فردية: PDPPL). المنطق في services.py.
 
 السجل يرتبط بالدرس نفسه (`lesson`، ومنه مقرره): الرمز «1.1» درس مختلف في كل كتاب، ومعلم يدرّس صفّين لا تتصادم سجلاته.
-`lesson_code` نسخة من الرمز باقية من قبل الربط (تُحذف في طلب لاحق منفصل)؛ `lesson` مطلوب.
+`lesson` مطلوب وهو مصدر الرمز الوحيد (`lesson.code`): لا نسخة من الرمز في السجل.
 """
 
 from __future__ import annotations
@@ -21,7 +21,6 @@ class ClassOutcomeRecord(TimeStampedModel):
     )
     section = models.CharField(max_length=20)
     lesson = models.ForeignKey("curriculum.Lesson", on_delete=models.PROTECT, related_name="class_outcomes")
-    lesson_code = models.CharField(max_length=10)
     attempted = models.PositiveSmallIntegerField()
     correct = models.PositiveSmallIntegerField()
     pace = models.CharField(max_length=4, default="ok")
@@ -40,7 +39,7 @@ class ClassOutcomeRecord(TimeStampedModel):
         ]
 
     def __str__(self) -> str:
-        return f"{self.section} · {self.lesson_code}: {self.correct}/{self.attempted}"
+        return f"{self.section} · {self.lesson.code}: {self.correct}/{self.attempted}"
 
 
 class LessonRunRecord(TimeStampedModel):
@@ -49,7 +48,6 @@ class LessonRunRecord(TimeStampedModel):
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="lesson_runs")
     section = models.CharField(max_length=20)
     lesson = models.ForeignKey("curriculum.Lesson", on_delete=models.PROTECT, related_name="lesson_runs")
-    lesson_code = models.CharField(max_length=10)
     period_minutes = models.PositiveSmallIntegerField()
     started_at = models.DateTimeField()
     finished = models.BooleanField(default=False)
@@ -64,4 +62,4 @@ class LessonRunRecord(TimeStampedModel):
         ]
 
     def __str__(self) -> str:
-        return f"{self.section} · {self.lesson_code} @ {self.started_at:%Y-%m-%d %H:%M}"
+        return f"{self.section} · {self.lesson.code} @ {self.started_at:%Y-%m-%d %H:%M}"
