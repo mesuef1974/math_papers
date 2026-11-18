@@ -205,6 +205,8 @@ def test_idle_run_reports_what_the_sync_wrote(world, monkeypatch):
     monkeypatch.setattr(runner, "sh", Shell())
     monkeypatch.setattr(runner.ledger, "cards_in", lambda *_: [])
     monkeypatch.setattr(runner.sync, "quiet", lambda *_: "x → merged (#7)")
+    # CI بلا claude على المسار، فالنبض يُلحق «غائب عن المسار»؛ الاختبار عن المزامنة وحدها.
+    monkeypatch.setattr(runner.shutil, "which", lambda tool: f"/usr/bin/{tool}")
     assert runner.main([]) == 0
     log = (runner.WORKTREES / "runner.log").read_text(encoding="utf-8").strip()
     assert log.endswith("لا بطاقات ready | مزامنة: x → merged (#7)")
