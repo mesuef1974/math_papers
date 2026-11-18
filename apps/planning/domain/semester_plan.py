@@ -1,6 +1,6 @@
 """الخطة الفصلية: بنود الوزارة وأعداد حصصها أسبوعًا بأسبوع، تُحمَّل من بيانات عددية وتُحوَّل إلى بنود المحرك. حتمي، بلا Django.
 
-`data/grade10_term1_plan.json` أعداد وأرقام دروس وأنواع بنود فقط، بلا نص من وثيقة الوزارة (قاعدة نطاق المحتوى)؛ عناوين العرض من عندنا.
+الخطة في العقد القانوني (`term_plan.json` في مجلد المقرر، `apps/knowledge/domain/sources.py`) وفي الجداول (`apps.curriculum.TermPlan`)، أعداد وأرقام دروس وأنواع بنود فقط، بلا نص من وثيقة الوزارة؛ عناوين العرض من عندنا.
 التحقق صارم: أسبوع يبدأ الأحد وينتهي الخميس، ومجموع حصصه خمس إلا الأيام الفاقدة فيه، ودرس مخطّط أو إثرائي غير معروف خطأ، ودرس واحد لا يكون
 مخططًا وإثرائيًا معًا. الأيام الفاقدة وإغلاق الاختبارات الذي تُعقد الحصص رغمه من أقوال الخطة نفسها (حصصها في ذلك الأسبوعين أربع)، ويبقى اليوم
 الفاقد المحدد افتراضًا موثّقًا في الملف.
@@ -16,7 +16,6 @@ from datetime import date
 from pathlib import Path
 
 from .calendar_engine import (
-    DATA_DIR,
     ITEM_KINDS,
     WEEKDAYS,
     Item,
@@ -102,8 +101,19 @@ def _entry(raw: dict) -> PlanEntry:
     return entry
 
 
-def load_term_plan(path: Path | None = None) -> TermPlan:
-    raw = json.loads((path or DATA_DIR / "grade10_term1_plan.json").read_text(encoding="utf-8"))
+def term_id(semester: int) -> str:
+    """معرّف الفصل في المحرك من رقمه: الفصل الأول «t1»."""
+    return f"t{semester}"
+
+
+def load_term_plan(path: Path) -> TermPlan:
+    """خطة من ملف بصيغة العقد (`term_plan.json` في مجلد المقرر)؛ الفصل من الملف إن ذُكر وإلا الأول."""
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    return parse_term_plan(raw, int(raw.get("semester", 1)))
+
+
+def parse_term_plan(raw: dict, semester: int) -> TermPlan:
+    """خطة الوزارة من بياناتها العددية (صيغة `TermPlanData` في العقد) بعد التحقق الكامل منها."""
     per_week = int(raw.get("sessions_per_week", DEFAULT_SESSIONS_PER_WEEK))
     window = raw.get("class_during_exams")
     lost = tuple(date.fromisoformat(d) for d in raw.get("lost_days", ()))
@@ -117,7 +127,7 @@ def load_term_plan(path: Path | None = None) -> TermPlan:
         for w in raw["weeks"]
     )
     plan = TermPlan(
-        term_id=raw["term"],
+        term_id=term_id(semester),
         sessions_per_week=per_week,
         class_during_exams=(date.fromisoformat(window["start"]), date.fromisoformat(window["end"]))
         if window

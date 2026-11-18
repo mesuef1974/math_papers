@@ -8,10 +8,10 @@ from django.db.models import Sum
 
 from apps.curriculum.courses import GRADE12_SLUG
 
-from .domain.contract import SCHEMA_VERSION, source_hash, source_index, source_slugs
+from .domain.contract import SCHEMA_VERSION, source_hash, source_slugs
 from .domain.course_index import CourseIndex, LessonIndex
 from .domain.schemas import lesson_sort_key
-from .models import ExerciseTemplate, LessonProfile
+from .models import ExerciseTemplate, LessonProfile, Source
 
 
 @dataclass(frozen=True)
@@ -50,11 +50,13 @@ def coverage(course: str = GRADE12_SLUG) -> list[CoverageRow]:
 
 
 def course_index(course: str) -> CourseIndex:
-    """الفهرس المشتق لمقرر من ملفه المودَع. `KeyError` لمقرر بلا مصدر أو بلا فهرس مشتق (معرفته بصياغتنا)."""
-    index = source_index(course)
-    if index is None:
-        raise KeyError(f"لا فهرس مشتق للمقرر {course}")
-    return index
+    """الفهرس المشتق لمقرر من جداوله (ما حمّله المحمِّل الواحد من `index.json`)؛ الجداول مصدر القراءة الوحيد.
+
+    `KeyError` لمقرر لم يُحمَّل أو بلا دروس مستخرجة (معرفته بصياغتنا).
+    """
+    if not LessonProfile.objects.filter(lesson__course__slug=course, source=Source.EXTRACTED).exists():
+        raise KeyError(f"لا فهرس مشتق محمَّل للمقرر {course}")
+    return course_index_from_tables(course)
 
 
 def lesson_index(course: str, code: str) -> LessonIndex | None:

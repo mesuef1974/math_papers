@@ -16,18 +16,20 @@ from apps.assets.models import Asset
 from apps.assets.selectors import asset_bytes
 from apps.assets.storage import Storage
 from apps.curriculum.courses import GRADE10_SLUG
+from apps.curriculum.models import Course
+from apps.curriculum.selectors import calendar_data, term_plan_data
 from apps.knowledge.domain.course_index import LessonIndex
 from apps.knowledge.domain.schemas import lesson_sort_key
 from apps.knowledge.selectors import course_index, lesson_index
 
-from .domain.calendar_engine import Closure, Plan, Slot, allocate, load_terms, sessions
+from .domain.calendar_engine import Closure, Plan, Slot, Term, allocate, parse_terms, sessions
 from .domain.deck import Deck, ExampleClip, LessonContent, build_deck
 from .domain.feedback import ClassOutcome, Decision, decide
 from .domain.semester_plan import (
     TermPlan,
     check_catalog,
-    load_term_plan,
     ministry_slots,
+    parse_term_plan,
     plan_items,
     term_for_plan,
 )
@@ -39,7 +41,7 @@ from .domain.strategies import (
 )
 from .models import ClassOutcomeRecord, LessonRunRecord
 
-PLAN_COURSE = GRADE10_SLUG  # مقرر الخطة الفصلية المودَعة (`domain/semester_plan.py`)
+PLAN_COURSE = GRADE10_SLUG  # المقرر الافتراضي للتخطيط: أول مقرر له خطة فصلية في الجداول
 
 
 def profile_from_lesson(lesson: LessonIndex) -> LessonProfile:
@@ -108,22 +110,34 @@ def lesson_deck(
     return build_deck(lesson, content, flow)
 
 
-def term_plan() -> TermPlan:
-    """خطة الفصل الأول للوزارة بعد مطابقة دروسها وأمثلتها الإثرائية على الفهرس المشتق."""
-    plan = load_term_plan()
-    index = course_index(PLAN_COURSE)
+def _course_plan(course: str) -> tuple[Course, TermPlan]:
+    row, raw = term_plan_data(course)
+    plan = parse_term_plan(raw, row.semester)
+    index = course_index(course)
     check_catalog(
         plan,
         [lesson.lesson for lesson in index.lessons],
         {lesson.lesson: [e.n for e in lesson.examples] for lesson in index.lessons},
     )
-    return plan
+    return row, plan
 
 
-def term1_schedule(slots: Collection[Slot] | None = None) -> tuple[TermPlan, list, Plan]:
+def term_plan(course: str = PLAN_COURSE) -> TermPlan:
+    """خطة الوزارة الفصلية للمقرر من جداولها، بعد مطابقة دروسها وأمثلتها الإثرائية على فهرسه. `KeyError` بلا خطة."""
+    return _course_plan(course)[1]
+
+
+def calendar_terms(year: str) -> dict[str, Term]:
+    """فصول تقويم السنة الأكاديمية من جداوله بمعرّفاتها «t1» و«t2»."""
+    return parse_terms(calendar_data(year))
+
+
+def term1_schedule(
+    slots: Collection[Slot] | None = None, course: str = PLAN_COURSE
+) -> tuple[TermPlan, list, Plan]:
     """توزيع بنود الوزارة على حصص شعبة (الافتراضي خمس حصص أسبوعيًا): الخطة والبنود وما وضعه المحرك."""
-    plan = term_plan()
-    term = term_for_plan(load_terms()[plan.term_id], plan)
+    row, plan = _course_plan(course)
+    term = term_for_plan(calendar_terms(row.academic_year)[plan.term_id], plan)
     lost = [Closure(d, d, "other", "يوم فاقد") for d in plan.lost_days]
     free = sessions(term, slots or ministry_slots(), lost)
     items = plan_items(plan)
