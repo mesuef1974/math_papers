@@ -221,6 +221,119 @@ def test_table_without_header_is_ignored():
         parse([stray])
 
 
+def test_fingerprint_of_a_cell():
+    cells = [
+        None,
+        "",
+        " \n",
+        span("2026-08-30"),
+        "الدرس 2.10: عنوان",
+        "5",
+        " 12 ",
+        "٣",
+        "مثال 4",
+        "123",
+        "6/9",
+    ]
+    assert "".join(map(term_plan.fingerprint, cells)) == "N--YL###ttt"
+
+
+def test_headerless_continuation_with_extra_column_in_another_position():
+    first = PageTable(1, [HEAD, ["", span("2026-08-30"), "الدرس 1.1", "5"]])
+    continuation = PageTable(  # خمسة أعمدة بترتيب غير ترتيب الترويسة: درس، زائد، حصص، زمن، فارغ
+        2,
+        [
+            ["الدرس 1.2", "", "3", span("2026-09-06", 1), ""],
+            ["الدرس 1.3", "ملاحظة من عندنا", "2", None, ""],
+            ["مشروع تطبيقي", "", "5", span("2026-09-13", 2), ""],
+        ],
+    )
+    weeks = parse([first, continuation])["weeks"]
+    assert [(w["n"], w["start"]) for w in weeks] == [(1, "2026-08-30"), (2, "2026-09-06"), (3, "2026-09-13")]
+    assert weeks[1]["items"] == [
+        {"kind": "lesson", "lesson": "1.2", "periods": 3},
+        {"kind": "lesson", "lesson": "1.3", "periods": 2},
+    ]
+    assert weeks[2]["items"] == [{"kind": "project", "periods": 5}]
+
+
+def test_headerless_continuation_of_original_width_after_single_column_tables():
+    first = PageTable(1, [HEAD, ["", span("2026-08-30"), "الدرس 1.1", "5"]])
+    notes = [PageTable(2, [["توقيع من عندنا"]]), PageTable(2, [["ملاحظة أولى"], ["ملاحظة ثانية"]])]
+    continuation = PageTable(
+        3,
+        [
+            ["", span("2026-09-06"), "الدرس 1.2", "3"],
+            [None, None, "دعم ومعالجة", "2"],
+        ],
+    )
+    weeks = parse([first, *notes, continuation])["weeks"]
+    assert [w["n"] for w in weeks] == [1, 2]
+    assert weeks[1]["items"] == [
+        {"kind": "lesson", "lesson": "1.2", "periods": 3},
+        {"kind": "support", "periods": 2},
+    ]
+
+
+def test_holiday_rows_with_year_in_first_column_do_not_pick_the_time_column():
+    # العمود الأول يحمل سنة في ثلاثة صفوف بلا حصص، وعمود الزمن الحقيقي في خليتين فقط (المدموجة None)
+    continuation = PageTable(
+        2,
+        [
+            ["", "الدرس 2.5", "3", span("2026-10-18")],
+            [None, "الدرس 2.6", "2", None],
+            ["إجازة منتصف الفصل 2026", None, None, None],
+            ["اختبارات مغلقة 2026", None, None, None],
+            ["عطلة العام 2026/2027", None, None, None],
+            ["", "الدرس 2.7", "5", span("2026-11-01", 1)],
+        ],
+    )
+    weeks = parse([continuation])["weeks"]
+    assert [(w["n"], w["start"]) for w in weeks] == [(1, "2026-10-18"), (3, "2026-11-01")]
+    assert [len(w["items"]) for w in weeks] == [2, 1]
+
+
+def test_enrichment_table_is_found_by_content_without_its_header_word():
+    table = PageTable(
+        4,
+        [
+            ["الدرس", "المحتوى", "ملاحظات"],  # ترويسة بلا الكلمة: تُتخطى
+            ["1.4", "الدرس كله", ""],
+            ["2.7", "مثال 4، 5", ""],
+            ["3.3", "مثال 1 و مثال 2\nاثبات النظريتين 2-1 و 3-1", "ملاحظة من عندنا"],
+        ],
+    )
+    extracted = parse([week_table(("الدرس 1.1", "5")), table])
+    assert extracted["enrichment_lessons"] == ["1.4"]
+    assert extracted["enrichment_examples"] == {"2.7": [4, 5], "3.3": [1, 2]}
+
+
+def test_quiz_unit_after_continuation_is_from_last_lesson_not_a_stale_unit_cell():
+    first = week_table(("الدرس 2.10", "5", "الوحدة 2"))
+    continuation = PageTable(
+        3,
+        [
+            ["", span("2026-09-06"), "الدرس 3.1", "4"],
+            [None, None, "مراجعة واختبار الوحدة", "1"],
+        ],
+    )
+    weeks = parse([first, continuation])["weeks"]
+    assert weeks[1]["items"][1] == {"kind": "quiz", "unit": 3, "periods": 1}
+
+
+def test_headerless_table_with_periods_but_unresolved_columns_is_rejected_with_page():
+    first = week_table(("الدرس 1.1", "5"))
+    no_time = PageTable(5, [["الدرس 1.2", "3", "حاشية"], ["الدرس 1.3", "2", "حاشية"]])
+    with pytest.raises(TermPlanError, match="الصفحة 5") as error:
+        parse([first, no_time])
+    assert "حاشية" not in str(error.value)
+
+
+def test_headerless_signature_table_is_ignored():
+    signatures = PageTable(3, [["الاسم", "التوقيع", "التاريخ"], ["", "", ""], ["المعلم", "", "2026"]])
+    assert len(parse([week_table(("الدرس 1.1", "5")), signatures])["weeks"]) == 1
+
+
 def run(tables, *args):
     return main(["plan.pdf", "--course", "g10-s1", *map(str, args)], read=lambda pdf: tables)
 

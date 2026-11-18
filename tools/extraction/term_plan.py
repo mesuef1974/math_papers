@@ -4,7 +4,8 @@
 
 طبقتان: قارئ PDF (`read_tables`، pdfplumber باستيراد كسول) يعيد جداول الصفحات خلايا نصية بترتيب منطقي، ومحلّل نقي (`parse`)
 يحوّلها إلى قاموس بصيغة `TermPlanData` (`apps/knowledge/domain/sources.py`). الأعمدة تُحدَّد من كلمات الترويسة لا من موضعها، والكلمات
-تُطابَق بمفتاح يُسقط الباء والهمزة لأن خط الوثيقة يسقطهما. ما لا يُصنَّف خطأ صريح بالصفحة والصف، ولا يُخمَّن، والخطأ لا يحمل نص الخلية.
+تُطابَق بمفتاح يُسقط الباء والهمزة لأن خط الوثيقة يسقطهما. الجدول بلا ترويسة (تتمة صفحة، أو الإثرائي حين يسقط الخط كلمته) يُصنَّف
+ببصمات خلاياه (`fingerprint`) لا بعرضه ولا بما قبله. ما لا يُصنَّف خطأ صريح بالصفحة والصف، ولا يُخمَّن، والخطأ لا يحمل نص الخلية.
 `lost_days` و`class_during_exams` و`notes` يدوية: تُحفظ من الملف الموجود ولا تُستخرج.
 """
 
@@ -44,6 +45,8 @@ Row = list[str | None]
 # تتابع الأرقام بفواصله (2.10 و30/8) وحدة واحدة يسارًا إلى يمين في خوارزمية الاتجاه
 _RUN = re.compile(r"\d+(?:[.,:/\-]\d+)*")
 _LESSON = re.compile(r"(?<!\d)\d{1,2}\.\d{1,2}(?!\d)")
+_YEAR = re.compile(r"(?<!\d)\d{4}(?!\d)")
+_COUNT = re.compile(r"\d{1,2}")
 _THEOREM = re.compile(r"\d+\s*-\s*\d+")
 _EXAMPLE_WORD = re.compile("مثال|مثله")
 _EXAMPLES = re.compile(r"(?:مثال|مثله)\s*:?\s*(\d+(?:\s*[،,و]?\s*\d+)*)")
@@ -107,6 +110,58 @@ def _columns(row: Row) -> dict[str, int] | None:
             if _has(key, word):
                 found.setdefault(name, index)
     return found if {"periods", "lesson", "time"} <= found.keys() else None
+
+
+def fingerprint(cell: str | None) -> str:
+    """بصمة الخلية حرفًا: N مدموجة، - فارغة، Y فيها عدد بأربع خانات، L فيها رمز درس، # عدد بخانة أو خانتين وحده، t غير ذلك."""
+    if cell is None:
+        return "N"
+    text = norm(cell).strip()
+    if not text:
+        return "-"
+    if _YEAR.search(text):
+        return "Y"
+    if _LESSON.search(text):
+        return "L"
+    return "#" if _COUNT.fullmatch(text) else "t"
+
+
+def _marks(rows: list[Row]) -> list[str]:
+    """بصمات الجدول صفًّا صفًّا بعرض واحد (الصف القصير يُكمَل N)."""
+    width = max((len(row) for row in rows), default=0)
+    return ["".join(map(fingerprint, row)).ljust(width, "N") for row in rows]
+
+
+def _is_enrichment(marks: list[str]) -> bool:
+    """جدول الإثرائي بمحتواه: لا عدد حصص ولا سنة في أي خلية، والعمود الأول رمز درس في نصف الصفوف فأكثر."""
+    if any(mark in "#Y" for row in marks for mark in row):
+        return False
+    return 2 * sum(row[0] == "L" for row in marks) >= len(marks)
+
+
+def _continuation(marks: list[str], page: int) -> dict[str, int] | None:
+    """أعمدة تتمة الجدول الرئيسي بلا ترويسة من بصمات خلاياها، أو None إن لم يكن الجدول تتمة (توقيعات وملاحظات)."""
+
+    def best(rows: list[str], wanted: str, skip: tuple[int, ...]) -> tuple[int, int]:
+        counts = [
+            (sum(row[index] in wanted for row in rows), sum(row[index] == wanted[0] for row in rows), -index)
+            for index in range(len(marks[0]))
+            if index not in skip
+        ]
+        count, _, index = max(counts, default=(0, 0, 0))
+        return -index, count
+
+    periods, count = best(marks, "#", ())
+    if count == 0 or count < 0.4 * len(marks):
+        return None
+    counted = [
+        row for row in marks if row[periods] == "#"
+    ]  # صفوف الإجازة قد تحمل سنة خارج عمود الزمن: لا تُحسب
+    lesson, lessons = best(counted, "Lt", (periods,))
+    time, times = best(counted, "Y", (periods, lesson))
+    if not lessons or not times:
+        raise TermPlanError(f"جدول بلا ترويسة فيه عمود حصص ولم تتعيّن أعمدته (الصفحة {page})")
+    return {"periods": periods, "lesson": lesson, "time": time}
 
 
 def week_start(numbers: list[int], after: date | None = None) -> date | None:
@@ -238,23 +293,33 @@ class _Builder:
 def parse(tables: Iterable[PageTable]) -> dict[str, Any]:
     """المحلّل النقي: جداول بخلايا منطقية النص إلى الحقول المستخرجة (الأسابيع وحصصها الأسبوعية والإثرائي)."""
     builder = _Builder()
-    mode: str | None = None
-    columns: dict[str, int] = {}
-    width = 0
     for table in tables:
-        own = False  # الجدول بلا ترويسة يتبع ما قبله إن ساواه عرضًا (تتمة صفحة)، وإلا يُهمل
-        if width != max((len(row) for row in table.rows), default=0):
-            mode = None
+        mode: str | None = None
+        columns: dict[str, int] = {}
+        marks = _marks(table.rows)
         for number, row in enumerate(table.rows, start=1):
             header = _columns(row)
             if header:
-                mode, columns, width, own = "main", header, len(row), True
-            elif not own and number <= 2 and any(_ENRICHMENT in _key(cell or "") for cell in row):
-                mode, width, own = "enrichment", len(row), True
+                mode, columns = "main", header
+            elif mode is None and number <= 2 and any(_ENRICHMENT in _key(cell or "") for cell in row):
+                mode = "enrichment"
             elif mode == "main":
                 builder.main_row(row, columns, f"الصفحة {table.page}، الصف {number}")
             elif mode == "enrichment":
                 builder.enrichment_row(row, f"الصفحة {table.page}، الصف {number}")
+        if mode is not None or len(marks) < 2 or len(marks[0]) < 3:
+            continue
+        # بلا ترويسة: يُصنَّف بمحتواه، لا بعرضه ولا بما قبله
+        if _is_enrichment(marks):
+            for number, (row, mark) in enumerate(zip(table.rows, marks, strict=True), start=1):
+                if "L" in mark:  # صف الترويسة بلا رمز درس: يُتخطى
+                    builder.enrichment_row(row, f"الصفحة {table.page}، الصف {number}")
+            continue
+        columns = _continuation(marks, table.page)
+        if columns:
+            builder.unit_cell = None  # لا عمود وحدة في التتمة: وحدة الاختبار من آخر درس مرّ
+            for number, row in enumerate(table.rows, start=1):
+                builder.main_row(row, columns, f"الصفحة {table.page}، الصف {number}")
     return builder.result()
 
 
