@@ -18,6 +18,7 @@
    "examples": [
     {
      "n": 1,
+     "page": 5,
      "representations": [
       "جدول",
       "بياني"
@@ -25,18 +26,21 @@
     },
     {
      "n": 2,
+     "page": 6,
      "representations": [
       "بياني"
      ]
     },
     {
      "n": 3,
+     "page": 7,
      "representations": [
       "جدول"
      ]
     },
     {
      "n": 4,
+     "page": 7,
      "representations": [
       "جبري",
       "سياق"
@@ -44,6 +48,7 @@
     },
     {
      "n": 5,
+     "page": 8,
      "representations": [
       "بياني",
       "جبري"
@@ -169,18 +174,21 @@
    "examples": [
     {
      "n": 1,
+     "page": 12,
      "representations": [
       "بياني"
      ]
     },
     {
      "n": 2,
+     "page": 13,
      "representations": [
       "بياني"
      ]
     },
     {
      "n": 3,
+     "page": 13,
      "representations": [
       "بياني",
       "جبري"
@@ -188,6 +196,7 @@
     },
     {
      "n": 4,
+     "page": 14,
      "representations": [
       "بياني",
       "جبري"
@@ -195,6 +204,7 @@
     },
     {
      "n": 5,
+     "page": 15,
      "representations": [
       "بياني",
       "جبري",
@@ -331,12 +341,14 @@
    "examples": [
     {
      "n": 1,
+     "page": 19,
      "representations": [
       "بياني"
      ]
     },
     {
      "n": 2,
+     "page": 20,
      "representations": [
       "بياني",
       "جبري"
@@ -344,6 +356,7 @@
     },
     {
      "n": 3,
+     "page": 21,
      "representations": [
       "جدول",
       "جبري",
@@ -352,6 +365,7 @@
     },
     {
      "n": 4,
+     "page": 22,
      "representations": [
       "بياني",
       "جبري",
@@ -490,6 +504,7 @@
    "examples": [
     {
      "n": 1,
+     "page": 26,
      "representations": [
       "جبري",
       "سياق"
@@ -497,6 +512,7 @@
     },
     {
      "n": 2,
+     "page": 27,
      "representations": [
       "جبري",
       "سياق"
@@ -504,6 +520,7 @@
     },
     {
      "n": 3,
+     "page": 28,
      "representations": [
       "جدول",
       "بياني",
@@ -512,6 +529,7 @@
     },
     {
      "n": 4,
+     "page": 29,
      "representations": [
       "جدول",
       "بياني",
@@ -624,6 +642,7 @@
    "examples": [
     {
      "n": 1,
+     "page": 39,
      "representations": [
       "بياني",
       "جبري"
@@ -631,6 +650,7 @@
     },
     {
      "n": 2,
+     "page": 40,
      "representations": [
       "جدول",
       "جبري"
@@ -638,6 +658,7 @@
     },
     {
      "n": 3,
+     "page": 41,
      "representations": [
       "بياني",
       "جبري",
@@ -747,12 +768,14 @@
    "examples": [
     {
      "n": 1,
+     "page": 45,
      "representations": [
       "جبري"
      ]
     },
     {
      "n": 2,
+     "page": 46,
      "representations": [
       "جدول",
       "جبري"
@@ -760,6 +783,7 @@
     },
     {
      "n": 3,
+     "page": 47,
      "representations": [
       "جبري",
       "سياق"
@@ -767,6 +791,7 @@
     },
     {
      "n": 4,
+     "page": 48,
      "representations": [
       "بياني",
       "جبري"
@@ -774,6 +799,7 @@
     },
     {
      "n": 5,
+     "page": 48,
      "representations": [
       "بياني",
       "جبري"
@@ -908,30 +934,35 @@
    "examples": [
     {
      "n": 1,
+     "page": 53,
      "representations": [
       "جبري"
      ]
     },
     {
      "n": 2,
+     "page": 54,
      "representations": [
       "جبري"
      ]
     },
     {
      "n": 3,
+     "page": 54,
      "representations": [
       "جبري"
      ]
     },
     {
      "n": 4,
+     "page": 55,
      "representations": [
       "جبري"
      ]
     },
     {
      "n": 5,
+     "page": 55,
      "representations": [
       "جبري",
       "سياق"
@@ -1068,24 +1099,28 @@
    "examples": [
     {
      "n": 1,
+     "page": 59,
      "representations": [
       "جبري"
      ]
     },
     {
      "n": 2,
+     "page": 60,
      "representations": [
       "جبري"
      ]
     },
     {
      "n": 3,
+     "page": 60,
      "representations": [
       "جبري"
      ]
     },
     {
      "n": 4,
+     "page": 61,
      "representations": [
       "جبري",
       "سياق"
@@ -1217,6 +1252,7 @@
    "examples": [
     {
      "n": 1,
+     "page": 66,
      "representations": [
       "بياني",
       "جبري"
@@ -1224,12 +1260,14 @@
     },
     {
      "n": 2,
+     "page": 67,
      "representations": [
       "جبري"
      ]
     },
     {
      "n": 3,
+     "page": 68,
      "representations": [
       "جبري",
       "سياق"
@@ -1237,12 +1275,14 @@
     },
     {
      "n": 4,
+     "page": 69,
      "representations": [
       "جبري"
      ]
     },
     {
      "n": 5,
+     "page": 69,
      "representations": [
       "بياني",
       "جبري",
@@ -1396,12 +1436,14 @@
    "examples": [
     {
      "n": 1,
+     "page": 73,
      "representations": [
       "جبري"
      ]
     },
     {
      "n": 2,
+     "page": 74,
      "representations": [
       "بياني",
       "جبري"
@@ -1409,6 +1451,7 @@
     },
     {
      "n": 3,
+     "page": 75,
      "representations": [
       "بياني",
       "جبري",
@@ -1417,6 +1460,7 @@
     },
     {
      "n": 4,
+     "page": 76,
      "representations": [
       "بياني",
       "جبري"
@@ -1512,12 +1556,14 @@
    "examples": [
     {
      "n": 1,
+     "page": 80,
      "representations": [
       "جبري"
      ]
     },
     {
      "n": 2,
+     "page": 81,
      "representations": [
       "جبري",
       "سياق"
@@ -1525,6 +1571,7 @@
     },
     {
      "n": 3,
+     "page": 82,
      "representations": [
       "بياني",
       "جبري"
@@ -1532,12 +1579,14 @@
     },
     {
      "n": 4,
+     "page": 83,
      "representations": [
       "جبري"
      ]
     },
     {
      "n": 5,
+     "page": 84,
      "representations": [
       "جبري",
       "سياق"
@@ -1672,6 +1721,7 @@
    "examples": [
     {
      "n": 1,
+     "page": 88,
      "representations": [
       "بياني",
       "جبري"
@@ -1679,6 +1729,7 @@
     },
     {
      "n": 2,
+     "page": 89,
      "representations": [
       "بياني",
       "جبري"
@@ -1686,12 +1737,14 @@
     },
     {
      "n": 3,
+     "page": 89,
      "representations": [
       "جبري"
      ]
     },
     {
      "n": 4,
+     "page": 90,
      "representations": [
       "جبري",
       "سياق"
@@ -1827,6 +1880,7 @@
    "examples": [
     {
      "n": 1,
+     "page": 95,
      "representations": [
       "بياني",
       "جبري"
@@ -1834,6 +1888,7 @@
     },
     {
      "n": 2,
+     "page": 96,
      "representations": [
       "بياني",
       "جبري"
@@ -1841,6 +1896,7 @@
     },
     {
      "n": 3,
+     "page": 97,
      "representations": [
       "بياني",
       "جبري"
@@ -1848,6 +1904,7 @@
     },
     {
      "n": 4,
+     "page": 99,
      "representations": [
       "بياني",
       "جبري",
@@ -1955,6 +2012,7 @@
    "examples": [
     {
      "n": 1,
+     "page": 105,
      "representations": [
       "بياني",
       "جبري"
@@ -1962,6 +2020,7 @@
     },
     {
      "n": 2,
+     "page": 106,
      "representations": [
       "بياني",
       "جبري"
@@ -1969,6 +2028,7 @@
     },
     {
      "n": 3,
+     "page": 107,
      "representations": [
       "بياني",
       "جبري",
@@ -1977,12 +2037,14 @@
     },
     {
      "n": 4,
+     "page": 108,
      "representations": [
       "جبري"
      ]
     },
     {
      "n": 5,
+     "page": 108,
      "representations": [
       "جبري"
      ]
@@ -2107,6 +2169,7 @@
    "examples": [
     {
      "n": 1,
+     "page": 125,
      "representations": [
       "بياني",
       "جبري"
@@ -2114,6 +2177,7 @@
     },
     {
      "n": 2,
+     "page": 127,
      "representations": [
       "بياني",
       "جبري"
@@ -2121,6 +2185,7 @@
     },
     {
      "n": 3,
+     "page": 128,
      "representations": [
       "بياني",
       "جبري"
@@ -2128,6 +2193,7 @@
     },
     {
      "n": 4,
+     "page": 128,
      "representations": [
       "بياني",
       "جبري"
@@ -2135,6 +2201,7 @@
     },
     {
      "n": 5,
+     "page": 129,
      "representations": [
       "جدول",
       "بياني",
@@ -2143,6 +2210,7 @@
     },
     {
      "n": 6,
+     "page": 130,
      "representations": [
       "بياني",
       "سياق"
@@ -2278,6 +2346,7 @@
    "examples": [
     {
      "n": 1,
+     "page": 135,
      "representations": [
       "بياني",
       "جبري"
@@ -2285,6 +2354,7 @@
     },
     {
      "n": 2,
+     "page": 136,
      "representations": [
       "بياني",
       "جبري"
@@ -2292,12 +2362,14 @@
     },
     {
      "n": 3,
+     "page": 137,
      "representations": [
       "بياني"
      ]
     },
     {
      "n": 4,
+     "page": 138,
      "representations": [
       "بياني",
       "جبري",
@@ -2306,6 +2378,7 @@
     },
     {
      "n": 5,
+     "page": 138,
      "representations": [
       "بياني",
       "جبري"
@@ -2417,6 +2490,7 @@
    "examples": [
     {
      "n": 1,
+     "page": 142,
      "representations": [
       "بياني",
       "جبري"
@@ -2424,6 +2498,7 @@
     },
     {
      "n": 2,
+     "page": 143,
      "representations": [
       "بياني",
       "جبري"
@@ -2431,6 +2506,7 @@
     },
     {
      "n": 3,
+     "page": 144,
      "representations": [
       "بياني",
       "جبري"
@@ -2438,6 +2514,7 @@
     },
     {
      "n": 4,
+     "page": 145,
      "representations": [
       "بياني",
       "جبري"
@@ -2445,6 +2522,7 @@
     },
     {
      "n": 5,
+     "page": 145,
      "representations": [
       "بياني",
       "سياق"
@@ -2561,12 +2639,14 @@
    "examples": [
     {
      "n": 1,
+     "page": 150,
      "representations": [
       "بياني"
      ]
     },
     {
      "n": 2,
+     "page": 151,
      "representations": [
       "بياني",
       "جبري"
@@ -2574,6 +2654,7 @@
     },
     {
      "n": 3,
+     "page": 152,
      "representations": [
       "بياني",
       "جبري"
@@ -2581,6 +2662,7 @@
     },
     {
      "n": 4,
+     "page": 153,
      "representations": [
       "بياني",
       "جبري"
@@ -2588,6 +2670,7 @@
     },
     {
      "n": 5,
+     "page": 154,
      "representations": [
       "بياني",
       "جبري"
@@ -2595,6 +2678,7 @@
     },
     {
      "n": 6,
+     "page": 154,
      "representations": [
       "بياني",
       "جبري",
@@ -2717,6 +2801,7 @@
    "examples": [
     {
      "n": 1,
+     "page": 158,
      "representations": [
       "بياني",
       "جبري"
@@ -2724,6 +2809,7 @@
     },
     {
      "n": 2,
+     "page": 159,
      "representations": [
       "بياني",
       "جبري"
@@ -2731,6 +2817,7 @@
     },
     {
      "n": 3,
+     "page": 160,
      "representations": [
       "بياني",
       "جبري",
@@ -2739,6 +2826,7 @@
     },
     {
      "n": 4,
+     "page": 161,
      "representations": [
       "بياني",
       "جبري"
@@ -2746,6 +2834,7 @@
     },
     {
      "n": 5,
+     "page": 161,
      "representations": [
       "بياني",
       "جبري"

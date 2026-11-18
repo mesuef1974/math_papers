@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -28,6 +29,9 @@ class _Strict(BaseModel):
 
 class ExampleIndex(_Strict):
     n: int = Field(ge=1, le=20)
+    page: int | None = Field(
+        default=None, ge=1, le=999
+    )  # صفحة المثال المطبوعة في كتاب الطالب؛ None إن لم تُعرف
     representations: list[Literal[*REPRESENTATIONS]] = Field(default_factory=list)  # type: ignore[valid-type]
 
 
@@ -104,8 +108,18 @@ def _analysis(rows: list[dict] | None) -> list[dict]:
     return out
 
 
-def build_lesson_index(lesson: dict, grade: int) -> dict:
-    """يشتق سجل الفهرس من مخرج درس واحد؛ كل ما ليس رقمًا أو فئة مغلقة يُهمَل."""
+def _printed_page(example: dict, printed: Mapping[int, int]) -> int | None:
+    """صفحة المثال المطبوعة: صفحة ملف الدليل (`page_pdf`) عبر جدول الصفحات المطبوعة؛ غيابها يعطي None ولا يُخمَّن."""
+    page_pdf = _value(example.get("page_pdf"))
+    return printed.get(page_pdf) if isinstance(page_pdf, int) else None
+
+
+def build_lesson_index(lesson: dict, grade: int, printed: Mapping[int, int] | None = None) -> dict:
+    """يشتق سجل الفهرس من مخرج درس واحد؛ كل ما ليس رقمًا أو فئة مغلقة يُهمَل.
+
+    `printed` جدول صفحة ملف الدليل → رقم الصفحة المطبوعة (صفحة الدليل تحمل رقم صفحة الطالب المضمَّنة فيها).
+    """
+    printed = printed or {}
     vocab = _value(lesson.get("vocabulary")) or []
     guide = _value(lesson.get("task_guide")) or {}
     quiz = _value(lesson.get("lesson_quiz")) or {}
@@ -120,7 +134,7 @@ def build_lesson_index(lesson: dict, grade: int) -> dict:
             o.get("bloom") if o.get("bloom") in BLOOMS else "unclassified" for o in objectives
         ],
         "examples": [
-            {"n": int(e["n"]), "representations": _representations(e)}
+            {"n": int(e["n"]), "page": _printed_page(e, printed), "representations": _representations(e)}
             for e in sorted(lesson.get("examples") or [], key=lambda e: int(e["n"]))
         ],
         "analysis": _analysis(_value(lesson.get("exercise_analysis"))),
@@ -138,6 +152,6 @@ def build_lesson_index(lesson: dict, grade: int) -> dict:
     }
 
 
-def build_index(lessons: list[dict], grade: int) -> CourseIndex:
+def build_index(lessons: list[dict], grade: int, printed: Mapping[int, int] | None = None) -> CourseIndex:
     ordered = sorted(lessons, key=lambda d: lesson_sort_key(d["id"]))
-    return CourseIndex(lessons=[LessonIndex(**build_lesson_index(d, grade)) for d in ordered])
+    return CourseIndex(lessons=[LessonIndex(**build_lesson_index(d, grade, printed)) for d in ordered])

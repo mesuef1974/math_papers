@@ -217,3 +217,52 @@ def test_index_command_reads_lessons_dir_override(tmp_path):
 
     with pytest.raises(Exception, match="lesson_"):
         call_command("build_course_index", "g7-s2", **common)  # لا lessons تحت المصدر
+
+
+def test_builder_maps_the_guide_page_of_an_example_to_its_printed_page():
+    """صفحة المثال المطبوعة من صفحة ملف الدليل عبر جدول الصفحات؛ الغائب من الجدول أو بلا صفحة يبقى None ولا يُخمَّن."""
+    record = lesson_output(
+        examples=[
+            {"n": 1, "page_pdf": field(28)},
+            {"n": 2, "page_pdf": field(99)},
+            {"n": 3},
+        ]
+    )
+    pages = [e["page"] for e in build_lesson_index(record, 10, {28: 5})["examples"]]
+    assert pages == [5, None, None]
+    assert [e["page"] for e in build_lesson_index(record, 10)["examples"]] == [None, None, None]
+    with pytest.raises(ValidationError):
+        LessonIndex(**(build_lesson_index(record, 10) | {"examples": [{"n": 1, "page": 0}]}))
+
+
+def test_committed_index_knows_the_printed_page_of_every_example():
+    """كل أمثلة العاشر بصفحاتها المطبوعة في كتاب الطالب، متزايدة داخل الدرس، وصفحتان قُرئتا من الكتاب نفسه."""
+    lessons = {
+        row.lesson: row
+        for row in CourseIndex(**json.loads(GRADE10_INDEX.read_text(encoding="utf-8"))).lessons
+    }
+    for code, lesson in lessons.items():
+        pages = [e.page for e in lesson.examples]
+        assert all(pages), code
+        assert pages == sorted(pages), code
+    assert lessons["1.1"].examples[0].page == 5
+    assert lessons["3.5"].examples[3].page == 161
+
+
+def test_index_command_reads_the_printed_pages_table(tmp_path):
+    from django.core.management import call_command
+    from django.core.management.base import CommandError
+
+    folder = tmp_path / "lessons"
+    folder.mkdir()
+    record = lesson_output(examples=[{"n": 1, "page_pdf": field(28)}, {"n": 2, "page_pdf": field(29)}])
+    (folder / "lesson_2_1.json").write_text(json.dumps(record), encoding="utf-8")
+    (tmp_path / "printed_pages.json").write_text(json.dumps({"28": 5, "29": 6}), encoding="utf-8")
+    courses = tmp_path / "courses"
+    meta = {"title": "مقرر تجريبي", "grade": 10, "semester": 2, "academic_year": "2026-2027"}
+    call_command("build_course_index", "g7-s2", source=str(tmp_path), courses_dir=str(courses), **meta)
+    written = json.loads((courses / "g7-s2" / INDEX).read_text(encoding="utf-8"))
+    assert [e["page"] for e in written["lessons"][0]["examples"]] == [5, 6]
+    (tmp_path / "printed_pages.json").write_text(json.dumps({"28": "ص"}), encoding="utf-8")
+    with pytest.raises(CommandError, match="غير صالح"):
+        call_command("build_course_index", "g7-s2", source=str(tmp_path), courses_dir=str(courses))

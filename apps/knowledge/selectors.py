@@ -11,7 +11,7 @@ from apps.curriculum.courses import GRADE12_SLUG
 from .domain.contract import SCHEMA_VERSION, source_hash, source_slugs
 from .domain.course_index import CourseIndex, LessonIndex
 from .domain.schemas import lesson_sort_key
-from .models import ExerciseTemplate, LessonProfile, Source
+from .models import ExerciseTemplate, LessonProfile, Source, WorkedExample
 
 
 @dataclass(frozen=True)
@@ -68,6 +68,17 @@ def lesson_index(course: str, code: str) -> LessonIndex | None:
     return next((lesson for lesson in lessons if lesson.lesson == code), None)
 
 
+def example_page(course: str, lesson: str, number: int) -> int | None:
+    """صفحة المثال المطبوعة في كتاب الطالب كما حمّلها المحمِّل؛ None إن غاب المثال أو صفحته."""
+    return (
+        WorkedExample.objects.filter(
+            profile__lesson__course__slug=course, profile__lesson__code=lesson, number=number
+        )
+        .values_list("page", flat=True)
+        .first()
+    )
+
+
 def course_index_from_tables(course: str) -> CourseIndex:
     """فهرس مقرر مشتقًّا من الجداول التي حمّلها المحمِّل الواحد: يطابق الملف المودَع حين يكون المقرر محمَّلًا."""
     profiles = (
@@ -85,7 +96,8 @@ def course_index_from_tables(course: str) -> CourseIndex:
                 "practices": sorted(p.code for p in profile.practices.all()),
                 "objectives_bloom": [o.bloom for o in profile.objectives.all()],
                 "examples": [
-                    {"n": e.number, "representations": e.representations} for e in profile.examples.all()
+                    {"n": e.number, "page": e.page, "representations": e.representations}
+                    for e in profile.examples.all()
                 ],
                 "analysis": [
                     {"example": g.example, "dok": g.dok, "exercises": g.exercises}

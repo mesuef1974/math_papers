@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
 from typing import Any
@@ -870,6 +871,18 @@ def _key_rows(part: dict) -> list[dict]:
     return rows
 
 
+KEY_TABLE_WIDTH = 17.8  # عرض جدول الحلول (سم): عمود الإجابة يأخذ ما تبقى بعد الأعمدة الأخرى
+
+
+@dataclass(frozen=True)
+class _KeyColumn:
+    key: str
+    head: str
+    width: float
+    per_item: bool = False  # يتكرر لكل بند من توزيع الدرجة؛ غيره خلية للجزء تمتد على صفوف بنوده
+    centered: bool = False  # محاذاة رأسية في الوسط
+
+
 def key_pages(doc, paper: dict, header: dict, *, page_break: bool = True) -> None:
     booklet = paper["kind"] == "exam"
     title = f"{'دليل تقدير الدرجات' if booklet else 'مفتاح الحل'}: {header['title']}"
@@ -924,16 +937,29 @@ def key_pages(doc, paper: dict, header: dict, *, page_break: bool = True) -> Non
             size=12,
             bold=True,
         )
-    # مع الدرجات: عمود لدرجة كل بند بعد الخطوات، وعمود لمجموع الجزء في آخر الجدول
-    widths = [1.7, 7.9, 1.5, 3.1, 1.9, 1.7] if has_marks else [1.9, 10.9, 3.1, 1.9]
-    heads = (
-        ["السؤال", "الإجابة والخطوات", "الدرجة", "الدرس", "المستوى", "المجموع"]
-        if has_marks
-        else ["السؤال", "الإجابة والخطوات", "الدرس", "المستوى"]
+    # مع الدرجات: عمود لدرجة كل بند بعد الخطوات، وعمود لمجموع الجزء في آخر الجدول. ومع مصدر جزء واحد على الأقل
+    # عمود «المصدر في الكتاب» بعد الدرس (كما في AnswerKey.vue)، وعرضه من عمود الدرس وعمود الإجابة.
+    has_sources = any(
+        part.get("source_label") for question in paper["questions"] for part in question["parts"]
     )
-    lesson_col, level_col = (3, 4) if has_marks else (2, 3)
-    per_item = {1, 2} if has_marks else {1}  # أعمدة تتكرر لكل بند؛ ما عداها خلايا الجزء
-    centered = {0, 2, 5} if has_marks else {0}
+    columns = [_KeyColumn("question", "السؤال", 1.7 if has_marks else 1.9, centered=True)]
+    columns.append(_KeyColumn("answer", "الإجابة والخطوات", 0.0, per_item=True))
+    if has_marks:
+        columns.append(_KeyColumn("mark", "الدرجة", 1.5, per_item=True, centered=True))
+    columns.append(_KeyColumn("lesson", "الدرس", 1.5 if has_sources else 3.1))
+    if has_sources:
+        columns.append(_KeyColumn("source", "المصدر في الكتاب", 2.4))
+    columns.append(_KeyColumn("level", "المستوى", 1.9))
+    if has_marks:
+        columns.append(_KeyColumn("total", "المجموع", 1.7, centered=True))
+    widths = [c.width for c in columns]
+    widths[1] = round(KEY_TABLE_WIDTH - sum(widths), 2)
+    heads = [c.head for c in columns]
+    col = {c.key: index for index, c in enumerate(columns)}
+    per_item = {
+        index for index, c in enumerate(columns) if c.per_item
+    }  # أعمدة تتكرر لكل بند؛ ما عداها خلايا الجزء
+    centered = {index for index, c in enumerate(columns) if c.centered}
     table = x.make_table(doc, 1, widths, borders=x.box(6, x.RULE))
     for c, text in enumerate(heads):
         cell = table.cell(0, c)
@@ -971,7 +997,7 @@ def key_pages(doc, paper: dict, header: dict, *, page_break: bool = True) -> Non
                     rich(cells[1], step, size=9.5, first=par)
                 if has_marks:
                     x.add_text(
-                        x.new_paragraph(cells[2], align="center", after=0, rtl=False),
+                        x.new_paragraph(cells[col["mark"]], align="center", after=0, rtl=False),
                         _mark_text(entry["marks"]),
                         size=10.5,
                     )
@@ -984,15 +1010,21 @@ def key_pages(doc, paper: dict, header: dict, *, page_break: bool = True) -> Non
                     bold=True,
                     color=x.BRAND_STRONG,
                 )
-                x.add_text(x.new_paragraph(cells[lesson_col], after=0), part.get("lesson", ""), size=9)
+                x.add_text(x.new_paragraph(cells[col["lesson"]], after=0), part.get("lesson", ""), size=9)
+                if has_sources:
+                    x.add_text(
+                        x.new_paragraph(cells[col["source"]], after=0),
+                        part.get("source_label") or "—",
+                        size=9,
+                    )
                 x.add_text(
-                    x.new_paragraph(cells[level_col], align="center", after=0),
+                    x.new_paragraph(cells[col["level"]], align="center", after=0),
                     LEVEL_NAMES.get(part.get("level", ""), ""),
                     size=9,
                 )
                 if has_marks:
                     x.add_text(
-                        x.new_paragraph(cells[5], align="center", after=0, rtl=False),
+                        x.new_paragraph(cells[col["total"]], align="center", after=0, rtl=False),
                         str(part["marks"] or ""),
                         size=10.5,
                         bold=True,

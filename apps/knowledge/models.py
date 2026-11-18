@@ -180,6 +180,7 @@ class WorkedExample(models.Model):
 
     profile = models.ForeignKey(LessonProfile, on_delete=models.CASCADE, related_name="examples")
     number = models.PositiveSmallIntegerField()
+    page = models.PositiveSmallIntegerField(null=True, blank=True)  # صفحته المطبوعة في كتاب الطالب إن عُرفت
     skill = models.TextField()
     representation = models.CharField(max_length=60, blank=True)
     representations = models.JSONField(default=list, blank=True)  # التمثيلات من قائمة مغلقة

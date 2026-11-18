@@ -27,6 +27,21 @@ from apps.knowledge.domain.schemas import lesson_sort_key
 
 META_OPTIONS = ("title", "grade", "semester", "academic_year", "track", "edition", "language")
 REQUIRED_FOR_NEW = ("title", "grade", "semester", "academic_year")
+PRINTED_PAGES = "printed_pages.json"
+
+
+def _printed_pages(path: Path) -> dict[int, int]:
+    """الجدول اختياري: غيابه يترك صفحات الأمثلة None. مفاتيحه وقيمه أرقام صفحات فقط."""
+    if not path.is_file():
+        return {}
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        table = {int(pdf): int(printed) for pdf, printed in raw.items()}
+    except (ValueError, TypeError, AttributeError) as error:
+        raise CommandError(f"جدول الصفحات المطبوعة غير صالح: {path}") from error
+    if any(not (1 <= page <= 999) for page in table.values()):
+        raise CommandError(f"رقم صفحة خارج المدى في {path}")
+    return table
 
 
 def _write(path: Path, data: dict, indent: int) -> None:
@@ -42,6 +57,10 @@ class Command(BaseCommand):
         parser.add_argument("course", help="معرّف المقرر، مثل g10-s1")
         parser.add_argument("--source", required=True, help="مجلد الكتاب المستخرَج (خارج المستودع)")
         parser.add_argument("--lessons-dir", help="مجلد سجلات الدروس إن لم يكن lessons تحت المصدر")
+        parser.add_argument(
+            "--printed-pages",
+            help="جدول صفحة ملف الدليل → صفحة الطالب المطبوعة (JSON)؛ الافتراضي printed_pages.json تحت المصدر إن وُجد",
+        )
         parser.add_argument("--courses-dir", default=str(COURSES_DIR), help="جذر مجلدات المقررات")
         parser.add_argument("--title", help="عنوان المقرر (لمقرر جديد)")
         parser.add_argument("--grade", type=int, help="الصف (لمقرر جديد)")
@@ -51,8 +70,11 @@ class Command(BaseCommand):
         parser.add_argument("--edition", help="الطبعة إن وُجدت")
         parser.add_argument("--language", help="لغة الكتاب: ar أو en")
 
-    def handle(self, *args, course, source, lessons_dir=None, courses_dir=None, **options):
+    def handle(
+        self, *args, course, source, lessons_dir=None, courses_dir=None, printed_pages=None, **options
+    ):
         folder = Path(lessons_dir) if lessons_dir else Path(source) / "lessons"
+        printed = _printed_pages(Path(printed_pages) if printed_pages else Path(source) / PRINTED_PAGES)
         files = sorted(folder.glob("lesson_*.json"))
         if not files:
             raise CommandError(f"لا ملفات lesson_*.json في {folder}")
@@ -69,7 +91,9 @@ class Command(BaseCommand):
             manifest = {"schema_version": SCHEMA_VERSION, "course": {"slug": course, **given}, "lessons": []}
         try:
             meta = CourseMeta(**manifest["course"])
-            index = build_index([json.loads(f.read_text(encoding="utf-8")) for f in files], meta.grade)
+            index = build_index(
+                [json.loads(f.read_text(encoding="utf-8")) for f in files], meta.grade, printed
+            )
         except ValidationError as error:
             raise CommandError(str(error)) from error
         if meta.slug != course:

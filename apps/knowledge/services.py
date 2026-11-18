@@ -134,6 +134,7 @@ def _load_lesson(data: LessonData, lessons: dict[str, Lesson], report: LoadRepor
     examples = [
         {
             "number": e.number,
+            "page": e.page,
             "skill": e.skill,
             "representation": e.representation,
             "representations": e.representations,

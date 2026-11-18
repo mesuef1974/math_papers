@@ -49,6 +49,12 @@ export interface MarkItem {
   final: boolean;
 }
 
+export interface BookSource {
+  kind: "example" | "practice";
+  number: number;
+  page: number | null;
+}
+
 export interface Part {
   label: string;
   lesson: string;
@@ -64,6 +70,9 @@ export interface Part {
   graph: Graph | null;
   option_graphs: Graph[];
   variant: string;
+  // مصدر فكرة الجزء في كتاب الطالب (أرقام فقط)، ونصه المشتق في الخادم «ص 5، مثال 1»؛ فارغ لصيغة بلا مثال ولما حُفظ قبله.
+  source?: BookSource | null;
+  source_label?: string;
   fingerprint: string;
   slot: Slot;
 }
