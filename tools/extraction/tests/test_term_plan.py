@@ -94,6 +94,30 @@ def test_week_start_from_shuffled_numbers():
     assert week_start([6, 9, 10, 9]) is None
 
 
+def test_week_start_without_thursday_falls_back_to_the_only_later_sunday():
+    previous = date(2026, 11, 22)
+    # الأحد 29/11 موجود ويوم الخميس 3/12 غائب
+    assert week_start([11, 29, 2026, 12], after=previous) == date(2026, 11, 29)
+    # بلا أسبوع سابق لا بديل: الأسبوع الأول يلزمه الخميس
+    assert week_start([11, 29, 2026, 12]) is None
+    # البديل بعد السابق تمامًا: الأسبوع نفسه لا يُعاد
+    assert week_start([11, 29, 2026, 12], after=date(2026, 11, 29)) is None
+
+
+def test_week_start_fallback_refuses_two_sunday_candidates():
+    # 8/11 و15/11 أحدان ولا خميس لأي منهما: لا تخمين
+    assert week_start([11, 8, 15, 2026], after=date(2026, 11, 1)) is None
+    # 11/1/2026 و1/11/2026 أحدان معًا
+    assert week_start([1, 11, 2026], after=date(2025, 12, 28)) is None
+
+
+def test_week_start_prefers_the_thursday_rule_when_it_succeeds():
+    # 8/11 مع خميسه 12، و15/11 أحد بلا خميس: القاعدة الأصلية تحسم
+    assert week_start([11, 8, 12, 15, 2026], after=date(2026, 11, 1)) == date(2026, 11, 8)
+    # الأسبوع السابق نفسه مقبول بالقاعدة الأصلية (>=) ولا يصل إلى البديل
+    assert week_start([9, 3, 30, 8, 2026], after=date(2026, 8, 30)) == date(2026, 8, 30)
+
+
 def test_reference_plan_round_trips_through_synthetic_rows(reference):
     extracted = parse(tables_of(reference))
     assert extracted["weeks"] == reference["weeks"]

@@ -168,13 +168,16 @@ def week_start(numbers: list[int], after: date | None = None) -> date | None:
     """بداية الأسبوع من أرقام خلية الزمن وحدها مهما اضطرب ترتيبها.
 
     السنة العدد ذو الأربع خانات (وبدونه سنة الأسبوع السابق أو التي تليها)، والبداية زوج (شهر، يوم) يكون أحدًا ويومُ الخميس
-    بعده بين الأرقام الباقية. None إن لم يتعيّن تاريخ واحد.
+    بعده بين الأرقام الباقية. إن لم تعيّن هذه القاعدة تاريخًا واحدًا (خلية بلا يوم الخميس) فالبديل: أزواج (شهر، يوم) التي
+    تكون أحدًا بعد الأسبوع السابق تمامًا، ويُقبل حين يكون المرشح واحدًا؛ ولا بديل بلا أسبوع سابق (الأسبوع الأول يلزمه الخميس).
+    None إن لم يتعيّن تاريخ واحد.
     """
     years = sorted({n for n in numbers if 1000 <= n <= 9999})
     rest = [n for n in numbers if n < 1000]
     if not years and after:
         years = [after.year, after.year + 1]
     found: set[date] = set()
+    sundays: set[date] = set()  # مرشحو البديل: كل أحد ولو غاب خميسه
     for year in years:
         for i, month in enumerate(rest):
             for j, day in enumerate(rest):
@@ -184,12 +187,20 @@ def week_start(numbers: list[int], after: date | None = None) -> date | None:
                     start = date(year, month, day)
                 except ValueError:
                     continue
+                if start.weekday() != SUNDAY:
+                    continue
+                sundays.add(start)
                 others = [n for k, n in enumerate(rest) if k not in (i, j)]
-                if start.weekday() == SUNDAY and (start + timedelta(days=4)).day in others:
+                if (start + timedelta(days=4)).day in others:
                     found.add(start)
     if after:
         found = {start for start in found if start >= after}
-    return found.pop() if len(found) == 1 else None
+    if len(found) == 1:
+        return found.pop()
+    if after is None:
+        return None
+    later = {start for start in sundays if start > after}
+    return later.pop() if len(later) == 1 else None
 
 
 @dataclass
