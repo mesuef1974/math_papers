@@ -6,6 +6,8 @@
 الوحدة 1، الدوال التربيعية: 1.1 الدالة الرئيسة f(x)=ax²، 1.2 صيغة الرأس، 1.3 الصيغة القياسية.
 الوحدة 2 (أ)، حل المعادلات التربيعية: 2.1 بالتمثيل البياني والجداول، 2.2 بالتحليل إلى العوامل، 2.3 المقادير
 الجذرية، 2.5 إكمال المربع، 2.6 القانون العام والمميز.
+الوحدة 2 (ب): 2.7 المعادلات النسبية، 2.8 الأنظمة الخطية-التربيعية، 2.9 المتباينات التربيعية، 2.10 معادلة
+الدائرة.
 """
 
 from __future__ import annotations
@@ -18,7 +20,7 @@ import sympy as sp
 
 from apps.curriculum.courses import GRADE10_SLUG
 
-from .generators import Problem, frac, m, minus, nz, tex, variant, with_unit, wrongs, x
+from .generators import Problem, frac, m, minus, nz, tex, variant, with_unit, wrongs, x, y
 
 G10 = GRADE10_SLUG
 UP, DOWN = "الأعلى", "الأسفل"
@@ -1307,4 +1309,894 @@ def landing_time_by_quadratic_formula(rng: random.Random) -> Problem:
         ),
         "A",
         {"type": "approx_root", "f": f, "value": float(tenth(high))},
+    )
+
+
+# الوحدة 2 (ب): المعادلات النسبية، والأنظمة الخطية-التربيعية، والمتباينات التربيعية، ومعادلة الدائرة
+RATIOS = {2: "ضعف", 3: "ثلاثة أمثال", 4: "أربعة أمثال"}
+# (ما تنجزه الآلتان معًا، اسم الآلة الواحدة، العمل المطلوب منها)
+JOBS = (
+    ("تملأ مضختان خزان ماء", "المضخة", "لملء الخزان"),
+    ("تطبع طابعتان كتب المدرسة", "الطابعة", "لطباعة الكتب"),
+    ("تحصد آلتان حقل قمح", "الآلة", "لحصاد الحقل"),
+    ("تنظّف مكنستان آليتان قاعة رياضية", "المكنسة", "لتنظيف القاعة"),
+)
+# مدتا آلتين منفردتين (بالساعات) تنجزان العمل معًا في عدد صحيح من الساعات
+WORK_PAIRS = tuple((a, b) for a in range(3, 41) for b in range(a + 1, 61) if (a * b) % (a + b) == 0)
+
+
+def hours(n: int) -> str:
+    """مدة بالساعات بصيغتها العربية."""
+    return {1: "ساعة واحدة", 2: "ساعتين"}.get(n, f"${n}$ {'ساعات' if n <= 10 else 'ساعة'}")
+
+
+def points(*pairs: tuple[Any, Any]) -> str:
+    """أزواج مرتبة بترتيب ثابت، فالمجموعة نفسها تُكتب بالنص نفسه أيًّا كان ترتيب إدخالها."""
+    ordered = sorted(set(pairs), key=lambda pair: (float(pair[0]), float(pair[1])))
+    return " و".join(f"$({tex(px)},{tex(py)})$" for px, py in ordered)
+
+
+def point_wrongs(answer: str, first: tuple[int, int], second: tuple[int, int]) -> tuple[str, ...]:
+    """تبديل الإحداثيات وأخطاء الإشارة أولًا؛ البديلان الأخيران يخالفان الجواب وبعضهما دائمًا."""
+    (x1, y1), (x2, y2) = first, second
+    return wrongs(
+        answer,
+        points((x1, y2), (x2, y1)),
+        points((y1, x1), (y2, x2)),
+        points((x1, -y1), (x2, -y2)),
+        points((-x1, y1), (-x2, y2)),
+        points((x1 + 1, y1), (x2 + 1, y2)),
+        points((x1, y1 + 1), (x2, y2 + 1)),
+    )
+
+
+# الدرس 2.7: حل المعادلات النسبية. المثالان 4 و5 إثرائيان: لا صيغة جوابها «لا حل»، ولا مسألة معدّل سرعة.
+@variant("2.7", G10, example=1)
+def rational_equation_with_constant_numerator(rng: random.Random) -> Problem:
+    a, b = nz(rng, -9, 9), nz(rng, -9, 9)
+    c = rng.choice([n for n in range(-6, 7) if n not in (0, 1)])
+    value = sp.Rational(a, c) - b
+    answer = solutions(value)
+    return Problem(
+        "2.7",
+        f"حلّ المعادلة النسبية ${frac(a, linear(-b))}={c}$.",
+        answer,
+        wrongs(
+            answer,
+            solutions(sp.Rational(a, c) + b),
+            solutions(-value),
+            solutions(a * c - b),
+            solutions(sp.Rational(c, a) - b),
+            solutions(value + 1),
+            solutions(value - 1),
+        ),
+        (
+            f"نضرب طرفي المعادلة في المقام ${linear(-b)}$: ${a}={lead(c)}{shifted(-b)}$",
+            f"${a}={lead(c)}x{c * b:+d}$",
+            f"${lead(c)}x={a - c * b}$، إذن $x={tex(value)}$",
+            f"القيمة لا تجعل المقام صفرًا، إذن حل المعادلة {answer}.",
+        ),
+        "K",
+        {"type": "rational_equation", "lhs": a / (x + b), "rhs": sp.Integer(c), "solutions": (value,)},
+    )
+
+
+@variant("2.7", G10, example=1)
+def rational_equation_as_proportion(rng: random.Random) -> Problem:
+    a, c = rng.sample(range(1, 10), 2)
+    b, d = rng.sample(range(-8, 9), 2)
+    value = sp.Rational(c * b - a * d, a - c)
+    answer = solutions(value)
+    return Problem(
+        "2.7",
+        f"حلّ المعادلة النسبية ${frac(a, linear(-b))}={frac(c, linear(-d))}$.",
+        answer,
+        wrongs(
+            answer,
+            solutions(-value),
+            solutions(sp.Rational(c * b + a * d, a - c)),
+            solutions(sp.Rational(c * b - a * d, a + c)),
+            solutions(sp.Rational(a * b - c * d, a - c)),
+            solutions(value + 1),
+            solutions(value - 1),
+            solutions(value + 2),
+        ),
+        (
+            f"نضرب طرفي المعادلة في المقام المشترك ${shifted(-b)}{shifted(-d)}$: "
+            f"${lead(a)}{shifted(-d)}={lead(c)}{shifted(-b)}$",
+            f"${lead(a)}x{signed(a * d)}={lead(c)}x{signed(c * b)}$",
+            f"نجمع الحدود المتشابهة: ${lead(a - c)}x={c * b - a * d}$"
+            + ("" if a - c == 1 else f"، إذن $x={tex(value)}$"),
+            f"القيمة لا تجعل أيّ مقام صفرًا، إذن حل المعادلة {answer}.",
+        ),
+        "K",
+        {"type": "rational_equation", "lhs": a / (x + b), "rhs": c / (x + d), "solutions": (value,)},
+    )
+
+
+def rational_sum_equation(a: int, p: int, q: int, c: int) -> tuple[str, sp.Expr, sp.Expr, sp.Expr]:
+    """(نص المعادلة a/(x-p)+x/(x-q)=c/((x-p)(x-q)) بمقام مفكوك، طرفها الأيسر، طرفها الأيمن، المقام المفكوك)."""
+    bottom = sp.expand((x - p) * (x - q))
+    text = f"{frac(a, linear(p))}+{frac('x', linear(q))}={frac(c, bottom)}"
+    return text, a / (x - p) + x / (x - q), c / bottom, bottom
+
+
+@variant("2.7", G10, example=3)
+def values_excluded_from_solutions(rng: random.Random) -> Problem:
+    a, c = rng.randint(1, 5), nz(rng, -9, 9)
+    p, q = rng.sample([n for n in range(-7, 8) if n], 2)
+    text, lhs, rhs, bottom = rational_sum_equation(a, p, q, c)
+    low, high = sorted((p, q))
+
+    def both(first: int, second: int) -> str:
+        return f"$x={first}$ و$x={second}$"
+
+    answer = both(low, high)
+    return Problem(
+        "2.7",
+        f"أيّ قيم $x$ لا يمكن أن تكون حلًّا للمعادلة ${text}$ لأنها تجعل مقامًا فيها يساوي صفرًا؟",
+        answer,
+        wrongs(
+            answer,
+            both(-high, -low),
+            f"$x={low}$ فقط",
+            f"$x={high}$ فقط",
+            both(low + high, low * high),
+        ),
+        (
+            f"المقام ${linear(p)}$ يساوي صفرًا عند $x={p}$، والمقام ${linear(q)}$ يساوي صفرًا عند $x={q}$.",
+            f"${tex(bottom)}={product(low, high)}$، فيساوي صفرًا عند القيمتين نفسيهما.",
+            f"إذن {answer} لا يمكن أن يكونا حلّين للمعادلة، وأي حل يساوي أحدهما حل غير مقبول.",
+        ),
+        "K",
+        {"type": "excluded_values", "lhs": lhs, "rhs": rhs, "values": (p, q)},
+    )
+
+
+@variant("2.7", G10, example=2)
+def work_rate_with_speed_ratio(rng: random.Random) -> Problem:
+    together, noun, task = rng.choice(JOBS)
+    k = rng.choice([2, 3, 4])
+    t = k * rng.randint(1, 4)
+    slow, fast = (k + 1) * t, (k + 1) * t // k
+    first, second = f"{noun} الأولى", f"{noun} الثانية"
+    wanted_fast = rng.random() < 0.5
+    wanted = fast if wanted_fast else slow
+    answer = hours(wanted)
+    last = (
+        f"سرعة {first} {RATIOS[k]} سرعة {second}، فتحتاج إلى ${frac(1, k)}$ من هذه المدة: "
+        f"$\\dfrac{{{slow}}}{{{k}}}={fast}$، أي {answer}."
+        if wanted_fast
+        else f"إذن تحتاج {second} إلى {answer} {task} بمفردها."
+    )
+    return Problem(
+        "2.7",
+        f"{together} في {hours(t)} عندما تعملان معًا. سرعة {first} في العمل تساوي {RATIOS[k]} سرعة "
+        f"{second}. ما المدة التي تحتاج إليها {first if wanted_fast else second} {task} إذا عملت بمفردها؟",
+        answer,
+        wrongs(
+            answer,
+            hours(slow if wanted_fast else fast),
+            hours(k * t),
+            hours(2 * t),
+            hours(slow + fast),
+            hours(wanted + 1),
+            hours(wanted + 2),
+        ),
+        (
+            f"ليكن $x$ عدد الساعات التي تحتاج إليها {second} بمفردها، فمعدل عملها $\\dfrac{{1}}{{x}}$ من "
+            f"العمل في الساعة، ومعدل عمل {first} $\\dfrac{{{k}}}{{x}}$.",
+            f"معدل عملهما معًا $\\dfrac{{1}}{{{t}}}$: $\\dfrac{{1}}{{x}}+\\dfrac{{{k}}}{{x}}=\\dfrac{{1}}{{{t}}}$",
+            f"نضرب الطرفين في ${t}x$: ${t}+{k * t}=x$، إذن $x={slow}$",
+            last,
+        ),
+        "A",
+        {"type": "work_rate", "times": (slow, fast), "together": t, "ratio": k, "answer": wanted},
+    )
+
+
+@variant("2.7", G10, example=2)
+def work_rate_with_one_time_known(rng: random.Random) -> Problem:
+    _, noun, task = rng.choice(JOBS)
+    known, other = rng.sample(rng.choice(WORK_PAIRS), 2)
+    t = known * other // (known + other)
+    first, second = f"{noun} الأولى", f"{noun} الثانية"
+    answer = hours(other)
+    return Problem(
+        "2.7",
+        f"تحتاج {first} إلى {hours(known)} {task} إذا عملت بمفردها، وإذا عملت معها {second} أنجزتا "
+        f"العمل في {hours(t)}. ما المدة التي تحتاج إليها {second} {task} إذا عملت بمفردها؟",
+        answer,
+        wrongs(
+            answer,
+            hours(known - t),
+            hours(known + t),
+            hours(2 * t),
+            hours(other + 1),
+            hours(other + 2),
+            hours(other + 3),
+        ),
+        (
+            f"ليكن $x$ عدد الساعات التي تحتاج إليها {second} بمفردها. معدل عمل {first} "
+            f"$\\dfrac{{1}}{{{known}}}$ من العمل في الساعة، ومعدل عمل {second} $\\dfrac{{1}}{{x}}$.",
+            f"معدل عملهما معًا $\\dfrac{{1}}{{{t}}}$: "
+            f"$\\dfrac{{1}}{{{known}}}+\\dfrac{{1}}{{x}}=\\dfrac{{1}}{{{t}}}$",
+            f"نضرب الطرفين في ${known * t}x$: ${t}x+{known * t}={known}x$",
+            f"${lead(known - t)}x={known * t}$، إذن $x={other}$، فتحتاج {second} إلى {answer}.",
+        ),
+        "A",
+        {"type": "work_rate", "times": (known, other), "together": t, "answer": other},
+    )
+
+
+@variant("2.7", G10, example=3)
+def rational_equation_with_extraneous_solution(rng: random.Random) -> Problem:
+    while True:
+        a = rng.randint(1, 5)
+        p, q = rng.sample([n for n in range(-6, 7) if n], 2)
+        # بعد حذف المقامات: x²+(a-p)x-aq-c=0، وأحد جذريها p أو q يُعدِم مقامًا فهو غير مقبول.
+        if rng.random() < 0.5:
+            bad, good, c = p, -a, a * (p - q)
+        else:
+            bad, good, c = q, p - a - q, q * (q - p)
+        if good not in (p, q) and (a, p, q) != (1, 5, 3):
+            break
+    text, lhs, rhs, _ = rational_sum_equation(a, p, q, c)
+    cleared = sp.expand(a * (x - q) + x * (x - p) - c)
+    answer = solutions(good)
+    return Problem(
+        "2.7",
+        f"ما حل المعادلة ${text}$؟",
+        answer,
+        wrongs(
+            answer,
+            solutions(bad),
+            solutions(good, bad),
+            solutions(-good),
+            solutions(-good, -bad),
+            solutions(good + 1),
+            solutions(good - 1),
+        ),
+        (
+            f"نضرب طرفي المعادلة في المقام المشترك الأصغر ${product(*sorted((p, q)))}$: "
+            f"${lead(a)}{shifted(q)}+x{shifted(p)}={c}$",
+            f"نبسّط ونكتب المعادلة في الصيغة القياسية: ${tex(cleared)}=0$",
+            f"نحلّل إلى العوامل: ${product(*sorted((good, bad)))}=0$، إذن {solutions(good, bad)}",
+            f"الحل $x={bad}$ غير مقبول لأنه يجعل مقامًا في المعادلة الأصلية يساوي صفرًا، إذن حل "
+            f"المعادلة {answer}.",
+        ),
+        "A",
+        {
+            "type": "rational_equation",
+            "lhs": lhs,
+            "rhs": rhs,
+            "solutions": (good,),
+            "extraneous": (bad,),
+            "cleared": cleared,
+        },
+    )
+
+
+# الدرس 2.8: الأنظمة الخطية-التربيعية
+SYSTEM_COUNTS = {0: "ليس للنظام حل", 1: "للنظام حل واحد", 2: "للنظام حلّان"}
+CROSSINGS = {0: "لا يتقاطعان", 1: "يتقاطعان في نقطة واحدة", 2: "يتقاطعان في نقطتين"}
+
+
+def line_value(m_: int, d: int, at: int) -> str:
+    """تعويض قيمة x في المعادلة الخطية y=mx+d."""
+    return f"$y={lead(m_)}({at}){signed(d)}={m_ * at + d}$"
+
+
+def meters(n: int) -> str:
+    return f"${n}$ {'أمتار' if n <= 10 else 'مترًا'}"
+
+
+@variant("2.8", G10, example=1)
+def number_of_solutions_of_linear_quadratic_system(rng: random.Random) -> Problem:
+    count, h = rng.choice([0, 1, 2]), rng.randint(-4, 4)
+    slope, d = nz(rng, -3, 3), rng.randint(-6, 6)
+    gap = {0: 1, 1: 0, 2: -1}[count] * rng.randint(1, 9)
+    line = slope * x + d
+    difference = sp.expand((x - h) ** 2 + gap)
+    parabola = sp.expand(difference + line)
+    b, c = -2 * h, h * h + gap
+    answer = SYSTEM_COUNTS[count]
+    return Problem(
+        "2.8",
+        f"ما عدد حلول النظام الخطي-التربيعي $y={tex(parabola)}$ و$y={tex(line)}$؟",
+        answer,
+        wrongs(
+            answer,
+            *[text for n, text in SYSTEM_COUNTS.items() if n != count],
+            "للنظام عدد لا نهائي من الحلول",
+        ),
+        (
+            f"نساوي المقدارين: ${tex(parabola)}={tex(line)}$، أي ${tex(difference)}=0$",
+            *formula_values(1, b, c, b * b - 4 * c),
+            f"المميز {('سالب', 'يساوي صفرًا', 'موجب')[count]}، فالمستقيم والقطع المكافئ "
+            f"{CROSSINGS[count]}، إذن {answer}.",
+        ),
+        "K",
+        {"type": "system", "equations": (y - parabola, y - line), "count": count},
+    )
+
+
+def crossing_system(
+    rng: random.Random, leading: int
+) -> tuple[sp.Expr, sp.Expr, sp.Expr, int, int, tuple[int, int], tuple[int, int]]:
+    """(القطع المكافئ، المستقيم، الفرق بينهما، الميل، المقطع، نقطتا التقاطع) بإحداثيات صحيحة."""
+    r1, r2 = two_roots(rng, -5, 5)
+    slope, d = nz(rng, -4, 4), rng.randint(-6, 6)
+    line = slope * x + d
+    difference = sp.expand(leading * (x - r1) * (x - r2))
+    return (
+        sp.expand(difference + line),
+        line,
+        difference,
+        slope,
+        d,
+        (r1, slope * r1 + d),
+        (r2, slope * r2 + d),
+    )
+
+
+def back_substitution(slope: int, d: int, r1: int, r2: int) -> str:
+    return (
+        f"نعوّض في المعادلة الخطية: عند $x={r1}$: {line_value(slope, d, r1)}، وعند $x={r2}$: "
+        f"{line_value(slope, d, r2)}"
+    )
+
+
+@variant("2.8", G10, example=2)
+def system_solutions_from_intersection_points(rng: random.Random) -> Problem:
+    parabola, line, _, slope, d, first, second = crossing_system(rng, rng.choice([1, -1]))
+    answer = points(first, second)
+    return Problem(
+        "2.8",
+        f"يتقاطع التمثيلان البيانيان للمعادلتين $y={tex(parabola)}$ و$y={tex(line)}$ في نقطتين "
+        f"إحداثياهما $x$ هما ${first[0]}$ و${second[0]}$. ما حلول النظام المكوّن من المعادلتين؟",
+        answer,
+        point_wrongs(answer, first, second),
+        (
+            "حلول النظام الخطي-التربيعي هي نقاط تقاطع المستقيم مع القطع المكافئ.",
+            back_substitution(slope, d, first[0], second[0]),
+            f"إذن حلّا النظام {answer}.",
+        ),
+        "K",
+        {"type": "system", "equations": (y - parabola, y - line), "solutions": (first, second)},
+    )
+
+
+@variant("2.8", G10, example=3)
+def solve_system_by_elimination(rng: random.Random) -> Problem:
+    parabola, line, difference, slope, d, first, second = crossing_system(rng, 1)
+    answer = points(first, second)
+    return Problem(
+        "2.8",
+        f"حلّ النظام الخطي-التربيعي $y={tex(parabola)}$ و$y={tex(line)}$ بطريقة الحذف.",
+        answer,
+        point_wrongs(answer, first, second),
+        (
+            f"نطرح المعادلة الخطية من المعادلة التربيعية لحذف $y$: $0={tex(difference)}$",
+            f"نحلّل إلى العوامل: ${product(first[0], second[0])}=0$، إذن {solutions(first[0], second[0])}",
+            back_substitution(slope, d, first[0], second[0]),
+            f"إذن حلّا النظام {answer}.",
+        ),
+        "A",
+        {"type": "system", "equations": (y - parabola, y - line), "solutions": (first, second)},
+    )
+
+
+@variant("2.8", G10, example=4)
+def solve_system_by_substitution(rng: random.Random) -> Problem:
+    leading = rng.choice([-3, -2, -1, 2, 3])
+    parabola, line, difference, slope, d, first, second = crossing_system(rng, leading)
+    monic = sp.expand(difference / leading)
+    answer = points(first, second)
+    return Problem(
+        "2.8",
+        f"حلّ النظام الخطي-التربيعي $y={tex(line)}$ و$y={tex(parabola)}$ بطريقة التعويض.",
+        answer,
+        point_wrongs(answer, first, second),
+        (
+            f"نعوّض ${tex(line)}$ بدل $y$ في المعادلة التربيعية: ${tex(line)}={tex(parabola)}$",
+            f"نكتب المعادلة في الصيغة القياسية: ${tex(difference)}=0$، ونقسم طرفيها على ${leading}$: "
+            f"${tex(monic)}=0$",
+            f"نحلّل إلى العوامل: ${product(first[0], second[0])}=0$، إذن {solutions(first[0], second[0])}",
+            back_substitution(slope, d, first[0], second[0]),
+            f"إذن حلّا النظام {answer}.",
+        ),
+        "A",
+        {"type": "system", "equations": (y - parabola, y - line), "solutions": (first, second)},
+    )
+
+
+@variant("2.8", G10, example=4)
+def ball_and_drone_at_same_height(rng: random.Random) -> Problem:
+    at, n = rng.randint(3, 7), rng.randint(1, 9)
+    slope, d = rng.randint(1, 4), rng.randint(1, 10)
+    drone = slope * x + d
+    # -5x²+(slope+5·at-n)x+d+n·at ناقص المستقيم = -(x-at)(5x+n): الجذر الموجب الوحيد هو at.
+    ball = -5 * x**2 + (slope + 5 * at - n) * x + d + n * at
+    height, other = slope * at + d, sp.Rational(-n, 5)
+
+    def text(time: int, level: int) -> str:
+        return f"بعد ${time}$ ثوانٍ، وعلى ارتفاع {meters(level)}"
+
+    answer = text(at, height)
+    return Problem(
+        "2.8",
+        "قُذفت كرة إلى الأعلى من سطح مبنى، ويُعطى ارتفاعها بالأمتار بعد $x$ من الثواني بالدالة "
+        f"$y={tex(ball)}$. في اللحظة نفسها بدأت طائرة مسيّرة بالصعود، ويُعطى ارتفاعها بالدالة "
+        f"$y={tex(drone)}$. بعد كم ثانية يكون للكرة والطائرة الارتفاع نفسه؟ وما ذلك الارتفاع؟",
+        answer,
+        wrongs(
+            answer,
+            text(at, d + n * at),
+            *[text(at + step, slope * (at + step) + d) for step in (1, 2, 3)],
+        ),
+        (
+            f"يكون الارتفاعان متساويين عندما ${tex(ball)}={tex(drone)}$",
+            f"نكتب المعادلة في الصيغة القياسية: ${tex(sp.expand(drone - ball))}=0$",
+            f"نحلّل إلى العوامل: ${shifted(at)}(5x+{n})=0$، إذن $x={at}$ أو $x={tex(other)}$",
+            f"الزمن لا يكون سالبًا، إذن $x={at}$، والارتفاع بالأمتار عندها {line_value(slope, d, at)}",
+        ),
+        "A",
+        {
+            "type": "system",
+            "equations": (y - ball, y - drone),
+            "solutions": ((at, height), (other, slope * other + d)),
+        },
+    )
+
+
+# الدرس 2.9: المتباينات التربيعية. المثال 4 (النمذجة بمتباينة) إثرائي: لا مسألة سياقية هنا.
+OP_TEX = {"<": "<", ">": ">", "<=": "\\le", ">=": "\\ge"}
+OP_NAMES = {"<": "أصغر من", ">": "أكبر من", "<=": "أصغر من أو يساوي", ">=": "أكبر من أو يساوي"}
+LESS, MORE = {True: "\\le", False: "<"}, {True: "\\ge", False: ">"}
+MINUS_INFINITY, INFINITY = "-\\infty", "\\infty"
+REALS, EMPTY = "مجموعة الأعداد الحقيقية $\\mathbb{R}$", "المجموعة الخالية $\\emptyset$"
+# قطعة من مجموعة الحل: (الطرف الأصغر أو None لسالب اللانهاية، الطرف الأكبر أو None، مغلقة يسارًا، مغلقة يمينًا)
+Piece = tuple[Any, Any, bool, bool]
+
+
+def interval(low: Any, high: Any, closed_low: bool = False, closed_high: bool = False) -> str:
+    """فترة برموز الكتاب: القوس المغلق نحو الداخل والمفتوح نحو الخارج، وطرف اللانهاية مفتوح دائمًا."""
+    left = "[" if closed_low and low is not None else "]"
+    right = "]" if closed_high and high is not None else "["
+    start = MINUS_INFINITY if low is None else tex(low)
+    end = INFINITY if high is None else tex(high)
+    return f"{left}{start},{end}{right}"
+
+
+def inequality_solution(r1: int, r2: int, inside: bool, strict: bool) -> tuple[str, str, tuple[Piece, ...]]:
+    """(الحل بصيغة المتباينة، الحل بالفترات، قطع مجموعة الحل) بين الجذرين أو خارجهما."""
+    closed = not strict
+    if inside:
+        return (
+            f"${r1}{LESS[closed]} x{LESS[closed]} {r2}$",
+            f"الفترة ${interval(r1, r2, closed, closed)}$",
+            ((r1, r2, closed, closed),),
+        )
+    return (
+        f"$x{LESS[closed]} {r1}$ أو $x{MORE[closed]} {r2}$",
+        f"الفترة ${interval(None, r1, False, closed)}$ أو الفترة ${interval(r2, None, closed, False)}$",
+        ((None, r1, False, closed), (r2, None, closed, False)),
+    )
+
+
+def solved_inequality(
+    leading: int, r1: int, r2: int, op: str
+) -> tuple[str, str, tuple[Piece, ...], tuple[str, ...]]:
+    """(الحل، الحل بالفترات، القطع، البدائل الثلاثة) للمتباينة leading(x-r₁)(x-r₂) op 0."""
+    inside, strict = (leading > 0) != (op in (">", ">=")), op in ("<", ">")
+    answer, intervals, pieces = inequality_solution(r1, r2, inside, strict)
+    others = tuple(
+        inequality_solution(r1, r2, *flags)[0]
+        for flags in ((not inside, strict), (inside, not strict), (not inside, not strict))
+    )
+    return answer, intervals, pieces, others
+
+
+@variant("2.9", G10, example=1)
+def quadratic_inequality_from_x_intercepts(rng: random.Random) -> Problem:
+    r1, r2 = two_roots(rng, -7, 7)
+    leading, op = rng.choice([-2, -1, 1, 2]), rng.choice(list(OP_TEX))
+    f = sp.expand(leading * (x - r1) * (x - r2))
+    answer, intervals, pieces, others = solved_inequality(leading, r1, r2, op)
+    above = op in (">", ">=")
+    where = (
+        f"الواقعة بين ${r1}$ و${r2}$" if (leading > 0) != above else f"الأصغر من ${r1}$ أو الأكبر من ${r2}$"
+    )
+    ends = "لا ينتميان" if op in ("<", ">") else "ينتميان"
+    return Problem(
+        "2.9",
+        f"يقطع التمثيل البياني للدالة $f(x)={tex(f)}$ المحور $x$ عند $x={r1}$ و$x={r2}$، ويفتح القطع "
+        f"المكافئ إلى {opening(leading)}. ما حل المتباينة ${tex(f)}{OP_TEX[op]} 0$؟",
+        answer,
+        others,
+        (
+            f"المتباينة تحوي الرمز «{OP_NAMES[op]}»، فنحدّد الجزء من المنحنى الذي يقع "
+            f"{'فوق' if above else 'تحت'} المحور $x$.",
+            f"القطع المكافئ يفتح إلى {opening(leading)}، فهذا الجزء يقابل قيم $x$ {where}، والعددان "
+            f"${r1}$ و${r2}$ {ends} إلى مجموعة الحلول.",
+            f"إذن حل المتباينة {answer}، أي {intervals}.",
+        ),
+        "K",
+        {"type": "inequality", "conditions": ((f, op),), "pieces": pieces},
+    )
+
+
+@variant("2.9", G10, example=2)
+def quadratic_inequality_without_zeros(rng: random.Random) -> Problem:
+    leading, h, size = rng.choice([-2, -1, 1, 2]), rng.randint(-4, 4), rng.randint(1, 6)
+    k, op = (size if leading > 0 else -size), rng.choice(list(OP_TEX))
+    f = sp.expand(leading * (x - h) ** 2 + k)
+    holds = (leading > 0) == (op in (">", ">="))
+    answer = REALS if holds else EMPTY
+    side = "فوق" if leading > 0 else "تحت"
+    return Problem(
+        "2.9",
+        f"رأس القطع المكافئ الذي يمثّل الدالة $f(x)={tex(f)}$ هو النقطة $({h},{k})$، ويفتح القطع إلى "
+        f"{opening(leading)}. ما حل المتباينة ${tex(f)}{OP_TEX[op]} 0$؟",
+        answer,
+        (EMPTY if holds else REALS, f"$x>{h}$", f"$x<{h}$"),
+        (
+            f"الرأس يقع {side} المحور $x$ والقطع المكافئ يفتح إلى {opening(leading)}، فلا يقطع التمثيل "
+            f"البياني المحور $x$ ويقع المنحنى كله {side} المحور $x$.",
+            f"إذن قيم الدالة {'موجبة' if leading > 0 else 'سالبة'} عند كل قيم $x$، "
+            f"{'فكل عدد حقيقي يحقق المتباينة' if holds else 'فلا يحقق المتباينة أي عدد حقيقي'}.",
+            f"حل المتباينة {answer}.",
+        ),
+        "K",
+        {
+            "type": "inequality",
+            "conditions": ((f, op),),
+            "pieces": ((None, None, False, False),) if holds else (),
+        },
+    )
+
+
+def belongs(closed: bool) -> str:
+    return "ينتمي إلى المجموعة فالقوس عنده مغلق" if closed else "لا ينتمي إلى المجموعة فالقوس عنده مفتوح"
+
+
+@variant("2.9", G10, example=1)
+def interval_for_set_of_real_numbers(rng: random.Random) -> Problem:
+    conditions: tuple[tuple[sp.Expr, str], ...]
+    pieces: tuple[Piece, ...]
+    if rng.random() < 0.5:
+        low, high = two_roots(rng, -9, 9)
+        closed_low, closed_high = rng.random() < 0.5, rng.random() < 0.5
+        condition = f"{low}{LESS[closed_low]} x{LESS[closed_high]} {high}"
+        answer = f"${interval(low, high, closed_low, closed_high)}$"
+        wrong = tuple(
+            f"${interval(low, high, *flags)}$"
+            for flags in (
+                (not closed_low, closed_high),
+                (closed_low, not closed_high),
+                (not closed_low, not closed_high),
+            )
+        )
+        conditions = ((x - low, ">=" if closed_low else ">"), (x - high, "<=" if closed_high else "<"))
+        pieces = ((low, high, closed_low, closed_high),)
+        steps = (
+            f"المجموعة تضم الأعداد الحقيقية الواقعة بين ${low}$ و${high}$، فطرفا الفترة ${low}$ و${high}$.",
+            f"العدد ${low}$ {belongs(closed_low)}، والعدد ${high}$ {belongs(closed_high)}.",
+        )
+    else:
+        at, closed, upward = rng.randint(-9, 9), rng.random() < 0.5, rng.random() < 0.5
+
+        def ray(up: bool, shut: bool) -> str:
+            return f"${interval(at, None, shut, False) if up else interval(None, at, False, shut)}$"
+
+        condition = f"x{(MORE if upward else LESS)[closed]} {at}"
+        answer = ray(upward, closed)
+        wrong = (ray(upward, not closed), ray(not upward, closed), ray(not upward, not closed))
+        conditions = ((x - at, (">" if upward else "<") + ("=" if closed else "")),)
+        pieces = ((at, None, closed, False),) if upward else ((None, at, False, closed),)
+        steps = (
+            f"المجموعة تضم الأعداد الحقيقية {'الأكبر من' if upward else 'الأصغر من'}"
+            f"{' أو تساوي' if closed else ''} ${at}$، فهي غير محدودة من جهة "
+            f"{RIGHT if upward else LEFT}، ويُكتب عندها الرمز ${INFINITY if upward else MINUS_INFINITY}$ "
+            "بقوس مفتوح.",
+            f"العدد ${at}$ {belongs(closed)}.",
+        )
+    return Problem(
+        "2.9",
+        f"اكتب الفترة التي تمثّل مجموعة الأعداد الحقيقية $x$ التي تحقق ${condition}$.",
+        answer,
+        wrong,
+        (*steps, f"إذن الفترة هي {answer}."),
+        "K",
+        {"type": "inequality", "conditions": conditions, "pieces": pieces},
+    )
+
+
+def algebraic_inequality(f: sp.Expr, leading: int, r1: int, r2: int, op: str, factored: str) -> Problem:
+    """حل جبري لمتباينة تربيعية جذراها r₁<r₂: المعادلة المرتبطة ثم اختبار قيمة من كل فترة."""
+    answer, intervals, pieces, others = solved_inequality(leading, r1, r2, op)
+    middle = r1 + 1 if r2 - r1 >= 2 else sp.Rational(r1 + r2, 2)
+    tests = "، و".join(
+        f"عند $x={tex(at)}$ قيمة المقدار ${tex(f.subs(x, at))}$" for at in (r1 - 1, middle, r2 + 1)
+    )
+    wanted = ("موجبًا" if op in (">", ">=") else "سالبًا") + ("" if op in ("<", ">") else " أو صفرًا")
+    return Problem(
+        "2.9",
+        f"حلّ المتباينة التربيعية ${tex(f)}{OP_TEX[op]} 0$ جبريًّا.",
+        answer,
+        others,
+        (
+            f"نحل المعادلة المرتبطة بالمتباينة ${tex(f)}=0$: ${factored}=0$، إذن {solutions(r1, r2)}",
+            f"نختبر قيمة من كل فترة يحددها الحلّان على خط الأعداد: {tests}.",
+            f"تتحقق المتباينة عندما يكون المقدار {wanted}، إذن الحل {answer}.",
+            f"باستعمال الفترات: {intervals}.",
+        ),
+        "A",
+        {"type": "inequality", "conditions": ((f, op),), "pieces": pieces},
+    )
+
+
+@variant("2.9", G10, example=3)
+def solve_quadratic_inequality_by_factoring(rng: random.Random) -> Problem:
+    r1, r2 = two_roots(rng, -7, 7)
+    f = sp.expand((x - r1) * (x - r2))
+    return algebraic_inequality(f, 1, r1, r2, rng.choice(list(OP_TEX)), product(r1, r2))
+
+
+@variant("2.9", G10, example=3)
+def solve_quadratic_inequality_with_common_factor(rng: random.Random) -> Problem:
+    leading, r = rng.choice([-3, -2, -1, 2, 3]), nz(rng, -6, 6)
+    f = sp.expand(leading * x * (x - r))
+    low, high = sorted((0, r))
+    return algebraic_inequality(
+        f, leading, low, high, rng.choice(list(OP_TEX)), f"{lead(leading)}x{shifted(r)}"
+    )
+
+
+# الدرس 2.10: معادلة الدائرة. المثال 4 (إكمال المربع لإيجاد المركز ونصف القطر) إثرائي: المعادلات هنا في
+# الصيغة القياسية (x-h)²+(y-k)²=r² دائمًا.
+ROUND_PLACES = (
+    ("نافورة دائرية", "حافة النافورة"),
+    ("حوض زهور دائري", "حافة الحوض"),
+    ("ساحة دائرية", "حافة الساحة"),
+    ("مضمار جري دائري", "المضمار"),
+)
+POSITIONS = {"on": "تقع على الدائرة", "inside": "تقع داخل الدائرة", "outside": "تقع خارج الدائرة"}
+RELATIONS = {"on": ("=", "يساوي"), "inside": ("<", "أصغر من"), "outside": (">", "أكبر من")}
+
+
+def lattice(r2: int) -> list[tuple[int, int]]:
+    """النقاط ذات الإحداثيات الصحيحة على الدائرة x²+y²=r2."""
+    reach = math.isqrt(r2)
+    return [
+        (px, py)
+        for px in range(-reach, reach + 1)
+        for py in range(-reach, reach + 1)
+        if px * px + py * py == r2
+    ]
+
+
+# مربعات أنصاف أقطار تمرّ دوائرها بنقاط إحداثياتها صحيحة غير صفرية (إزاحات عن المركز)
+SLANTED = {r2: [p for p in lattice(r2) if p[0] and p[1]] for r2 in range(5, 101)}
+CIRCLE_SQUARES = tuple(r2 for r2, found in SLANTED.items() if found)
+
+
+def line_circle_systems() -> list[tuple[int, int, int, tuple[int, int], tuple[int, int]]]:
+    """(r²، الميل، المقطع، نقطتا التقاطع) لمستقيم y=mx+c بمعاملات صحيحة يقطع x²+y²=r² في نقطتين صحيحتين."""
+    found = []
+    for r2 in range(5, 101):
+        on = lattice(r2)
+        for x1, y1 in on:
+            for x2, y2 in on:
+                if x1 < x2 and (y2 - y1) % (x2 - x1) == 0:
+                    slope = (y2 - y1) // (x2 - x1)
+                    c = y1 - slope * x1
+                    if slope and abs(slope) <= 3 and abs(c) <= 12:
+                        found.append((r2, slope, c, (x1, y1), (x2, y2)))
+    return found
+
+
+LINE_CIRCLE_SYSTEMS = line_circle_systems()
+
+
+def squared(name: str, center: int) -> str:
+    return f"{name}^2" if center == 0 else f"({name}{-center:+d})^2"
+
+
+def circle(h: int, k: int, r2: Any) -> str:
+    """معادلة الدائرة في الصيغة القياسية نصًّا."""
+    return f"${squared('x', h)}+{squared('y', k)}={tex(r2)}$"
+
+
+def circle_check(h: int, k: int, r2: int, **extra: Any) -> dict[str, Any]:
+    equation = sp.expand((x - h) ** 2 + (y - k) ** 2 - r2)
+    return {"type": "circle", "equation": equation, "center": (h, k), "radius2": r2, **extra}
+
+
+def radius(rng: random.Random) -> tuple[str, int, int]:
+    """(طول نصف القطر نصًّا، مربعه، الخطأ الشائع: نصف القطر بلا تربيع أو المجذور مربّعًا)."""
+    if rng.random() < 0.3:
+        n = rng.choice(SQUARE_FREE)
+        return f"\\sqrt{{{n}}}", n, n * n
+    r = rng.randint(2, 9)
+    return str(r), r * r, r
+
+
+@variant("2.10", G10, example=2)
+def circle_equation_from_center_and_radius(rng: random.Random) -> Problem:
+    h, k = rng.randint(-7, 7), rng.randint(-7, 7)
+    shown, r2, slip = radius(rng)
+    answer = circle(h, k, r2)
+    return Problem(
+        "2.10",
+        f"اكتب معادلة الدائرة التي مركزها $({h},{k})$ وطول نصف قطرها ${shown}$.",
+        answer,
+        wrongs(
+            answer,
+            circle(-h, -k, r2),
+            circle(h, k, slip),
+            circle(-h, -k, slip),
+            circle(k, h, r2),
+            circle(h, k, 2 * r2),
+            circle(h, k, r2 + 1),
+            circle(h, k, 3 * r2),
+        ),
+        (
+            f"$h={h}$، $k={k}$، $r={shown}$",
+            "الصيغة القياسية لمعادلة الدائرة: $(x-h)^2+(y-k)^2=r^2$",
+            f"نعوّض ونبسّط: $r^2={r2}$، إذن معادلة الدائرة {answer}.",
+        ),
+        "K",
+        circle_check(h, k, r2),
+    )
+
+
+@variant("2.10", G10, example=2)
+def center_and_radius_from_circle_equation(rng: random.Random) -> Problem:
+    h, k = rng.randint(-7, 7), nz(rng, -7, 7)
+    shown, r2, _ = radius(rng)
+
+    def text(a: int, b: int, length: str) -> str:
+        return f"المركز $({a},{b})$، وطول نصف القطر ${length}$"
+
+    answer = text(h, k, shown)
+    return Problem(
+        "2.10",
+        f"أوجد مركز الدائرة {circle(h, k, r2)} وطول نصف قطرها.",
+        answer,
+        wrongs(
+            answer,
+            text(-h, -k, shown),
+            text(h, k, str(r2)),
+            text(-h, -k, str(r2)),
+            text(k, h, shown),
+        ),
+        (
+            "الصيغة القياسية لمعادلة الدائرة: $(x-h)^2+(y-k)^2=r^2$",
+            f"نكتب المعادلة بهذه الصيغة: $(x-({h}))^2+(y-({k}))^2=({shown})^2$",
+            f"إذن $h={h}$، $k={k}$، $r={shown}$: {answer}.",
+        ),
+        "K",
+        circle_check(h, k, r2),
+    )
+
+
+@variant("2.10", G10, example=1)
+def circle_equation_from_center_and_point(rng: random.Random) -> Problem:
+    h, k = rng.randint(-6, 6), rng.randint(-6, 6)
+    dx, dy = nz(rng, -6, 6), nz(rng, -6, 6)
+    p, q, r2 = h + dx, k + dy, dx * dx + dy * dy
+    answer = circle(h, k, r2)
+    return Problem(
+        "2.10",
+        f"اكتب معادلة الدائرة التي مركزها $({h},{k})$ وتمرّ بالنقطة $({p},{q})$.",
+        answer,
+        wrongs(
+            answer,
+            circle(p, q, r2),
+            circle(-h, -k, r2),
+            circle(h, k, abs(dx) + abs(dy)),
+            circle(h, k, 2 * r2),
+            circle(h, k, r2 + 1),
+        ),
+        (
+            "طول نصف القطر هو المسافة بين المركز والنقطة، ونجد مربعه بنظرية فيثاغورس: "
+            f"$r^2=({minus(p, h)})^2+({minus(q, k)})^2={dx * dx}+{dy * dy}={r2}$",
+            f"نعوّض $h={h}$ و$k={k}$ و$r^2={r2}$ في الصيغة القياسية $(x-h)^2+(y-k)^2=r^2$.",
+            f"إذن معادلة الدائرة {answer}.",
+        ),
+        "A",
+        circle_check(h, k, r2, points=((p, q),)),
+    )
+
+
+@variant("2.10", G10, example=3)
+def circle_equation_from_diameter_endpoints(rng: random.Random) -> Problem:
+    place, edge = rng.choice(ROUND_PLACES)
+    h, k = rng.randint(-5, 5), rng.randint(-5, 5)
+    while True:
+        dx, dy = rng.randint(-5, 5), rng.randint(-5, 5)
+        if dx or dy:
+            break
+    (x1, y1), (x2, y2), r2 = (h - dx, k - dy), (h + dx, k + dy), dx * dx + dy * dy
+    answer = circle(h, k, r2)
+    return Problem(
+        "2.10",
+        f"على مخطط إحداثي لحديقة عامة، تقع نهايتا قطر {place} عند النقطتين $({x1},{y1})$ و$({x2},{y2})$. "
+        f"اكتب معادلة الدائرة التي تمثّل {edge}.",
+        answer,
+        wrongs(
+            answer,
+            circle(h, k, 4 * r2),
+            circle(x2, y2, r2),
+            circle(-h, -k, r2),
+            circle(h, k, 2 * r2),
+            circle(h, k, r2 + 1),
+        ),
+        (
+            "مركز الدائرة نقطة منتصف القطر: "
+            f"$\\left(\\dfrac{{{plus(x1, x2)}}}{{2}},\\dfrac{{{plus(y1, y2)}}}{{2}}\\right)=({h},{k})$",
+            "مربع طول نصف القطر مربع المسافة بين المركز وإحدى نهايتي القطر: "
+            f"$r^2=({minus(x2, h)})^2+({minus(y2, k)})^2={r2}$",
+            f"إذن معادلة الدائرة {answer}.",
+        ),
+        "A",
+        circle_check(h, k, r2, points=((x1, y1), (x2, y2)), diameter=True),
+    )
+
+
+@variant("2.10", G10, example=3)
+def point_position_relative_to_circle(rng: random.Random) -> Problem:
+    h, k, r2 = rng.randint(-5, 5), rng.randint(-5, 5), rng.choice(CIRCLE_SQUARES)
+    dx, dy = rng.choice(SLANTED[r2])
+    position = rng.choice(list(POSITIONS))
+    # إزاحة أفقية بوحدة نحو المركز تُدخل النقطة، وبوحدة بعيدًا عنه تُخرجها.
+    dx += {"on": 0, "inside": -1, "outside": 1}[position] * (1 if dx > 0 else -1)
+    p, q, d2 = h + dx, k + dy, dx * dx + dy * dy
+    sign, word = RELATIONS[position]
+    answer = POSITIONS[position]
+    return Problem(
+        "2.10",
+        f"حدّد موقع النقطة $({p},{q})$ بالنسبة إلى الدائرة {circle(h, k, r2)}: هل تقع على الدائرة أم "
+        "داخلها أم خارجها؟",
+        answer,
+        (*[text for name, text in POSITIONS.items() if name != position], "هي مركز الدائرة"),
+        (
+            f"نعوّض $x={p}$ و$y={q}$ في الطرف الأيسر من المعادلة: "
+            f"$({minus(p, h)})^2+({minus(q, k)})^2={dx * dx}+{dy * dy}={d2}$",
+            f"${d2}{sign}{r2}$، أي أن مربع بُعد النقطة عن المركز {word} مربع طول نصف القطر، إذن النقطة "
+            f"{answer}.",
+        ),
+        "A",
+        {
+            "type": "circle_position",
+            "center": (h, k),
+            "radius2": r2,
+            "point": (p, q),
+            "position": position,
+        },
+    )
+
+
+@variant("2.10", G10, example=5)
+def solve_line_and_circle_system(rng: random.Random) -> Problem:
+    r2, slope, c, first, second = rng.choice(LINE_CIRCLE_SYSTEMS)
+    line = slope * x + c
+    answer = points(first, second)
+    return Problem(
+        "2.10",
+        f"حلّ النظام الخطي-التربيعي $y={tex(line)}$ و$x^2+y^2={r2}$.",
+        answer,
+        point_wrongs(answer, first, second),
+        (
+            f"نعوّض ${tex(line)}$ بدل $y$ في معادلة الدائرة: $x^2+({tex(line)})^2={r2}$",
+            f"نفكّ المربع ونجمع الحدود المتشابهة: ${tex(sp.expand(x**2 + line**2 - r2))}=0$",
+            f"نقسم طرفي المعادلة على ${1 + slope * slope}$ ونحلّل إلى العوامل: "
+            f"${product(first[0], second[0])}=0$، إذن {solutions(first[0], second[0])}",
+            back_substitution(slope, c, first[0], second[0]),
+            f"إذن حلّا النظام {answer}.",
+        ),
+        "A",
+        {"type": "system", "equations": (y - line, x**2 + y**2 - r2), "solutions": (first, second)},
     )
