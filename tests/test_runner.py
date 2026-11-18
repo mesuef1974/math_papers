@@ -189,7 +189,7 @@ def test_runner_check_is_strict_about_missing_tools(world, monkeypatch):
     [
         {},
         {"head": "b" * 40, "checks": {"tests": "ok"}},
-        {"head": HEAD, "checks": {"tests": "ok", "secrets": "missing"}},
+        {"head": HEAD, "checks": {"tests": "ok", "secrets": "missing"}},  # pragma: allowlist secret
         {"head": HEAD, "checks": {}},
     ],
     ids=["no-receipt", "other-head", "unmeasured-check", "no-checks"],
