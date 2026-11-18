@@ -53,7 +53,8 @@ PostgreSQL + Redis. النشر على Railway (`railway.toml`).
 - بيان التبنّي (`brand/math_papers/identity/ADOPTION.yaml`، مولَّد من سِمة): ظهور الرمز بالحركة `styles/motion.css` (نسخة طبق الأصل من `identity/motion.css`) بالصنف `sima-mark-intro` عبر `utils/markIntro.ts` مرة عند أول عرض في شاشة الافتتاح `SplashScreen.vue` (تظهر بعد 150ms من تأخر فحص الجلسة)، وقالب الشرائح 16:9 `SlideFrame.vue` (تخطيطا العنوان والمحتوى بأحجام نسبة إلى عرض الإطار)، و`styles/adoptionParity.test.ts` يقرأ `token_map` من ADOPTION.yaml ويطابقه مع `tokens.css` نهارًا وليلًا ويتحقق من تطابق نسختي `motion.css`. تُحدَّث النسختان مع كل إصدار من سِمة.
 - النمط (`patterns/motif-soft.svg`) مكوّن `BrandPattern.vue` بلونين من متغيرات السمة (`--color-brand-soft` و`--color-sand-soft`): شريط أسفل شاشة الافتتاح، وفوق رسالة الحالة الفارغة (`EmptyState.vue`)، وعلى حافة غلاف الكراسة العليا (`BookletCover.vue`، مضمَّن في الصفحة فيُطبع في PDF)، وفي غلاف Word صورة `apps/papers/word/assets/pattern_band.png` (تحويل نقطي 300dpi بعرض المحتوى، تُحدَّث مع كل إصدار من سِمة كالشعار). زخرفة فقط: لا نص فوقه ولا يجاور الشعار.
 - لوحة الإدارة (`admin.css` و`templates/admin/_lockup.html`): الترويسة بسطح الورقة وخط سفلي وقفل الهوية الحالي، وخلفية مسطّحة بلا شبكة. `_lockup.html` نسخة من `BrandLockup.vue` يحرسها `styles/adminIdentity.test.ts`، وتُحدَّث مع كل إصدار من سِمة.
-- المدى الرقمي في نص عربي (السنوات) يُعرض عبر `isolateNumberRanges` من `utils/bidi.ts`.
+- المدى الرقمي في نص عربي (السنوات) يُعرض عبر `isolateNumberRanges` من `utils/bidi.ts` (ومنه التذييل الجاري)، وفي Word عبر `isolate_number_ranges` (علامة LRM) في `word/builder.py`.
+- سطر الصف في الترويسة والغلاف والتذييل من مقرر الورقة (`grade` في الورقة، `grade_label` في `apps/curriculum/courses.py`)، وصف ملف الطباعة احتياط للأوراق المحفوظة قبله. ملاحظة «للتدريب» على غلاف الجدول التوقّعي (`is_forecast`) وحده.
 
 ## أوامر
 ```bash

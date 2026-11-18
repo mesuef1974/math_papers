@@ -45,10 +45,13 @@ PATTERN_BAND = (Path(__file__).parent / "assets" / "pattern_band.png").read_byte
 HEADER_CM = [3.0, 10.6, 4.2]  # الشعار، العنوان، المدرسة والمعلم
 SIDE_GRAPH_CM = 5.4
 LINE_CM = 0.8
-COVER_NOTES = [
-    "هذا الاختبار للتدريب ولا يغطي جميع موضوعات الفصل.",
-    "الاختبار لا يغني عن الكتاب المدرسي ولا عن الخطة الفصلية.",
-]
+FORECAST_NOTE = "هذا الاختبار للتدريب ولا يغطي جميع موضوعات الفصل."
+BOOK_NOTE = "الاختبار لا يغني عن الكتاب المدرسي ولا عن الخطة الفصلية."
+
+
+def cover_notes(paper: dict) -> list[str]:
+    """ملاحظة التدريب للجدول التوقّعي وحده؛ الجدول الرسمي يغطي الفصل (يطابقه BookletCover.vue)."""
+    return [FORECAST_NOTE, BOOK_NOTE] if paper.get("is_forecast") else [BOOK_NOTE]
 
 
 # ---------- نصوص مساعدة ----------
@@ -109,6 +112,15 @@ def split_math(text: str) -> list[tuple[bool, bool, str]]:
     return out
 
 
+NUMBER_RANGE = re.compile(r"\d+(?:\s*[-–/]\s*\d+)+")
+
+
+def isolate_number_ranges(text: str) -> str:
+    """في فقرة عربية يقلب Word المدى «2026-2027» إلى «2027-2026» (الأرقام بعد حرف عربي أرقام عربية والشرطة لا تصلها)؛
+    علامة LRM قبله تجعله تشغيلًا من اليسار إلى اليمين. نظير isolateNumberRanges في utils/bidi.ts."""
+    return NUMBER_RANGE.sub(lambda match: f"{x.LRM}{match.group(0)}", text)
+
+
 def header_of(paper: dict, profile: dict, date: str, section: str, multi: bool) -> dict:
     kind = paper["kind"]
     minutes = profile["exam_minutes"] if kind == "exam" else QUIZ_MINUTES if kind == "quiz" else None
@@ -117,8 +129,8 @@ def header_of(paper: dict, profile: dict, date: str, section: str, multi: bool) 
         "school": profile.get("school", ""),
         "teacher": profile.get("teacher_name", ""),
         "subject": profile["subject"],
-        "grade": profile.get("grade", ""),
-        "title": paper["title"],
+        "grade": paper.get("grade") or profile.get("grade", ""),
+        "title": isolate_number_ranges(paper["title"]),
         "minutes": minutes,
         "date": date,
         "section": section,
@@ -348,7 +360,7 @@ def cover_page(doc, header: dict, paper: dict) -> None:
     cell = notes.cell(0, 0)
     x.set_cell(cell, CONTENT_CM)
     x.add_text(x.new_paragraph(cell, before=3, after=2), "ملاحظات:", size=11, bold=True)
-    for note in COVER_NOTES:
+    for note in cover_notes(paper):
         x.add_text(x.new_paragraph(cell, after=2, indent_cm=0.4), f"• {note}", size=10.5)
     instructions_page(doc, header, paper)
 

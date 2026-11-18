@@ -13,115 +13,115 @@
   "lessons": [
     {
       "code": "1.1",
-      "title": "الدرس 1.1",
+      "title": "المميزات الأساسية للدالة التربيعية",
       "unit": 1,
       "examinable": true
     },
     {
       "code": "1.2",
-      "title": "الدرس 1.2",
+      "title": "الدوال التربيعية بصيغة الرأس",
       "unit": 1,
       "examinable": true
     },
     {
       "code": "1.3",
-      "title": "الدرس 1.3",
+      "title": "الدوال التربيعية في الصيغة القياسية",
       "unit": 1,
       "examinable": true
     },
     {
       "code": "1.4",
-      "title": "الدرس 1.4",
+      "title": "النمذجة باستعمال الدوال التربيعية",
       "unit": 1,
       "examinable": false
     },
     {
       "code": "2.1",
-      "title": "الدرس 2.1",
+      "title": "حل المعادلات التربيعية باستعمال التمثيلات البيانية والجداول",
       "unit": 2,
       "examinable": true
     },
     {
       "code": "2.2",
-      "title": "الدرس 2.2",
+      "title": "حل المعادلات التربيعية بالتحليل إلى العوامل",
       "unit": 2,
       "examinable": true
     },
     {
       "code": "2.3",
-      "title": "الدرس 2.3",
+      "title": "إعادة كتابة المقادير الجذرية",
       "unit": 2,
       "examinable": true
     },
     {
       "code": "2.4",
-      "title": "الدرس 2.4",
+      "title": "حل المعادلات التربيعية باستعمال الجذور التربيعية",
       "unit": 2,
       "examinable": false
     },
     {
       "code": "2.5",
-      "title": "الدرس 2.5",
+      "title": "إكمال المربع",
       "unit": 2,
       "examinable": true
     },
     {
       "code": "2.6",
-      "title": "الدرس 2.6",
+      "title": "القانون العام لحل المعادلات التربيعية والمميّز",
       "unit": 2,
       "examinable": true
     },
     {
       "code": "2.7",
-      "title": "الدرس 2.7",
+      "title": "حل المعادلات النسبية",
       "unit": 2,
       "examinable": true
     },
     {
       "code": "2.8",
-      "title": "الدرس 2.8",
+      "title": "أنظمة حل المعادلات الخطية والتربيعية",
       "unit": 2,
       "examinable": true
     },
     {
       "code": "2.9",
-      "title": "الدرس 2.9",
+      "title": "حل المتباينات التربيعية في متغير واحد",
       "unit": 2,
       "examinable": true
     },
     {
       "code": "2.10",
-      "title": "الدرس 2.10",
+      "title": "معادلة الدائرة في المستوى الإحداثي",
       "unit": 2,
       "examinable": true
     },
     {
       "code": "3.1",
-      "title": "الدرس 3.1",
+      "title": "التمدد",
       "unit": 3,
       "examinable": false
     },
     {
       "code": "3.2",
-      "title": "الدرس 3.2",
+      "title": "تحويلات التشابه",
       "unit": 3,
       "examinable": false
     },
     {
       "code": "3.3",
-      "title": "الدرس 3.3",
+      "title": "إثبات تشابه المثلثات",
       "unit": 3,
       "examinable": true
     },
     {
       "code": "3.4",
-      "title": "الدرس 3.4",
+      "title": "التشابه في المثلثات القائمة",
       "unit": 3,
       "examinable": true
     },
     {
       "code": "3.5",
-      "title": "الدرس 3.5",
+      "title": "التناسب في المثلثات",
       "unit": 3,
       "examinable": true
     }
