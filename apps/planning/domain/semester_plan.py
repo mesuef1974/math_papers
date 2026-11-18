@@ -232,7 +232,7 @@ def parse_slots(rows: Iterable[tuple[str, int]]) -> tuple[Slot, ...]:
 
 
 def check_catalog(plan: TermPlan, lessons: Collection[str], examples: dict[str, Collection[int]]) -> None:
-    """الدروس والأمثلة المذكورة في الخطة موجودة في الفهرس المشتق."""
+    """الدروس والأمثلة المذكورة في الخطة موجودة في كتالوج المقرر (دروسه وأمثلتها، من فهرس مشتق أو معرفة بصياغتنا)."""
     unknown = sorted((set(plan.lessons()) | plan.enrichment_lessons) - set(lessons))
     if unknown:
         raise PlanningError(f"دروس غير موجودة في الفهرس: {unknown}")

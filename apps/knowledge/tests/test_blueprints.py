@@ -147,7 +147,7 @@ def test_contract_rejects_bad_blueprints():
 def test_course_without_blueprints_keeps_its_content_hash():
     """القسم الاختياري الفارغ خارج التجزئة: دخول حقل جديد العقدَ لا يُصدر إصدارًا لمقرر لا يملكه."""
     knowledge = read_source(GRADE12_SLUG)
-    assert knowledge.blueprints == [] and knowledge.term_plan is None
+    assert knowledge.blueprints == []
     payload = knowledge.model_dump(mode="json")
     for key in OPTIONAL:
         if not payload[key]:

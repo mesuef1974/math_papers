@@ -17,10 +17,10 @@ from apps.assets.selectors import asset_bytes
 from apps.assets.storage import Storage
 from apps.curriculum.courses import GRADE10_SLUG
 from apps.curriculum.models import Course
-from apps.curriculum.selectors import calendar_data, term_plan_data
+from apps.curriculum.selectors import calendar_data, lessons, term_plan_data
 from apps.knowledge.domain.course_index import LessonIndex
 from apps.knowledge.domain.schemas import lesson_sort_key
-from apps.knowledge.selectors import course_index, lesson_index
+from apps.knowledge.selectors import course_index, example_numbers, lesson_index
 
 from .domain.calendar_engine import Closure, Plan, Slot, Term, allocate, parse_terms, sessions
 from .domain.deck import Deck, ExampleClip, LessonContent, build_deck
@@ -113,17 +113,12 @@ def lesson_deck(
 def _course_plan(course: str) -> tuple[Course, TermPlan]:
     row, raw = term_plan_data(course)
     plan = parse_term_plan(raw, row.semester)
-    index = course_index(course)
-    check_catalog(
-        plan,
-        [lesson.lesson for lesson in index.lessons],
-        {lesson.lesson: [e.n for e in lesson.examples] for lesson in index.lessons},
-    )
+    check_catalog(plan, list(lessons(row).values_list("code", flat=True)), example_numbers(course))
     return row, plan
 
 
 def term_plan(course: str = PLAN_COURSE) -> TermPlan:
-    """خطة الوزارة الفصلية للمقرر من جداولها، بعد مطابقة دروسها وأمثلتها الإثرائية على فهرسه. `KeyError` بلا خطة."""
+    """خطة الوزارة الفصلية للمقرر من جداولها، بعد مطابقة دروسها على جدول دروسه وأمثلتها الإثرائية على أمثلته المحمَّلة (فهرس مشتق أو معرفة بصياغتنا). `KeyError` بلا خطة."""
     return _course_plan(course)[1]
 
 

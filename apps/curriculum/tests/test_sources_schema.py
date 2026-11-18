@@ -163,6 +163,8 @@ def test_tables_are_the_reading_source_and_match_the_canonical_files():
     assert term_plan(GRADE10_SLUG) == read_source(GRADE10_SLUG).term_plan.to_domain(1)
     terms = calendar_terms("2026-2027")
     assert (terms["t1"].start.isoformat(), terms["t2"].end.isoformat()) == ("2026-08-30", "2027-06-02")
+    assert term_plan(GRADE12_SLUG) == read_source(GRADE12_SLUG).term_plan.to_domain(1)  # بلا فهرس مشتق
+    TermPlan.objects.filter(course__slug=GRADE12_SLUG).delete()
     with pytest.raises(KeyError, match="لا خطة فصلية"):
         term_plan(GRADE12_SLUG)
 
