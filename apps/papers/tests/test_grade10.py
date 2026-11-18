@@ -152,3 +152,16 @@ def test_vertex_form_in_lesson_2_5_keeps_leading_coefficient_one():
     for seed in range(60):
         check = vertex_form_by_completing_the_square(random.Random(seed)).check
         assert check["f"].coeff(x, 2) == 1
+
+
+@pytest.mark.django_db
+def test_full_exam_carries_the_course_grade_and_real_lesson_titles():
+    """الاختبار الكامل (النموذجان) يحمل صف مقرره لا صف ملف الطباعة، وعناوين دروس الكتاب لا «الدرس <رمز>»."""
+    load_all()
+    for form in ("A", "B"):
+        paper = services.build_exam(FINAL, 7, form)
+        assert paper["grade"] == "الصف 10" and not paper["is_forecast"]
+        assert len(paper["questions"]) == 18 and sum(q["marks"] for q in paper["questions"]) == 50
+        titles = {part["lesson_title"] for q in paper["questions"] for part in q["parts"]}
+        assert not any(title.startswith("الدرس ") for title in titles)
+    assert services.build_worksheet("3.5", 2, 5, course=GRADE10_SLUG)["grade"] == "الصف 10"

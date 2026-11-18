@@ -17,7 +17,7 @@ from django.db import transaction
 
 from apps.core.services import record_audit
 from apps.curriculum import selectors
-from apps.curriculum.courses import DEFAULT_COURSE
+from apps.curriculum.courses import DEFAULT_COURSE, grade_label
 from apps.curriculum.models import Blueprint, BlueprintItem, Course
 
 from .domain.generators import (
@@ -155,8 +155,14 @@ def generate_for_slot(item: BlueprintItem, rng: random.Random, used: set[str]) -
 
 
 def paper_meta(kind: str, course: str = DEFAULT_COURSE, **extra: object) -> dict:
-    """حقول مشتركة تهم الحفظ وإعادة التوليد."""
-    return {"kind": kind, "generator_version": generator_version(course), **extra}
+    """حقول مشتركة تهم الحفظ وإعادة التوليد، وصف المقرر الذي تُطبع به الورقة."""
+    row = selectors.course_by_slug(course)
+    return {
+        "kind": kind,
+        "generator_version": generator_version(course),
+        "grade": grade_label(row.grade, row.track),
+        **extra,
+    }
 
 
 def blueprint_ready(blueprint: Blueprint) -> bool:

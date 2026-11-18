@@ -89,6 +89,7 @@ export interface Paper {
   blueprint: string;
   lesson_code: string;
   title: string;
+  grade?: string; // صف مقرر الورقة؛ الورقة المحفوظة قبله تأخذ صف ملف الطباعة
   seed: number;
   total_marks: number;
   is_forecast: boolean;

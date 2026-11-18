@@ -126,6 +126,7 @@ class PaperOut(Schema):
     blueprint: str
     lesson_code: str
     title: str
+    grade: str = ""  # صف مقرر الورقة؛ الفارغ (ورقة محفوظة قبله) يأخذ صف ملف الطباعة
     seed: int
     total_marks: int
     is_forecast: bool

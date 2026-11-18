@@ -14,12 +14,17 @@ from lxml import etree
 from apps.core.models import AuditLog
 from apps.papers.word import ooxml
 from apps.papers.word.builder import (
+    BOOK_NOTE,
     BUNDLE_COVER_TITLE,
     COPYRIGHT_NAME,
     COPYRIGHT_PHONE,
+    FORECAST_NOTE,
     LOGO,
     PATTERN_BAND,
     build_docx,
+    cover_notes,
+    header_of,
+    isolate_number_ranges,
     marks_label,
     split_math,
     work_lines,
@@ -453,3 +458,23 @@ def test_word_line_height_is_the_print_line_height(client):
     document = parts_of(build_docx(sample_payload(client, "worksheet")))["word/document.xml"].decode("utf-8")
     assert f'w:line="{round(ooxml.LINE_MULTIPLE * 240)}" w:lineRule="auto"' in document
     assert 'w:line="276"' not in document  # مضاعف Arial القديم
+
+
+def test_paper_grade_wins_over_the_print_profile_and_old_papers_fall_back(client):
+    """سطر الصف من مقرر الورقة؛ الورقة المحفوظة قبل الحقل (بلا grade) تأخذ صف ملف الطباعة."""
+    payload = sample_payload(client)
+    assert payload["papers"][0]["grade"] == "الصف 12: المسار العلمي والتكنولوجي"
+    assert header_of(payload["papers"][0], PROFILE, "", "", False)["grade"] == payload["papers"][0]["grade"]
+    old = {key: value for key, value in payload["papers"][0].items() if key != "grade"}
+    assert header_of(old, PROFILE, "", "", False)["grade"] == PROFILE["grade"]
+
+
+def test_training_note_only_on_a_forecast_cover():
+    assert cover_notes({"is_forecast": True}) == [FORECAST_NOTE, BOOK_NOTE]
+    assert cover_notes({"is_forecast": False}) == [BOOK_NOTE]
+
+
+def test_number_range_reads_left_to_right_in_arabic_text():
+    title = isolate_number_ranges("اختبار نهاية الفصل الأول: العاشر، 2026-2027")
+    assert title == f"اختبار نهاية الفصل الأول: العاشر، {ooxml.LRM}2026-2027"
+    assert isolate_number_ranges("الدرس 3.5") == "الدرس 3.5"

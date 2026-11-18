@@ -67,7 +67,7 @@ export const usePrintStore = defineStore("print", {
         school: state.profile.school,
         teacher: state.profile.teacher_name,
         subject: state.profile.subject,
-        grade: state.profile.grade,
+        grade: paper.grade || state.profile.grade,
         title: paper.title,
         minutes: minutesFor(paper, state.profile),
         date: state.date,

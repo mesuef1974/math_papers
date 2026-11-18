@@ -16,8 +16,11 @@ SEED = 20261116
 
 
 def digest(paper: dict) -> int:
-    """أول 64 بتًا من SHA-1 رقمًا عشريًا: كاشف الأسرار يعدّ السداسي العشري الطويل سرًّا."""
-    text = json.dumps(paper, sort_keys=True, ensure_ascii=False, default=str)
+    """أول 64 بتًا من SHA-1 رقمًا عشريًا: كاشف الأسرار يعدّ السداسي العشري الطويل سرًّا.
+    سطر الصف (grade) حقل عرض من المقرر أُضيف بعد التثبيت ولا يمسّ المسائل، فلا يدخل البصمة."""
+    text = json.dumps(
+        {k: v for k, v in paper.items() if k != "grade"}, sort_keys=True, ensure_ascii=False, default=str
+    )
     return int(hashlib.sha1(text.encode("utf-8"), usedforsecurity=False).hexdigest()[:16], 16)
 
 

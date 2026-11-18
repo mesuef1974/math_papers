@@ -7,6 +7,7 @@ import PaperQuestion from "@/components/PaperQuestion.vue";
 import ScoreTable from "@/components/ScoreTable.vue";
 import type { Paper, Question } from "@/stores/papers";
 import type { PaperHeaderData } from "@/stores/print";
+import { isolateNumberRanges } from "@/utils/bidi";
 import { ensurePrintFonts } from "@/utils/printFonts";
 
 // الورقة ومفتاحها. الأسئلة في PaperQuestion وأجزاؤها في PaperPart والمفتاح في AnswerKey.
@@ -69,7 +70,7 @@ watchEffect(() => {
   const footer = booklet.value
     ? [props.header.subject, props.header.title, props.header.grade].filter(Boolean).join(" – ")
     : props.header.title;
-  document.documentElement.style.setProperty("--print-footer", JSON.stringify(footer));
+  document.documentElement.style.setProperty("--print-footer", JSON.stringify(isolateNumberRanges(footer)));
 });
 </script>
 

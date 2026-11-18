@@ -4,6 +4,7 @@ import { mount } from "@vue/test-utils";
 import { describe, expect, it } from "vitest";
 import type { Paper, Part } from "@/stores/papers";
 import type { PaperHeaderData } from "@/stores/print";
+import { isolateNumberRanges } from "@/utils/bidi";
 import { marksLabel } from "@/utils/marks";
 import PaperSheet from "./PaperSheet.vue";
 
@@ -101,7 +102,16 @@ describe("PaperSheet", () => {
     expect(score.findAll("tbody tr").map((r) => `${r.find("th").text()} ${r.find("td").text()}`)).toEqual(["1 – 2 2", "3 12", "المجموع 14"]);
     expect(wrapper.find(".answer-key").exists()).toBe(false);
     expect(wrapper.text()).toContain("رقم النموذج 7");
-    expect(document.documentElement.style.getPropertyValue("--print-footer")).toBe('"الرياضيات – اختبار تدريبي 2026-2027"');
+    // المدى الرقمي معزول باتجاه LTR وإلا انقلب في سطر عربي إلى «2027-2026»
+    expect(document.documentElement.style.getPropertyValue("--print-footer")).toBe(
+      JSON.stringify("الرياضيات – اختبار تدريبي ⁦2026-2027⁩"),
+    );
+  });
+
+  it("ملاحظة التدريب على غلاف الجدول التوقّعي وحده، والجدول الرسمي يبقي ملاحظة الكتاب", () => {
+    const notesOf = (p: Paper) => mount(PaperSheet, { props: { paper: p, header, showKey: false } }).findAll(".cover li").map((li) => li.text());
+    expect(notesOf(paper)).toEqual(["هذا الاختبار للتدريب ولا يغطي جميع موضوعات الفصل.", "الاختبار لا يغني عن الكتاب المدرسي ولا عن الخطة الفصلية."]);
+    expect(notesOf({ ...paper, is_forecast: false })).toEqual(["الاختبار لا يغني عن الكتاب المدرسي ولا عن الخطة الفصلية."]);
   });
 
   it("ورقة العمل تبقى ورقة بترويسة ومساحة حل متدرجة بلا غلاف", () => {
@@ -115,7 +125,7 @@ describe("PaperSheet", () => {
     expect(wrapper.findAll(".section-end")).toHaveLength(0);
     expect(wrapper.find(".score-page").exists()).toBe(false);
     expect(wrapper.find(".work-space").findAll(".rule")).toHaveLength(6);
-    expect(document.documentElement.style.getPropertyValue("--print-footer")).toBe(JSON.stringify(header.title));
+    expect(document.documentElement.style.getPropertyValue("--print-footer")).toBe(JSON.stringify(isolateNumberRanges(header.title)));
   });
 
   it("المفتاح: جدول الإجابات الموضوعية ثم جدول بصف لكل جزء مع المستوى والدرس والخطوات، وعنوانه دليل التقدير للاختبار", () => {

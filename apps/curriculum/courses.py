@@ -7,3 +7,8 @@ GRADE12_TITLE = "الرياضيات: الثاني عشر العلمي والتك
 DEFAULT_COURSE = GRADE12_SLUG
 # العاشر، الفصل الأول: كتابه الثاني في المنصة؛ معرفته عددية مشتقة (apps/knowledge/domain/contract.py).
 GRADE10_SLUG = "g10-s1"
+
+
+def grade_label(grade: int, track: str = "") -> str:
+    """سطر الصف في ترويسة الورقة وغلافها وتذييلها، من مقرر الورقة لا من ملف طباعة المعلم."""
+    return f"الصف {grade}: المسار {track}" if track else f"الصف {grade}"

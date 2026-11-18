@@ -15,7 +15,10 @@ const mcqCount = computed(() => props.paper.questions.filter((q) => q.kind === "
 const essayCount = computed(() => props.paper.questions.length - mcqCount.value);
 const duration = computed(() => (props.header.minutes ? durationLabel(props.header.minutes) : ""));
 
-const COVER_NOTES = ["هذا الاختبار للتدريب ولا يغطي جميع موضوعات الفصل.", "الاختبار لا يغني عن الكتاب المدرسي ولا عن الخطة الفصلية."];
+// ملاحظة التدريب للجدول التوقّعي وحده؛ الجدول الرسمي يغطي الفصل كما أعلنته الوزارة (يطابقه cover_notes في word/builder.py).
+const FORECAST_NOTE = "هذا الاختبار للتدريب ولا يغطي جميع موضوعات الفصل.";
+const BOOK_NOTE = "الاختبار لا يغني عن الكتاب المدرسي ولا عن الخطة الفصلية.";
+const coverNotes = computed(() => (props.paper.is_forecast ? [FORECAST_NOTE, BOOK_NOTE] : [BOOK_NOTE]));
 
 const rules = computed(() => [
   {
@@ -78,7 +81,7 @@ const rules = computed(() => [
     <div class="notes">
       <strong>ملاحظات:</strong>
       <ul>
-        <li v-for="note in COVER_NOTES" :key="note">{{ note }}</li>
+        <li v-for="note in coverNotes" :key="note">{{ note }}</li>
       </ul>
     </div>
   </section>
