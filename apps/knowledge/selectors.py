@@ -79,6 +79,15 @@ def example_page(course: str, lesson: str, number: int) -> int | None:
     )
 
 
+def example_numbers(course: str) -> dict[str, list[int]]:
+    """أرقام أمثلة كل درس في مقرر من جداوله: من فهرسه المشتق أو من دروس المعرفة بصياغتنا، أيهما حمّله المحمِّل."""
+    numbers: dict[str, list[int]] = {}
+    rows = WorkedExample.objects.filter(profile__lesson__course__slug=course).order_by("number")
+    for code, number in rows.values_list("profile__lesson__code", "number"):
+        numbers.setdefault(code, []).append(number)
+    return numbers
+
+
 def course_index_from_tables(course: str) -> CourseIndex:
     """فهرس مقرر مشتقًّا من الجداول التي حمّلها المحمِّل الواحد: يطابق الملف المودَع حين يكون المقرر محمَّلًا."""
     profiles = (
