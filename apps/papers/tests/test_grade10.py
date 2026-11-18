@@ -169,10 +169,11 @@ def test_full_exam_carries_the_course_grade_and_real_lesson_titles():
 
 
 @pytest.mark.django_db
-@pytest.mark.parametrize("seed", [1, 7, 42])
+@pytest.mark.parametrize("seed", [1, 7, 42, 20261118])
 def test_form_b_rotates_lessons_within_each_ministry_group(seed):
     """النموذج ب يبدّل دروس كل مجموعة بين خاناتها: النوع والدرجة والمستوى ثابتة، ودروس المجموعة كلها مغطاة،
-    وأغلب الفروع بدرس غير درسها في أ، وفروع السؤال الواحد بدروس مختلفة."""
+    وأغلب الفروع بدرس غير درسها في أ، وفروع السؤال الواحد بدروس مختلفة، ولا يتكرر درس في سؤالين مقاليين
+    (البذرة 20261118 أعطت 2.7 للسؤالين 16 و17 قبل قرار المالك 2026-11-18)."""
     load_all()
     group_of = {
         (item.question_number, item.position): item.group
@@ -199,6 +200,8 @@ def test_form_b_rotates_lessons_within_each_ministry_group(seed):
             covered_b.setdefault(group, set()).add(pb["lesson"])
             moved += pa["lesson"] != pb["lesson"]
     assert covered_b == covered_a  # كل درس في مجموعته، ولا يغيب درس
+    essays = [part["lesson"] for q in paper_b["questions"] if q["kind"] == "essay" for part in q["parts"]]
+    assert len(set(essays)) == len(essays)
     assert moved >= 17  # 3.5 وحده يملك مستوى R في مجموعته فيبقى
 
 

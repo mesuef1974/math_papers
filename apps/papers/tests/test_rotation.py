@@ -40,6 +40,21 @@ def test_parts_of_one_question_take_different_lessons():
         assert sorted(chosen.values()) == ["1.1", "1.2", "1.3"]
 
 
+def test_two_essay_questions_never_share_a_lesson():
+    """قرار المالك 2026-11-18: النموذج ب لا يعطي سؤالين مقاليين الدرس نفسه، ولو غطّى الموضوعي الدرس الآخر."""
+    slots = [
+        slot(7, 0, "2b", "2.9"),
+        slot(8, 0, "2b", "2.8"),
+        slot(15, 0, "2b", "2.7", "essay"),
+        slot(16, 0, "2b", "2.8", "essay"),
+        slot(17, 0, "2b", "2.10", "essay"),
+    ]
+    for seed in range(50):
+        chosen = rotate(slots, everything_fits, random.Random(seed))
+        essays = [chosen[s.key] for s in slots if s.kind == "essay"]
+        assert len(set(essays)) == len(essays)
+
+
 def test_groups_do_not_mix_and_ungrouped_slots_stay():
     slots = [slot(1, 0, "a", "1.1"), slot(2, 0, "a", "1.2"), slot(3, 0, "b", "2.1"), slot(4, 0, "", "3.1")]
     chosen = rotate(slots, everything_fits, random.Random(5))
