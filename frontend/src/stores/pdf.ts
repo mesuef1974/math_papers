@@ -23,6 +23,7 @@ export interface PdfRequest {
   show_key: boolean;
   bubble: boolean;
   bundle?: { plan: BundleEntry[]; seed: number } | null; // حزمة كل أوراق العمل: غلاف بفهرس ثم الأوراق
+  template?: "awraq" | "school"; // قالب Word للاختبار: «school» قالب المدرسة؛ لا أثر له في PDF
 }
 
 export const POLL_MS = 1000;

@@ -18,6 +18,7 @@ from docx.oxml.ns import nsdecls
 from docx.shared import Cm, Pt
 
 from . import ooxml as x
+from . import school
 from .graph_png import render_graph
 from .omml import split_array, to_omml
 
@@ -1020,7 +1021,7 @@ def _setup(doc: Document) -> None:
     doc.core_properties.language = "ar-QA"
 
 
-def _configure_section(section, footer_text: str) -> None:
+def _configure_section(section, footer_text: str, pages: str = " NUMPAGES ") -> None:
     section.page_width, section.page_height = Cm(21), Cm(29.7)
     section.left_margin = section.right_margin = Cm(1.6)
     section.top_margin, section.bottom_margin = Cm(1.5), Cm(1.8)
@@ -1053,11 +1054,12 @@ def _configure_section(section, footer_text: str) -> None:
     x.add_text(copyright_line, f"©{NBSP}{COPYRIGHT_NAME}  ", size=7.5)
     x.add_picture(copyright_line, PHONE_ICON, PHONE_ICON_CM)
     x.add_text(copyright_line, f"  {COPYRIGHT_PHONE}", size=7.5)
+    total = pages
     pages = x.new_paragraph(table.cell(0, 2), align="left", before=3, after=0, line=None)
     x.add_text(pages, "صفحة ", size=7.5)
     x.add_field(pages, " PAGE ", size=7.5)
     x.add_text(pages, " من ", size=7.5)
-    x.add_field(pages, " NUMPAGES ", size=7.5)
+    x.add_field(pages, total, size=7.5)
     # الفقرة الفارغة الأصلية تسبق الجدول؛ تُحذف وتُضاف فقرة ختامية دقيقة (الحاوية تنتهي بفقرة لا بجدول)
     for paragraph in footer.paragraphs:
         paragraph._p.getparent().remove(paragraph._p)
@@ -1121,7 +1123,8 @@ def build_docx(payload: dict[str, Any]) -> bytes:
     profile = payload["profile"]
     bundle = payload.get("bundle")
     multi = len(papers) > 1 and not bundle
-    doc = Document()
+    school_template = payload.get("template") == "school" and not bundle
+    doc = school.new_document() if school_template else Document()
     _setup(doc)
     x.embed_fonts(doc)
     headers = [
@@ -1135,6 +1138,12 @@ def build_docx(payload: dict[str, Any]) -> bytes:
             sheet(doc, paper, header, page_break=True)
     else:
         for index, (paper, header) in enumerate(zip(papers, headers, strict=True)):
+            if school_template and paper["kind"] == "exam":
+                # قالب المدرسة: الغلاف من ملف القالب والأسئلة في أطره، بقسم وترقيم لكل نموذج
+                school.exam_sheet(doc, paper, header, duration_label(header["minutes"]), first=index == 0)
+                if payload.get("bubble") and any(q["kind"] == "mcq" for q in paper["questions"]):
+                    answer_sheet(doc, paper, header, answers=False)
+                continue
             section = doc.sections[0] if index == 0 else doc.add_section(WD_SECTION.NEW_PAGE)
             footer = (
                 " – ".join(v for v in (header["subject"], header["title"], short_grade(header["grade"])) if v)
@@ -1147,7 +1156,8 @@ def build_docx(payload: dict[str, Any]) -> bytes:
                 answer_sheet(doc, paper, header, answers=False)
     if payload.get("show_key"):
         section = doc.add_section(WD_SECTION.NEW_PAGE)
-        _configure_section(section, "مفتاح الحل")
+        # في قالب المدرسة يبدأ ترقيم كل قسم من 1 (القسم الجديد يرث ذلك)، فالمجموع مجموع صفحات المفتاح
+        _configure_section(section, "مفتاح الحل", " SECTIONPAGES " if school_template else " NUMPAGES ")
         for index, (paper, header) in enumerate(zip(papers, headers, strict=True)):
             # القسم الجديد يبدأ صفحة بنفسه؛ فاصل الصفحة قبل الترويسة لما بعد المفتاح الأول فقط
             key_pages(doc, paper, header, page_break=bool(index))

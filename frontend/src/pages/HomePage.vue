@@ -168,9 +168,9 @@ function printPaper() {
   window.print();
 }
 
-function downloadServerFile(format: "pdf" | "docx") {
+function downloadServerFile(format: "pdf" | "docx", template: "awraq" | "school" = "awraq") {
   if (!serverRequest.value) return;
-  void pdf.download(serverRequest.value, undefined, format);
+  void pdf.download({ ...serverRequest.value, template }, undefined, format);
 }
 </script>
 
@@ -296,6 +296,15 @@ function downloadServerFile(format: "pdf" | "docx") {
         </button>
         <button v-if="store.paper || store.bundle" type="button" class="btn btn-secondary" :disabled="pdf.busy" @click="downloadServerFile('docx')">
           {{ pdf.busy ? pdf.statusText : "تصدير Word (DOCX)" }}
+        </button>
+        <button
+          v-if="store.paper?.kind === 'exam' && !store.bundle"
+          type="button"
+          class="btn btn-secondary"
+          :disabled="pdf.busy"
+          @click="downloadServerFile('docx', 'school')"
+        >
+          {{ pdf.busy ? pdf.statusText : "Word بقالب المدرسة" }}
         </button>
         <label v-if="store.paper || store.bundle" class="check">
           <input v-model="print.showKey" type="checkbox" /> {{ store.bundle ? "المفاتيح في آخر الحزمة" : "مفتاح الحل في صفحة أخيرة" }}
