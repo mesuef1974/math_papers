@@ -1,9 +1,13 @@
-"""ورقة الاختبار في Word بقالب المدرسة (قرار المالك 2026-11-18): خيار إضافي بجانب إخراج «أوراق».
+"""الاختبار وورقة العمل في Word بقالب المدرسة (قرار المالك 2026-11-18): خيار إضافي بجانب إخراج «أوراق».
 
 الغلاف مأخوذ كما هو من ملف قالب المدرسة (`assets/school/cover.docx`: شعار الوزارة والمثلث وجدول الرصد والتعليمات،
 مجرّدًا من الأسئلة، وحقوله رموز مثل {school} تُملأ من الورقة). الأسئلة تُبنى بنسق القالب: كل سؤال إطار بشريط رمادي
 «السؤال رقم (n) | الدرجة (m)»، والبدائل عمودية بحرف في مربع، والمقالي مستطيل «وضح خطوات الحل»، والتذييل «صفحة n من N»
 لكل نموذج. المحتوى (النص والمعادلات OMML والرسوم) هو نفسه في إخراج «أوراق».
+
+ورقة العمل (وكل ورقة في حزمة) تأخذ من الغلاف ترويسته وحدها: شعار الوزارة والمثلث وحقول الطالب واسم المدرسة
+والعنوان والمادة (والعام إن كان في العنوان)، بلا مربع المجموع ولا الزمن ولا جدول الرصد ولا تعليمات الاختبار،
+ثم أسئلتها في الصفحة نفسها بالأطر، وخانة الدرجة في الشريط فارغة لأن أسئلتها بلا درجات.
 """
 
 from __future__ import annotations
@@ -128,7 +132,8 @@ def count_line(mcq: int, essay: int) -> str:
 
 def cover_values(header: dict, paper: dict, duration: str) -> dict[str, str]:
     title = re.sub("[‎‏]", "", paper["title"])
-    exam = title.split(":")[0].strip()
+    # عنوان الاختبار قبل النقطتين (ما بعدها نطاقه وعامه)، وعنوان ورقة العمل كله «ورقة عمل: الدرس»
+    exam = title.split(":")[0].strip() if paper["kind"] == "exam" else title.strip()
     year = YEAR.search(title)
     questions = paper["questions"]
     mcq = sum(q["kind"] == "mcq" for q in questions)
@@ -181,14 +186,35 @@ def _score_rows(table, paper: dict) -> None:
     table.remove(proto)
 
 
-def cover(doc, header: dict, paper: dict, duration: str) -> None:
+# ما يُسقط من الغلاف في ورقة العمل: فقرتا مربع المجموع والزمن، وجدول الرصد وكل ما بعده
+WORKSHEET_DROP = ("{total}", "{minutes}")
+SCORE_TABLE = "رقم السؤال"
+
+
+def _header_only(elements: list, values: dict[str, str]) -> list:
+    kept = []
+    for element in elements:
+        text = "".join(element.itertext())
+        if element.tag == qn("w:tbl") and SCORE_TABLE in text:
+            break
+        if any(key in text for key in WORKSHEET_DROP) or ("{year}" in text and not values["{year}"]):
+            continue
+        kept.append(element)
+    return kept
+
+
+def cover(doc, header: dict, paper: dict, duration: str, *, full: bool = True) -> None:
+    """الغلاف كاملًا للاختبار، أو ترويسته وحدها (full=False) لورقة العمل."""
     body = doc.element.body
+    values = cover_values(header, paper, duration)
     elements = [copy.deepcopy(element) for element in doc._school_cover]
+    if not full:
+        elements = _header_only(elements, values)
     ids = doc._school_ids
     for element in elements:
         for pr in element.iter(DOC_PR):  # معرّفات الأشكال فريدة في الوثيقة حين يتكرر الغلاف لكل نموذج
             pr.set("id", str(next(ids)))
-    fill(elements, cover_values(header, paper, duration))
+    fill(elements, values)
     for element in elements:
         if element.tag == qn("w:tbl") and "رقم السؤال" in "".join(element.itertext()):
             _score_rows(element, paper)
@@ -216,7 +242,9 @@ def _head(table, question: dict, widths: list[float]) -> None:
     الفقرة الفارغة الأولى في الخلية (لا تُعاد استعمالها) فيصير الشريط سطرين."""
     row = table.rows[0]
     x.set_row(row, header=False)
-    texts = (f"السؤال رقم ({question['number']})", "", f"الدرجة ( {question['marks']} )")
+    # سؤال ورقة العمل بلا درجة: الخانة تبقى فارغة في الشريط
+    grade = f"الدرجة ( {question['marks']} )" if question["marks"] else ""
+    texts = (f"السؤال رقم ({question['number']})", "", grade)
     for cell, width, text in zip(row.cells, widths, texts, strict=True):
         x.set_cell(cell, width, shade=HEAD, borders=x.box(6, x.INK, inside=False))
         align = "left" if text.startswith("الدرجة") else None
@@ -349,6 +377,24 @@ def exam_sheet(doc, paper: dict, header: dict, duration: str, *, first: bool) ->
         )
         for item in essay:
             question(doc, item)
+    x.add_text(
+        x.new_paragraph(doc, align="center", before=6, after=0), "انتهت الأسئلة نرجو لكم التوفيق", size=11
+    )
+
+
+WORKSHEET_INSTRUCTION = "أجب عن الأسئلة الآتية، ووضح خطوات الحل في المستطيل المخصص لكل سؤال:"
+
+
+def worksheet_sheet(doc, paper: dict, header: dict, *, first: bool) -> None:
+    """ورقة العمل: ترويسة القالب ثم تعليمتها وأسئلتها في الصفحة نفسها، بقسم وترقيم «صفحة n من N» لكل ورقة."""
+    if not first:
+        doc.add_section(WD_SECTION.NEW_PAGE)
+    _footer(doc.sections[-1])
+    cover(doc, header, paper, "", full=False)
+    x.spacer(doc, 6)
+    _instruction(doc, header["instructions"] or WORKSHEET_INSTRUCTION)
+    for item in paper["questions"]:
+        question(doc, item)
     x.add_text(
         x.new_paragraph(doc, align="center", before=6, after=0), "انتهت الأسئلة نرجو لكم التوفيق", size=11
     )

@@ -535,7 +535,7 @@ class PdfIn(Schema):
     show_key: bool = False
     bubble: bool = False
     bundle: BundleIn | None = None
-    # قالب Word للاختبار: «awraq» إخراج الهوية، و«school» قالب المدرسة (الغلاف من ملفه)؛ لا أثر له في PDF
+    # قالب Word: «awraq» إخراج الهوية، و«school» قالب المدرسة للاختبار وورقة العمل والحزمة؛ لا أثر له في PDF
     template: Literal["awraq", "school"] = "awraq"
 
     @model_validator(mode="after")
