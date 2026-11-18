@@ -212,16 +212,18 @@ def _instruction(doc, text: str) -> None:
 
 
 def _head(table, question: dict, widths: list[float]) -> None:
+    """شريط السؤال سطر واحد: فقرة واحدة في كل خلية. keepNext يُضاف بعد ملء الخلايا، فإضافته قبلها كانت تُبقي
+    الفقرة الفارغة الأولى في الخلية (لا تُعاد استعمالها) فيصير الشريط سطرين."""
     row = table.rows[0]
     x.set_row(row, header=False)
-    x.keep_row_with_next(row)
     texts = (f"السؤال رقم ({question['number']})", "", f"الدرجة ( {question['marks']} )")
     for cell, width, text in zip(row.cells, widths, texts, strict=True):
         x.set_cell(cell, width, shade=HEAD, borders=x.box(6, x.INK, inside=False))
         align = "left" if text.startswith("الدرجة") else None
-        par = x.new_paragraph(cell, align=align, after=0, keep_next=True)
+        par = x.new_paragraph(cell, align=align, before=1, after=1, keep_next=True)
         if text:
-            x.add_text(par, text, size=10, bold=True)
+            x.add_text(par, text, size=10.5, bold=True)
+    x.keep_row_with_next(row)
 
 
 def _option(cell, index: int, part: dict, width: float, keep: bool) -> None:
@@ -262,7 +264,7 @@ def _options(cell, part: dict, width: float, keep: bool) -> None:
         cell, rows, [col] * columns, rtl=False, borders=None, align="left", cell_margin_cm=0.05
     )
     for r in range(rows):
-        x.set_row(grid.rows[r], height_cm=0.8)
+        x.set_row(grid.rows[r], height_cm=0.7)
         for c in range(columns):
             index = r * columns + c if columns == 2 else r
             target = grid.cell(r, c)
@@ -286,19 +288,20 @@ def _work_box(cell, part: dict, width: float) -> None:
 
 
 def question(doc, item: dict) -> None:
+    """إطار السؤال: الشريط ثم صف لكل جزء. صف الجزء لا ينقسم بين صفحتين (نصه مع بدائله أو مستطيل حله)،
+    والشريط يلحق بصف الجزء الأول، فلا يبقى رأس سؤال في آخر صفحة ونصه في التي تليها."""
     from ..builder import graph_picture, rich
 
     widths = [6.0, CONTENT_CM - 9.6, 3.6]
-    table = x.make_table(doc, 2, widths, borders=x.box(6, x.INK, inside=False))
+    parts = item["parts"]
+    table = x.make_table(doc, 1 + len(parts), widths, borders=x.box(6, x.INK, inside=False))
     _head(table, item, widths)
-    body_row = table.rows[1]
-    mcq = item["kind"] == "mcq"
-    x.set_row(body_row, cant_split=mcq)
-    first = body_row.cells[0]
-    merged = first.merge(body_row.cells[-1])
-    x.set_cell(merged, CONTENT_CM, span=3, valign="top", borders=x.box(6, x.INK, inside=False))
     inner = CONTENT_CM - 0.4
-    for part in item["parts"]:
+    for index, part in enumerate(parts, start=1):
+        row = table.rows[index]
+        x.set_row(row, cant_split=True)
+        merged = row.cells[0].merge(row.cells[-1])
+        x.set_cell(merged, CONTENT_CM, span=3, valign="top", borders=x.box(6, x.INK, inside=False))
         stem = x.new_paragraph(merged, before=4, after=4, keep_next=True)
         label = part.get("label") or ""
         if label:
@@ -310,7 +313,7 @@ def question(doc, item: dict) -> None:
             _options(merged, part, inner, keep=False)
         else:
             _work_box(merged, part, inner)
-    x.spacer(merged, 2)
+        x.spacer(merged, 2)
     x.spacer(doc, 8)
 
 

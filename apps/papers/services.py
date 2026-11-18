@@ -118,10 +118,12 @@ def new_seed() -> int:
 
 
 def _book_source(course: str, lesson: str, name: str) -> dict | None:
-    """مصدر فكرة الجزء في كتاب الطالب: مثال الصيغة وصفحته المطبوعة من فهرس المقرر."""
+    """مصدر فكرة الجزء في كتاب الطالب: مثال الصيغة وصفحته المطبوعة وتدريباته من فهرس المقرر."""
     number = skill_example(course, lesson, name)
-    page = knowledge_selectors.example_page(course, lesson, number) if number is not None else None
-    return book_source(number, page)
+    if number is None:
+        return None
+    page = knowledge_selectors.example_page(course, lesson, number)
+    return book_source(number, page, exercises=knowledge_selectors.example_exercises(course, lesson, number))
 
 
 def render_part(problem: Problem, slot: PartSlot, rng: random.Random) -> dict:

@@ -91,6 +91,25 @@ def test_each_form_is_a_section_numbered_from_one_and_shape_ids_stay_unique():
     assert ids and max(ids.values()) == 1
 
 
+def test_question_head_is_one_line_and_stays_on_the_page_of_its_text():
+    """الشريط فقرة واحدة في كل خلية (كانت فقرة فارغة قبل النص تجعله سطرين)، ويلحق بصف الجزء الأول،
+    وكل جزء صف لا ينقسم بين صفحتين."""
+    doc = Document(io.BytesIO(build_docx(two_forms())))
+    frames = [t for t in doc.tables if t.rows[0].cells[0].text.startswith("السؤال رقم (")]
+    assert len(frames) == 36
+    paper = two_forms()["papers"][0]
+    parts = {q["number"]: len(q["parts"]) for q in paper["questions"]}
+    for table in frames:
+        head = table.rows[0]._tr
+        for tc in head.iter(f"{W}tc"):
+            paragraphs = tc.findall(f"{W}p")
+            assert len(paragraphs) == 1 and paragraphs[0].find(f"{W}pPr/{W}keepNext") is not None
+        number = int(re.search(r"\((\d+)\)", table.rows[0].cells[0].text).group(1))
+        body = table._tbl.findall(f"{W}tr")[1:]
+        assert len(body) == parts[number]
+        assert all(tr.find(f"{W}trPr/{W}cantSplit") is not None for tr in body)
+
+
 def test_latin_options_are_left_to_right_because_the_template_style_loses_its_direction():
     doc = Document(io.BytesIO(build_docx(two_forms())))
     normal = doc.styles["Normal"].element.find(f"{W}pPr")

@@ -27,6 +27,8 @@ W = nsdecls("w")
 CONTENT_CM = 17.8
 OPTION_LABELS = "ABCD"
 LEVEL_NAMES = {"K": "سهل", "A": "متوسط", "R": "مهارات عليا"}
+# عمود المستوى في المفتاح بعمق المعرفة (قرار المالك 2026-11-18): سهل DOK 1، متوسط DOK 2، صعب DOK 3. نظير KEY_LEVELS في stores/papers.ts
+KEY_LEVELS = {"K": "DOK 1", "A": "DOK 2", "R": "DOK 3"}
 FORM_LABELS = {"A": "أ", "B": "ب"}
 DOTS = "." * 20
 NBSP = "\u00a0"
@@ -836,6 +838,13 @@ def answer_sheet(doc, paper: dict, header: dict, *, answers: bool) -> None:
     )
 
 
+def source_lines(label: str) -> list[str]:
+    """«ص 26، مثال 1، تدريب 13، 20» في خلية ضيقة: سطر للصفحة وسطر للمثال وسطر للتدريبات."""
+    head, _, exercises = label.partition("، تدريب ")
+    lines = head.split("، ", 1)
+    return [*lines, f"تدريب {exercises}"] if exercises else lines
+
+
 def _mark_text(marks: float) -> str:
     """الدرجة كما تُكتب في الجدول: 1 و0.5 و1.5، وفارغة للصفر."""
     return f"{marks:g}" if marks else ""
@@ -881,7 +890,6 @@ class _KeyColumn:
     head: str
     width: float
     per_item: bool = False  # يتكرر لكل بند من توزيع الدرجة؛ غيره خلية للجزء تمتد على صفوف بنوده
-    centered: bool = False  # محاذاة رأسية في الوسط
 
 
 def key_pages(doc, paper: dict, header: dict, *, page_break: bool = True) -> None:
@@ -943,16 +951,16 @@ def key_pages(doc, paper: dict, header: dict, *, page_break: bool = True) -> Non
     has_sources = any(
         part.get("source_label") for question in paper["questions"] for part in question["parts"]
     )
-    columns = [_KeyColumn("question", "السؤال", 1.7 if has_marks else 1.9, centered=True)]
+    columns = [_KeyColumn("question", "السؤال", 1.7 if has_marks else 1.9)]
     columns.append(_KeyColumn("answer", "الإجابة والخطوات", 0.0, per_item=True))
     if has_marks:
-        columns.append(_KeyColumn("mark", "الدرجة", 1.5, per_item=True, centered=True))
-    columns.append(_KeyColumn("lesson", "الدرس", 1.5 if has_sources else 3.1))
+        columns.append(_KeyColumn("mark", "الدرجة", 1.5, per_item=True))
+    columns.append(_KeyColumn("lesson", "الدرس", 1.3 if has_sources else 3.1))
     if has_sources:
-        columns.append(_KeyColumn("source", "المصدر في الكتاب", 2.4))
-    columns.append(_KeyColumn("level", "المستوى", 1.9))
+        columns.append(_KeyColumn("source", "المصدر في الكتاب", 3.0))
+    columns.append(_KeyColumn("level", "المستوى", 1.7))
     if has_marks:
-        columns.append(_KeyColumn("total", "المجموع", 1.7, centered=True))
+        columns.append(_KeyColumn("total", "المجموع", 1.7))
     widths = [c.width for c in columns]
     widths[1] = round(KEY_TABLE_WIDTH - sum(widths), 2)
     heads = [c.head for c in columns]
@@ -960,7 +968,6 @@ def key_pages(doc, paper: dict, header: dict, *, page_break: bool = True) -> Non
     per_item = {
         index for index, c in enumerate(columns) if c.per_item
     }  # أعمدة تتكرر لكل بند؛ ما عداها خلايا الجزء
-    centered = {index for index, c in enumerate(columns) if c.centered}
     table = x.make_table(doc, 1, widths, borders=x.box(6, x.RULE))
     for c, text in enumerate(heads):
         cell = table.cell(0, c)
@@ -979,11 +986,12 @@ def key_pages(doc, paper: dict, header: dict, *, page_break: bool = True) -> Non
                 cells = row.cells
                 # خلايا الجزء (السؤال والدرس والمستوى والمجموع) تمتد رأسيًا على صفوف بنوده
                 merge = ("restart" if index == 0 else "continue") if len(rows) > 1 else ""
+                # كل الأعمدة في الوسط أفقيًا ورأسيًا عدا الإجابة والخطوات (قرار المالك 2026-11-18)
                 for c, width in enumerate(widths):
                     x.set_cell(
                         cells[c],
                         width,
-                        valign="center" if c in centered else "top",
+                        valign="top" if c == col["answer"] else "center",
                         vmerge="" if c in per_item else merge,
                     )
                 if entry["plain"] or entry["final"]:
@@ -994,7 +1002,16 @@ def key_pages(doc, paper: dict, header: dict, *, page_break: bool = True) -> Non
                     rich(cells[1], part["answer"], size=10.5, bold=True, after=2, first=first)
                 for number, step in enumerate(entry["steps"], start=entry["start"]):
                     par = x.new_paragraph(cells[1], after=1, indent_cm=0.0)
-                    x.add_text(par, f"{number}.{x.LRM} ", size=9.5, color=x.SOFT)
+                    # «1- » بترتيب القراءة العربية: Word يقلب «1-» إلى «-1» ما لم تُحَط الشرطة بعلامتي RLM،
+                    # وRLM قبل الرقم وبعده يفصله عن خطوة تبدأ بمعادلة لاتينية
+                    x.add_text(
+                        par,
+                        f"{x.RLM}{number}{x.RLM}-{x.RLM} ",
+                        size=9.5,
+                        bold=True,
+                        color=x.SOFT,
+                        force_rtl=True,
+                    )
                     rich(cells[1], step, size=9.5, first=par)
                 if has_marks:
                     x.add_text(
@@ -1011,17 +1028,23 @@ def key_pages(doc, paper: dict, header: dict, *, page_break: bool = True) -> Non
                     bold=True,
                     color=x.BRAND_STRONG,
                 )
-                x.add_text(x.new_paragraph(cells[col["lesson"]], after=0), part.get("lesson", ""), size=9)
-                if has_sources:
-                    x.add_text(
-                        x.new_paragraph(cells[col["source"]], after=0),
-                        part.get("source_label") or "—",
-                        size=9,
-                    )
                 x.add_text(
-                    x.new_paragraph(cells[col["level"]], align="center", after=0),
-                    LEVEL_NAMES.get(part.get("level", ""), ""),
+                    x.new_paragraph(cells[col["lesson"]], align="center", after=0, rtl=False),
+                    part.get("lesson", ""),
                     size=9,
+                )
+                if has_sources:
+                    for line in source_lines(part.get("source_label") or "—"):
+                        x.add_text(
+                            x.new_paragraph(cells[col["source"]], align="center", after=0),
+                            isolate_number_ranges(line),
+                            size=9,
+                        )
+                x.add_text(
+                    x.new_paragraph(cells[col["level"]], align="center", after=0, rtl=False),
+                    KEY_LEVELS.get(part.get("level", ""), ""),
+                    size=9,
+                    bold=True,
                 )
                 if has_marks:
                     x.add_text(

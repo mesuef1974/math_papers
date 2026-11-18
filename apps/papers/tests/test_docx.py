@@ -219,8 +219,32 @@ def test_key_shows_the_book_source_of_each_part_like_the_screen(client):
         for q in paper["questions"]
         for p in q["parts"]
     }
-    shown = {row.cells[0].text: row.cells[4].text for row in table.rows[1:]}
+    # المدى «16–19» معزول بعلامتي الاتجاه في Word كي لا ينقلب
+    # وفي الخلية سطر للصفحة وسطر للمثال وسطر للتدريبات
+    shown = {
+        row.cells[0].text: "، ".join(
+            re.sub("[\u200e\u200f\u2060]", "", p.text) for p in row.cells[4].paragraphs
+        )
+        for row in table.rows[1:]
+    }
     assert shown == expected and all(label.startswith("ص ") for label in shown.values())
+    assert any("تدريب" in label for label in shown.values())
+    # عمود المستوى بعمق المعرفة (قرار المالك 2026-11-18)
+    levels = {row.cells[0].text: row.cells[5].text for row in table.rows[1:]}
+    names = {"K": "DOK 1", "A": "DOK 2", "R": "DOK 3"}
+    assert levels == {
+        f"{q['number']} {p['label']}".strip(): names[p["level"]]
+        for q in paper["questions"]
+        for p in q["parts"]
+    }
+    # ترقيم الخطوات «1-» بعلامات RLM حوله، فلا يقلبه Word إلى «-1» ولو بدأت الخطوة بمعادلة
+    steps = [
+        par.text
+        for row in table.rows[1:]
+        for par in row.cells[1].paragraphs
+        if re.match(r"\u200f\d+\u200f-", par.text)
+    ]
+    assert steps and steps[0].startswith("\u200f1\u200f-\u200f ")
     widths = [float(w.get(f"{W}w")) for w in table._tbl.iter(f"{W}gridCol")]
     assert len(widths) == len(heads)
 
