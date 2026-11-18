@@ -602,6 +602,199 @@ def assert_circle_position(c):
         assert c["position"] == ("inside" if distance < length else "outside")
 
 
+def exact(value):
+    value = sp.nsimplify(value)
+    return Fraction(int(value.p), int(value.q))
+
+
+def side_lengths(a, b, c):
+    return sorted((math.dist(a, b), math.dist(b, c), math.dist(c, a)))
+
+
+def from_sas(first, second, degrees):
+    """رؤوس مثلث من ضلعين وزاويتهما المحصورة."""
+    angle = math.radians(degrees)
+    return (0.0, 0.0), (first, 0.0), (second * math.cos(angle), second * math.sin(angle))
+
+
+def from_sss(a, b, c):
+    """رؤوس مثلث من أضلاعه الثلاثة، ويفشل إن خالفت متباينة المثلث."""
+    assert a + b > c and b + c > a and a + c > b
+    px = (a * a + c * c - b * b) / (2 * a)
+    return (0.0, 0.0), (float(a), 0.0), (px, math.sqrt(c * c - px * px))
+
+
+def from_asa(alpha, beta):
+    """رؤوس مثلث من زاويتين وضلعهما المشترك بطول واحد."""
+    gamma = 180 - alpha - beta
+    assert gamma > 0
+    side = math.sin(math.radians(beta)) / math.sin(math.radians(gamma))
+    return (
+        (0.0, 0.0),
+        (1.0, 0.0),
+        (side * math.cos(math.radians(alpha)), side * math.sin(math.radians(alpha))),
+    )
+
+
+def assert_same_shape(one, two):
+    """مثلثان متشابهان: النسب بين أضلاعهما مرتّبةً متساوية."""
+    ratios = [q / p for p, q in zip(side_lengths(*one), side_lengths(*two), strict=True)]
+    assert ratios == pytest.approx([ratios[0]] * 3)
+
+
+def assert_criterion(c):
+    """المعطى من نوع المبرهنة المذكورة فعلًا، ويُنتج مثلثين متشابهين عند بنائهما هندسيًا."""
+    first, second = c["first"], c["second"]
+    if c["kind"] == "AA":
+        assert "sides" not in first and sorted(first["angles"]) == sorted(second["angles"])
+        assert_same_shape(from_asa(*first["angles"]), from_asa(*second["angles"]))
+    elif c["kind"] == "SSS":
+        assert "angles" not in first and "angle" not in first
+        factors = {Fraction(q, p) for p, q in zip(first["sides"], second["sides"], strict=True)}
+        assert len(factors) == 1
+        assert_same_shape(from_sss(*first["sides"]), from_sss(*second["sides"]))
+    else:
+        assert "angles" not in first and len(first["sides"]) == 2
+        (p, q), (big_p, big_q) = first["sides"], second["sides"]
+        assert Fraction(big_p, p) == Fraction(big_q, q) and first["angle"] == second["angle"]
+        assert_same_shape(from_sas(p, q, first["angle"]), from_sas(big_p, big_q, second["angle"]))
+
+
+def assert_similar_sides(c):
+    ratios = {exact(q) / exact(p) for p, q in zip(c["first"], c["second"], strict=True)}
+    assert len(ratios) == 1
+    if "perimeter" in c:
+        assert exact(c["perimeter"][1]) / exact(c["perimeter"][0]) == ratios.pop()
+
+
+def assert_similar_algebra(c):
+    first, second, small, large = c["proportion"]
+    assert sp.solve(first * large - second * small, x) == [c["x"]]
+    assert second.subs(x, c["x"]) == c["value"] and first.subs(x, c["x"]) > 0 and c["value"] > 0
+
+
+def assert_proportion(c):
+    (h, s), (big_h, big_s) = c["pairs"]
+    assert big_h == c["value"] and exact(h) / exact(s) == exact(big_h) / exact(big_s)
+    assert math.atan2(h, s) == pytest.approx(math.atan2(big_h, big_s))
+
+
+def right_triangle(first, second):
+    """C عند الأصل وA وB على المحورين، وD أسفل العمود من C على الوتر؛ أطوال القطع من الإحداثيات."""
+    a, b, origin = (first, 0.0), (0.0, second), (0.0, 0.0)
+    along = ((origin[0] - a[0]) * (b[0] - a[0]) + (origin[1] - a[1]) * (b[1] - a[1])) / math.dist(a, b) ** 2
+    d = (a[0] + along * (b[0] - a[0]), a[1] + along * (b[1] - a[1]))
+    return a, b, origin, d
+
+
+def assert_altitude(c):
+    first, second = c["legs"]
+    a, b, origin, d = right_triangle(first, second)
+    measured = {
+        "AC": first,
+        "BC": second,
+        "AB": math.dist(a, b),
+        "AD": math.dist(a, d),
+        "DB": math.dist(d, b),
+        "CD": math.dist(origin, d),
+    }
+    assert measured[c["asked"]] == pytest.approx(float(c["value"]))
+    for name, value in c.get("given", {}).items():
+        assert measured[name] == pytest.approx(float(value))
+
+
+def assert_geometric_mean(c):
+    """مثلث قائم ساقاه من قطعتي الوتر: العمود النازل عليه يقسمه إلى القطعتين، وطوله هو الجواب."""
+    first, second = c["parts"]
+    legs = math.sqrt(first * (first + second)), math.sqrt(second * (first + second))
+    a, b, origin, d = right_triangle(*legs)
+    assert math.dist(a, d) == pytest.approx(first) and math.dist(d, b) == pytest.approx(second)
+    assert math.dist(origin, d) == pytest.approx(float(c["value"]))
+
+
+def assert_similarity_statement(c):
+    """القائمة في الرأس الثالث، والترتيب المذكور يعطي نسبًا متساوية، وكل ترتيب خاطئ لا يعطيها."""
+    first, second = c["legs"]
+    a, b, origin, d = right_triangle(first, second)
+    name_a, name_b, name_c, name_d = c["names"]
+    points = {name_a: a, name_b: b, name_c: origin, name_d: d}
+    base = (name_a, name_b, name_c)
+
+    def ratios(order):
+        return [
+            math.dist(points[order[i]], points[order[(i + 1) % 3]])
+            / math.dist(points[base[i]], points[base[(i + 1) % 3]])
+            for i in range(3)
+        ]
+
+    right = ratios(c["answer"])
+    assert right == pytest.approx([right[0]] * 3)
+    for order in c["wrong"]:
+        assert sorted(order) == sorted(c["answer"])
+        assert ratios(order) != pytest.approx([ratios(order)[0]] * 3)
+
+
+def triangle_with_parallel(ad, db, ae, ec, degrees=52):
+    """مثلث ABC فيه D وE بالأطوال المعطاة؛ يرجع النقاط A وB وC وD وE."""
+    a, b = (0.0, 0.0), (float(ad + db), 0.0)
+    angle = math.radians(degrees)
+    c = ((ae + ec) * math.cos(angle), (ae + ec) * math.sin(angle))
+    d, e = (float(ad), 0.0), (ae * math.cos(angle), ae * math.sin(angle))
+    return a, b, c, d, e
+
+
+def cross(u, v):
+    return u[0] * v[1] - u[1] * v[0]
+
+
+def assert_de_parallel_to_bc(b, c, d, e):
+    assert cross((e[0] - d[0], e[1] - d[1]), (c[0] - b[0], c[1] - b[1])) == pytest.approx(0, abs=1e-9)
+
+
+def assert_parallel_division(c):
+    """نبني المثلث بالأطوال الأربعة (منها الجواب)؛ يصح الجواب فقط إن وازى DE القطعة BC."""
+    values = {**c["values"], "AC": c["values"]["AE"] + c["values"]["EC"]}
+    assert values[c["asked"]] == c["value"]
+    _, b, cc, d, e = triangle_with_parallel(*(values[n] for n in ("AD", "DB", "AE", "EC")))
+    assert_de_parallel_to_bc(b, cc, d, e)
+
+
+def assert_midsegment(c):
+    """D وE منتصفا ضلعين في مثلث عام: DE يوازي BC وطوله نصفه."""
+    a, b, cc = (0.0, 0.0), (7.0, 1.0), (2.0, 5.0)
+    factor = c["base"] / math.dist(b, cc)
+    a, b, cc = (tuple(factor * v for v in p) for p in (a, b, cc))
+    d, e = ((a[0] + b[0]) / 2, (a[1] + b[1]) / 2), ((a[0] + cc[0]) / 2, (a[1] + cc[1]) / 2)
+    assert_de_parallel_to_bc(b, cc, d, e)
+    assert math.dist(d, e) == pytest.approx(c["mid"])
+    assert (c["mid"] if c["asked"] == "DE" else c["base"]) == c["value"]
+
+
+def assert_medial_perimeter(c):
+    a, b, cc = from_sss(*c["sides"])
+    mids = [((p[0] + q[0]) / 2, (p[1] + q[1]) / 2) for p, q in ((a, b), (b, cc), (cc, a))]
+    perimeter = sum(math.dist(mids[i], mids[(i + 1) % 3]) for i in range(3))
+    assert perimeter == pytest.approx(c["value"])
+
+
+def assert_parallel_algebra(c):
+    """المعادلة الناتجة من التناسب لها حلّ وحيد هو x، وبالأطوال الناتجة يوازي DE القطعة BC."""
+    ad, db, ae, ec = c["proportion"]
+    assert sp.solve(ad * ec - db * ae, x) == [c["x"]]
+    at = [sp.sympify(value).subs(x, c["x"]) for value in (ad, db, ae, ec)]
+    assert min(at) > 0 and at[0] + at[1] == c["total"]
+    _, b, cc, d, e = triangle_with_parallel(*(float(value) for value in at))
+    assert_de_parallel_to_bc(b, cc, d, e)
+
+
+def assert_transversals(c):
+    """ثلاثة مستقيمات أفقية بمسافتين متناسبتين مع القطعتين الأوليين؛ القاطع الثاني يقطعها بالنسبة نفسها."""
+    p, q = c["first"]
+    heights = (p / (p + q), q / (p + q))
+    parts = tuple(height * c["total"] for height in heights)
+    assert parts == pytest.approx(c["second"]) and sum(c["second"]) == c["total"]
+
+
 CHECKS = {
     "rational_equation": assert_rational_equation,
     "excluded_values": assert_excluded_values,
@@ -610,6 +803,18 @@ CHECKS = {
     "inequality": assert_inequality,
     "circle": assert_circle,
     "circle_position": assert_circle_position,
+    "criterion": assert_criterion,
+    "similar_sides": assert_similar_sides,
+    "similar_algebra": assert_similar_algebra,
+    "proportion": assert_proportion,
+    "altitude": assert_altitude,
+    "geometric_mean": assert_geometric_mean,
+    "similarity_statement": assert_similarity_statement,
+    "parallel_division": assert_parallel_division,
+    "midsegment": assert_midsegment,
+    "medial_perimeter": assert_medial_perimeter,
+    "parallel_algebra": assert_parallel_algebra,
+    "transversals": assert_transversals,
     "roots": assert_roots,
     "solution_count": assert_solution_count,
     "sign_change": assert_sign_change,
