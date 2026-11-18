@@ -38,7 +38,10 @@ def current_digests() -> dict[str, int]:
 
 
 @pytest.mark.django_db
-def test_papers_regenerate_identically_after_course_keys():
+def test_papers_regenerate_identically_after_course_keys(monkeypatch):
+    # توزيع مواضع الإجابة (بعد التثبيت) ينقل الخيار الصحيح وحده بمولّد أعداد خاص؛ بتعطيله تعود الأوراق المثبتة حرفيًا،
+    # فالبصمات تبقى شاهدًا على البذرة والصيغ. ما يفعله التوزيع نفسه في test_answer_positions.
+    monkeypatch.setattr(services, "balance_answers", lambda questions, rng: None)
     expected = json.loads(GOLDEN.read_text(encoding="utf-8"))
     actual = current_digests()
     assert actual.keys() == expected.keys()
