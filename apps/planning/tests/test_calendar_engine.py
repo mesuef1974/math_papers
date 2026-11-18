@@ -4,6 +4,7 @@ from datetime import date
 
 import pytest
 
+from apps.knowledge.domain.contract import CALENDARS_DIR
 from apps.planning.domain.calendar_engine import (
     Closure,
     Item,
@@ -25,7 +26,7 @@ THREE_A_WEEK = [Slot(SUN, 2), Slot(TUE, 3), Slot(WED, 1)]
 
 @pytest.fixture(scope="module")
 def terms():
-    return load_terms()
+    return load_terms(CALENDARS_DIR / "2026-2027.json")
 
 
 def small_term(**over):

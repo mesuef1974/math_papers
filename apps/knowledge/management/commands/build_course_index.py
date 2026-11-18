@@ -25,8 +25,8 @@ from apps.knowledge.domain.contract import (
 from apps.knowledge.domain.course_index import build_index
 from apps.knowledge.domain.schemas import lesson_sort_key
 
-META_OPTIONS = ("title", "grade", "semester", "track", "edition", "language")
-REQUIRED_FOR_NEW = ("title", "grade", "semester")
+META_OPTIONS = ("title", "grade", "semester", "academic_year", "track", "edition", "language")
+REQUIRED_FOR_NEW = ("title", "grade", "semester", "academic_year")
 
 
 def _write(path: Path, data: dict, indent: int) -> None:
@@ -46,6 +46,7 @@ class Command(BaseCommand):
         parser.add_argument("--title", help="عنوان المقرر (لمقرر جديد)")
         parser.add_argument("--grade", type=int, help="الصف (لمقرر جديد)")
         parser.add_argument("--semester", type=int, help="الفصل (لمقرر جديد)")
+        parser.add_argument("--academic-year", help="السنة الأكاديمية مثل 2026-2027 (لمقرر جديد)")
         parser.add_argument("--track", help="المسار إن وُجد")
         parser.add_argument("--edition", help="الطبعة إن وُجدت")
         parser.add_argument("--language", help="لغة الكتاب: ar أو en")
@@ -62,7 +63,7 @@ class Command(BaseCommand):
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
             manifest["course"].update(given)
         else:
-            missing = [f"--{key}" for key in REQUIRED_FOR_NEW if key not in given]
+            missing = [f"--{key.replace('_', '-')}" for key in REQUIRED_FOR_NEW if key not in given]
             if missing:
                 raise CommandError(f"مقرر جديد يلزمه: {', '.join(missing)}")
             manifest = {"schema_version": SCHEMA_VERSION, "course": {"slug": course, **given}, "lessons": []}

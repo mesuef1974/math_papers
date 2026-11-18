@@ -10,10 +10,9 @@ from pydantic import ValidationError
 from apps.curriculum.courses import GRADE10_SLUG, GRADE12_SLUG
 from apps.curriculum.models import Blueprint, BlueprintItem, Course
 from apps.knowledge import models as km
-from apps.knowledge.domain.contract import BlueprintData, CourseKnowledge, read_source
+from apps.knowledge.domain.contract import OPTIONAL, BlueprintData, CourseKnowledge, read_source
 from apps.knowledge.services import BlueprintOwnerError, load_all, load_contract, load_course
 from apps.papers import services as papers
-from apps.planning.domain.semester_plan import load_term_plan
 
 pytestmark = pytest.mark.django_db
 
@@ -30,7 +29,7 @@ GROUPS = {
 
 
 def grade10() -> dict:
-    return json.loads(json.dumps(read_source(GRADE10_SLUG).model_dump()))
+    return json.loads(json.dumps(read_source(GRADE10_SLUG).model_dump(mode="json")))
 
 
 def final(data: dict) -> dict:
@@ -74,7 +73,7 @@ def test_grade10_blueprint_matches_the_ministry_table():
 
 
 def test_exam_scope_has_one_source_and_the_manifest_follows_it():
-    plan = load_term_plan()
+    plan = read_source(GRADE10_SLUG).term_plan.to_domain(1)
     knowledge = read_source(GRADE10_SLUG)
     assert (
         {ref.code for ref in knowledge.lessons if not ref.examinable} == plan.enrichment_lessons == ENRICHMENT
@@ -128,11 +127,14 @@ def test_contract_rejects_bad_blueprints():
 
 
 def test_course_without_blueprints_keeps_its_content_hash():
-    """الحقل الجديد خارج تجزئة مقرر بلا جداول: الثاني عشر لا يصدر له إصدار ولا يتغير فحص صحته."""
+    """القسم الاختياري الفارغ خارج التجزئة: دخول حقل جديد العقدَ لا يُصدر إصدارًا لمقرر لا يملكه."""
     knowledge = read_source(GRADE12_SLUG)
-    assert knowledge.blueprints == []
-    payload = knowledge.model_dump()
-    del payload["blueprints"]
+    assert knowledge.blueprints == [] and knowledge.term_plan is None
+    payload = knowledge.model_dump(mode="json")
+    for key in OPTIONAL:
+        if not payload[key]:
+            del payload[key]
+    assert "blueprints" not in payload and "sources" in payload  # للثاني عشر مصادر ولا جداول
     before = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     assert knowledge.content_hash() == hashlib.sha256(before.encode("utf-8")).hexdigest()
 

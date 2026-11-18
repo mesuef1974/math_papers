@@ -210,26 +210,29 @@ def moves(before: Plan, after: Plan, items: Iterable[Item]) -> list[Move]:
     return out
 
 
-def load_terms(path: Path | None = None) -> dict[str, Term]:
-    """فصول ملف التقويم بمعرّفاتها."""
-    data = json.loads((path or DATA_DIR / "calendar_2026_2027.json").read_text(encoding="utf-8"))
+TERM_NAMES = {1: "الفصل الأول", 2: "الفصل الثاني", 3: "الفصل الثالث"}
+
+
+def parse_terms(data: dict) -> dict[str, Term]:
+    """فصول تقويم سنة (صيغة `CalendarData` في العقد، أو صفوف جداوله) بمعرّفاتها «t1» و«t2»."""
     weekdays = tuple(WEEKDAYS[w] for w in data.get("weekdays", ())) or DEFAULT_WEEKDAYS
     terms: dict[str, Term] = {}
     for raw in data["terms"]:
         closures = tuple(
             Closure(
-                date.fromisoformat(c["start"]),
-                date.fromisoformat(c["end"]),
+                date.fromisoformat(str(c["start"])),
+                date.fromisoformat(str(c["end"])),
                 c.get("kind", "other"),
                 c.get("label", ""),
             )
             for c in raw.get("closures", ())
         )
+        semester = int(raw["semester"])
         term = Term(
-            raw["id"],
-            raw["name"],
-            date.fromisoformat(raw["start"]),
-            date.fromisoformat(raw["end"]),
+            f"t{semester}",
+            TERM_NAMES.get(semester, f"الفصل {semester}"),
+            date.fromisoformat(str(raw["start"])),
+            date.fromisoformat(str(raw["end"])),
             closures,
             weekdays,
         )
@@ -238,3 +241,8 @@ def load_terms(path: Path | None = None) -> dict[str, Term]:
                 raise PlanningError(f"إغلاق خارج حدّ الفصل {term.id}: {c.label}")
         terms[term.id] = term
     return terms
+
+
+def load_terms(path: Path) -> dict[str, Term]:
+    """فصول ملف تقويم بصيغة العقد (`apps/knowledge/data/calendars/<السنة>.json`)."""
+    return parse_terms(json.loads(path.read_text(encoding="utf-8")))

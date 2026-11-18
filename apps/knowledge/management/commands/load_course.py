@@ -1,11 +1,11 @@
 from django.core.management.base import BaseCommand, CommandError
 
 from apps.knowledge.domain.contract import source_slugs
-from apps.knowledge.services import load_course
+from apps.knowledge.services import load_calendars, load_course
 
 
 class Command(BaseCommand):
-    help = "يحمّل معرفة مقرر (أو كل المقررات بـ --all) من مصدره بالمحمِّل الواحد (idempotent)."
+    help = "يحمّل معرفة مقرر (أو التقاويم وكل المقررات بـ --all) من مصدره بالمحمِّل الواحد (idempotent)."
 
     def add_arguments(self, parser):
         parser.add_argument("course", nargs="?", help=f"رمز المقرر: {', '.join(source_slugs())}")
@@ -15,6 +15,8 @@ class Command(BaseCommand):
         if options["all"] == bool(options["course"]):
             raise CommandError("حدّد مقررًا واحدًا أو --all")
         slugs = source_slugs() if options["all"] else [options["course"]]
+        if options["all"]:  # التقاويم مشتركة: تُحمَّل قبل المقررات التي تقرؤها خططها
+            self.stdout.write(f"التقاويم: تغيّر {dict(load_calendars()) or 'لا شيء'}")
         for slug in slugs:
             try:
                 report = load_course(slug)

@@ -52,6 +52,7 @@ def third_course(tmp_path, monkeypatch):
         title="الرياضيات: الحادي عشر العلمي، الفصل الأول",
         grade=11,
         semester=1,
+        academic_year="2026-2027",
         track="العلمي",
         language="en",
     )
@@ -87,6 +88,7 @@ def test_lessons_are_ordered_numerically_in_the_tables(third_course):
 
 
 def test_planning_reads_each_course_from_its_own_index(third_course):
+    load_all()  # الجداول مصدر القراءة الوحيد: المجلد وحده لا يكفي
     assert planning.lesson_codes(THIRD) == list(THIRD_LESSONS)
     assert len(planning.lesson_codes()) == 19  # الافتراضي مقرر الخطة الفصلية (العاشر)
     assert planning.lesson_profile("11.2", course=THIRD).dok == {1, 2}
@@ -188,6 +190,7 @@ def test_database_enforces_course_integrity():
             track=course.track,
             semester=course.semester,
             edition=course.edition,
+            academic_year=course.academic_year,
         )
     with pytest.raises(IntegrityError), transaction.atomic():
         Course.objects.create(slug="g13", title="صف غير موجود", grade=13, semester=1)

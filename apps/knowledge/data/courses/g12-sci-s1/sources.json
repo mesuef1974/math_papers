@@ -1,0 +1,19 @@
+[
+ {
+  "slug": "g12-sci-s1-teacher-guide",
+  "kind": "teacher_guide",
+  "title": "دليل المعلم: الرياضيات، الثاني عشر العلمي، الفصل الأول",
+  "academic_year": "2026-2027",
+  "digest": "sha256:c464abd878250218d48de1c06ccadd0bf9a4957f704d7ef761bdd012f3d6b7d4",
+  "pages": 316
+ },
+ {
+  "slug": "g12-sci-s1-term-plan",
+  "kind": "term_plan",
+  "title": "الخطة الفصلية للوزارة: الثاني عشر العلمي والتكنولوجي، الفصل الأول",
+  "academic_year": "2026-2027",
+  "digest": "sha256:f3773168988ab2abd2eb9e93a0a086338b49f3df6779a235c9c4375dd9220e75",
+  "pages": 3,
+  "note": "مسجَّل مصدرًا؛ خطته لم تُستخرج إلى term_plan.json بعد"
+ }
+]

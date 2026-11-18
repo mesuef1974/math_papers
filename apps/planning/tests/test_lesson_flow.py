@@ -2,9 +2,14 @@
 
 import pytest
 
+from apps.curriculum.courses import GRADE10_SLUG  # noqa: E402
+from apps.knowledge.domain.contract import read_source  # noqa: E402
 from apps.knowledge.domain.course_index import AnalysisRow, LessonIndex, VocabularyCount
 from apps.planning.domain.strategies import PHASES, FlowError
 from apps.planning.selectors import lesson_codes, lesson_flow, lesson_profile, profile_from_lesson
+
+pytestmark = pytest.mark.usefixtures("loaded_courses")
+G10_CODES = [ref.code for ref in read_source(GRADE10_SLUG).lessons]  # عند الجمع: من العقد لا من القاعدة
 
 
 def _lesson(bloom, doks):
@@ -38,7 +43,7 @@ def test_index_has_the_nineteen_lessons():
     assert len(lesson_codes()) == 19
 
 
-@pytest.mark.parametrize("code", lesson_codes())
+@pytest.mark.parametrize("code", G10_CODES)
 def test_every_lesson_gets_a_flow_that_fills_the_period(code):
     flow = lesson_flow(code, 45)
     assert flow.total == 45

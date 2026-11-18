@@ -9,7 +9,8 @@ from io import BytesIO
 import pytest
 from docx import Document
 
-from apps.planning.domain.calendar_engine import DATA_DIR, PlanningError, Slot, allocate, load_terms, sessions
+from apps.knowledge.domain.contract import COURSES_DIR
+from apps.planning.domain.calendar_engine import PlanningError, Slot, allocate, sessions
 from apps.planning.domain.semester_plan import (
     load_term_plan,
     ministry_slots,
@@ -20,7 +21,11 @@ from apps.planning.domain.semester_plan import (
     weekly_view,
 )
 from apps.planning.plan_docx import plan_docx
-from apps.planning.selectors import term1_schedule, term_plan
+from apps.planning.selectors import calendar_terms, term1_schedule, term_plan
+
+pytestmark = pytest.mark.usefixtures("loaded_courses")
+PLAN_FILE = COURSES_DIR / "g10-s1" / "term_plan.json"
+YEAR = "2026-2027"
 
 # عدد حصص كل درس في خطة الوزارة (مجموع ما يمتد على أسبوعين): مرجع مستقل عن ملف البيانات
 LESSON_PERIODS = {
@@ -30,7 +35,7 @@ LESSON_PERIODS = {
 RAW_BOOK_REFS = re.compile(r"For Qatar|Savvas|ISBN", re.IGNORECASE)
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture
 def plan():
     return term_plan()
 
@@ -71,7 +76,7 @@ def test_a_section_with_five_weekly_periods_reproduces_the_ministry_weeks():
 
 def test_planned_sessions_stay_inside_the_term():
     plan, _, placed = term1_schedule()
-    term = load_terms()[plan.term_id]
+    term = calendar_terms(YEAR)[plan.term_id]
     days = [p.session.day for p in placed.placements]
     assert term.start <= min(days) and max(days) <= term.end
     assert not any(
@@ -80,7 +85,7 @@ def test_planned_sessions_stay_inside_the_term():
 
 
 def test_midterm_exam_window_is_taught_only_through_the_plan_rule(plan):
-    term = load_terms()[plan.term_id]
+    term = calendar_terms(YEAR)[plan.term_id]
     raw = sessions(term, ministry_slots())
     plain = allocate(plan_items(plan), raw)
     assert plain.shortfall > 0  # دون القاعدة يضيق الفصل عن الخطة
@@ -89,7 +94,7 @@ def test_midterm_exam_window_is_taught_only_through_the_plan_rule(plan):
 
 
 def test_data_file_has_no_document_text_only_numbers_and_codes():
-    raw = (DATA_DIR / "grade10_term1_plan.json").read_text(encoding="utf-8")
+    raw = PLAN_FILE.read_text(encoding="utf-8")
     assert not RAW_BOOK_REFS.search(raw)
     for w in json.loads(raw)["weeks"]:
         for e in w["items"]:
@@ -97,7 +102,7 @@ def test_data_file_has_no_document_text_only_numbers_and_codes():
 
 
 def test_invalid_weeks_are_rejected(tmp_path):
-    data = json.loads((DATA_DIR / "grade10_term1_plan.json").read_text(encoding="utf-8"))
+    data = json.loads(PLAN_FILE.read_text(encoding="utf-8"))
     data["weeks"][0]["items"][1]["periods"] = 4  # أسبوع بست حصص
     bad = tmp_path / "plan.json"
     bad.write_text(json.dumps(data), encoding="utf-8")
@@ -106,7 +111,7 @@ def test_invalid_weeks_are_rejected(tmp_path):
 
 
 def test_enrichment_overlap_is_rejected(tmp_path):
-    data = json.loads((DATA_DIR / "grade10_term1_plan.json").read_text(encoding="utf-8"))
+    data = json.loads(PLAN_FILE.read_text(encoding="utf-8"))
     data["enrichment_lessons"].append("1.1")
     bad = tmp_path / "plan.json"
     bad.write_text(json.dumps(data), encoding="utf-8")
