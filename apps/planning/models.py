@@ -1,7 +1,7 @@
 """نموذجان نحيلان: نتيجة الصف في الدرس وتقرير الحصة. مستوى الشعبة فقط (لا بيانات طلاب فردية: PDPPL). المنطق في services.py.
 
 السجل يرتبط بالدرس نفسه (`lesson`، ومنه مقرره): الرمز «1.1» درس مختلف في كل كتاب، ومعلم يدرّس صفّين لا تتصادم سجلاته.
-`lesson_code` نسخة من الرمز باقية من قبل الربط (تُحذف في طلب لاحق منفصل)؛ `lesson` اختياري في القاعدة حتى تلك الهجرة، والخدمات تملؤه دائمًا.
+`lesson_code` نسخة من الرمز باقية من قبل الربط (تُحذف في طلب لاحق منفصل)؛ `lesson` مطلوب.
 """
 
 from __future__ import annotations
@@ -20,9 +20,7 @@ class ClassOutcomeRecord(TimeStampedModel):
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="class_outcomes"
     )
     section = models.CharField(max_length=20)
-    lesson = models.ForeignKey(
-        "curriculum.Lesson", on_delete=models.PROTECT, related_name="class_outcomes", null=True, blank=True
-    )
+    lesson = models.ForeignKey("curriculum.Lesson", on_delete=models.PROTECT, related_name="class_outcomes")
     lesson_code = models.CharField(max_length=10)
     attempted = models.PositiveSmallIntegerField()
     correct = models.PositiveSmallIntegerField()
@@ -50,9 +48,7 @@ class LessonRunRecord(TimeStampedModel):
 
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="lesson_runs")
     section = models.CharField(max_length=20)
-    lesson = models.ForeignKey(
-        "curriculum.Lesson", on_delete=models.PROTECT, related_name="lesson_runs", null=True, blank=True
-    )
+    lesson = models.ForeignKey("curriculum.Lesson", on_delete=models.PROTECT, related_name="lesson_runs")
     lesson_code = models.CharField(max_length=10)
     period_minutes = models.PositiveSmallIntegerField()
     started_at = models.DateTimeField()

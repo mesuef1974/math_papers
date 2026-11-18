@@ -3,6 +3,7 @@
 import importlib
 
 import pytest
+from django.contrib.auth import get_user_model
 from django.db import IntegrityError, transaction
 
 from apps.curriculum import selectors
@@ -10,6 +11,7 @@ from apps.curriculum.courses import GRADE12_SLUG
 from apps.curriculum.models import Blueprint, Course, Lesson
 from apps.knowledge.models import LessonProfile, PedagogyNote, UnitProfile
 from apps.knowledge.services import load_knowledge
+from apps.planning.models import ClassOutcomeRecord
 
 pytestmark = pytest.mark.django_db
 
@@ -65,6 +67,11 @@ def test_duplicate_code_in_one_course_is_rejected_and_course_is_required():
         UnitProfile.objects.create(course=None, unit=9, title="بلا مقرر")
     with pytest.raises(IntegrityError), transaction.atomic():
         PedagogyNote.objects.create(course=None, slug="no-course", title="بلا مقرر", text="نص")
+    user = get_user_model().objects.create(username="teacher")
+    with pytest.raises(IntegrityError), transaction.atomic():
+        ClassOutcomeRecord.objects.create(
+            owner=user, section="10/1", lesson=None, lesson_code="1.1", attempted=1, correct=1
+        )
 
 
 def test_backfill_migrations_number_lessons_and_are_idempotent():
@@ -74,7 +81,7 @@ def test_backfill_migrations_number_lessons_and_are_idempotent():
         "apps.curriculum.migrations.0011_backfill_lesson_number_and_course"
     )
     knowledge_migration = importlib.import_module("apps.knowledge.migrations.0006_backfill_course")
-    planning_migration = importlib.import_module("apps.planning.migrations.0003_backfill_lesson")
+    planning_migration = importlib.import_module("apps.planning.migrations.0005_lesson_guard")
     # دروس الثاني عشر زُرعت قبل عمود الرقم: الهجرة ملأته من الرمز
     seeded = {row.code: row.number for row in Lesson.objects.filter(course__slug=GRADE12_SLUG)}
     assert seeded["1.1"] == 1 and seeded["2.9"] == 9 and 0 not in seeded.values()
@@ -84,6 +91,33 @@ def test_backfill_migrations_number_lessons_and_are_idempotent():
         knowledge_migration.forwards(apps, None)
         planning_migration.forwards(apps, None)
     assert Lesson.objects.get(course__slug=GRADE12_SLUG, code="2.9").number == 9
+
+
+@pytest.mark.parametrize(
+    ("module", "model"),
+    [
+        ("apps.papers.migrations.0006_saved_paper_course_guard", "SavedPaper"),
+        ("apps.planning.migrations.0005_lesson_guard", "ClassOutcomeRecord"),
+    ],
+)
+def test_contract_guard_stops_the_migration_when_a_row_is_still_unlinked(monkeypatch, module, model):
+    """صف بقي بلا ربط بعد إعادة التعبئة يوقف الهجرة (فيفشل preDeploy) ولا يُحذف."""
+
+    class Rows:
+        def filter(self, **_):
+            return self
+
+        def count(self):
+            return 1
+
+    class Apps:
+        def get_model(self, *_):
+            return type(model, (), {"objects": Rows()})
+
+    guard = importlib.import_module(module)
+    monkeypatch.setattr(guard.BACKFILL, "forwards", lambda *_: None)
+    with pytest.raises(RuntimeError, match="أعِد النشر"):
+        guard.forwards(Apps(), None)
 
 
 def test_only_one_course_is_current():

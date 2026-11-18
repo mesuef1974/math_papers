@@ -83,6 +83,10 @@ class SavedLimitError(ValueError):
     """بلغ المعلم الحد الأقصى من الأوراق المحفوظة."""
 
 
+class SavedCourseError(ValueError):
+    """مقرر الوصفة غير موجود في القاعدة: الورقة المحفوظة لا تكون بلا مقرر."""
+
+
 class SavedConflictError(ValueError):
     """التعديل يجعل الورقة نسخة من ورقة محفوظة أخرى."""
 
@@ -429,12 +433,12 @@ def recipe_hash(recipe: dict) -> str:
     return hashlib.sha1(canonical.encode("utf-8"), usedforsecurity=False).hexdigest()
 
 
-def _recipe_course(recipe: dict) -> Course | None:
-    """مقرر الوصفة (الفارغ = الحالي)؛ None إن لم يعد موجودًا فلا يمنع ذلك حفظ الورقة."""
+def _recipe_course(recipe: dict) -> Course:
+    """مقرر الوصفة (الفارغ = الحالي)؛ المجهول يرفض الحفظ فلا تُحفظ ورقة بلا مقرر."""
     try:
         return selectors.course_by_slug(recipe.get("course", ""))
-    except selectors.UnknownCourseError:
-        return None
+    except selectors.UnknownCourseError as error:
+        raise SavedCourseError(recipe.get("course", "")) from error
 
 
 def _summary(snapshot: dict, recipe: dict) -> dict:

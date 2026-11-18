@@ -285,6 +285,7 @@ EXHAUSTED = "تعذر توليد مسائل مختلفة بهذا العدد. غ
 REPLACE_EXHAUSTED = "تعذر إيجاد مسألة مختلفة لهذه الخانة. جرّب مرة أخرى."
 SAVED_LIMIT = f"بلغت الحد الأقصى ({services.MAX_SAVED_PER_USER} ورقة). احذف بعض الأوراق القديمة."
 SAVED_CONFLICT = "هذا التعديل يجعل الورقة نسخة من ورقة محفوظة أخرى."
+SAVED_COURSE = "مقرر الورقة غير موجود."
 KIND_MISMATCH = "نوع الورقة في الوصفة لا يطابق اللقطة."
 
 
@@ -436,6 +437,8 @@ def saved_create(request: HttpRequest, payload: SavePaperIn):
         )
     except services.SavedLimitError as error:
         raise HttpError(409, SAVED_LIMIT) from error
+    except services.SavedCourseError as error:
+        raise HttpError(422, SAVED_COURSE) from error
     return Status(201 if created else 200, row)
 
 
@@ -463,6 +466,8 @@ def saved_update(request: HttpRequest, pk: int, payload: SavedPatchIn):
         )
     except services.SavedConflictError as error:
         raise HttpError(409, SAVED_CONFLICT) from error
+    except services.SavedCourseError as error:
+        raise HttpError(422, SAVED_COURSE) from error
     if row is None:
         raise HttpError(404, "الورقة غير موجودة")
     return row
