@@ -38,6 +38,8 @@ const sheetWrap = ref<HTMLElement | null>(null);
 usePaperFit(sheetWrap); // الورقة بعرض A4، وتُصغَّر كلها حين تضيق الشاشة
 const forms = computed(() => (store.paper ? [store.paper, ...(store.twin ? [store.twin] : [])] : []));
 const hasMcq = computed(() => store.paper?.questions.some((q) => q.kind === "mcq") ?? false);
+// قالب المدرسة في Word للاختبار وورقة العمل وحزمة أوراق العمل؛ الاختبار القصير بإخراج «أوراق» وحده
+const schoolWord = computed(() => Boolean(store.bundle) || ["exam", "worksheet"].includes(store.paper?.kind ?? ""));
 // العرض: الورقة الحية القابلة للاستبدال، أو صفحات ملف PDF الحقيقي من الخادم بحدودها وترقيمها.
 const view = ref<"paged" | "sheet" | "pdf">("paged");
 // طلب ملف الخادم (PDF وWord والمعاينة): النماذج المعروضة كما هي مع ترويسة المعلم وحقول هذه الطباعة وخياراتها.
@@ -298,7 +300,7 @@ function downloadServerFile(format: "pdf" | "docx", template: "awraq" | "school"
           {{ pdf.busy ? pdf.statusText : "تصدير Word (DOCX)" }}
         </button>
         <button
-          v-if="store.paper?.kind === 'exam' && !store.bundle"
+          v-if="schoolWord"
           type="button"
           class="btn btn-secondary"
           :disabled="pdf.busy"

@@ -128,7 +128,62 @@ def test_cover_asset_is_the_template_cover_only():
     assert "السؤال رقم" not in text and "{school}" in text and "{count_line}" in text
 
 
-def test_default_template_and_worksheets_keep_the_platform_output():
+def headers_of(doc) -> list[str]:
+    return [t.text for t in doc.element.body.iter(f"{W}t") if t.text and t.text.startswith("السؤال رقم (")]
+
+
+def test_school_worksheet_takes_the_template_header_only_and_frames_its_questions():
+    load_all()
+    sheet = papers.build_worksheet("1.1", 4, seed=3, course="g10-s1")
+    data = build_docx({"papers": [sheet], "profile": PROFILE, "template": "school", "show_key": True})
+    doc = Document(io.BytesIO(data))
+    text = all_text(doc)
+    assert not re.search(r"\{\w+\}", text)
+    for expected in (
+        "مدرسة الاختبار الثانوية",
+        sheet["title"],
+        "مادة الرياضيات للصف العاشر",
+        school.WORKSHEET_INSTRUCTION,
+    ):
+        assert expected in text, expected
+    # لا شيء من أجزاء الاختبار في الغلاف: الزمن والعام (لا عام في عنوانها) وجدول الرصد والتعليمات والمجموع
+    for absent in ("زمن الاختبار", "العام الأكاديمي", "رقم السؤال", "المنسق", "تعليمات الاختبار", "الدرجة ("):
+        assert absent not in text, absent
+    assert headers_of(doc) == [f"السؤال رقم ({n})" for n in range(1, 5)]
+    assert "وضح خطوات الحل في المستطيل أدناه" in text
+    assert len(doc.sections) == 2  # الورقة والمفتاح، كل منهما مرقّم من 1
+    assert all(s._sectPr.find(f"{W}pgNumType").get(f"{W}start") == "1" for s in doc.sections)
+
+
+def test_teacher_worksheet_instructions_replace_the_default():
+    load_all()
+    sheet = papers.build_worksheet("1.1", 2, seed=3, course="g10-s1")
+    profile = {**PROFILE, "worksheet_instructions": "حل في الدفتر"}
+    text = all_text(
+        Document(io.BytesIO(build_docx({"papers": [sheet], "profile": profile, "template": "school"})))
+    )
+    assert "حل في الدفتر" in text and school.WORKSHEET_INSTRUCTION not in text
+
+
+def test_school_bundle_gives_each_worksheet_its_own_section_without_the_platform_cover():
+    load_all()
+    plan = [e for e in papers.bundle_plan(FINAL) if e["lesson"] in ("1.1", "1.2")]
+    sheets = [papers.build_bundle_item(FINAL, e["lesson"], 9) for e in plan]
+    payload = {
+        "papers": sheets,
+        "profile": PROFILE,
+        "template": "school",
+        "bundle": {"plan": plan, "seed": 9},
+    }
+    doc = Document(io.BytesIO(build_docx(payload)))
+    assert len(doc.sections) == len(sheets) == 2
+    text = all_text(doc)
+    assert "رقم الحزمة" not in text and all(s["title"] in text for s in sheets)
+    ids = Counter(pr.get("id") for pr in doc.element.body.iter(f"{WP}docPr"))
+    assert max(ids.values()) == 1
+
+
+def test_default_template_and_quizzes_keep_the_platform_output():
     payload = two_forms()
     plain = build_docx({**payload, "template": "awraq"})
     assert "السؤال رقم (" not in all_text(Document(io.BytesIO(plain)))

@@ -1172,20 +1172,28 @@ def bundle_cover(doc, header: dict, bundle: dict) -> None:
     x.add_text(x.new_paragraph(doc, before=10), f"رقم الحزمة {bundle['seed']}", size=9, color=x.SOFT)
 
 
+SCHOOL_KINDS = ("exam", "worksheet")
+
+
 def build_docx(payload: dict[str, Any]) -> bytes:
     """الحمولة هي PdfIn.dict(): papers وprofile وdate وsection وshow_key وbubble، وbundle لحزمة أوراق العمل."""
     papers = payload["papers"]
     profile = payload["profile"]
     bundle = payload.get("bundle")
     multi = len(papers) > 1 and not bundle
-    school_template = payload.get("template") == "school" and not bundle
+    # قالب المدرسة للاختبار وورقة العمل (وأوراق الحزمة)؛ الاختبار القصير يبقى بإخراج «أوراق»
+    school_template = payload.get("template") == "school" and any(p["kind"] in SCHOOL_KINDS for p in papers)
     doc = school.new_document() if school_template else Document()
     _setup(doc)
     x.embed_fonts(doc)
     headers = [
         header_of(p, profile, payload.get("date", ""), payload.get("section", ""), multi) for p in papers
     ]
-    if bundle:
+    if bundle and school_template:
+        # الحزمة بقالب المدرسة: كل ورقة قسم بترويسة القالب وترقيمها، بلا غلاف «أوراق» وفهرسه
+        for index, (paper, header) in enumerate(zip(papers, headers, strict=True)):
+            school.worksheet_sheet(doc, paper, header, first=index == 0)
+    elif bundle:
         # الحزمة قسم واحد بتذييل واحد: غلاف بفهرس، ثم كل ورقة تبدأ صفحة جديدة
         _configure_section(doc.sections[0], BUNDLE_COVER_TITLE)
         bundle_cover(doc, headers[0], bundle)
@@ -1198,6 +1206,9 @@ def build_docx(payload: dict[str, Any]) -> bytes:
                 school.exam_sheet(doc, paper, header, duration_label(header["minutes"]), first=index == 0)
                 if payload.get("bubble") and any(q["kind"] == "mcq" for q in paper["questions"]):
                     answer_sheet(doc, paper, header, answers=False)
+                continue
+            if school_template and paper["kind"] == "worksheet":
+                school.worksheet_sheet(doc, paper, header, first=index == 0)
                 continue
             section = doc.sections[0] if index == 0 else doc.add_section(WD_SECTION.NEW_PAGE)
             footer = (
