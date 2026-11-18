@@ -15,6 +15,8 @@ export type Level = "K" | "A" | "R";
 
 // أسماء المستويات كما يراها المعلم؛ الرموز للخادم فقط.
 export const LEVEL_NAMES: Record<Level, string> = { K: "سهل", A: "متوسط", R: "مهارات عليا" };
+// عمود المستوى في مفتاح الحل بعمق المعرفة (قرار المالك 2026-11-18)؛ نظير KEY_LEVELS في word/builder.py
+export const KEY_LEVELS: Record<Level, string> = { K: "DOK 1", A: "DOK 2", R: "DOK 3" };
 
 export interface Blueprint {
   slug: string;
@@ -53,6 +55,7 @@ export interface BookSource {
   kind: "example" | "practice";
   number: number;
   page: number | null;
+  exercises?: number[];
 }
 
 export interface Part {

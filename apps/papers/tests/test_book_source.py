@@ -12,7 +12,7 @@ from apps.papers.domain.book_source import book_source, source_label
 from apps.papers.domain.generators import SKILL_EXAMPLES, skill_example
 
 FINAL = "g10-s1-2026-27-final"
-LABEL = re.compile(r"^ص \d{1,3}، مثال \d{1,2}$")
+LABEL = re.compile(r"^ص \d{1,3}، مثال \d{1,2}(، تدريب \d+(?:–\d+)?(?:، \d+(?:–\d+)?)*)?$")
 
 
 def test_label_is_page_then_item_and_numbers_only():
@@ -20,6 +20,14 @@ def test_label_is_page_then_item_and_numbers_only():
     assert source_label(book_source(4, 35, "practice")) == "ص 35، تدريب 4"
     assert source_label(book_source(2, None)) == "مثال 2"  # الصفحة غير معروفة: لا تُخترع
     assert book_source(None, 28) is None and source_label(None) == ""
+
+
+def test_label_lists_the_book_exercises_of_the_example_with_runs_as_ranges():
+    assert source_label(book_source(2, 27, exercises=[28, 9, 11, 16, 17, 18, 19, 27])) == (
+        "ص 27، مثال 2، تدريب 9، 11، 16–19، 27، 28"
+    )
+    assert source_label(book_source(1, 26, exercises=[20, 21])) == "ص 26، مثال 1، تدريب 20، 21"
+    assert "exercises" not in book_source(1, 26, exercises=[])  # بلا تدريبات: المصدر كما كان
 
 
 @pytest.mark.usefixtures("loaded_courses")
@@ -33,19 +41,23 @@ def test_every_declared_grade10_example_has_a_printed_page():
 @pytest.mark.usefixtures("loaded_courses")
 @pytest.mark.parametrize("form", ["A", "B"])
 def test_every_part_of_the_grade10_exam_carries_its_book_source(form):
-    pages = {(row.lesson, e.n): e.page for row in course_index(GRADE10_SLUG).lessons for e in row.examples}
+    lessons = course_index(GRADE10_SLUG).lessons
+    pages = {(row.lesson, e.n): e.page for row in lessons for e in row.examples}
+    exercises: dict = {}
+    for row in lessons:
+        for group in row.analysis:
+            exercises.setdefault((row.lesson, group.example), set()).update(group.exercises)
     paper = services.build_exam(FINAL, 7, form)
     parts = [part for question in paper["questions"] for part in question["parts"]]
     assert parts
     for part in parts:
         number = skill_example(GRADE10_SLUG, part["lesson"], part["variant"])
-        assert part["source"] == {
-            "kind": "example",
-            "number": number,
-            "page": pages[(part["lesson"], number)],
-        }
+        expected = {"kind": "example", "number": number, "page": pages[(part["lesson"], number)]}
+        if exercises.get((part["lesson"], number)):
+            expected["exercises"] = sorted(exercises[(part["lesson"], number)])
+        assert part["source"] == expected
         label = PartOut.model_validate(part).source_label
-        assert LABEL.match(label) and label.endswith(f"مثال {number}"), label
+        assert LABEL.match(label) and re.search(f"مثال {number}(،|$)", label), label
 
 
 @pytest.mark.usefixtures("loaded_courses")

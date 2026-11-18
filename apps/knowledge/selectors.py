@@ -11,7 +11,7 @@ from apps.curriculum.courses import GRADE12_SLUG
 from .domain.contract import SCHEMA_VERSION, source_hash, source_slugs
 from .domain.course_index import CourseIndex, LessonIndex
 from .domain.schemas import lesson_sort_key
-from .models import ExerciseTemplate, LessonProfile, Source, WorkedExample
+from .models import ExerciseGroup, ExerciseTemplate, LessonProfile, Source, WorkedExample
 
 
 @dataclass(frozen=True)
@@ -86,6 +86,14 @@ def example_numbers(course: str) -> dict[str, list[int]]:
     for code, number in rows.values_list("profile__lesson__code", "number"):
         numbers.setdefault(code, []).append(number)
     return numbers
+
+
+def example_exercises(course: str, lesson: str, number: int) -> list[int]:
+    """أرقام تدريبات الكتاب التي تتدرّب على المثال (جدول «تحليل التمارين» كما حمّله المحمِّل)؛ فارغة إن لم تُعرف."""
+    groups = ExerciseGroup.objects.filter(
+        profile__lesson__course__slug=course, profile__lesson__code=lesson, example=number
+    ).values_list("exercises", flat=True)
+    return sorted({n for group in groups for n in group})
 
 
 def course_index_from_tables(course: str) -> CourseIndex:

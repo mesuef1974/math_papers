@@ -64,6 +64,15 @@ const header: PaperHeaderData = {
 const heads = (wrapper: ReturnType<typeof mount>) => wrapper.findAll(".key thead th").map((th) => th.text());
 
 describe("AnswerKey", () => {
+  it("المستوى بعمق المعرفة DOK، وعمود الخطوات وحده غير موسَّط (قرار المالك 2026-11-18)", () => {
+    const wrapper = mount(AnswerKey, {
+      props: { paper: paper([part({ level: "K" }), part({ level: "A", fingerprint: "b" }), part({ level: "R", fingerprint: "c" })]), header },
+    });
+    expect(wrapper.findAll(".badge").map((b) => b.text())).toEqual(["DOK 1", "DOK 2", "DOK 3"]);
+    const rows = wrapper.findAll(".key tbody tr");
+    expect(rows.every((row) => row.findAll(".steps-cell").length === 1)).toBe(true);
+  });
+
   it("عمود «المصدر في الكتاب» بعد الدرس بنص الخادم، خلية واحدة للجزء تمتد على صفوف بنوده، و«—» لجزء بلا مصدر", () => {
     const withSource = part({
       fingerprint: "a",

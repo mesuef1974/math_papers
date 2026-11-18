@@ -2,8 +2,9 @@
 import { computed } from "vue";
 import MathText from "@/components/MathText.vue";
 import PaperHeader from "@/components/PaperHeader.vue";
-import { LEVEL_NAMES, type Paper, type Part } from "@/stores/papers";
+import { KEY_LEVELS, type Paper, type Part } from "@/stores/papers";
 import type { PaperHeaderData } from "@/stores/print";
+import { isolateNumberRanges } from "@/utils/bidi";
 import { OPTION_LABELS } from "@/utils/options";
 
 // مفتاح الحل (دليل تقدير الدرجات في الاختبار): جدول رموز الإجابات الموضوعية، ثم جدول الحلول بتوزيع درجاتها.
@@ -94,7 +95,7 @@ const keyParts = computed(() =>
               <th v-if="index === 0" scope="row" :rowspan="rows.length">
                 <bdi>{{ id }}</bdi>
               </th>
-              <td>
+              <td class="steps-cell">
                 <p v-if="row.plain || row.final" class="answer">
                   <span v-if="row.final" class="final-label">الجواب النهائي: </span><MathText :text="part.answer" />
                 </p>
@@ -105,10 +106,10 @@ const keyParts = computed(() =>
               <td v-if="hasMarks" class="num step-mark"><bdi dir="ltr">{{ row.marks || "" }}</bdi></td>
               <td v-if="index === 0" class="lesson" :rowspan="rows.length">{{ part.lesson }}</td>
               <td v-if="hasSources && index === 0" class="source" :rowspan="rows.length">
-                {{ part.source_label || "—" }}
+                {{ isolateNumberRanges(part.source_label || "—") }}
               </td>
               <td v-if="index === 0" :rowspan="rows.length">
-                <span class="badge" :class="`badge-${part.level.toLowerCase()}`">{{ LEVEL_NAMES[part.level] }}</span>
+                <span class="badge" :class="`badge-${part.level.toLowerCase()}`"><bdi dir="ltr">{{ KEY_LEVELS[part.level] }}</bdi></span>
               </td>
               <td v-if="hasMarks && index === 0" class="num part-total" :rowspan="rows.length">{{ part.marks || "" }}</td>
             </tr>
@@ -149,6 +150,17 @@ const keyParts = computed(() =>
 .key tbody tr {
   break-inside: avoid;
 }
+/* كل الأعمدة في الوسط أفقيًا ورأسيًا عدا الإجابة والخطوات (قرار المالك 2026-11-18)، كما في Word */
+.key thead th,
+.key tbody th,
+.key tbody td {
+  text-align: center;
+  vertical-align: middle;
+}
+.key tbody .steps-cell {
+  text-align: start;
+  vertical-align: top;
+}
 .key tbody th {
   white-space: nowrap;
   color: var(--color-brand-strong);
@@ -170,6 +182,11 @@ const keyParts = computed(() =>
   padding-inline-start: var(--space-5);
   color: var(--color-ink-soft);
 }
+/* ترقيم الخطوات «1- 2- 3-» كما في Word؛ عدّاد list-item يحترم start في الصفوف المتتالية */
+.steps li::marker {
+  /* RLM حول الشرطة يُبقيها يسار الرقم («1-» لا «-1»)، كما في Word */
+  content: "\200F" counter(list-item) "\200F-\200F ";
+}
 .steps.marked {
   margin-block: 0;
   color: var(--color-ink);
@@ -178,8 +195,10 @@ const keyParts = computed(() =>
   font-weight: var(--weight-bold);
   color: var(--color-brand-strong);
 }
+.source {
+  min-inline-size: 7em;
+}
 .lesson,
-.source,
 .num {
   white-space: nowrap;
 }
