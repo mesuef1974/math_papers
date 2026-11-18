@@ -80,6 +80,11 @@ def variant(
     return register
 
 
+def skill_example(course: str, lesson: str, name: str) -> int | None:
+    """رقم مثال الكتاب الذي تقيس الصيغة مهارته، أو None لصيغة لم تصرّح به."""
+    return SKILL_EXAMPLES.get((course, lesson, name))
+
+
 def out_of_scope(
     course: str, enrichment_lessons: Collection[str], enrichment_examples: Mapping[str, Collection[int]]
 ) -> list[str]:

@@ -19,7 +19,9 @@ from apps.core.services import record_audit
 from apps.curriculum import selectors
 from apps.curriculum.courses import DEFAULT_COURSE, grade_label
 from apps.curriculum.models import Blueprint, BlueprintItem, Course
+from apps.knowledge import selectors as knowledge_selectors
 
+from .domain.book_source import book_source
 from .domain.generators import (
     LEVEL_NAMES,
     ExhaustedError,
@@ -29,6 +31,7 @@ from .domain.generators import (
     generate,
     generator_version,
     lesson_levels,
+    skill_example,
     variants,
 )
 from .domain.marking import marking
@@ -113,6 +116,13 @@ def new_seed() -> int:
     return secrets.randbelow(MAX_SEED)
 
 
+def _book_source(course: str, lesson: str, name: str) -> dict | None:
+    """مصدر فكرة الجزء في كتاب الطالب: مثال الصيغة وصفحته المطبوعة من فهرس المقرر."""
+    number = skill_example(course, lesson, name)
+    page = knowledge_selectors.example_page(course, lesson, number) if number is not None else None
+    return book_source(number, page)
+
+
 def render_part(problem: Problem, slot: PartSlot, rng: random.Random) -> dict:
     options: list[str] = []
     option_graphs: list[dict] = []
@@ -147,6 +157,8 @@ def render_part(problem: Problem, slot: PartSlot, rng: random.Random) -> dict:
         "variant": problem.variant,
         "fingerprint": problem.fingerprint,
         "slot": {"kind": slot.kind, "level": slot.level, "needs_graph": slot.needs_graph},
+        # المصدر يُضاف حين يُعرف فقط: أوراق الصيغ بلا مثال (الثاني عشر) تبقى كما كانت بايتًا ببايت (البصمات الذهبية)
+        **({"source": source} if (source := _book_source(slot.course, slot.lesson, problem.variant)) else {}),
     }
 
 

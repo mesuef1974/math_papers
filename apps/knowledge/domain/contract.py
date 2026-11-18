@@ -253,7 +253,10 @@ def profile_from_index(lesson: LessonIndex) -> LessonData:
         standards=lesson.standards,
         practices=lesson.practices,
         objectives=[ObjectiveData(bloom=b) for b in lesson.objectives_bloom],
-        examples=[ExampleData(number=e.n, representations=list(e.representations)) for e in lesson.examples],
+        examples=[
+            ExampleData(number=e.n, page=e.page, representations=list(e.representations))
+            for e in lesson.examples
+        ],
         exercise_groups=[
             ExerciseGroupData(example=a.example, dok=a.dok, exercises=list(a.exercises))
             for a in lesson.analysis

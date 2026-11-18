@@ -195,6 +195,36 @@ def test_key_marks_column_only_when_the_paper_has_marks(client):
     assert heads[2] == "الدرجة" and heads[-1] == "المجموع" and first[-1].strip().isdigit()
 
 
+@pytest.mark.usefixtures("loaded_courses")
+def test_key_shows_the_book_source_of_each_part_like_the_screen(client):
+    """عمود «المصدر في الكتاب» بعد الدرس بنص الخادم نفسه لكل جزء (اختبار العاشر)، ولا عمود لورقة بلا مصادر."""
+    paper = client.get("/api/v1/papers/exam", {"blueprint": "g10-s1-2026-27-final", "seed": 7}).json()
+    payload = {"papers": [paper], "profile": PROFILE, "show_key": True}
+    doc = Document(io.BytesIO(build_docx(payload)))
+    table = next(
+        t for t in doc.tables if [c.text for c in t.rows[0].cells][:2] == ["السؤال", "الإجابة والخطوات"]
+    )
+    heads = [c.text for c in table.rows[0].cells]
+    assert heads == [
+        "السؤال",
+        "الإجابة والخطوات",
+        "الدرجة",
+        "الدرس",
+        "المصدر في الكتاب",
+        "المستوى",
+        "المجموع",
+    ]
+    expected = {
+        f"{q['number']} {p['label']}".strip(): p["source_label"]
+        for q in paper["questions"]
+        for p in q["parts"]
+    }
+    shown = {row.cells[0].text: row.cells[4].text for row in table.rows[1:]}
+    assert shown == expected and all(label.startswith("ص ") for label in shown.values())
+    widths = [float(w.get(f"{W}w")) for w in table._tbl.iter(f"{W}gridCol")]
+    assert len(widths) == len(heads)
+
+
 def test_key_distributes_essay_marks_over_steps_and_final_answer(client):
     """جدول الحلول في Word: مجموع درجات بنود كل جزء يساوي مجموعه، ولكل جزء مقالي بند جواب نهائي واحد."""
     payload = sample_payload(client, show_key=True)

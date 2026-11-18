@@ -17,6 +17,7 @@ from apps.curriculum import selectors
 from . import pdf, services
 from . import selectors as paper_selectors
 from .access import TeacherAuth
+from .domain.book_source import source_label
 from .domain.generators import ExhaustedError, available_lessons, lesson_levels
 from .domain.marking import marking
 from .models import SavedPaper
@@ -87,6 +88,14 @@ class MarkItemOut(Schema):
     final: bool = False
 
 
+class BookSourceOut(Schema):
+    """مصدر فكرة الجزء في كتاب الطالب: أرقام فقط (نوع البند ورقمه وصفحته المطبوعة)."""
+
+    kind: Literal["example", "practice"] = "example"
+    number: int = Field(ge=1, le=99)
+    page: int | None = Field(None, ge=1, le=999)
+
+
 class PartOut(Schema):
     label: str
     lesson: str
@@ -102,13 +111,19 @@ class PartOut(Schema):
     graph: GraphOut | None = None
     option_graphs: list[GraphOut] = []
     variant: str
+    source: BookSourceOut | None = None  # الأوراق المحفوظة قبله بلا مصدر
+    source_label: str = ""  # «ص 5، مثال 1»: مشتق من source دائمًا
     fingerprint: str
     slot: SlotOut
 
     @model_validator(mode="after")
     def derive_marking(self):
-        """التوزيع مشتق من الخطوات والدرجة دائمًا، فلا يُقبل من العميل، وتناله الأوراق المحفوظة قبل وجوده."""
+        """التوزيع مشتق من الخطوات والدرجة دائمًا، فلا يُقبل من العميل، وتناله الأوراق المحفوظة قبل وجوده.
+
+        ونص المصدر مشتق من أرقامه كذلك، فيطابق المفتاح على الشاشة وفي Word.
+        """
         self.marking = [MarkItemOut(**item) for item in marking(self.slot.kind, self.steps, self.marks)]
+        self.source_label = source_label(self.source.model_dump() if self.source else None)
         return self
 
 

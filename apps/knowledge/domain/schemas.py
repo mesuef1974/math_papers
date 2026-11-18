@@ -82,6 +82,7 @@ class ExerciseGroupData(_Strict):
 
 class ExampleData(_Strict):
     number: int = Field(ge=1)
+    page: int | None = Field(default=None, ge=1, le=999)  # صفحته المطبوعة في كتاب الطالب إن عُرفت
     skill: Safe = ""
     representation: Safe = ""
     representations: list[Literal["جدول", "بياني", "جبري", "سياق"]] = Field(default_factory=list)
