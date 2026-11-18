@@ -69,19 +69,17 @@ def test_duplicate_code_in_one_course_is_rejected_and_course_is_required():
         PedagogyNote.objects.create(course=None, slug="no-course", title="بلا مقرر", text="نص")
     user = get_user_model().objects.create(username="teacher")
     with pytest.raises(IntegrityError), transaction.atomic():
-        ClassOutcomeRecord.objects.create(
-            owner=user, section="10/1", lesson=None, lesson_code="1.1", attempted=1, correct=1
-        )
+        ClassOutcomeRecord.objects.create(owner=user, section="10/1", lesson=None, attempted=1, correct=1)
 
 
 def test_backfill_migrations_number_lessons_and_are_idempotent():
+    """إعادة تعبئة التخطيط (planning 0003 و0005) تقرأ عمودًا حُذف في 0007، فلا تُشغَّل على النماذج الحالية."""
     from django.apps import apps
 
     number_migration = importlib.import_module(
         "apps.curriculum.migrations.0011_backfill_lesson_number_and_course"
     )
     knowledge_migration = importlib.import_module("apps.knowledge.migrations.0006_backfill_course")
-    planning_migration = importlib.import_module("apps.planning.migrations.0005_lesson_guard")
     # دروس الثاني عشر زُرعت قبل عمود الرقم: الهجرة ملأته من الرمز
     seeded = {row.code: row.number for row in Lesson.objects.filter(course__slug=GRADE12_SLUG)}
     assert seeded["1.1"] == 1 and seeded["2.9"] == 9 and 0 not in seeded.values()
@@ -89,7 +87,6 @@ def test_backfill_migrations_number_lessons_and_are_idempotent():
     for _ in range(2):
         number_migration.forwards(apps, None)
         knowledge_migration.forwards(apps, None)
-        planning_migration.forwards(apps, None)
     assert Lesson.objects.get(course__slug=GRADE12_SLUG, code="2.9").number == 9
 
 

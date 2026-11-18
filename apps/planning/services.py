@@ -57,7 +57,6 @@ def record_outcome(
         section=_section(section),
         lesson=_lesson(course, outcome.lesson_id),
         defaults={
-            "lesson_code": outcome.lesson_id,
             "attempted": outcome.attempted,
             "correct": outcome.correct,
             "pace": outcome.pace,
@@ -81,7 +80,6 @@ def save_run_report(
         lesson=_lesson(course, lesson_code),
         started_at=started_at,
         defaults={
-            "lesson_code": lesson_code,
             "period_minutes": run.flow.period_minutes,
             "finished": run.finished,
             "phases": [

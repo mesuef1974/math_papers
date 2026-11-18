@@ -7,6 +7,7 @@ from django.contrib.auth import get_user_model
 from django.db import IntegrityError, transaction
 
 from apps.curriculum.courses import GRADE10_SLUG
+from apps.curriculum.models import Lesson
 from apps.knowledge.services import load_course
 from apps.planning.domain.calendar_engine import PlanningError
 from apps.planning.domain.feedback import ClassOutcome
@@ -42,7 +43,13 @@ def test_record_outcome_is_idempotent_per_section_and_lesson(teacher):
     again, created_again = record_outcome(teacher, "10/3", ClassOutcome("1.1", 30, 12))
     assert created and not created_again
     assert ClassOutcomeRecord.objects.count() == 1 and again.correct == 12
-    assert (again.lesson.course.slug, again.lesson.code, again.lesson_code) == (GRADE10_SLUG, "1.1", "1.1")
+    assert (again.lesson.course.slug, again.lesson.code) == (GRADE10_SLUG, "1.1")
+
+
+@pytest.mark.parametrize("model", [ClassOutcomeRecord, LessonRunRecord])
+def test_lesson_is_the_only_source_of_the_code(model):
+    """لا نسخة من الرمز في السجل: الرمز يتكرر بين الكتب، والدرس المرتبط وحده يعيّنه."""
+    assert "lesson_code" not in {field.name for field in model._meta.get_fields()}
 
 
 def test_unknown_lesson_is_rejected_before_writing(teacher):
@@ -82,7 +89,11 @@ def test_section_is_required_and_bounded(teacher, bad):
 def test_database_rejects_counts_the_domain_would_have_rejected(teacher):
     with pytest.raises(IntegrityError), transaction.atomic():
         ClassOutcomeRecord.objects.create(
-            owner=teacher, section="10/3", lesson_code="1.1", attempted=5, correct=6
+            owner=teacher,
+            section="10/3",
+            lesson=Lesson.objects.get(course__slug=GRADE10_SLUG, code="1.1"),
+            attempted=5,
+            correct=6,
         )
 
 
