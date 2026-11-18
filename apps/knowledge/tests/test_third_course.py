@@ -149,6 +149,7 @@ def test_courses_endpoint_lists_every_loaded_course(third_course, teacher_client
         "grade": 11,
         "track": "العلمي",
         "semester": 1,
+        "academic_year": "2026-2027",
         "edition": "",
         "language": "en",
         "is_current": False,

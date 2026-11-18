@@ -119,6 +119,57 @@ describe("papers store: الوصفة والاستبدال", () => {
     expect(store.replacing).toBe("");
   });
 
+  it("المقرر المختار يحدد الدروس والجداول ويُرسل مع كل توليد ويُدوَّن في الوصفة", async () => {
+    const blueprints = [
+      { slug: "g12", title: "ج12", total_marks: 40, is_forecast: true, course: "g12-sci-s1" },
+      { slug: "g10", title: "ج10", total_marks: 50, is_forecast: false, course: "g10-s1" },
+    ];
+    get.mockResolvedValueOnce([]).mockResolvedValueOnce(blueprints);
+    const store = usePapersStore();
+    await store.loadOptions("g10-s1");
+    expect(get.mock.calls[0][0]).toBe("/lessons?course=g10-s1");
+    expect(store.blueprints.map((row) => row.slug)).toEqual(["g10"]);
+
+    get.mockResolvedValue(paper());
+    await store.generateWorksheet("1.2", 2, null, "");
+    expect(get.mock.calls[2][0]).toBe("/papers/worksheet?lesson=1.2&count=2&course=g10-s1");
+    expect(store.recipe?.course).toBe("g10-s1");
+    await store.generateQuiz(["1.1"], 5);
+    expect(get.mock.calls[3][0]).toBe("/papers/quiz?lessons=1.1&seed=5&course=g10-s1");
+
+    // ورقة محفوظة من كتاب آخر تُستبدل مسائلها من كتابها لا من المختار الآن
+    store.openSaved({ id: 3, title: "قديمة", paper: paper(), recipe: { ...store.recipe!, course: "g12-sci-s1" } });
+    post.mockResolvedValue({ ...part("ccc"), seed: 7 });
+    await store.replacePart(2, "");
+    expect(post.mock.calls[0][1]).toMatchObject({ course: "g12-sci-s1" });
+  });
+
+  it("ردّ مقرر سابق يصل بعد تبديل أحدث لا يكتب فوقه", async () => {
+    let releaseOld: (value: unknown) => void = () => {};
+    const lesson = (code: string) => ({ code, title: code, unit: 1, examinable: true, has_generator: true, levels: [] });
+    get
+      .mockReturnValueOnce(new Promise((resolve) => (releaseOld = resolve)))
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([lesson("10.1")])
+      .mockResolvedValueOnce([]);
+    const store = usePapersStore();
+    const old = store.loadOptions("g12-sci-s1");
+    await store.loadOptions("g10-s1");
+    releaseOld([lesson("12.1")]);
+    await old;
+    expect(store.course).toBe("g10-s1");
+    expect(store.lessons.map((row) => row.code)).toEqual(["10.1"]);
+    expect(store.optionsLoading).toBe(false);
+  });
+
+  it("بلا مقرر تبقى الطلبات كما كانت للمقرر الحالي في الخادم", async () => {
+    get.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+    const store = usePapersStore();
+    await store.loadOptions();
+    expect(get.mock.calls[0][0]).toBe("/lessons");
+    expect(store.course).toBe("");
+  });
+
   it("طلب النموذج ب يأخذ بذرة أ ويخزّنه توأمًا، والتوليد التالي بلا توأم يمسحه", async () => {
     get.mockResolvedValueOnce(paper()).mockResolvedValueOnce({ ...paper(), form: "B" });
     const store = usePapersStore();

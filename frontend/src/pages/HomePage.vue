@@ -9,12 +9,14 @@ import PdfPreview from "@/components/PdfPreview.vue";
 import PrintSettings from "@/components/PrintSettings.vue";
 import { usePaperFit } from "@/composables/usePaperFit";
 import { useAuthStore } from "@/stores/auth";
+import { useCoursesStore } from "@/stores/courses";
 import { LEVEL_NAMES, PURPOSE_LEVEL, PURPOSE_NAMES, usePapersStore, type Level, type Purpose } from "@/stores/papers";
 import { usePdfStore, type PdfRequest } from "@/stores/pdf";
 import { usePrintStore } from "@/stores/print";
 import { useSavedStore } from "@/stores/saved";
 
 const store = usePapersStore();
+const courses = useCoursesStore();
 const auth = useAuthStore();
 const print = usePrintStore();
 const saved = useSavedStore();
@@ -69,15 +71,39 @@ const purposeEntries = Object.entries(PURPOSE_NAMES) as [Purpose, string][];
 function purposeAvailable(code: Purpose): boolean {
   return code === "" || lessonLevels.value.includes(PURPOSE_LEVEL[code]);
 }
+// الاختبار الكامل والحزمة يحتاجان جدول مواصفات جاهزًا للمقرر المختار؛ بدونه تبقى ورقة العمل والاختبار القصير.
+const hasBlueprints = computed(() => store.blueprints.length > 0);
+const pageTitle = computed(() => courses.current?.title ?? "أوراق الرياضيات");
+const academicYear = computed(() => courses.current?.academic_year ?? "");
 const generateLabel = computed(() => {
   if (mode.value === "bundle") return "توليد الحزمة";
   if (mode.value === "quiz") return "توليد الاختبار القصير";
   return "توليد الورقة";
 });
 
+// تغيير المقرر يعيد تحميل دروسه وجداوله ويُسقط اختيارات المقرر السابق؛ الورقة المعروضة تبقى كما هي.
+async function loadCourseOptions(course: string) {
+  lesson.value = "";
+  secondLesson.value = "";
+  blueprint.value = "";
+  await store.loadOptions(course);
+  if (!hasBlueprints.value && (mode.value === "exam" || mode.value === "bundle")) mode.value = "worksheet";
+}
+watch(
+  () => courses.selected,
+  (course, previous) => {
+    if (course && course !== previous) void loadCourseOptions(course);
+  },
+);
+
 onMounted(async () => {
   if (!auth.canGenerate) return;
-  void store.loadOptions();
+  if (courses.courses.length) void loadCourseOptions(courses.selected);
+  else {
+    // المراقب يحمّل دروس المقرر الافتراضي حين يُختار؛ بلا مقرر (تعذر الطلب) تبقى دروس المقرر الحالي في الخادم
+    await courses.load();
+    if (!courses.selected) void loadCourseOptions("");
+  }
   // رابط مباشر إلى ورقة محفوظة: /?saved=ID
   const id = Number(route.query.saved);
   if (Number.isInteger(id) && id > 0 && store.savedId !== id) {
@@ -151,8 +177,8 @@ function downloadServerFile(format: "pdf" | "docx") {
 <template>
   <div class="no-print">
     <header class="page-head">
-      <span class="eyebrow">المنهج القطري، <bdi dir="ltr">2026-2027</bdi></span>
-      <h1>أوراق رياضيات 12 علمي وتكنولوجي</h1>
+      <span class="eyebrow">المنهج القطري<template v-if="academicYear">، <bdi dir="ltr">{{ academicYear }}</bdi></template></span>
+      <h1>{{ pageTitle }}</h1>
       <p class="lead">
         ولّد اختبارًا تدريبيًا من 40، أو اختبارًا قصيرًا من 10 لدرس أو درسين، أو ورقة عمل لدرس (عادية أو علاجية أو
         إثرائية)، بمسائل جديدة في كل مرة ومفتاح حل.
@@ -162,16 +188,32 @@ function downloadServerFile(format: "pdf" | "docx") {
     <p v-if="!auth.canGenerate" class="alert alert-error" role="alert">
       حسابك لا يملك صلاحية توليد الأوراق. اطلب من المشرف إضافتك إلى مجموعة المعلمين.
     </p>
-    <form v-else class="panel generator" :aria-busy="store.loading || store.optionsLoading" @submit.prevent="generate">
+    <form v-else class="panel generator" :aria-busy="store.loading || store.optionsLoading || courses.loading" @submit.prevent="generate">
+      <label v-if="courses.courses.length > 1" class="field course">
+        المقرر
+        <select
+          class="select"
+          :value="courses.selected"
+          :disabled="store.loading"
+          @change="courses.select(($event.target as HTMLSelectElement).value)"
+        >
+          <option v-for="item in courses.courses" :key="item.slug" :value="item.slug" :disabled="!item.has_generators">
+            {{ item.title }}{{ item.has_generators ? "" : " (لا مولّدات بعد)" }}
+          </option>
+        </select>
+      </label>
       <fieldset class="mode">
         <legend class="visually-hidden">نوع الورقة</legend>
         <div class="segmented">
-          <label><input v-model="mode" type="radio" value="exam" /><span><AppIcon name="test" />اختبار كامل</span></label>
+          <label><input v-model="mode" type="radio" value="exam" :disabled="!hasBlueprints" /><span><AppIcon name="test" />اختبار كامل</span></label>
           <label><input v-model="mode" type="radio" value="quiz" /><span><AppIcon name="problem" />اختبار قصير</span></label>
           <label><input v-model="mode" type="radio" value="worksheet" /><span><AppIcon name="worksheet" />ورقة عمل</span></label>
-          <label><input v-model="mode" type="radio" value="bundle" /><span><AppIcon name="curriculum" />كل أوراق العمل بضغطة</span></label>
+          <label><input v-model="mode" type="radio" value="bundle" :disabled="!hasBlueprints" /><span><AppIcon name="curriculum" />كل أوراق العمل بضغطة</span></label>
         </div>
       </fieldset>
+      <p v-if="!hasBlueprints && !store.optionsLoading && store.lessons.length" class="mode-hint">
+        جدول مواصفات هذا المقرر لم تكتمل مولّدات دروسه بعد، فالاختبار الكامل والحزمة غير متاحين؛ ورقة العمل والاختبار القصير متاحان.
+      </p>
 
       <p v-if="mode === 'bundle'" class="mode-hint">
         ورقة لكل درس في جدول المواصفات، عدد مسائلها من وزن الدرس في الجدول، مرتبة سهل ثم متوسط ثم مهارات عليا،
@@ -266,6 +308,7 @@ function downloadServerFile(format: "pdf" | "docx") {
         في نافذة الطباعة اختر A4 وألغِ «الترويسات والتذييلات» حتى لا يطبع المتصفح الرابط والتاريخ فوق الورقة.
       </p>
       <p v-if="seedInvalid" id="seed-error" class="alert alert-error">رقم النموذج يجب أن يكون أرقامًا فقط.</p>
+      <p v-if="courses.error" class="alert alert-error" role="alert">{{ courses.error }}</p>
       <p v-if="store.error" class="alert alert-error" role="alert" aria-live="assertive">{{ store.error }}</p>
       <p v-if="pdf.error" class="alert alert-error" role="alert">{{ pdf.error }}</p>
       <p v-else-if="pdf.status === 'done'" class="hint" role="status">{{ pdf.statusText }}.</p>
@@ -358,6 +401,9 @@ function downloadServerFile(format: "pdf" | "docx") {
 .generator {
   display: grid;
   gap: var(--space-5);
+}
+.course {
+  max-inline-size: 32rem;
 }
 .mode {
   border: 0;

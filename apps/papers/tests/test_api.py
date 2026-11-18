@@ -183,7 +183,8 @@ def test_blueprint_without_generators_is_hidden_and_answers_409(client, monkeypa
     monkeypatch.delitem(REGISTRY, ("g10-s1", "3.5"))
     pending = "g10-s1-2026-27-final"
     assert Blueprint.objects.filter(slug=pending).exists()
-    assert [row["slug"] for row in client.get("/api/v1/blueprints").json()] == [SLUG]
+    rows = client.get("/api/v1/blueprints").json()
+    assert [(row["slug"], row["course"]) for row in rows] == [(SLUG, "g12-sci-s1")]  # الواجهة تصفّي بالمقرر
     res = client.get(f"/api/v1/papers/exam?blueprint={pending}&seed=1")
     assert res.status_code == 409 and "مولّدات" in res.json()["detail"]
     # حزمة أوراق العمل تسرد من دروس الجدول ما له مولّد وحده، فتكبر مع كل مرحلة مولّدات
