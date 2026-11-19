@@ -403,6 +403,47 @@ def assert_translation(c):
         assert {1: "وحدة واحدة", 2: "وحدتين"}.get(size, f"${size}$ وحدات") in text
 
 
+def assert_table_rule(c):
+    """كثيرة حدود الاستكمال عبر نقاط الجدول هي ax² (بلا حد خطي ولا ثابت)، وقيمتها عند النقطة المطلوبة."""
+    poly = sp.expand(sp.interpolate(list(zip(c["xs"], c["values"])), x))
+    a = poly.coeff(x, 2)
+    assert sp.expand(poly - a * x**2) == 0 and a != 0
+    assert c["answer"] == f"$a={sp.latex(a)}$، و$f({c['at']})={sp.latex(poly.subs(x, c['at']))}$"
+
+
+def shift_words(steps):
+    return {1: "وحدة واحدة", 2: "وحدتين"}.get(steps, f"${steps}$ وحدات")
+
+
+def assert_vertical_shift(c):
+    """الفرق g(x)−f(x) ثابت في كل النقاط وهو مقدار الإزاحة الرأسية، والرأس (0,k)."""
+    diffs = {round(number(c["g"], px) - number(c["f"], px), 9) for px in (-3, -1, 0, 2, 5)}
+    assert len(diffs) == 1
+    k = int(diffs.pop())
+    answer = c["answer"]
+    assert ("الأعلى" in answer) == (k > 0) and ("الأسفل" in answer) == (k < 0)
+    assert shift_words(abs(k)) in answer and f"$(0,{k})$" in answer
+
+
+def assert_horizontal_shift(c):
+    """المشتقة تنعدم عند h وحده، وg(h+d)=f(d) لكل d، فالإزاحة أفقية مقدارها |h| بلا إزاحة رأسية."""
+    (h,) = sp.solve(sp.diff(c["g"], x), x)
+    for d in (-2, 0, 1, 3):
+        assert number(c["g"], h + d) == pytest.approx(number(c["f"], d))
+    answer = c["answer"]
+    assert ("اليمين" in answer) == (h > 0) and ("اليسار" in answer) == (h < 0)
+    assert shift_words(abs(h)) in answer and f"$({h},0)$" in answer
+
+
+def assert_mirror_point(c):
+    """المقطع y ونظيره على ارتفاع واحد، ومنتصفهما على محور التماثل الذي تنعدم عنده المشتقة."""
+    px, py = c["point"]
+    axis = sp.solve(sp.diff(c["f"], x), x)
+    assert px != 0 and axis == [sp.Rational(px, 2)]
+    assert number(c["f"], 0) == pytest.approx(float(py)) and number(c["f"], px) == pytest.approx(float(py))
+    assert f"$(0,{py})$" in c["answer"] and f"$({px},{py})$" in c["answer"]
+
+
 def assert_standard_features(c):
     answer = c["answer"]
     assert f"هو ${round(number(c['f'], 0))}$" in answer
@@ -703,6 +744,25 @@ def assert_altitude(c):
         assert measured[name] == pytest.approx(float(value))
 
 
+def assert_similar_right_proportion(c):
+    """أطوال الشكل من الإحداثيات: المعطى والمطلوب صحيحان، ونسب ACD وCBD متساوية (تشابه المثلثين)."""
+    first, second = c["legs"]
+    a, b, origin, d = right_triangle(first, second)
+    measured = {
+        "AC": first,
+        "BC": second,
+        "AD": math.dist(a, d),
+        "DB": math.dist(d, b),
+        "CD": math.dist(origin, d),
+    }
+    for name, value in c["given"].items():
+        assert measured[name] == pytest.approx(float(value))
+    assert measured[c["asked"]] == pytest.approx(float(c["value"]))
+    ratio = measured["AC"] / measured["BC"]
+    assert measured["AD"] / measured["CD"] == pytest.approx(ratio)
+    assert measured["CD"] / measured["DB"] == pytest.approx(ratio)
+
+
 def assert_geometric_mean(c):
     """مثلث قائم ساقاه من قطعتي الوتر: العمود النازل عليه يقسمه إلى القطعتين، وطوله هو الجواب."""
     first, second = c["parts"]
@@ -809,6 +869,7 @@ CHECKS = {
     "proportion": assert_proportion,
     "altitude": assert_altitude,
     "geometric_mean": assert_geometric_mean,
+    "similar_right_proportion": assert_similar_right_proportion,
     "similarity_statement": assert_similarity_statement,
     "parallel_division": assert_parallel_division,
     "midsegment": assert_midsegment,
@@ -830,6 +891,10 @@ CHECKS = {
     "vertex": assert_vertex,
     "vertex_point": assert_vertex_point,
     "translation": assert_translation,
+    "table_rule": assert_table_rule,
+    "vertical_shift": assert_vertical_shift,
+    "horizontal_shift": assert_horizontal_shift,
+    "mirror_point": assert_mirror_point,
     "standard_features": assert_standard_features,
     "parabola_extreme": assert_parabola_extreme,
     "compare_maxima": assert_compare_maxima,
