@@ -100,9 +100,29 @@ def test_unapproved_objectives_are_marked_pending_in_page_and_word(teacher_clien
     assert sheet["pending"] is True
     first = sheet["objectives"][0]
     assert first["pending"] and PENDING_MARK in first["text"] and f"مثال {first['example']}" in first["text"]
-    assert {c["code"]: c["status"] for c in sheet["checks"]}["T2c"] == "pending"
+    assert {c["code"]: c["status"] for c in sheet["checks"]}["T2c"] == "fail"
     document = Document(BytesIO(teacher_client.get(f"{base}/word").content))
     assert PENDING_MARK in document.tables[0].rows[TEACH_ROW].cells[0].text
+
+
+@pytest.mark.django_db
+def test_approved_unit_objectives_reach_page_and_word(teacher_client):
+    from apps.curriculum.models import PrepObjective, PrepUnit
+
+    PrepUnit.objects.filter(course__slug=GRADE10_SLUG, unit=1).update(
+        status="approved", approval="اعتماد المالك (اختبار)"
+    )
+    base = f"{API}/{GRADE10_SLUG}/1.2/1"
+    sheet = teacher_client.get(base).json()
+    assert sheet["pending"] is False
+    assert {c["code"]: c["status"] for c in sheet["checks"]}["T2c"] == "pass"
+    first = sheet["objectives"][0]
+    row = PrepObjective.objects.get(
+        lesson__course__slug=GRADE10_SLUG, lesson__code="1.2", example=first["example"]
+    )
+    assert first["text"] == f"{row.behavior} {row.condition} {row.criterion}" and not first["pending"]
+    document = Document(BytesIO(teacher_client.get(f"{base}/word").content))
+    assert row.behavior in document.tables[0].rows[TEACH_ROW].cells[0].text
 
 
 @pytest.mark.django_db

@@ -58,13 +58,27 @@ def _prep(preps, lesson, k):
 # ---- الحصص الـ48 ----
 
 
-def test_48_lesson_periods_pass_every_blocking_criterion(preps):
+def test_48_lesson_periods_pass_every_blocking_criterion_but_owner_approval(preps):
+    """ملفات الوحدات الثلاث مسودات: لا يحجب الحصص إلا اعتماد المالك (T2c)."""
     assert len(preps) == 48
     failures = {}
     for row in preps:
         for result in blocking_failures(row.checks):
             failures.setdefault((row.prep.lesson, row.prep.k), []).append(result)
-    assert failures == {}
+    assert len(failures) == 48
+    for (lesson, _), results in failures.items():
+        assert [(r.code, r.details) for r in results] == [
+            ("T2c", (f"الوحدة {lesson.split('.')[0]}: حالتها draft",))
+        ]
+
+
+def test_every_example_objective_comes_from_its_unit_file(preps):
+    for row in preps:
+        p = row.prep
+        assert {o.example for o in p.objectives} == {e.n for e in p.examples if not e.extension}
+        for o in p.objectives:
+            assert o.source == "authored" and all(o.parts) and o.behavior.split()[0] == o.verb
+        assert p.sources["objectives"] == ("authored" if p.objectives else "index")
 
 
 def test_every_core_example_sits_in_exactly_one_period(preps):
@@ -80,13 +94,13 @@ def test_every_core_example_sits_in_exactly_one_period(preps):
     assert placed["3.3"] == [3, 4, 5]  # المثالان 1 و2 إثرائيان
 
 
-def test_every_criterion_is_reported_and_texts_are_pending_not_failing(preps):
+def test_every_criterion_is_reported_and_draft_units_await_approval(preps):
     for row in preps:
         codes = [r.code for r in row.checks]
         assert set(codes) == BLOCKING | {"T9"} and len(codes) == len(set(codes))
         by = {r.code: r for r in row.checks}
-        assert by["T2c"].status == PENDING
-        assert by["T2"].status == (PASS if row.prep.is_last else PENDING)
+        assert by["T2c"].status == FAIL
+        assert by["T2"].status == PASS
         if not row.prep.is_last:
             assert by["T2b"].status in (PENDING, FAIL)
 
@@ -212,7 +226,7 @@ def test_t2b_fails_without_training_generator_or_clip(middle):
 
 
 def test_t2c_fails_on_a_draft_unit(middle):
-    assert t2c_approval(middle).status == PENDING
+    assert t2c_approval(replace(middle, unit_status=None)).status == PENDING
     _fails(t2c_approval(replace(middle, unit_status="draft")))
     assert t2c_approval(replace(middle, unit_status="approved")).status == PASS
 

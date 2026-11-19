@@ -12,6 +12,7 @@ from typing import Any
 
 from django.db import models
 
+from apps.knowledge.domain.prep_units import PrepUnitData
 from apps.knowledge.domain.sources import (
     CalendarData,
     CoverageData,
@@ -34,6 +35,8 @@ from .models import (
     PlanEnrichment,
     PlanEntry,
     PlanWeek,
+    PrepObjective,
+    PrepUnit,
     ResourceCoverage,
     SourceDocument,
     TermPlan,
@@ -148,6 +151,33 @@ def sync_past_exam(
     exam = _owned(PastExam, data.slug, course, wanted, changed, "past_exams")
     sync_slots(PastExamItem, {"exam": exam}, data.items, lessons, changed, "past_exam_items", extra=("dok",))
     return exam
+
+
+def sync_prep_unit(
+    data: PrepUnitData, course: Course, lessons: dict[str, Lesson], changed: Counter
+) -> PrepUnit:
+    """ملف تحضير الوحدة → `PrepUnit` وأهدافه: ينشئ ويحدّث بمفتاح (الدرس، المثال) ويحذف الهدف الذي غاب عن الملف."""
+    wanted = {"status": data.status, "approval": data.approval, "audience": data.audience}
+    unit = PrepUnit.objects.filter(course=course, unit=data.unit).first()
+    if unit is None:
+        unit = PrepUnit.objects.create(course=course, unit=data.unit, **wanted)
+        changed["prep_units"] += 1
+    elif _update(unit, wanted):
+        changed["prep_units"] += 1
+    current = {(row.lesson_id, row.example): row for row in unit.objectives.all()}
+    for item in data.objectives:
+        lesson = lessons[item.lesson]
+        fields = {"behavior": item.behavior, "condition": item.condition, "criterion": item.criterion}
+        row = current.pop((lesson.pk, item.example), None)
+        if row is None:
+            PrepObjective.objects.create(unit=unit, lesson=lesson, example=item.example, **fields)
+            changed["prep_objectives"] += 1
+        elif _update(row, fields):
+            changed["prep_objectives"] += 1
+    if current:
+        PrepObjective.objects.filter(pk__in=[row.pk for row in current.values()]).delete()
+        changed["prep_objectives"] += len(current)
+    return unit
 
 
 def sync_coverage(data: CoverageData, lessons: dict[str, Lesson], sources: dict, changed: Counter) -> None:
