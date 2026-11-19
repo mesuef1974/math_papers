@@ -377,16 +377,16 @@ def exam_sheet(doc, paper: dict, header: dict, duration: str, *, first: bool) ->
         )
         for item in essay:
             question(doc, item)
-    x.add_text(
-        x.new_paragraph(doc, align="center", before=6, after=0), "انتهت الأسئلة نرجو لكم التوفيق", size=11
-    )
+    x.add_text(x.new_paragraph(doc, align="center", before=6, after=0), CLOSING, size=11)
 
 
+CLOSING = "انتهت الأسئلة نرجو لكم التوفيق"
 WORKSHEET_INSTRUCTION = "أجب عن الأسئلة الآتية، ووضح خطوات الحل في المستطيل المخصص لكل سؤال:"
 
 
-def worksheet_sheet(doc, paper: dict, header: dict, *, first: bool) -> None:
-    """ورقة العمل: ترويسة القالب ثم تعليمتها وأسئلتها في الصفحة نفسها، بقسم وترقيم «صفحة n من N» لكل ورقة."""
+def worksheet_sheet(doc, paper: dict, header: dict, *, first: bool, last: bool = True) -> None:
+    """ورقة العمل: ترويسة القالب ثم تعليمتها وأسئلتها في الصفحة نفسها، بقسم وترقيم «صفحة n من N» لكل ورقة.
+    عبارة الختام بعد آخر ورقة وحدها (last)، فلا تتكرر في آخر كل ورقة من الحزمة."""
     if not first:
         doc.add_section(WD_SECTION.NEW_PAGE)
     _footer(doc.sections[-1])
@@ -395,9 +395,8 @@ def worksheet_sheet(doc, paper: dict, header: dict, *, first: bool) -> None:
     _instruction(doc, header["instructions"] or WORKSHEET_INSTRUCTION)
     for item in paper["questions"]:
         question(doc, item)
-    x.add_text(
-        x.new_paragraph(doc, align="center", before=6, after=0), "انتهت الأسئلة نرجو لكم التوفيق", size=11
-    )
+    if last:
+        x.add_text(x.new_paragraph(doc, align="center", before=6, after=0), CLOSING, size=11)
 
 
 def _footer(section) -> None:

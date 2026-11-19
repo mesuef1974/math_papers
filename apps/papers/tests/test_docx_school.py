@@ -179,6 +179,12 @@ def test_school_bundle_gives_each_worksheet_its_own_section_without_the_platform
     assert len(doc.sections) == len(sheets) == 2
     text = all_text(doc)
     assert "رقم الحزمة" not in text and all(s["title"] in text for s in sheets)
+    # عبارة الختام مرة واحدة بعد آخر ورقة، لا في آخر كل ورقة
+    # عناصر w:t لا itertext (يكرر نص الشوط في عناصر python-docx)
+    runs = [t.text or "" for t in doc.element.body.iter(f"{W}t")]
+    closing = [i for i, t in enumerate(runs) if t == school.CLOSING]
+    assert len(closing) == 1
+    assert closing[0] > max(i for i, t in enumerate(runs) if sheets[-1]["title"] in t)
     ids = Counter(pr.get("id") for pr in doc.element.body.iter(f"{WP}docPr"))
     assert max(ids.values()) == 1
 

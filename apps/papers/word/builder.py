@@ -1192,7 +1192,7 @@ def build_docx(payload: dict[str, Any]) -> bytes:
     if bundle and school_template:
         # الحزمة بقالب المدرسة: كل ورقة قسم بترويسة القالب وترقيمها، بلا غلاف «أوراق» وفهرسه
         for index, (paper, header) in enumerate(zip(papers, headers, strict=True)):
-            school.worksheet_sheet(doc, paper, header, first=index == 0)
+            school.worksheet_sheet(doc, paper, header, first=index == 0, last=index == len(papers) - 1)
     elif bundle:
         # الحزمة قسم واحد بتذييل واحد: غلاف بفهرس، ثم كل ورقة تبدأ صفحة جديدة
         _configure_section(doc.sections[0], BUNDLE_COVER_TITLE)
