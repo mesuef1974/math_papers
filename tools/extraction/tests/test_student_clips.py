@@ -137,6 +137,29 @@ def test_refine_survives_a_template_larger_than_the_page():
     assert score == -1.0 and widened and box == (0.0, 0.0, *PAGE)
 
 
+def test_refine_corrects_each_axis_scale_when_the_panel_aspect_is_off():
+    # اللوحة المقدَّرة أعرض من صفحة الطالب: المقياس الحقيقي 1.03 أفقيًا و0.98 رأسيًا، ولا مقياس موحَّد يطابقهما
+    predicted = (100.0, 200.0, 300.0, 500.0)  # 200×300
+    true = (104.0, 197.0, 104.0 + 200 * 1.03, 197.0 + 300 * 0.98)
+
+    def match(dpi, size, window):
+        x0, y0, x1, y1 = window or (0.0, 0.0, *PAGE)
+        if x1 - x0 < size[0] or y1 - y0 < size[1]:
+            return (-1.0, 0.0, 0.0)
+        x = min(max(true[0], x0), x1 - size[0])
+        y = min(max(true[1], y0), y1 - size[1])
+        miss = math.hypot(x - true[0], y - true[1]) / 50
+        stretch = abs(size[0] / 200 - 1.03) + abs(size[1] / 300 - 0.98)
+        return (1.0 - miss - stretch * 5, x, y)
+
+    box, score, _ = student_clips.refine(match, predicted, PAGE, SEARCH, 0.8)
+    assert score > 0.95
+    assert box == pytest.approx(true, abs=0.005 * 300 + 0.01)
+    # بلا تصحيح المحورين يبقى خطأ النسبة في الدرجة والصندوق
+    _, flat, _ = student_clips.refine(match, predicted, PAGE, {**SEARCH, "aspect": 0}, 0.8)
+    assert flat < score - 0.08
+
+
 def test_steps_are_inclusive_and_exact():
     assert student_clips.steps(0.85, 1.15, 0.02)[:2] == [0.85, 0.87]
     assert student_clips.steps(0.85, 1.15, 0.02)[-1] == 1.15
@@ -171,6 +194,57 @@ def test_estimate_offset_takes_the_best_mean_and_rejects_weak_or_absent():
         student_clips.estimate_offset(lambda c, o: None, samples, range(0, 5), 0.8)
 
 
+def test_estimate_offset_accepts_a_distinct_peak_below_the_threshold():
+    samples = [clip("1.1_m1_p28.png"), clip("3.5_m2_p274.png")]
+
+    def weak_peak(c, offset):  # الصفحة الصحيحة 0.55 والبقية 0.3: دون العتبة لكنها قمة منفردة
+        return 0.55 if offset == 8 else 0.3
+
+    with pytest.raises(student_clips.StudentClipsError, match="أفضل متوسط 0.55 عند 8"):
+        student_clips.estimate_offset(weak_peak, samples, range(-20, 61), 0.8)
+    assert student_clips.estimate_offset(weak_peak, samples, range(-20, 61), 0.8, 0.15) == (
+        8,
+        pytest.approx(0.55),
+    )
+    with pytest.raises(student_clips.StudentClipsError, match="page_offset"):  # قمتان متقاربتان: لا تميّز
+        student_clips.estimate_offset(
+            lambda c, o: 0.55 if o in (8, 9) else 0.3, samples, range(0, 41), 0.8, 0.15
+        )
+    with pytest.raises(student_clips.StudentClipsError, match="page_offset"):  # مرشّح وحيد لا يُقارَن بغيره
+        student_clips.estimate_offset(weak_peak, samples, range(8, 9), 0.8, 0.15)
+
+
+def test_pick_mode_takes_the_first_sound_representation_that_reaches_the_threshold():
+    samples = [clip("1.1_m1_p28.png"), clip("3.5_m2_p274.png")]
+    scores = {
+        "gray": (0.5, 0.2),  # يفصل الصفحة الصحيحة عن جاراتها لكنه دون العتبة
+        "blur": (0.9, 0.85),  # يبلغ العتبة في كل صفحة: لا يميّز
+        "binary": (0.86, 0.3),
+        "edges": (0.95, 0.3),
+    }
+
+    def score_at(mode, c, shift):
+        if shift == 2:
+            return None  # صفحة خارج الملف
+        return scores[mode][0 if shift == 0 else 1]
+
+    modes = list(scores)
+    mode, table = student_clips.pick_mode(score_at, modes, samples, range(-2, 3), 0.8, 0.2)
+    assert mode == "binary"  # أول سليم يبلغ العتبة، لا الأعلى درجة
+    assert table["blur"] == {"hit": 0.9, "miss": 0.85} and table["gray"] == {"hit": 0.5, "miss": 0.2}
+    assert student_clips.pick_mode(score_at, ["gray", "blur"], samples, range(-2, 3), 0.8, 0.2)[0] == "gray"
+    assert student_clips.pick_mode(score_at, ["blur"], samples, range(-2, 3), 0.8, 0.2)[0] == "blur"
+    with pytest.raises(student_clips.StudentClipsError, match="معايرة"):
+        student_clips.pick_mode(lambda m, c, s: None, modes, samples, range(-2, 3), 0.8, 0.2)
+
+
+def test_neighbor_pages_fill_only_between_consecutive_neighbors():
+    table = {176: 97, 178: 99, 224: 125, 227: 128, 240: 140, 242: 150}
+    filled = student_clips.neighbor_pages(table, [177, 178, 225, 226, 241, 20, 300])
+    # 241 بين جارتين غير متتابعتين، و20 و300 بلا جارة من جهة: تبقى غائبة
+    assert filled == {177: 98, 225: 126, 226: 127}
+
+
 def test_pick_samples_spreads_over_main_clips():
     names = [f"1.{i}_m1_p{20 + i}.png" for i in range(1, 8)] + ["1.2_m1_p23_cont.png"]
     clips = [clip(n) for n in sorted(names)]
@@ -183,12 +257,29 @@ def test_pick_samples_spreads_over_main_clips():
 def test_summary_counts_and_unreviewed():
     result = {
         "page_offset": 9,
+        "mode": "edges",
         "unmatched": ["x.png"],
         "clips": [
-            {"file": "a.png", "status": "ok", "score": 0.97, "kind": "vector", "dpi": 600},
-            {"file": "b.png", "status": "approved", "score": 0.71, "kind": "scan", "dpi": 300},
-            {"file": "c.png", "status": "review", "score": 0.42},
-            {"file": "d.png", "status": "missing"},
+            {
+                "file": "a.png",
+                "lesson": "1.1",
+                "page_shift": 0,
+                "status": "ok",
+                "score": 0.97,
+                "kind": "vector",
+                "dpi": 600,
+            },
+            {
+                "file": "b.png",
+                "lesson": "2.10",
+                "page_shift": 1,
+                "status": "approved",
+                "score": 0.71,
+                "kind": "scan",
+                "dpi": 300,
+            },
+            {"file": "c.png", "lesson": "2.3", "page_shift": -2, "status": "review", "score": 0.42},
+            {"file": "d.png", "lesson": "3.1", "status": "missing"},
         ],
     }
     assert student_clips.summarize(result) == {
@@ -199,6 +290,8 @@ def test_summary_counts_and_unreviewed():
         "min_dpi": 300,
         "kinds": {"vector": 1, "scan": 1},
         "page_offset": 9,
+        "mode": "edges",
+        "shifts": {"1": {"0": 1}, "2": {"1": 1}},  # المكتوب وحده: انزياح المطابقة الضعيفة لا يُعدّ
         "unmatched_names": 1,
     }
     assert student_clips.unreviewed(result) == ["c.png", "d.png"]
@@ -223,10 +316,16 @@ def test_config_errors():
     errs = student_clips.errors(
         {
             "student_pdf": {"dir": "d"},
-            "student_clips": {"threshold": 1.5, "page_offset": "9", "offsets": [5, 1], "approved": "x"},
+            "student_clips": {
+                "threshold": 1.5,
+                "page_offset": "9",
+                "offsets": [5, 1],
+                "modes": ["gray", "sepia"],
+                "approved": "x",
+            },
         }
     )
-    assert len(errs) == 5
+    assert len(errs) == 6
     assert student_clips.errors({"student_clips": 3}) == ["student_clips يجب أن يكون خريطة"]
 
 
@@ -400,6 +499,58 @@ def test_cv_matcher_finds_a_scaled_shifted_crop():
     assert student_clips.refine(other, predicted, PAGE, SEARCH, 0.8)[1] < 0.5  # محتوى آخر لا يطابق
 
 
+def _page_image(cv2, page_px):
+    def page_image(dpi):
+        k = dpi / 144
+        size = (round(page_px.shape[1] * k), round(page_px.shape[0] * k))
+        return cv2.resize(page_px, size, interpolation=cv2.INTER_AREA)
+
+    return page_image
+
+
+def test_cv_matcher_recovers_a_crop_stretched_on_one_axis():
+    np = pytest.importorskip("numpy")
+    cv2 = pytest.importorskip("cv2")
+    page_px = _texture(np, 1200, 1600, seed=3)
+    true = (150.0, 260.0, 390.0, 440.0)  # 240×180 نقطة
+    template = cv2.resize(page_px[520:880, 300:780], (700, 525), interpolation=cv2.INTER_CUBIC)
+    # المنقول أضيق 4% وأطول 3% من الحقيقي: نسبة اللوحة المقدَّرة تخالف صفحة الطالب
+    predicted = (145.0, 255.0, 145.0 + 240 / 1.04, 255.0 + 180 / 0.97)
+    match = student_clips.cv_matcher(_page_image(cv2, page_px), template)
+    box, score, _ = student_clips.refine(match, predicted, PAGE, SEARCH, 0.8)
+    assert score > 0.9
+    assert box == pytest.approx(true, abs=2.0)
+    flat, _, _ = student_clips.refine(match, predicted, PAGE, {**SEARCH, "aspect": 0}, 0.8)
+    assert abs((flat[3] - flat[1]) - 180.0) > 4.0  # المقياس الموحَّد يترك خطأ النسبة في الصندوق
+
+
+def test_cv_matcher_representations_survive_tone_and_polarity_differences():
+    np = pytest.importorskip("numpy")
+    cv2 = pytest.importorskip("cv2")
+    page_px = _texture(np, 1200, 1600, seed=4)
+    page_image = _page_image(cv2, page_px)
+    crop = cv2.resize(page_px[520:880, 300:780], (700, 525), interpolation=cv2.INTER_CUBIC)
+    size, window = (240.0, 180.0), (130.0, 240.0, 410.0, 460.0)
+
+    def score(template, mode):
+        found = student_clips.cv_matcher(page_image, template, mode)(144, size, window)
+        assert found[0] < 0.5 or (found[1], found[2]) == pytest.approx((150.0, 260.0), abs=1.0)
+        return found[0]
+
+    inverted = 255 - crop  # قطبية معكوسة: الرمادي ينقلب والحواف تبقى
+    assert score(inverted, "gray") < 0.3 and score(inverted, "edges") > 0.8
+    # تدرّج آخر: كل مستوى رمادي (لون في الأصل) يُحوَّل إلى مستوى مختلف، والحبر يبقى حبرًا والورق ورقًا
+    levels = np.random.default_rng(6).integers(0, 150, 256).astype(np.uint8)
+    levels[230:] = 255
+    recolored = levels[crop]
+    assert score(recolored, "binary") > score(recolored, "gray") and score(recolored, "binary") > 0.8
+    assert score(crop, "blur") > 0.9 and score(crop, "gray") > 0.9
+    other = _texture(np, 700, 525, seed=77)
+    assert max(score(other, mode) for mode in student_clips.MODES) < 0.5  # محتوى آخر لا يطابق بأي تمثيل
+    with pytest.raises(student_clips.StudentClipsError, match="تمثيل"):
+        student_clips.cv_matcher(page_image, crop, "sepia")(144, size, window)
+
+
 def test_stage_end_to_end_on_synthetic_pdfs(tmp_path):
     np = pytest.importorskip("numpy")
     cv2 = pytest.importorskip("cv2")
@@ -442,7 +593,8 @@ def test_stage_end_to_end_on_synthetic_pdfs(tmp_path):
         student_pdf={"dir": "books", "pattern": "student.pdf"},
         student_clips={"panel": {"min_width": 900, "max_x0": 100, "width": None}, "offsets": [0, 2]},
     )
-    (tmp_path / "printed_pages.json").write_text(json.dumps({"1": 1, "2": 2}), encoding="utf-8")
+    # صفحة الدليل 2 بلا رقم مطبوع في الجدول: يُقدَّر من جارتيها 1 و3
+    (tmp_path / "printed_pages.json").write_text(json.dumps({"1": 1, "3": 3}), encoding="utf-8")
     hires = tmp_path / "hires"
     hires.mkdir()
     guide = pymupdf.open(tmp_path / "guide.pdf")
@@ -455,7 +607,10 @@ def test_stage_end_to_end_on_synthetic_pdfs(tmp_path):
     assert main([str(tmp_path), "student_clips"]) == 0
     report = json.loads((tmp_path / "student_clips.json").read_text(encoding="utf-8"))
     assert report["page_offset"] == 2
+    assert report["mode"] == "gray" and report["calibration"]["gray"]["hit"] > 0.95
     first, second = report["clips"]
+    assert "page_source" not in first
+    assert (second["printed_page"], second["page_source"], second["status"]) == (2, "neighbors", "ok")
     assert (first["kind"], first["dpi"], first["student_page"]) == ("scan", 150, 3)
     assert (second["kind"], second["dpi"], second["student_page"]) == ("vector", 600, 4)
     assert min(first["score"], second["score"]) >= 0.8 and first["guide_score"] > 0.95
