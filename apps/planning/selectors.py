@@ -16,7 +16,7 @@ from django.db.models import Count, QuerySet
 from apps.assets.models import Asset
 from apps.assets.selectors import asset_bytes
 from apps.assets.storage import Storage
-from apps.curriculum.courses import GRADE10_SLUG
+from apps.curriculum.courses import GRADE10_SLUG, grade_label
 from apps.curriculum.models import Course
 from apps.curriculum.selectors import calendar_data, lessons, term_plan_data
 from apps.knowledge.domain.course_index import LessonIndex
@@ -31,6 +31,7 @@ from .domain.plan_periods import plan_periods as derive_plan_periods
 from .domain.prep import PeriodPrep, build_prep, lesson_examples, recall_for
 from .domain.prep import allocate as allocate_examples
 from .domain.prep_checks import CheckResult, check_lesson, check_prep
+from .domain.prep_sheet import PrepSheet, prep_sheet
 from .domain.semester_plan import (
     TermPlan,
     check_catalog,
@@ -287,3 +288,55 @@ def lesson_preps(course: str = PLAN_COURSE) -> tuple[PreparedPeriod, ...]:
         )
         out += [PreparedPeriod(period, prep, checks + lesson_checks) for period, prep, checks in built]
     return tuple(out)
+
+
+class PrepNotFoundError(LookupError):
+    """لا مقرر ولا حصة دروس بهذا الرمز في خطته الفصلية."""
+
+
+def _plan_course(course: str) -> Course:
+    found = Course.objects.filter(slug=course, term_plan__isnull=False).first()
+    if found is None:
+        raise PrepNotFoundError(f"لا خطة فصلية للمقرر {course}")
+    return found
+
+
+def prep_periods(course: str) -> list[dict]:
+    """حصص الدروس بترتيب الخطة مع حالة معاييرها: للتنقل في صفحة التحضير."""
+    found = _plan_course(course)
+    titles = dict(lessons(found).values_list("code", "title"))
+    out = []
+    for item in lesson_preps(course):
+        statuses = {c.status for c in item.checks if c.blocking}
+        out.append(
+            {
+                "lesson": item.prep.lesson,
+                "title": titles.get(item.prep.lesson, ""),
+                "unit": item.prep.unit,
+                "k": item.prep.k,
+                "n": item.prep.n,
+                "week": item.period.week,
+                "status": "fail" if "fail" in statuses else "pending" if "pending" in statuses else "pass",
+            }
+        )
+    return out
+
+
+def period_sheet(course: str, lesson: str, k: int) -> PrepSheet:
+    """ورقة تحضير حصة واحدة (الدرس ورقمها فيه) بنصوصها ومعاييرها."""
+    found = _plan_course(course)
+    item = next((p for p in lesson_preps(course) if p.prep.lesson == lesson and p.prep.k == k), None)
+    if item is None:
+        raise PrepNotFoundError(f"لا حصة {k} للدرس {lesson} في خطة {course}")
+    title = lessons(found).filter(code=lesson).values_list("title", flat=True).first() or ""
+    return prep_sheet(
+        item.prep,
+        item.checks,
+        {s.slug: s for s in load_library()},
+        lesson_title=title,
+        week=item.period.week,
+        number=item.period.number,
+        year=found.academic_year,
+        semester=found.semester,
+        grade=grade_label(found.grade, found.track),
+    )
