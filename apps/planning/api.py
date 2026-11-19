@@ -6,15 +6,21 @@
 - GET  /decks/download?course=&lesson=  ملف PPTX الجاهز
 - GET  /preps/<مقرر>                 حصص الدروس بترتيب الخطة وحالة معاييرها
 - GET  /preps/<مقرر>/<درس>/<k>       تحضير الحصة بنصوصه ومعاييره
-- GET  /preps/<مقرر>/<درس>/<k>/word  التحضير في Word بنموذج الوزارة
+- GET  /preps/<مقرر>/<درس>/<k>/word  التحضير في Word بنموذج الوزارة (بنسخة المعلم من أهدافه)
+- PUT  /preps/<مقرر>/<درس>/<k>/objectives/<مثال>  نسخة المعلم من شرط الهدف ومعياره، واقتراحها اختياريًا
+- DELETE /preps/<مقرر>/<درس>/<k>/objectives/<مثال>  استرجاع النص المعتمد
+- POST /preps/<مقرر>/<درس>/<k>/review  علامة «راجعتُ أهداف الحصة»
 """
 
 from __future__ import annotations
 
 import logging
+from contextlib import contextmanager
+from dataclasses import asdict
+from datetime import datetime
 
 from django.http import HttpRequest, HttpResponse
-from ninja import Query, Router, Schema
+from ninja import Field, Query, Router, Schema
 from ninja.errors import HttpError
 from ninja.throttling import UserRateThrottle
 
@@ -25,6 +31,7 @@ from apps.papers.access import TeacherAuth
 
 from . import selectors, services
 from .domain.deck import DeckError
+from .domain.objective_text import ObjectiveLockedError, ObjectiveNotFoundError, ObjectiveTextError
 from .domain.strategies import DEFAULT_PERIOD_MINUTES
 from .prep_word import DOCX_CONTENT_TYPE, prep_docx, prep_filename
 from .tasks import build_lesson_deck_task
@@ -133,10 +140,34 @@ class PrepPeriodOut(Schema):
     status: str
 
 
+class SharedObjectiveOut(Schema):
+    behavior: str
+    condition: str
+    criterion: str
+
+
+class MyObjectiveOut(Schema):
+    condition: str
+    criterion: str
+
+
+class SuggestionOut(Schema):
+    status: str  # pending | accepted | rejected | applied
+    condition: str
+    criterion: str
+    note: str
+    created_at: datetime
+
+
 class ObjectiveOut(Schema):
     example: int | None
     text: str
     pending: bool
+    shared: SharedObjectiveOut | None = None
+    mine: MyObjectiveOut | None = None
+    stale: bool = False
+    editable: bool = False
+    suggestion: SuggestionOut | None = None
     teach_activity: str
     teach_assessment: str
     teach_minutes: int
@@ -158,6 +189,11 @@ class CheckOut(Schema):
     status: str
     kind: str
     details: list[str]
+
+
+class ReviewOut(Schema):
+    reviewed_at: datetime
+    stale: bool
 
 
 class PrepOut(Schema):
@@ -188,13 +224,45 @@ class PrepOut(Schema):
     stages: list[StageOut]
     checks: list[CheckOut]
     pending: bool
+    review: ReviewOut | None = None
 
 
-def _sheet(course: str, lesson: str, k: int):
+class ObjectiveIn(Schema):
+    condition: str = Field(max_length=2000)
+    criterion: str = Field(max_length=2000)
+    suggest: bool = False
+    note: str | None = Field(default=None, max_length=2000)
+
+
+def _teacher_sheet(request: HttpRequest, course: str, lesson: str, k: int) -> selectors.TeacherSheet:
     try:
-        return selectors.period_sheet(course, lesson, k)
+        return selectors.teacher_sheet(course, lesson, k, request.user)
     except selectors.PrepNotFoundError as error:
         raise HttpError(404, str(error)) from error
+
+
+def _prep_out(view: selectors.TeacherSheet) -> dict:
+    """ورقة الحصة بنسخة المعلم، ولكل هدف حاله (المعتمد ونسخته وقِدمها واقتراحه)، وعلامة المراجعة."""
+    data = asdict(view.sheet)
+    data["pending"] = view.sheet.pending
+    for row in data["objectives"]:
+        state = view.objectives.get(row["example"])
+        if state is not None:
+            row.update(asdict(state))
+    data["review"] = view.review
+    return data
+
+
+@contextmanager
+def _objective_errors():
+    try:
+        yield
+    except (selectors.PrepNotFoundError, ObjectiveNotFoundError) as error:
+        raise HttpError(404, str(error)) from error
+    except ObjectiveLockedError as error:
+        raise HttpError(409, str(error)) from error
+    except ObjectiveTextError as error:
+        raise HttpError(422, str(error)) from error
 
 
 @router.get("preps/{course}", response=list[PrepPeriodOut])
@@ -207,12 +275,46 @@ def prep_periods(request: HttpRequest, course: str):
 
 @router.get("preps/{course}/{lesson}/{k}", response=PrepOut)
 def prep(request: HttpRequest, course: str, lesson: str, k: int):
-    return _sheet(course, lesson, k)
+    return _prep_out(_teacher_sheet(request, course, lesson, k))
+
+
+@router.put("preps/{course}/{lesson}/{k}/objectives/{example}", response=PrepOut)
+def save_objective(
+    request: HttpRequest, course: str, lesson: str, k: int, example: int, payload: ObjectiveIn
+):
+    with _objective_errors():
+        services.save_objective(
+            request.user,
+            course,
+            lesson,
+            k,
+            example,
+            condition=payload.condition,
+            criterion=payload.criterion,
+            suggest=payload.suggest,
+            note=payload.note,
+            request_id=request_id_of(request),
+        )
+    return _prep_out(_teacher_sheet(request, course, lesson, k))
+
+
+@router.delete("preps/{course}/{lesson}/{k}/objectives/{example}", response=PrepOut)
+def reset_objective(request: HttpRequest, course: str, lesson: str, k: int, example: int):
+    with _objective_errors():
+        services.reset_objective(request.user, course, lesson, k, example, request_id=request_id_of(request))
+    return _prep_out(_teacher_sheet(request, course, lesson, k))
+
+
+@router.post("preps/{course}/{lesson}/{k}/review", response=PrepOut)
+def review_prep(request: HttpRequest, course: str, lesson: str, k: int):
+    with _objective_errors():
+        services.mark_reviewed(request.user, course, lesson, k, request_id=request_id_of(request))
+    return _prep_out(_teacher_sheet(request, course, lesson, k))
 
 
 @router.get("preps/{course}/{lesson}/{k}/word")
 def prep_word(request: HttpRequest, course: str, lesson: str, k: int):
-    sheet = _sheet(course, lesson, k)
+    sheet = _teacher_sheet(request, course, lesson, k).sheet
     user = request.user
     data = prep_docx(sheet, teacher=user.get_full_name() or user.get_username())
     record_audit(

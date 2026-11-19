@@ -17,10 +17,42 @@ export interface PrepPeriod {
   status: CheckStatus;
 }
 
+// مراجعة المعلم لأهداف حصته: المعتمد من ملف الوحدة، ونسخته الشخصية (الشرط والمعيار)، وآخر اقتراح له.
+export interface SharedObjective {
+  behavior: string;
+  condition: string;
+  criterion: string;
+}
+
+export interface MyObjective {
+  condition: string;
+  criterion: string;
+}
+
+export type SuggestionStatus = "pending" | "accepted" | "rejected" | "applied";
+
+export interface ObjectiveSuggestion {
+  status: SuggestionStatus;
+  condition: string;
+  criterion: string;
+  note: string;
+  created_at: string;
+}
+
+export interface PrepReview {
+  reviewed_at: string;
+  stale: boolean;
+}
+
 export interface PrepObjective {
   example: number | null;
   text: string;
   pending: boolean;
+  shared?: SharedObjective | null;
+  mine?: MyObjective | null;
+  stale?: boolean;
+  editable?: boolean;
+  suggestion?: ObjectiveSuggestion | null;
   teach_activity: string;
   teach_assessment: string;
   teach_minutes: number;
@@ -72,12 +104,17 @@ export interface PrepSheet {
   stages: PrepStage[];
   checks: PrepCheck[];
   pending: boolean;
+  review?: PrepReview | null;
+}
+
+export function prepPath(lesson: string, k: number): string {
+  return `/preps/${PREP_COURSE}/${encodeURIComponent(lesson)}/${k}`;
 }
 
 export const periodKey = (p: { lesson: string; k: number }) => `${p.lesson}/${p.k}`;
 
 export function wordUrl(lesson: string, k: number): string {
-  return `${API_BASE}/preps/${PREP_COURSE}/${encodeURIComponent(lesson)}/${k}/word`;
+  return `${API_BASE}${prepPath(lesson, k)}/word`;
 }
 
 export const usePrepsStore = defineStore("preps", {
@@ -109,7 +146,7 @@ export const usePrepsStore = defineStore("preps", {
       this.opening = true;
       this.error = "";
       try {
-        this.sheet = await api.get<PrepSheet>(`/preps/${PREP_COURSE}/${encodeURIComponent(lesson)}/${k}`);
+        this.sheet = await api.get<PrepSheet>(prepPath(lesson, k));
       } catch (error) {
         this.sheet = null;
         this.error = accessMessage(error) ?? "تعذر فتح تحضير الحصة.";
