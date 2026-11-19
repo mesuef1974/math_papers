@@ -119,6 +119,53 @@ def test_latin_options_are_left_to_right_because_the_template_style_loses_its_di
     assert title.find(f"{W}pPr/{W}bidi") is not None
 
 
+def option_paragraphs(doc) -> dict[str, list]:
+    """فقرة قيمة كل بديل (الخلية الثانية في جدول البديل المتداخل) بنصها المكتوب."""
+    found: dict[str, list] = {}
+    for tbl in doc.element.body.iter(f"{W}tbl"):
+        if tbl.find(f"{W}tblPr/{W}tblBorders") is not None:
+            continue
+        rows = tbl.findall(f"{W}tr")
+        cells = rows[0].findall(f"{W}tc") if len(rows) == 1 else []
+        if len(cells) != 2 or "".join(t.text for t in cells[0].iter(f"{W}t")) not in set("ABCD"):
+            continue
+        paragraph = cells[1].find(f"{W}p")
+        # نص المعادلات في m:t
+        text = "".join(t.text or "" for t in paragraph.iter() if t.tag.endswith("}t")).strip()
+        found.setdefault(text, []).append(paragraph)
+    return found
+
+
+def test_arabic_options_read_right_to_left_and_latin_ones_left_to_right():
+    """«$4$ ساعات» في فقرة لاتينية كان يُقرأ «ساعات 4»: البديل الذي فيه كلام عربي فقرته عربية، والرياضي لاتينية."""
+    assert school.arabic_option("$4$ ساعات") and school.arabic_option("تطابق زاويتين (AA)")
+    assert not school.arabic_option("$x=-3\\pm\\sqrt{3}$") and not school.arabic_option("$]4,8[$")
+    options = option_paragraphs(Document(io.BytesIO(build_docx(two_forms()))))
+    arabic = [p for text, ps in options.items() if "ساعات" in text for p in ps]
+    latin = [p for text, ps in options.items() if text and not re.search("[؀-ۿ]", text) for p in ps]
+    assert arabic and latin
+    assert all(p.find(f"{W}pPr/{W}bidi") is not None for p in arabic)
+    assert all(p.find(f"{W}pPr/{W}bidi") is None for p in latin)
+
+
+def test_nested_option_tables_add_no_blank_lines():
+    """الجدول المتداخل كان بين فقرتين فارغتين بارتفاع سطر، فكان البديل ثلاثة أسطر وإطار السؤال نصف صفحة:
+    الخلية تبدأ بجدولها، والفقرة التي يشترطها Word بعده بارتفاع نقطة."""
+    doc = Document(io.BytesIO(build_docx(two_forms())))
+    nested = [tbl for tbl in doc.element.body.iter(f"{W}tbl") if tbl.getparent().tag == f"{W}tc"]
+    assert nested
+    for tbl in nested:
+        previous = tbl.getprevious()
+        assert previous is None or previous.tag != f"{W}p" or "".join(previous.itertext()).strip()
+        after = tbl.getnext()
+        spacing = after.find(f"{W}pPr/{W}spacing")
+        assert (
+            after.tag == f"{W}p"
+            and spacing.get(f"{W}lineRule") == "exact"
+            and spacing.get(f"{W}line") == "20"
+        )
+
+
 def test_cover_asset_is_the_template_cover_only():
     archive = zipfile.ZipFile(io.BytesIO(school.COVER))
     media = [name for name in archive.namelist() if name.startswith("word/media/")]

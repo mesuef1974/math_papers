@@ -548,8 +548,14 @@ def test_training_note_only_on_a_forecast_cover():
 
 def test_number_range_reads_left_to_right_in_arabic_text():
     title = isolate_number_ranges("اختبار نهاية الفصل الأول: العاشر، 2026-2027")
-    assert title == f"اختبار نهاية الفصل الأول: العاشر، {ooxml.LRM}2026-2027{ooxml.RLM}"
+    assert title == f"اختبار نهاية الفصل الأول: العاشر، {ooxml.LRM}2026{ooxml.NB_HYPHEN}2027{ooxml.RLM}"
+    # الشرطة غير القاطعة عنصر Word في تشغيل باتجاه ما حوله، فلا ينكسر العنوان بعد «2026-» ولا ينقلب المدى
+    paragraph = Document().add_paragraph()
+    ooxml.add_text(paragraph, title)
+    runs = paragraph._p.findall(f"{W}r")
+    assert [r.find(f"{W}noBreakHyphen") is not None for r in runs] == [False, True, False]
+    assert all(r.find(f"{W}rPr/{W}rtl") is not None for r in runs)
     # التذييل يضمّ العنوان المعزول ثم « – 10» (الصف): RLM تُنهي تشغيل اليسار إلى اليمين قبله فلا يُسحب الرقم إليه.
     footer = " – ".join((title, "10"))
-    assert footer.endswith(f"2026-2027{ooxml.RLM} – 10")
+    assert footer.endswith(f"2026{ooxml.NB_HYPHEN}2027{ooxml.RLM} – 10")
     assert isolate_number_ranges("الدرس 3.5") == "الدرس 3.5"
