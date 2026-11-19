@@ -229,6 +229,8 @@ def cover(doc, header: dict, paper: dict, duration: str, *, full: bool = True, p
 
 
 def _instruction(doc, text: str) -> None:
+    """مربع التعليمات يلحق بالسؤال الذي بعده (keepNext في صفه وفي الفاصل)، فلا تبقى تعليمات المقالي وحدها في صفحة
+    والسؤال 11 في التي تليها؛ وشريط السؤال يلحق بصف جزئه الأول، فالسلسلة تصل إلى نص السؤال."""
     table = x.make_table(doc, 1, [2.2, CONTENT_CM - 2.6], borders=None, align="right")
     x.set_row(table.rows[0])
     label, body = table.cell(0, 0), table.cell(0, 1)
@@ -236,7 +238,8 @@ def _instruction(doc, text: str) -> None:
     x.add_text(x.new_paragraph(label, align="center", after=0), "تعليمات", size=12, bold=True)
     x.set_cell(body, CONTENT_CM - 2.6)
     x.add_text(x.new_paragraph(body, after=0), text, size=11, bold=True)
-    x.spacer(doc, 6)
+    x.keep_row_with_next(table.rows[0])
+    x.spacer(doc, 6, keep_next=True)
 
 
 def _head(table, question: dict, widths: list[float]) -> None:

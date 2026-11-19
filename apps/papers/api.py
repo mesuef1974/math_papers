@@ -17,7 +17,7 @@ from apps.curriculum import selectors
 from . import pdf, services
 from . import selectors as paper_selectors
 from .access import TeacherAuth
-from .domain.book_source import source_label
+from .domain.book_source import source_cells, source_label
 from .domain.generators import ExhaustedError, available_lessons, lesson_levels
 from .domain.marking import marking
 from .models import SavedPaper
@@ -114,6 +114,10 @@ class PartOut(Schema):
     variant: str
     source: BookSourceOut | None = None  # الأوراق المحفوظة قبله بلا مصدر
     source_label: str = ""  # «ص 5، مثال 1»: مشتق من source دائمًا
+    # خلايا أعمدة المفتاح «الصفحة» و«المثال» و«التدريب»: مشتقة من source دائمًا كالنص، فلا تُقبل من العميل
+    source_page: str = ""
+    source_example: str = ""
+    source_exercises: str = ""
     fingerprint: str
     slot: SlotOut
 
@@ -124,7 +128,14 @@ class PartOut(Schema):
         ونص المصدر مشتق من أرقامه كذلك، فيطابق المفتاح على الشاشة وفي Word.
         """
         self.marking = [MarkItemOut(**item) for item in marking(self.slot.kind, self.steps, self.marks)]
-        self.source_label = source_label(self.source.model_dump() if self.source else None)
+        source = self.source.model_dump() if self.source else None
+        self.source_label = source_label(source)
+        cells = source_cells(source)
+        self.source_page, self.source_example, self.source_exercises = (
+            cells["page"],
+            cells["example"],
+            cells["exercises"],
+        )
         return self
 
 

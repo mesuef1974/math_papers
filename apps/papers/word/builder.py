@@ -18,6 +18,7 @@ from docx.oxml import parse_xml
 from docx.oxml.ns import nsdecls
 from docx.shared import Cm, Pt
 
+from ..domain.book_source import source_cells
 from . import ooxml as x
 from . import school
 from .graph_png import render_graph
@@ -839,11 +840,8 @@ def answer_sheet(doc, paper: dict, header: dict, *, answers: bool) -> None:
     )
 
 
-def source_lines(label: str) -> list[str]:
-    """«ص 26، مثال 1، تدريب 13، 20» في خلية ضيقة: سطر للصفحة وسطر للمثال وسطر للتدريبات."""
-    head, _, exercises = label.partition("، تدريب ")
-    lines = head.split("، ", 1)
-    return [*lines, f"تدريب {exercises}"] if exercises else lines
+# أعمدة مصدر الجزء في كتاب الطالب: المفتاح وعنوانه وعرضه بالسنتيمتر؛ العناوين نفسها في AnswerKey.vue
+SOURCE_COLUMNS = (("page", "الصفحة", 1.3), ("example", "المثال", 1.3), ("exercises", "التدريب", 2.2))
 
 
 def _mark_text(marks: float) -> str:
@@ -953,17 +951,15 @@ def key_pages(doc, paper: dict, header: dict, *, page_break: bool = True, headin
             bold=True,
         )
     # مع الدرجات: عمود لدرجة كل بند بعد الخطوات، وعمود لمجموع الجزء في آخر الجدول. ومع مصدر جزء واحد على الأقل
-    # عمود «المصدر في الكتاب» بعد الدرس (كما في AnswerKey.vue)، وعرضه من عمود الدرس وعمود الإجابة.
-    has_sources = any(
-        part.get("source_label") for question in paper["questions"] for part in question["parts"]
-    )
+    # أعمدة المصدر الثلاثة «الصفحة» و«المثال» و«التدريب» بعد الدرس (كما في AnswerKey.vue)، مشتقة من أرقام المصدر.
+    has_sources = any(part.get("source") for question in paper["questions"] for part in question["parts"])
     columns = [_KeyColumn("question", "السؤال", 1.7 if has_marks else 1.9)]
     columns.append(_KeyColumn("answer", "الإجابة والخطوات", 0.0, per_item=True))
     if has_marks:
         columns.append(_KeyColumn("mark", "الدرجة", 1.5, per_item=True))
     columns.append(_KeyColumn("lesson", "الدرس", 1.3 if has_sources else 3.1))
     if has_sources:
-        columns.append(_KeyColumn("source", "المصدر في الكتاب", 3.0))
+        columns.extend(_KeyColumn(key, head, width) for key, head, width in SOURCE_COLUMNS)
     columns.append(_KeyColumn("level", "المستوى", 1.7))
     if has_marks:
         columns.append(_KeyColumn("total", "المجموع", 1.7))
@@ -1040,10 +1036,10 @@ def key_pages(doc, paper: dict, header: dict, *, page_break: bool = True, headin
                     size=9,
                 )
                 if has_sources:
-                    for line in source_lines(part.get("source_label") or "—"):
+                    for key, text in source_cells(part.get("source")).items():
                         x.add_text(
-                            x.new_paragraph(cells[col["source"]], align="center", after=0),
-                            isolate_number_ranges(line),
+                            x.new_paragraph(cells[col[key]], align="center", after=0),
+                            isolate_number_ranges(text or "—"),
                             size=9,
                         )
                 x.add_text(
