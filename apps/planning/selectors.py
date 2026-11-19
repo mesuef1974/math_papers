@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 from collections.abc import Collection, Sequence
+from dataclasses import dataclass
 
 from django.contrib.auth.models import AbstractBaseUser
 from django.db.models import Count, QuerySet
@@ -27,6 +28,9 @@ from .domain.deck import Deck, ExampleClip, LessonContent, build_deck
 from .domain.feedback import ClassOutcome, Decision, decide
 from .domain.plan_periods import PlanPeriod
 from .domain.plan_periods import plan_periods as derive_plan_periods
+from .domain.prep import PeriodPrep, build_prep, lesson_examples, recall_for
+from .domain.prep import allocate as allocate_examples
+from .domain.prep_checks import CheckResult, check_lesson, check_prep
 from .domain.semester_plan import (
     TermPlan,
     check_catalog,
@@ -40,6 +44,7 @@ from .domain.strategies import (
     Flow,
     LessonProfile,
     build_flow,
+    load_library,
 )
 from .models import ClassOutcomeRecord, LessonRunRecord
 
@@ -202,3 +207,83 @@ def clips_of(assets: Sequence[Asset], storage: Storage | None = None) -> tuple[E
         )
         for a in assets
     )
+
+
+@dataclass(frozen=True)
+class PreparedPeriod:
+    """تحضير حصة من حصص الخطة مع نتائج معاييرها (معايير الحصة ثم معايير درسها)."""
+
+    period: PlanPeriod
+    prep: PeriodPrep
+    checks: tuple[CheckResult, ...]
+
+
+def _example_clips(course: str) -> dict[str, dict[int, int]] | None:
+    """عدد مقاطع كل مثال (الأصل وتتماته) من فهرس الأصول؛ None إن لم يُنشر للمقرر أصل بعد (فالمقطع معلَّق لا مفقود)."""
+    rows = Asset.objects.filter(course__slug=course, kind=Asset.Kind.EXAMPLE)
+    if not rows.exists():
+        return None
+    clips: dict[str, dict[int, int]] = {}
+    for code, number in rows.values_list("lesson__code", "number"):
+        clips.setdefault(code, {})
+        clips[code][number] = clips[code].get(number, 0) + 1
+    return clips
+
+
+def lesson_preps(course: str = PLAN_COURSE) -> tuple[PreparedPeriod, ...]:
+    """تحضير كل حصة دروس في الخطة الفصلية بترتيبها، مشتقًّا من الفهرس والخطة والمكتبة، مع معاييره T1 إلى T13."""
+    from apps.papers.domain.generators import SKILL_EXAMPLES
+
+    plan = term_plan(course)
+    periods = [p for p in plan_periods(course) if p.kind == "lesson"]
+    index = {lesson.lesson: lesson for lesson in course_index(course).lessons}
+    library = load_library()
+    by_slug = {s.slug: s for s in library}
+    clips = _example_clips(course)
+    generators: dict[str, set[int]] = {}
+    for (c, code, _), number in SKILL_EXAMPLES.items():
+        if c == course:
+            generators.setdefault(code, set()).add(number)
+
+    order = plan.lessons()
+    out: list[PreparedPeriod] = []
+    for position, code in enumerate(order):
+        lesson = index[code]
+        rows = [p for p in periods if p.lesson == code]
+        enrichment = plan.enrichment_examples.get(code, ())
+        examples = lesson_examples(
+            lesson,
+            course,
+            enrichment=enrichment,
+            generators=generators.get(code, ()),
+            clips=None if clips is None else clips.get(code, {}),
+        )
+        groups = allocate_examples([(e.n, e.weight) for e in examples], len(rows))
+        previous_lesson = order[position - 1] if position else None
+        built = []
+        for i, period in enumerate(rows):
+            after_break = i > 0 and (
+                rows[i - 1].week != period.week or rows[i - 1].number != period.number - 1
+            )
+            prep = build_prep(
+                course=course,
+                lesson=lesson,
+                examples=examples,
+                groups=groups,
+                k=period.k,
+                recall=recall_for(period.k, previous_lesson, after_break),
+                library=library,
+            )
+            checks = check_prep(
+                prep,
+                by_slug,
+                previous_lesson=previous_lesson,
+                after_break=after_break,
+                quiz_depths=lesson.quiz_depths,
+            )
+            built.append((period, prep, checks))
+        lesson_checks = check_lesson(
+            [p for _, p, _ in built], [e.n for e in examples], lesson.standards, enrichment
+        )
+        out += [PreparedPeriod(period, prep, checks + lesson_checks) for period, prep, checks in built]
+    return tuple(out)
