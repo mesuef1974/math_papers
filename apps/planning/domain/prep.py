@@ -8,10 +8,12 @@
 
 from __future__ import annotations
 
+import hashlib
 import itertools
+import json
 import re
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 
 from apps.knowledge.domain.course_index import LessonIndex
 from apps.knowledge.domain.unit_prep import AuthoredObjective
@@ -163,6 +165,18 @@ class PeriodPrep:
     @property
     def is_last(self) -> bool:
         return self.k == self.n
+
+
+def prep_digest(prep: PeriodPrep) -> str:
+    """تجزئة ثابتة لكل حقول التحضير (المجموعات مرتبة): تغيّر أي حقل يغيّرها فيُعلَّم عرضه قديمًا."""
+
+    def plain(value: object) -> object:
+        if isinstance(value, (set, frozenset)):
+            return sorted(value)
+        raise TypeError(type(value).__name__)
+
+    data = json.dumps(asdict(prep), default=plain, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(data.encode("utf-8")).hexdigest()
 
 
 def parse_ranges(text: str) -> frozenset[int]:

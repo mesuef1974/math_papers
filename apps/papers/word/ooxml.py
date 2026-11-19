@@ -18,6 +18,7 @@ from docx.table import _Cell
 from docx.text.paragraph import Paragraph
 from lxml import etree
 
+from ..domain.bidi import LRM, NB_HYPHEN, RLM  # noqa: F401 (يستعملها builder بـ x.LRM)
 from .omml import to_omml
 
 # خط الورقة الموحَّد مع الطباعة وPDF (frontend/src/styles/fonts.css): يُضمَّن في الملف فيظهر على أي جهاز
@@ -36,9 +37,7 @@ FONT_NATURAL_LINE = 1.703
 PRINT_LEADING = 1.6
 LINE_MULTIPLE = round(PRINT_LEADING / FONT_NATURAL_LINE, 3)
 SYMBOL_FONT = "Segoe UI Symbol"
-NB_HYPHEN = "‑"  # الشرطة غير القاطعة؛ add_text يكتبها عنصر w:noBreakHyphen
-LRM = "‎"
-RLM = "‏"
+# NB_HYPHEN (الشرطة غير القاطعة) يكتبها add_text عنصر w:noBreakHyphen
 # ألوان هوية «أوراق» على الورق: النص حبر أسود، والعنابي للعناوين والشارات والخطوط الرئيسة، والذهبي للتزيين
 INK = "000000"
 SOFT = "6F655C"

@@ -18,6 +18,7 @@ from docx.oxml import parse_xml
 from docx.oxml.ns import nsdecls
 from docx.shared import Cm, Pt
 
+from ..domain.bidi import isolate_number_ranges
 from ..domain.book_source import source_cells
 from . import ooxml as x
 from . import school
@@ -115,17 +116,6 @@ def split_math(text: str) -> list[tuple[bool, bool, str]]:
     if buffer:
         out.append((False, False, buffer))
     return out
-
-
-NUMBER_RANGE = re.compile(r"\d+(?:\s*[-–/]\s*\d+)+")
-
-
-def isolate_number_ranges(text: str) -> str:
-    """في فقرة عربية يقلب Word المدى «2026-2027» إلى «2027-2026» (الأرقام بعد حرف عربي أرقام عربية والشرطة لا تصلها)؛
-    علامة LRM قبله تجعله تشغيلًا من اليسار إلى اليمين، وRLM بعده تُنهيه فلا يُسحب إليه رقم يليه
-    (التذييل «العاشر، 2026-2027 – 10» كان يُقرأ «العاشر، 10 – 2026-2027»). نظير isolateNumberRanges في utils/bidi.ts."""
-    # والشرطة فيه غير قاطعة، فلا ينكسر العنوان الطويل بعد «2026-» ويبدأ السطر التالي بـ«2027»
-    return NUMBER_RANGE.sub(lambda match: f"{x.LRM}{match.group(0).replace('-', x.NB_HYPHEN)}{x.RLM}", text)
 
 
 def header_of(paper: dict, profile: dict, date: str, section: str, multi: bool) -> dict:
