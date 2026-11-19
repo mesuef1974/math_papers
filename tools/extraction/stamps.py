@@ -39,6 +39,8 @@ INPUTS: dict[str, dict[str, Any]] = {
         "after": ("lesson",),
         "pdf": False,
     },  # ومجلد سجلات الدروس ووجهة التحميل (انظر digest)
+    "printed_pages": {"dirs": ("ocr", "boxes"), "after": (), "pdf": False},
+    "exercise_links": {"dirs": ("vision",), "after": ("layout", "examples"), "pdf": False},
     "publish": {"dirs": (), "after": (), "pdf": False},  # ومجلد المقاطع (publish.clips) ووجهة التخزين
 }
 
