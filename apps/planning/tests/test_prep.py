@@ -45,6 +45,7 @@ from apps.planning.selectors import lesson_preps
 
 LIBRARY = {s.slug: s for s in load_library()}
 APPROVED_UNITS = {1}  # وحدات العاشر التي اعتمد المالك نصوصها (prep/unit-<n>.json)
+DRAFT_UNITS = {2, 3}  # وحدات كُتبت نصوصها ولم تُعتمد بعد: T2c يحجبها وحده
 
 
 @pytest.fixture
@@ -64,6 +65,8 @@ def test_48_lesson_periods_pass_every_blocking_criterion(preps):
     failures = {}
     for row in preps:
         for result in blocking_failures(row.checks):
+            if result.code == "T2c" and row.prep.unit in DRAFT_UNITS:
+                continue  # المسودة لا يرفع حجبها إلا اعتماد المالك
             failures.setdefault((row.prep.lesson, row.prep.k), []).append(result)
     assert failures == {}
 
@@ -86,9 +89,12 @@ def test_every_criterion_is_reported_and_texts_are_pending_not_failing(preps):
         codes = [r.code for r in row.checks]
         assert set(codes) == BLOCKING | {"T9"} and len(codes) == len(set(codes))
         by = {r.code: r for r in row.checks}
-        approved = row.prep.unit in APPROVED_UNITS
-        assert by["T2c"].status == (PASS if approved else PENDING)
-        assert by["T2"].status == (PASS if row.prep.is_last or approved else PENDING)
+        unit = row.prep.unit
+        written = unit in APPROVED_UNITS | DRAFT_UNITS
+        assert by["T2c"].status == (
+            PASS if unit in APPROVED_UNITS else FAIL if unit in DRAFT_UNITS else PENDING
+        )
+        assert by["T2"].status == (PASS if row.prep.is_last or written else PENDING)
         if not row.prep.is_last:
             assert by["T2b"].status in (PENDING, FAIL)
 
@@ -214,7 +220,7 @@ def test_t2b_fails_without_training_generator_or_clip(middle):
 
 
 def test_t2c_fails_on_a_draft_unit(middle):
-    assert t2c_approval(middle).status == PENDING
+    assert t2c_approval(replace(middle, unit_status=None)).status == PENDING
     _fails(t2c_approval(replace(middle, unit_status="draft")))
     assert t2c_approval(replace(middle, unit_status="approved")).status == PASS
 

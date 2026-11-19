@@ -97,12 +97,12 @@ def test_every_lesson_period_opens_and_downloads_in_the_ministry_template(teache
 
 @pytest.mark.django_db
 def test_unapproved_objectives_are_marked_pending_in_page_and_word(teacher_client):
-    base = f"{API}/{GRADE10_SLUG}/2.1/1"  # الوحدة 2 لم تُعتمد نصوصها بعد
+    base = f"{API}/{GRADE10_SLUG}/2.1/1"  # الوحدة 2 مسودة لم يعتمدها المالك بعد
     sheet = teacher_client.get(base).json()
     assert sheet["pending"] is True
     first = sheet["objectives"][0]
     assert first["pending"] and PENDING_MARK in first["text"] and f"مثال {first['example']}" in first["text"]
-    assert {c["code"]: c["status"] for c in sheet["checks"]}["T2c"] == "pending"
+    assert {c["code"]: c["status"] for c in sheet["checks"]}["T2c"] == "fail"
     document = Document(BytesIO(teacher_client.get(f"{base}/word").content))
     assert PENDING_MARK in document.tables[0].rows[TEACH_ROW].cells[0].text
 

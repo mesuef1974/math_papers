@@ -317,3 +317,40 @@ def test_docx_api_names_the_key_file_and_rejects_key_only_outside_the_school_tem
         "/api/v1/docx", json.dumps({**payload, "template": "awraq"}), content_type="application/json"
     )
     assert bad.status_code == 422
+
+
+def test_key_only_file_has_page_example_and_exercise_columns_from_the_source_itself():
+    """المفتاح المستقل بقالب المدرسة فيه أعمدة «الصفحة» و«المثال» و«التدريب» لكل سؤال، موضوعيًا كان أو مقاليًا،
+    مشتقة من أرقام المصدر في Word نفسه: الحمولة هنا بلا نص مشتق (source_label) ولا تغيب الأعمدة."""
+    payload = two_forms(key_only=True)
+    paper = payload["papers"][0]
+    assert all("source_label" not in p for q in paper["questions"] for p in q["parts"])
+    doc = Document(io.BytesIO(build_docx(payload)))
+    table = next(t for t in doc.tables if t.rows[0].cells[0].text == "السؤال")
+    heads = [c.text for c in table.rows[0].cells]
+    assert heads[3:7] == ["الدرس", "الصفحة", "المثال", "التدريب"]
+    rows = {}
+    for row in table.rows[1:]:
+        rows.setdefault(row.cells[0].text, tuple(re.sub("[‎‏]", "", row.cells[c].text) for c in (4, 5, 6)))
+    first = paper["questions"][0]["parts"][0]["source"]
+    assert rows["1"][:2] == (str(first["page"]), str(first["number"]))
+    assert len({key.split()[0] for key in rows}) == len(paper["questions"])
+    assert all(page.isdigit() and example.isdigit() for page, example, _ in rows.values())
+
+
+def _keeps_next(element) -> bool:
+    paragraphs = [element] if element.tag == f"{W}p" else list(element.iter(f"{W}p"))
+    return all(p.find(f"{W}pPr/{W}keepNext") is not None for p in paragraphs)
+
+
+def test_essay_instructions_stay_on_the_page_of_the_first_essay_question():
+    """تعليمات الأسئلة المقالية والسؤال 11 في صفحة واحدة: مربع التعليمات والفاصل بعده يلحقان بشريط السؤال،
+    والشريط يلحق بصف جزئه الأول. وكذلك تعليمات الموضوعي مع السؤال 1."""
+    doc = Document(io.BytesIO(build_docx(two_forms())))
+    body = list(doc.element.body)
+    for lead in ("عند الإجابة على الأسئلة من 11", "اختر الإجابة الصحيحة لكل من الأسئلة من 1 "):
+        index = next(i for i, e in enumerate(body) if e.tag == f"{W}tbl" and lead in "".join(e.itertext()))
+        box, gap, question = body[index], body[index + 1], body[index + 2]
+        assert _keeps_next(box) and _keeps_next(gap), lead
+        head = question.find(f"{W}tr")
+        assert "السؤال رقم" in "".join(head.itertext()) and _keeps_next(head), lead

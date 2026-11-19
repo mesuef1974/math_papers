@@ -73,24 +73,27 @@ describe("AnswerKey", () => {
     expect(rows.every((row) => row.findAll(".steps-cell").length === 1)).toBe(true);
   });
 
-  it("عمود «المصدر في الكتاب» بعد الدرس بنص الخادم، خلية واحدة للجزء تمتد على صفوف بنوده، و«—» لجزء بلا مصدر", () => {
+  it("أعمدة «الصفحة» و«المثال» و«التدريب» بعد الدرس بخلايا الخادم، تمتد على صفوف بنود الجزء، و«—» للمجهول", () => {
     const withSource = part({
       fingerprint: "a",
-      source: { kind: "example", number: 1, page: 5 },
-      source_label: "ص 5، مثال 1",
+      source: { kind: "example", number: 1, page: 5, exercises: [14, 15, 16] },
+      source_label: "ص 5، مثال 1، تدريب 14–16",
+      source_page: "5",
+      source_example: "1",
+      source_exercises: "14–16",
     });
     const wrapper = mount(AnswerKey, { props: { paper: paper([withSource, part({ fingerprint: "b" })]), header } });
-    expect(heads(wrapper)).toEqual(["السؤال", "الإجابة والخطوات", "الدرجة", "الدرس", "المصدر في الكتاب", "المستوى", "المجموع"]);
+    expect(heads(wrapper)).toEqual(["السؤال", "الإجابة والخطوات", "الدرجة", "الدرس", "الصفحة", "المثال", "التدريب", "المستوى", "المجموع"]);
     const cells = wrapper.findAll("td.source");
-    expect(cells.map((td) => td.text())).toEqual(["ص 5، مثال 1", "—"]);
+    expect(cells.map((td) => td.text().replace(/[⁦-⁩]/g, ""))).toEqual(["5", "1", "14–16", "—", "—", "—"]);
     expect(cells[0].attributes("rowspan")).toBe("2");
     const firstRow = wrapper.findAll(".key tbody tr")[0].findAll("th, td");
-    expect(firstRow[4].classes()).toContain("source");
+    expect(firstRow.slice(4, 7).every((td) => td.classes().includes("source"))).toBe(true);
   });
 
   it("لا عمود مصدر حين لا يُعرف مصدر أي جزء (الثاني عشر والأوراق المحفوظة قبله)", () => {
     const wrapper = mount(AnswerKey, { props: { paper: paper([part()]), header } });
-    expect(heads(wrapper)).not.toContain("المصدر في الكتاب");
+    expect(heads(wrapper)).not.toContain("الصفحة");
     expect(wrapper.find("td.source").exists()).toBe(false);
   });
 });

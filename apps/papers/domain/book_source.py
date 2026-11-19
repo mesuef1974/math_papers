@@ -36,6 +36,22 @@ def number_list(numbers: list[int]) -> str:
     return "، ".join(f"{run[0]}–{run[-1]}" if len(run) >= 3 else "، ".join(map(str, run)) for run in runs)
 
 
+def source_cells(source: Mapping[str, Any] | None) -> dict[str, str]:
+    """خلايا المصدر في أعمدة المفتاح الثلاثة «الصفحة» و«المثال» و«التدريب» (قرار المالك 2026-11-19)، مشتقة من
+    أرقام المصدر وحدها في الخادم وWord، فلا تغيب حين لا يصل نص مشتق مع الجزء. الخانة المجهولة فارغة لا مخترعة.
+    مصدر من نوع التدريب (لا مثال له) رقمه في عمود «التدريب»."""
+    if not source:
+        return {"page": "", "example": "", "exercises": ""}
+    page = str(source["page"]) if source.get("page") else ""
+    if source["kind"] == "practice":
+        return {"page": page, "example": "", "exercises": str(source["number"])}
+    return {
+        "page": page,
+        "example": str(source["number"]),
+        "exercises": number_list(source["exercises"]) if source.get("exercises") else "",
+    }
+
+
 def source_label(source: Mapping[str, Any] | None) -> str:
     if not source:
         return ""
