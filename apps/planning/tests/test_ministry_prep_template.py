@@ -13,7 +13,14 @@ PLAN = ROOT / "docs" / "lesson_prep_plan.md"
 
 # أجزاء وسم Microsoft 365 وSharePoint: تحمل معرّف المؤسسة ولا مكان لها في مستودع عام
 LABEL_PARTS = re.compile(r"^(docProps/custom\.xml|docMetadata/|customXml/(_rels/)?item(Props)?[2-9])")
-LABEL_MARKERS = (b"MSIP_Label", b"siteId", b"SiteId", b"ContentTypeId", b"classificationlabels", b"sharepoint")
+LABEL_MARKERS = (
+    b"MSIP_Label",
+    b"siteId",
+    b"SiteId",
+    b"ContentTypeId",
+    b"classificationlabels",
+    b"sharepoint",
+)
 
 
 def xml_parts(path: Path) -> dict[str, bytes]:
@@ -63,7 +70,9 @@ def test_template_package_has_no_dangling_parts(path):
         assert set(overrides) <= names
         for rels in (name for name in names if name.endswith(".rels")):
             base = Path(rels).parent.parent
-            for target, mode in re.findall(r'Target="([^"]+)"(?:[^>]*TargetMode="(\w+)")?', archive.read(rels).decode()):
+            for target, mode in re.findall(
+                r'Target="([^"]+)"(?:[^>]*TargetMode="(\w+)")?', archive.read(rels).decode()
+            ):
                 if mode != "External":
                     resolved = (Path("/") / base / target).resolve().as_posix()
                     assert re.sub(r"^[A-Za-z]:", "", resolved).lstrip("/") in names, (rels, target)
