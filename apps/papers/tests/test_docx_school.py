@@ -360,17 +360,21 @@ FORECAST = "g12-sci-s1-2026-27-forecast"
 
 
 def test_key_only_file_keeps_the_source_columns_for_every_course_even_without_sources():
-    """مفتاح قالب المدرسة بأعمدة «الصفحة» و«المثال» و«التدريب» لكل مقرر: صيغ الثاني عشر بلا مصدر بعد،
-    فتبقى الأعمدة وخاناتها «—» لا مخترعة (قرار المالك 2026-11-19)."""
+    """مفتاح قالب المدرسة بأعمدة «الصفحة» و«المثال» و«التدريب» لكل مقرر: صيغ الثاني عشر برقم مثالها وبلا صفحة
+    ولا تدريب بعد، فتبقى الأعمدة، والمثال رقمه، وخانتا الصفحة والتدريب «—» لا مخترعة (قرار المالك 2026-11-19)."""
     load_all()
     a = papers.build_exam(FORECAST, seed=7)
-    assert not any(p.get("source") for q in a["questions"] for p in q["parts"])
+    sources = [p.get("source") for q in a["questions"] for p in q["parts"]]
+    assert all(s and s["number"] for s in sources)
+    assert not any(s.get("page") or s.get("exercises") for s in sources)
     doc = Document(
         io.BytesIO(build_docx({"papers": [a], "profile": PROFILE, "template": "school", "key_only": True}))
     )
     table = next(t for t in doc.tables if t.rows[0].cells[0].text == "السؤال")
     assert [c.text for c in table.rows[0].cells][3:7] == ["الدرس", "الصفحة", "المثال", "التدريب"]
-    assert {table.rows[1].cells[c].text for c in (4, 5, 6)} == {"—"}
+    row = table.rows[1].cells
+    assert row[4].text == row[6].text == "—"
+    assert row[5].text.isdigit()
 
 
 def _has_keep(element) -> bool:
