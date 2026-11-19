@@ -537,11 +537,15 @@ class PdfIn(Schema):
     bundle: BundleIn | None = None
     # قالب Word: «awraq» إخراج الهوية، و«school» قالب المدرسة للاختبار وورقة العمل والحزمة؛ لا أثر له في PDF
     template: Literal["awraq", "school"] = "awraq"
+    # مفتاح الحل وحده في ملف Word مستقل بترويسة قالب المدرسة؛ ملف الأسئلة بقالب المدرسة لا يحمل المفتاح
+    key_only: bool = False
 
     @model_validator(mode="after")
     def forms_or_bundle(self):
         if self.bundle is None and len(self.papers) > MAX_FORMS:
             raise ValueError("أكثر من نموذجين دون حزمة")
+        if self.key_only and self.template != "school":
+            raise ValueError("المفتاح المستقل لقالب المدرسة وحده")
         return self
 
 
@@ -570,6 +574,8 @@ def docx_create(request: HttpRequest, payload: PdfIn):
 def _create_document(request: HttpRequest, payload: PdfIn, fmt: str):
     try:
         title = BUNDLE_TITLE if payload.bundle else payload.papers[0].title
+        if payload.key_only:
+            title = f"مفتاح الحل – {title}"
         meta = pdf.create_job(request.user.pk, payload.dict(), title, fmt)
     except pdf.UnavailableError as error:
         raise HttpError(503, str(error)) from error

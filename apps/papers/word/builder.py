@@ -893,10 +893,15 @@ class _KeyColumn:
     per_item: bool = False  # يتكرر لكل بند من توزيع الدرجة؛ غيره خلية للجزء تمتد على صفوف بنوده
 
 
-def key_pages(doc, paper: dict, header: dict, *, page_break: bool = True) -> None:
-    booklet = paper["kind"] == "exam"
-    title = f"{'دليل تقدير الدرجات' if booklet else 'مفتاح الحل'}: {header['title']}"
-    paper_header(doc, {**header, "title": title}, compact=True, page_break=page_break)
+def key_label(paper: dict) -> str:
+    return "دليل تقدير الدرجات" if paper["kind"] == "exam" else "مفتاح الحل"
+
+
+def key_pages(doc, paper: dict, header: dict, *, page_break: bool = True, heading: bool = True) -> None:
+    """المفتاح بترويسة «أوراق»، أو بلا ترويسة (heading=False) حين تسبقه ترويسة قالب المدرسة."""
+    if heading:
+        title = f"{key_label(paper)}: {header['title']}"
+        paper_header(doc, {**header, "title": title}, compact=True, page_break=page_break)
     mcq = [
         (q["number"], q["parts"][0].get("answer_index", -1))
         for q in paper["questions"]
@@ -1190,7 +1195,19 @@ def build_docx(payload: dict[str, Any]) -> bytes:
     headers = [
         header_of(p, profile, payload.get("date", ""), payload.get("section", ""), multi) for p in papers
     ]
-    if bundle and school_template:
+    if payload.get("key_only"):
+        # المفتاح وحده في ملف مستقل: لكل نموذج أو ورقة ترويسة قالب المدرسة ثم جداول المفتاح
+        for index, (paper, header) in enumerate(zip(papers, headers, strict=True)):
+            if school_template:
+                school.key_header(doc, paper, header, key_label(paper), first=index == 0)
+                key_pages(doc, paper, header, heading=False)
+            else:
+                if index == 0:
+                    _configure_section(doc.sections[0], "مفتاح الحل")
+                key_pages(doc, paper, header, page_break=bool(index))
+            if payload.get("bubble") and not bundle and any(q["kind"] == "mcq" for q in paper["questions"]):
+                answer_sheet(doc, paper, header, answers=True)
+    elif bundle and school_template:
         # الحزمة بقالب المدرسة: كل ورقة قسم بترويسة القالب وترقيمها، بلا غلاف «أوراق» وفهرسه
         for index, (paper, header) in enumerate(zip(papers, headers, strict=True)):
             school.worksheet_sheet(doc, paper, header, first=index == 0, last=index == len(papers) - 1)
@@ -1221,10 +1238,10 @@ def build_docx(payload: dict[str, Any]) -> bytes:
             sheet(doc, paper, header)
             if payload.get("bubble") and any(q["kind"] == "mcq" for q in paper["questions"]):
                 answer_sheet(doc, paper, header, answers=False)
-    if payload.get("show_key"):
+    # ملف الأسئلة بقالب المدرسة بلا مفتاح: المفتاح ملفه المستقل (key_only)
+    if payload.get("show_key") and not school_template and not payload.get("key_only"):
         section = doc.add_section(WD_SECTION.NEW_PAGE)
-        # في قالب المدرسة يبدأ ترقيم كل قسم من 1 (القسم الجديد يرث ذلك)، فالمجموع مجموع صفحات المفتاح
-        _configure_section(section, "مفتاح الحل", " SECTIONPAGES " if school_template else " NUMPAGES ")
+        _configure_section(section, "مفتاح الحل")
         for index, (paper, header) in enumerate(zip(papers, headers, strict=True)):
             # القسم الجديد يبدأ صفحة بنفسه؛ فاصل الصفحة قبل الترويسة لما بعد المفتاح الأول فقط
             key_pages(doc, paper, header, page_break=bool(index))

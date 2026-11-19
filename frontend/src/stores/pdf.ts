@@ -24,6 +24,7 @@ export interface PdfRequest {
   bubble: boolean;
   bundle?: { plan: BundleEntry[]; seed: number } | null; // حزمة كل أوراق العمل: غلاف بفهرس ثم الأوراق
   template?: "awraq" | "school"; // قالب Word: «school» قالب المدرسة للاختبار وورقة العمل والحزمة؛ لا أثر له في PDF
+  key_only?: boolean; // مفتاح الحل وحده في ملف Word مستقل بترويسة قالب المدرسة (ملف الأسئلة بالقالب بلا مفتاح)
 }
 
 export const POLL_MS = 1000;

@@ -170,9 +170,9 @@ function printPaper() {
   window.print();
 }
 
-function downloadServerFile(format: "pdf" | "docx", template: "awraq" | "school" = "awraq") {
+function downloadServerFile(format: "pdf" | "docx", template: "awraq" | "school" = "awraq", keyOnly = false) {
   if (!serverRequest.value) return;
-  void pdf.download({ ...serverRequest.value, template }, undefined, format);
+  void pdf.download({ ...serverRequest.value, template, key_only: keyOnly }, undefined, format);
 }
 </script>
 
@@ -307,6 +307,15 @@ function downloadServerFile(format: "pdf" | "docx", template: "awraq" | "school"
           @click="downloadServerFile('docx', 'school')"
         >
           {{ pdf.busy ? pdf.statusText : "Word بقالب المدرسة" }}
+        </button>
+        <button
+          v-if="schoolWord"
+          type="button"
+          class="btn btn-secondary"
+          :disabled="pdf.busy"
+          @click="downloadServerFile('docx', 'school', true)"
+        >
+          {{ pdf.busy ? pdf.statusText : "مفتاح الحل بقالب المدرسة" }}
         </button>
         <label v-if="store.paper || store.bundle" class="check">
           <input v-model="print.showKey" type="checkbox" /> {{ store.bundle ? "المفاتيح في آخر الحزمة" : "مفتاح الحل في صفحة أخيرة" }}
