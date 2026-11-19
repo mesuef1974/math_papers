@@ -40,6 +40,29 @@ python -m tools.extraction <مجلد الكتاب> all          # layout ثم im
 و`examples.max/jump`) وصفحات المراجعة. الاختياري: `practices` (`marker` و`names`) و`fusion` (`degenerate` و`name_tail` و`exercise_pattern`).
 المرحلة التي تعتمد `layout` تبنيه قبل حساب ختمها فلا يبطل الختم عند أول تشغيل.
 
+## الصفحات المطبوعة وربط التدريبات (`printed_pages.py`، `exercise_links.py`)
+
+مرحلتان خارج `all` (تُشغَّلان بالاسم) لكتاب تُكتب معرفته بصياغتنا بلا جدول «تحليل التمارين»، ومخرجهما أرقام فقط:
+
+- `printed_pages`: تكتب `printed_pages.json` في مجلد الكتاب (صفحة ملف الدليل → رقم صفحة الطالب المطبوعة المضمَّنة) من صناديق OCR:
+  `dirs.ocr/NNNN.json` (أزواج [نص، صندوق] أو مخرج PaddleOCR الخام) ثم `dirs.boxes/NNNN.json`، والصفحة المصيَّرة بلا صناديق تُقرأ الآن
+  (بيئة guide_extract). الرقم صندوق كله أرقام (خانة إلى ثلاث) مركزه في شريط التذييل. الإعداد `printed_pages` اختياري: `band` (كسور
+  [x0, y0, x1, y1] من مقاس الصفحة؛ الافتراضي أسفل 12%)، `size` ([عرض، ارتفاع]؛ وإلا أقصى امتداد للصناديق)، `fill` (سدّ صفحة بين
+  جارتين بإزاحة واحدة؛ الافتراضي true)، `skip` (صفحات تُهمل قراءتها)، `set` (صفحة ملف → رقم يثبّته المالك). تذييل فيه رقمان يُحسم
+  بالإزاحة الأشيع وإلا تُترك صفحته (`ambiguous` في الملخص). الجدول الذي لا يتزايد تمامًا أو فيه رقم خارج 1-999 يُرفض كله: رمز
+  الخروج 6، والرسالة أزواج صفحات الملف المخالفة، ولا يُكتب الملف ولا تُختم المرحلة. `build_course_index` و`write_book_numbers` يقرآنه.
+- `exercise_links`: تكتب `exercise_links.json`: لكل درس غلاف قيمته صفوف `{example, exercises, pages}`. القاعدة تجاور الأرقام في
+  الصفحة: تدريبات صفحة من صفحات الدرس (`exercises` في `dirs.vision/NNNN.json`) تُربط بكل مثال مقبول في `examples.json` يظهر رقمه في
+  الصفحة نفسها (`examples`)، وتدريبات صفحة بلا رقم مثال في `unlinked`، والصفحة التي فيها أكثر من مثال في `shared_pages`. أرقام
+  التدريبات بسقف `exercises.max` وسلسلة `exercises.jump` و`fusion.degenerate` كما في الدمج. تبني `examples` إن غاب ناتجها. الحالة
+  `review` دائمًا (و`missing` بلا أمثلة أو رؤية أو ربط) لأن الربط مستنتج؛ اعتماد المالك تصحيح في `corrections.yaml`
+  (`stage: exercise_links`، `path: [lessons, "2.1"]`، والقيمة قائمة الصفوف) فيصير الغلاف `teacher/ok`.
+
+كتابة الأرقام في المستودع بأمر إدارة لا بالخط: `python manage.py write_book_numbers <مقرر> --source <مجلد الكتاب>` يضيف إلى
+`lessons/lesson_*.json` حقل `page` لكل مثال (صفحة بدئه في `examples.json` عبر `printed_pages.json`) و`exercise_groups` من روابط الدروس
+المعتمدة `ok` وحدها (`--include-review` يكتب غير المراجَع)، وعمق المجموعة من مستوى قالب التمرين (K=1، A=2، R=3، و2 إن غاب).
+idempotent ولا يمسّ حقلًا آخر؛ راجع `git diff` بعده ثم `load_course`.
+
 ## سجل الدرس والمفردات والانحدار (`lesson.py`، `vocabulary.py`، `regression.py`)
 
 مرحلة `lesson` (آخر `all`): تجمع لكل درس `lessons/lesson_X_Y.json` (`dirs.lessons`، افتراضًا `lessons` في مجلد الكتاب) من layout وobjectives

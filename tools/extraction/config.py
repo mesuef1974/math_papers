@@ -186,6 +186,8 @@ class Book:
             "lesson": "lessons.json",
             "load": "load.json",
             "publish": "publish.json",
+            "printed_pages": "printed_pages.json",
+            "exercise_links": "exercise_links.json",
         }
         outputs = self.cfg.get("outputs", {})
         # generic_<اسم> يتقدم على <اسم> حين يشترك الكتاب مع أدوات قديمة في الملف نفسه بصيغة مختلفة

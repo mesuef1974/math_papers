@@ -4,7 +4,7 @@
 الاستخراج. التصحيح الذي لم يعد يصيب شيئًا (مسار زال، أو قيمة سابقة `expect` تغيّرت) خطأ صريح لا تجاهل صامت، فلا تتعفّن
 التصحيحات. المخرج يحمل `corrections` بما طُبِّق (المسار وقيمته قبل وبعد وسببه) للمراجعة.
 
-    - stage: examples                 # layout أو objectives أو examples أو checks
+    - stage: examples                 # layout أو objectives أو examples أو checks أو exercise_links
       path: [lessons, "2.1", value, 2, representations]   # أرقام = فهرس قائمة، نصوص = مفاتيح (رمز الدرس فيه نقطة فيبقى نصًّا)
       value: [جبري, جدول]
       expect: [جبري]                  # اختياري: القيمة المتوقعة قبل التصحيح؛ غيرها = تصحيح قديم
@@ -25,7 +25,7 @@ from .config import Book
 
 FILE = "corrections.yaml"
 MIN_REASON = 8
-STAGES = ("layout", "objectives", "examples", "checks")
+STAGES = ("layout", "objectives", "examples", "checks", "exercise_links")
 ENVELOPE = {"value", "source", "status"}
 
 
