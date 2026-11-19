@@ -4,14 +4,16 @@ import re
 
 import pytest
 
-from apps.curriculum.courses import GRADE10_SLUG
+from apps.curriculum.courses import GRADE10_SLUG, GRADE12_SLUG
+from apps.knowledge.domain.contract import read_source
 from apps.knowledge.selectors import course_index
 from apps.papers import services
 from apps.papers.api import PartOut
 from apps.papers.domain.book_source import book_source, source_cells, source_label
-from apps.papers.domain.generators import SKILL_EXAMPLES, skill_example
+from apps.papers.domain.generators import REGISTRY, SKILL_EXAMPLES, out_of_scope, skill_example
 
 FINAL = "g10-s1-2026-27-final"
+G12_FORECAST = "g12-sci-s1-2026-27-forecast"
 LABEL = re.compile(r"^ص \d{1,3}، مثال \d{1,2}(، تدريب \d+(?:–\d+)?(?:، \d+(?:–\d+)?)*)?$")
 
 
@@ -60,12 +62,33 @@ def test_every_part_of_the_grade10_exam_carries_its_book_source(form):
         assert LABEL.match(label) and re.search(f"مثال {number}(،|$)", label), label
 
 
+def test_every_grade12_variant_declares_an_example_of_its_lesson_outside_enrichment():
+    """صيغ الثاني عشر كلها برقم مثال من أمثلة درسها في دروس المعرفة، ولا مثال إثرائي ولا درس إثرائي."""
+    plan = read_source(GRADE12_SLUG).term_plan.to_domain(1)
+    assert out_of_scope(GRADE12_SLUG, plan.enrichment_lessons, plan.enrichment_examples) == []
+    examples = {
+        lesson.lesson: {e.number for e in lesson.examples} for lesson in read_source(GRADE12_SLUG).profiles
+    }
+    declared = {key: n for key, n in SKILL_EXAMPLES.items() if key[0] == GRADE12_SLUG}
+    assert len(declared) == sum(len(fns) for (course, _), fns in REGISTRY.items() if course == GRADE12_SLUG)
+    for (_, lesson, name), number in declared.items():
+        assert number in examples[lesson], (lesson, name, number)
+
+
 @pytest.mark.usefixtures("loaded_courses")
-def test_grade12_parts_have_no_book_source():
-    paper = services.build_worksheet("3.1", 4, 5)
-    for part in (p for q in paper["questions"] for p in q["parts"]):
-        assert "source" not in part  # لا مفتاح: الورقة كما كانت قبل المصدر
-        assert PartOut.model_validate(part).source_label == ""
+@pytest.mark.parametrize("form", ["A", "B"])
+def test_every_part_of_the_grade12_exam_carries_its_book_source(form):
+    """مصدر الثاني عشر رقم المثال، وصفحته وتدريباته من الجداول حين تُحمَّل (فارغة إلى أن تُستخرج)."""
+    paper = services.build_exam(G12_FORECAST, 7, form)
+    parts = [part for question in paper["questions"] for part in question["parts"]]
+    assert parts
+    for part in parts:
+        number = skill_example(GRADE12_SLUG, part["lesson"], part["variant"])
+        assert number is not None, part["variant"]
+        assert part["source"]["kind"] == "example" and part["source"]["number"] == number
+        out = PartOut.model_validate(part)
+        assert out.source_example == str(number)  # عمود «المثال» في المفتاح
+        assert re.search(f"مثال {number}(،|$)", out.source_label), out.source_label
 
 
 @pytest.mark.usefixtures("loaded_courses")

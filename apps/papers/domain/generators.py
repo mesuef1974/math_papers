@@ -286,7 +286,7 @@ def cubic_with_critical_points(rng: random.Random) -> tuple[sp.Expr, int, int, i
 
 
 # الوحدة الأولى: النهايات والاتصال
-@variant("1.1")
+@variant("1.1", example=2)
 def limit_from_piecewise(rng: random.Random) -> Problem:
     c, value = rng.randint(-3, 4), rng.randint(-5, 8)
     a = nz(rng, -3, 4)
@@ -309,7 +309,7 @@ def limit_from_piecewise(rng: random.Random) -> Problem:
     )
 
 
-@variant("1.1")
+@variant("1.1", example=3)
 def limit_from_graph(rng: random.Random) -> Problem:
     """قراءة نهاية من رسم دالة مقسمة: نقطتان مفتوحتان عند c، وقيمة f(c) نقطة مغلقة أو غير معرفة."""
     c = rng.randint(-2, 2)
@@ -382,7 +382,7 @@ def limit_from_graph(rng: random.Random) -> Problem:
     )
 
 
-@variant("1.2")
+@variant("1.2", example=3)
 def limit_by_factoring(rng: random.Random) -> Problem:
     a = nz(rng, -4, 5)
     b = rng.randint(-5, 5)
@@ -404,7 +404,7 @@ def limit_by_factoring(rng: random.Random) -> Problem:
     )
 
 
-@variant("1.2")
+@variant("1.2", example=4)
 def limit_by_conjugate(rng: random.Random) -> Problem:
     p, k = rng.randint(2, 7), rng.randint(1, 4)
     expr = (sp.sqrt(k * x + p**2) - p) / x
@@ -427,7 +427,7 @@ def limit_by_conjugate(rng: random.Random) -> Problem:
     )
 
 
-@variant("1.2")
+@variant("1.2", example=6)
 def limit_at_infinity(rng: random.Random) -> Problem:
     a, c = rng.randint(2, 9), rng.randint(2, 9)
     b, d = nz(rng, -6, 6), nz(rng, -6, 6)
@@ -444,7 +444,7 @@ def limit_at_infinity(rng: random.Random) -> Problem:
     )
 
 
-@variant("1.3")
+@variant("1.3", example=2)
 def limit_sine_ratio(rng: random.Random) -> Problem:
     a, b = rng.sample(range(2, 10), 2)
     value = sp.Rational(a, b)
@@ -462,7 +462,7 @@ def limit_sine_ratio(rng: random.Random) -> Problem:
     )
 
 
-@variant("1.3")
+@variant("1.3", example=4)
 def limit_tan_over_sin(rng: random.Random) -> Problem:
     a, b = rng.sample(range(2, 10), 2)
     value = sp.Rational(a, b)
@@ -480,7 +480,7 @@ def limit_tan_over_sin(rng: random.Random) -> Problem:
     )
 
 
-@variant("1.3")
+@variant("1.3", example=3)
 def limit_one_minus_cosine(rng: random.Random) -> Problem:
     a, b = rng.randint(2, 9), rng.randint(1, 4)
     value = sp.Rational(a * a, 2 * b)
@@ -500,7 +500,7 @@ def limit_one_minus_cosine(rng: random.Random) -> Problem:
     )
 
 
-@variant("1.4")
+@variant("1.4", example=2)
 def continuity_constant(rng: random.Random) -> Problem:
     c, k, d = nz(rng, -3, 3), nz(rng, -5, 6), rng.randint(-4, 6)
     b = c * c + d - k * c
@@ -523,7 +523,7 @@ def continuity_constant(rng: random.Random) -> Problem:
 
 
 # الوحدة الثانية: الاشتقاق
-@variant("2.1")
+@variant("2.1", example=1)
 def average_rate(rng: random.Random) -> Problem:
     p, q, r = nz(rng, -3, 4), rng.randint(-5, 6), rng.randint(-4, 6)
     a = rng.randint(-2, 3)
@@ -542,7 +542,7 @@ def average_rate(rng: random.Random) -> Problem:
     )
 
 
-@variant("2.1")
+@variant("2.1", example=3)
 def instantaneous_velocity(rng: random.Random) -> Problem:
     p, q, t0 = rng.randint(2, 6), rng.randint(1, 9), rng.randint(1, 5)
     f = p * x**2 + q * x
@@ -560,7 +560,7 @@ def instantaneous_velocity(rng: random.Random) -> Problem:
     )
 
 
-@variant("2.2")
+@variant("2.2", example=1)
 def derivative_as_limit_h(rng: random.Random) -> Problem:
     p, q, a = nz(rng, -3, 4), rng.randint(-5, 6), rng.randint(-3, 4)
     f = p * x**2 + q * x
@@ -577,7 +577,7 @@ def derivative_as_limit_h(rng: random.Random) -> Problem:
     )
 
 
-@variant("2.2")
+@variant("2.2", example=1)
 def derivative_as_limit_x(rng: random.Random) -> Problem:
     p, a = rng.randint(1, 4), nz(rng, -3, 3)
     f = p * x**3
@@ -594,7 +594,7 @@ def derivative_as_limit_x(rng: random.Random) -> Problem:
     )
 
 
-@variant("2.3")
+@variant("2.3", example=2)
 def power_rule_with_root(rng: random.Random) -> Problem:
     a, b = nz(rng, -3, 4), nz(rng, -6, 6)
     c = rng.choice([2, 4, 6, -2, -4])
@@ -617,7 +617,7 @@ def power_rule_with_root(rng: random.Random) -> Problem:
     )
 
 
-@variant("2.3")
+@variant("2.3", example=3)
 def power_rule_negative_exponent(rng: random.Random) -> Problem:
     a, b, c = nz(rng, -3, 4), nz(rng, -5, 5), rng.randint(-6, 6)
     x0 = rng.choice([-2, -1, 1, 2])
@@ -635,7 +635,7 @@ def power_rule_negative_exponent(rng: random.Random) -> Problem:
     )
 
 
-@variant("2.4")
+@variant("2.4", example=1)
 def product_rule(rng: random.Random) -> Problem:
     a, b, c = nz(rng, -3, 4), nz(rng, -5, 5), nz(rng, -5, 6)
     x0 = rng.randint(-2, 3)
@@ -656,7 +656,7 @@ def product_rule(rng: random.Random) -> Problem:
     )
 
 
-@variant("2.4")
+@variant("2.4", example=3)
 def quotient_rule(rng: random.Random) -> Problem:
     a, c = nz(rng, -4, 5), nz(rng, -3, 4)
     b = rng.randint(-5, 5)
@@ -680,7 +680,7 @@ def quotient_rule(rng: random.Random) -> Problem:
     )
 
 
-@variant("2.5")
+@variant("2.5", example=2)
 def chain_power(rng: random.Random) -> Problem:
     a, b = nz(rng, -2, 3), nz(rng, -3, 4)
     n, x0 = rng.randint(2, 4), rng.choice([-1, 1, 2])
@@ -701,7 +701,7 @@ def chain_power(rng: random.Random) -> Problem:
     )
 
 
-@variant("2.5")
+@variant("2.5", example=2)
 def chain_root(rng: random.Random) -> Problem:
     a, root = rng.randint(1, 6), rng.randint(2, 6)
     x0 = rng.randint(1, 5)
@@ -719,7 +719,7 @@ def chain_root(rng: random.Random) -> Problem:
     )
 
 
-@variant("2.6")
+@variant("2.6", example=4)
 def derivative_log_quadratic(rng: random.Random) -> Problem:
     a, b = rng.randint(1, 6), rng.randint(1, 9)
     inner = a * x**2 + b
@@ -735,7 +735,7 @@ def derivative_log_quadratic(rng: random.Random) -> Problem:
     )
 
 
-@variant("2.6")
+@variant("2.6", example=2)
 def derivative_x_exponential(rng: random.Random) -> Problem:
     a, k = nz(rng, -4, 5), nz(rng, -3, 3)
     e = sp.exp(a * x)
@@ -754,7 +754,7 @@ def derivative_x_exponential(rng: random.Random) -> Problem:
     )
 
 
-@variant("2.6")
+@variant("2.6", example=4)
 def derivative_power_log(rng: random.Random) -> Problem:
     n, k = rng.randint(2, 5), nz(rng, -3, 3)
     f = k * x**n * sp.log(x)
@@ -770,7 +770,7 @@ def derivative_power_log(rng: random.Random) -> Problem:
     )
 
 
-@variant("2.7")
+@variant("2.7", example=1)
 def derivative_sine_cosine(rng: random.Random) -> Problem:
     a, b, n = nz(rng, -4, 5), nz(rng, -4, 5), rng.randint(2, 5)
     s, c = sp.sin(n * x), sp.cos(n * x)
@@ -786,7 +786,7 @@ def derivative_sine_cosine(rng: random.Random) -> Problem:
     )
 
 
-@variant("2.7")
+@variant("2.7", example=4)
 def derivative_tangent(rng: random.Random) -> Problem:
     n, k = rng.randint(2, 6), nz(rng, -4, 4)
     f, d = k * sp.tan(n * x), k * n * sp.sec(n * x) ** 2
@@ -801,7 +801,7 @@ def derivative_tangent(rng: random.Random) -> Problem:
     )
 
 
-@variant("2.7")
+@variant("2.7", example=5)
 def derivative_x_sine(rng: random.Random) -> Problem:
     n, k = rng.randint(2, 5), nz(rng, -3, 3)
     s, c = sp.sin(n * x), sp.cos(n * x)
@@ -817,7 +817,7 @@ def derivative_x_sine(rng: random.Random) -> Problem:
     )
 
 
-@variant("2.8")
+@variant("2.8", example=1)
 def implicit_circle(rng: random.Random) -> Problem:
     p, q, r = rng.choice([(3, 4, 5), (4, 3, 5), (6, 8, 10), (8, 6, 10), (5, 12, 13), (12, 5, 13)])
     p, q = p * rng.choice([1, -1]), q * rng.choice([1, -1])
@@ -833,7 +833,7 @@ def implicit_circle(rng: random.Random) -> Problem:
     )
 
 
-@variant("2.8")
+@variant("2.8", example=2)
 def implicit_mixed_term(rng: random.Random) -> Problem:
     a = rng.choice([1, 3])  # المعامل 2 يجعل المنحنى مربعًا كاملًا، أي مستقيمين
     p = nz(rng, -3, 3)
@@ -856,7 +856,7 @@ def implicit_mixed_term(rng: random.Random) -> Problem:
     )
 
 
-@variant("2.9")
+@variant("2.9", example=2)
 def second_derivative_polynomial(rng: random.Random) -> Problem:
     a, b, c = nz(rng, -3, 3), nz(rng, -4, 5), rng.randint(-6, 6)
     x0 = rng.randint(-2, 2)
@@ -874,7 +874,7 @@ def second_derivative_polynomial(rng: random.Random) -> Problem:
     )
 
 
-@variant("2.9")
+@variant("2.9", example=1)
 def third_derivative_exponential(rng: random.Random) -> Problem:
     a, k = rng.choice([-3, -2, 2, 3, 4]), nz(rng, -3, 3)
     f = k * sp.exp(a * x)
@@ -890,7 +890,7 @@ def third_derivative_exponential(rng: random.Random) -> Problem:
     )
 
 
-@variant("2.9")
+@variant("2.9", example=3)
 def second_derivative_sine(rng: random.Random) -> Problem:
     n, k = rng.randint(2, 6), nz(rng, -4, 4)
     f = k * sp.sin(n * x)
@@ -907,7 +907,7 @@ def second_derivative_sine(rng: random.Random) -> Problem:
 
 
 # الوحدة الثالثة: تطبيقات الاشتقاق
-@variant("3.1")
+@variant("3.1", example=2)
 def monotonic_intervals(rng: random.Random) -> Problem:
     f, p, q, sign = cubic_with_critical_points(rng)
     ask_increasing = rng.choice([True, False])
@@ -938,7 +938,7 @@ def monotonic_intervals(rng: random.Random) -> Problem:
     )
 
 
-@variant("3.2")
+@variant("3.2", example=2)
 def local_extremum(rng: random.Random) -> Problem:
     f, p, q, sign = cubic_with_critical_points(rng)
     want_max = rng.choice([True, False])
@@ -961,7 +961,7 @@ def local_extremum(rng: random.Random) -> Problem:
     )
 
 
-@variant("3.2")
+@variant("3.2", example=5)
 def absolute_extremum(rng: random.Random) -> Problem:
     f, p, q, _sign = cubic_with_critical_points(rng)
     low, high = p - 1, q + 1
@@ -992,7 +992,7 @@ def inflection_cubic(rng: random.Random) -> tuple[sp.Expr, int, int]:
     return sign * (x**3 - 3 * t * x**2) + c * x + d, t, sign
 
 
-@variant("3.3")
+@variant("3.3", example=3)
 def inflection_point(rng: random.Random) -> Problem:
     f, t, _sign = inflection_cubic(rng)
     value = f.subs(x, t)
@@ -1019,7 +1019,7 @@ def inflection_point(rng: random.Random) -> Problem:
     )
 
 
-@variant("3.3")
+@variant("3.3", example=3)
 def concavity_interval(rng: random.Random) -> Problem:
     f, t, sign = inflection_cubic(rng)
     up = rng.choice([True, False])
@@ -1038,7 +1038,7 @@ def concavity_interval(rng: random.Random) -> Problem:
     )
 
 
-@variant("3.3")
+@variant("3.3", example=3)
 def full_concavity_study(rng: random.Random) -> Problem:
     f, t, sign = inflection_cubic(rng)
     value = f.subs(x, t)
@@ -1061,7 +1061,7 @@ def with_unit(value: Any, unit: str) -> str:
     return f"${tex(value)}$ {unit}"
 
 
-@variant("3.5")
+@variant("3.5", example=1)
 def fence_against_wall(rng: random.Random) -> Problem:
     length = 4 * rng.randint(5, 30)
     area = length * x - 2 * x**2
@@ -1111,7 +1111,7 @@ def box_sheets() -> list[tuple[int, int, int]]:
 BOX_SHEETS = box_sheets()
 
 
-@variant("3.5")
+@variant("3.5", example=2)
 def open_box(rng: random.Random) -> Problem:
     a, b, n = rng.choice(BOX_SHEETS)
     volume = x * (a - 2 * x) * (b - 2 * x)
@@ -1146,7 +1146,7 @@ def open_box(rng: random.Random) -> Problem:
     )
 
 
-@variant("3.5")
+@variant("3.5", example=1)
 def minimum_sum_of_squares(rng: random.Random) -> Problem:
     total = 2 * rng.randint(3, 25)
     objective = x**2 + (total - x) ** 2

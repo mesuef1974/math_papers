@@ -26,7 +26,7 @@ def sign_text(positive: bool) -> str:
     return ">0" if positive else "<0"
 
 
-@variant("3.4")
+@variant("3.4", example=3)
 def shape_from_signs(rng: random.Random) -> Problem:
     """إشارتا f′ وf″ على فترة تحددان شكل المنحنى (جدول الملخص في الدرس)."""
     increasing, up = rng.choice([True, False]), rng.choice([True, False])
@@ -54,7 +54,7 @@ def shape_from_signs(rng: random.Random) -> Problem:
     )
 
 
-@variant("3.4")
+@variant("3.4", example=1)
 def extremum_type_from_second_derivative(rng: random.Random) -> Problem:
     """اختبار المشتقة الثانية: f′(c)=0 وإشارة f″(c) تصنّف القيمة القصوى."""
     c = rng.randint(-4, 4)
@@ -77,7 +77,7 @@ def extremum_type_from_second_derivative(rng: random.Random) -> Problem:
     )
 
 
-@variant("3.4")
+@variant("3.4", example=2)
 def cubic_sketch_summary(rng: random.Random) -> Problem:
     """ملخص الرسم لتكعيبية: فترات التزايد والتناقص، والقيم القصوى المحلية، ونقطة الانعطاف."""
     f, p, q, sign = cubic_with_critical_points(rng)
@@ -107,7 +107,7 @@ def cubic_sketch_summary(rng: random.Random) -> Problem:
     )
 
 
-@variant("3.4")
+@variant("3.4", example=3)
 def shape_interval_from_derivative_graph(rng: random.Random) -> Problem:
     """من رسم f′: الفترة التي يجمع فيها المنحنى اتجاهًا وتقعرًا (قراءة الإشارة والميل معًا)."""
     graph, _, p, q, s = derivative_graph(rng)
