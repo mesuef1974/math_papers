@@ -1,6 +1,6 @@
 """تحضير حصص العاشر الـ48 (المرحلة 2 من docs/lesson_prep_plan.md): التوزيع والاشتقاق والمعايير T1 إلى T13.
 
-حصص العاشر تجتاز المعايير الحاجبة كلها، وكل مثال أساسي في حصة واحدة، وكل معيار حاجب يُشغَّل على حالة فاشلة. النصوص والاعتماد والمقاطع معلَّقة لا فاشلة.
+حصص العاشر تجتاز المعايير الحاجبة كلها، وكل مثال أساسي في حصة واحدة، وكل معيار حاجب يُشغَّل على حالة فاشلة. النصوص والاعتماد والمقاطع معلَّقة لا فاشلة حتى يُعتمد ملف الوحدة.
 """
 
 from dataclasses import replace
@@ -44,6 +44,7 @@ from apps.planning.domain.strategies import load_library
 from apps.planning.selectors import lesson_preps
 
 LIBRARY = {s.slug: s for s in load_library()}
+APPROVED_UNITS = {1}  # وحدات العاشر التي اعتمد المالك نصوصها (prep/unit-<n>.json)
 
 
 @pytest.fixture
@@ -85,8 +86,9 @@ def test_every_criterion_is_reported_and_texts_are_pending_not_failing(preps):
         codes = [r.code for r in row.checks]
         assert set(codes) == BLOCKING | {"T9"} and len(codes) == len(set(codes))
         by = {r.code: r for r in row.checks}
-        assert by["T2c"].status == PENDING
-        assert by["T2"].status == (PASS if row.prep.is_last else PENDING)
+        approved = row.prep.unit in APPROVED_UNITS
+        assert by["T2c"].status == (PASS if approved else PENDING)
+        assert by["T2"].status == (PASS if row.prep.is_last or approved else PENDING)
         if not row.prep.is_last:
             assert by["T2b"].status in (PENDING, FAIL)
 

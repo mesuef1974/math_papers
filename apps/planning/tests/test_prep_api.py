@@ -1,6 +1,7 @@
 """التحضير للمعلم (المرحلة 3 من docs/lesson_prep_plan.md): المسار خلف TeacherAuth، وWord بنموذج الوزارة لكل حصة من الـ48.
 
-الأهداف لم تُعتمد نصوصها بعد، فتظهر وصفًا بعلامة «معلَّق» في الرد وفي ملف Word (قرار المالك 2026-11-19).
+أهداف الوحدة المعتمدة (prep/unit-<n>.json) تظهر نصوصها ونتاجات معاييرها؛ وما لم يُعتمد يظهر وصفًا بعلامة «معلَّق»
+في الرد وفي ملف Word (قرار المالك 2026-11-19).
 """
 
 import re
@@ -12,6 +13,7 @@ from docx import Document
 
 from apps.core.models import AuditLog
 from apps.curriculum.courses import GRADE10_SLUG
+from apps.knowledge.domain.unit_prep import approved_standards, unit_prep
 from apps.planning.domain.prep_sheet import PENDING_MARK, split_minutes
 from apps.planning.prep_word import TEACH_ROW
 
@@ -95,7 +97,7 @@ def test_every_lesson_period_opens_and_downloads_in_the_ministry_template(teache
 
 @pytest.mark.django_db
 def test_unapproved_objectives_are_marked_pending_in_page_and_word(teacher_client):
-    base = f"{API}/{GRADE10_SLUG}/1.2/1"
+    base = f"{API}/{GRADE10_SLUG}/2.1/1"  # الوحدة 2 لم تُعتمد نصوصها بعد
     sheet = teacher_client.get(base).json()
     assert sheet["pending"] is True
     first = sheet["objectives"][0]
@@ -103,6 +105,24 @@ def test_unapproved_objectives_are_marked_pending_in_page_and_word(teacher_clien
     assert {c["code"]: c["status"] for c in sheet["checks"]}["T2c"] == "pending"
     document = Document(BytesIO(teacher_client.get(f"{base}/word").content))
     assert PENDING_MARK in document.tables[0].rows[TEACH_ROW].cells[0].text
+
+
+@pytest.mark.django_db
+def test_approved_unit_objectives_and_outcomes_reach_page_and_word(teacher_client):
+    unit = unit_prep(GRADE10_SLUG, 1)
+    assert unit is not None and unit.status == "approved"
+    base = f"{API}/{GRADE10_SLUG}/1.2/1"
+    sheet = teacher_client.get(base).json()
+    assert sheet["pending"] is False
+    expected = [" ".join((o.behavior, o.condition, o.criterion)) for o in unit.objectives("1.2").values()][
+        : len(sheet["objectives"])
+    ]
+    assert [o["text"] for o in sheet["objectives"]] == expected
+    assert {c["code"]: c["status"] for c in sheet["checks"]}["T2c"] == "pass"
+    texts = approved_standards(GRADE10_SLUG)
+    assert sheet["outcomes"].startswith("10.3.2: ") and texts["10.3.3"].rstrip(".") in sheet["outcomes"]
+    text = document_text(teacher_client.get(f"{base}/word").content)
+    assert expected[0] in text and sheet["outcomes"] in text and PENDING_MARK not in text
 
 
 @pytest.mark.django_db

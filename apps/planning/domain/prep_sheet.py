@@ -148,6 +148,11 @@ def _objective_text(prep: PeriodPrep, objective, example: PrepExample) -> tuple[
     )
 
 
+def _outcomes(codes: Sequence[str], texts: Mapping[str, str]) -> str:
+    """نتاجات التعلم: رمز كل معيار ووصفه القصير المعتمد بصياغتنا (`standards.json`)، والرمز وحده قبل اعتماد وحدته."""
+    return "؛ ".join(f"{code}: {texts[code].rstrip('.')}" if code in texts else code for code in codes)
+
+
 def _assessment(prep: PeriodPrep, example: PrepExample) -> str:
     if example.conceptual:
         return "أسئلة شفهية عن الاشتقاق (مثال مفاهيمي بلا سؤال خروج)"
@@ -242,6 +247,7 @@ def prep_sheet(
     year: str,
     semester: int,
     grade: str,
+    standard_texts: Mapping[str, str] | None = None,
 ) -> PrepSheet:
     titles = {slug: s.title for slug, s in library.items()}
     stages = {s.name: s for s in prep.stages}
@@ -262,7 +268,7 @@ def prep_sheet(
         grade=grade,
         unit_label=f"الوحدة {prep.unit}",
         day_date=f"الأسبوع {week}، الحصة {prep.k} من {prep.n}",
-        outcomes="، ".join(prep.standards),
+        outcomes=_outcomes(prep.standards, standard_texts or {}),
         main_sources="كتاب الطالب: " + "، ".join(pages) if pages else "كتاب الطالب",
         support_sources=SUPPORT_SOURCES,
         warmup=f"{titles.get(stages['warmup'].strategy or '', '')}: {_recall(prep)}",
