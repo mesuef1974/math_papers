@@ -21,6 +21,7 @@ from apps.curriculum.models import Course
 from apps.curriculum.selectors import calendar_data, lessons, term_plan_data
 from apps.knowledge.domain.course_index import LessonIndex
 from apps.knowledge.domain.schemas import lesson_sort_key
+from apps.knowledge.domain.unit_prep import approved_standards, unit_prep
 from apps.knowledge.selectors import course_index, example_numbers, lesson_index
 
 from .domain.calendar_engine import Closure, Plan, Slot, Term, allocate, parse_terms, sessions
@@ -260,6 +261,7 @@ def lesson_preps(course: str = PLAN_COURSE) -> tuple[PreparedPeriod, ...]:
             clips=None if clips is None else clips.get(code, {}),
         )
         groups = allocate_examples([(e.n, e.weight) for e in examples], len(rows))
+        unit = unit_prep(course, lesson.unit)
         previous_lesson = order[position - 1] if position else None
         built = []
         for i, period in enumerate(rows):
@@ -274,6 +276,9 @@ def lesson_preps(course: str = PLAN_COURSE) -> tuple[PreparedPeriod, ...]:
                 k=period.k,
                 recall=recall_for(period.k, previous_lesson, after_break),
                 library=library,
+                unit_status=None if unit is None else unit.status,
+                authored=None if unit is None else unit.objectives(code),
+                audience=None if unit is None else unit.audience,
             )
             checks = check_prep(
                 prep,
@@ -339,4 +344,5 @@ def period_sheet(course: str, lesson: str, k: int) -> PrepSheet:
         year=found.academic_year,
         semester=found.semester,
         grade=grade_label(found.grade, found.track),
+        standard_texts=approved_standards(course),
     )
