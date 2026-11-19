@@ -86,6 +86,28 @@ def test_forty_eight_periods_build_decks_matching_their_preps(preps):
         assert _clip_slides(data) == clips + len(prep.examples), key
 
 
+def test_course_decks_command_prints_one_line_and_fails_on_low_resolution_clips(preps, capsys):
+    from django.core.management import CommandError, call_command
+
+    for item in preps:
+        _publish(item.prep.lesson, item.prep.examples)
+    call_command("build_period_decks", GRADE10_SLUG)
+    assert capsys.readouterr().out.strip() == "ناجح 48 فاشل 0"
+    assert services.build_course_decks(GRADE10_SLUG) == (48, ())  # idempotent
+    # مقطع بدقة دون S7 يُفشل حصته وحدها، والسطر يعدّها
+    item = next(p for p in preps if p.prep.examples)
+    asset = Asset.objects.filter(lesson__code=item.prep.lesson, number=item.prep.examples[0].n, part=0).get()
+    png = make_png(400, 225, shade=3)
+    asset.sha256, asset.width, asset.height = hashlib.sha256(png).hexdigest(), 400, 225
+    asset.save()
+    get_storage().put(asset.key, png, "image/png")
+    with pytest.raises(CommandError, match="ناجح 47 فاشل 1"):
+        call_command("build_period_decks", GRADE10_SLUG)
+    assert "S7" in capsys.readouterr().err
+    with pytest.raises(CommandError, match="لا خطة فصلية"):
+        call_command("build_period_decks", "unknown")
+
+
 def test_build_is_idempotent_and_key_follows_inputs(period):
     first = services.build_period_deck_file(GRADE10_SLUG, period.lesson, period.k)
     stored = get_storage().get(first)

@@ -183,6 +183,21 @@ def build_period_deck_file(course: str, lesson: str, k: int, storage: Storage | 
     return key
 
 
+def build_course_decks(course: str, storage: Storage | None = None) -> tuple[int, tuple[str, ...]]:
+    """يبني عرض كل حصة دروس في خطة المقرر: (عدد الناجح، أسباب الفاشل بحصته). idempotent كبناء الحصة الواحدة.
+
+    شاهد المقاطع المنشورة على معايير العروض كلها؛ المقرر بلا خطة يرفع `PrepNotFoundError`."""
+    built, failures = 0, []
+    for row in selectors.prep_periods(course):
+        try:
+            build_period_deck_file(course, row["lesson"], row["k"], storage)
+        except PlanningError as error:
+            failures.append(f"{row['lesson']} حصة {row['k']}: {error}")
+        else:
+            built += 1
+    return built, tuple(failures)
+
+
 def clear_deck_failure(key: str, storage: Storage | None = None) -> None:
     """يمحو أثر فشل سابق قبل إعادة المحاولة فلا تبقى الحالة «failed» أثناء المحاولة الجديدة."""
     storage = storage or get_storage()
