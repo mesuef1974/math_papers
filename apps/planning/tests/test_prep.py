@@ -1,7 +1,6 @@
 """تحضير حصص العاشر الـ48 (المرحلة 2 من docs/lesson_prep_plan.md): التوزيع والاشتقاق والمعايير T1 إلى T13.
 
-حصص العاشر تجتاز المعايير الحاجبة كلها عدا سؤال الخروج لأمثلة بلا صيغة بعد (`MISSING_GENERATORS`، ينتظر مهاراتها من
-المالك)، وكل مثال أساسي في حصة واحدة، وكل معيار حاجب يُشغَّل على حالة فاشلة. النصوص والاعتماد والمقاطع معلَّقة لا فاشلة.
+حصص العاشر تجتاز المعايير الحاجبة كلها، وكل مثال أساسي في حصة واحدة، وكل معيار حاجب يُشغَّل على حالة فاشلة. النصوص والاعتماد والمقاطع معلَّقة لا فاشلة.
 """
 
 from dataclasses import replace
@@ -44,8 +43,6 @@ from apps.planning.domain.prep_checks import (
 from apps.planning.domain.strategies import load_library
 from apps.planning.selectors import lesson_preps
 
-# أمثلة أساسية بلا صيغة لسؤال الخروج بعد: (الدرس، الحصة) → الأمثلة. تُحذف بإضافة مولّداتها.
-MISSING_GENERATORS = {("1.1", 1): {3}, ("1.2", 1): {1, 2}, ("1.2", 2): {4}, ("1.3", 2): {4}, ("3.4", 2): {3}}
 LIBRARY = {s.slug: s for s in load_library()}
 
 
@@ -58,10 +55,6 @@ def _prep(preps, lesson, k):
     return next(p.prep for p in preps if p.prep.lesson == lesson and p.prep.k == k)
 
 
-def _missing_exit(details):
-    return {int(d.split(":")[0].split()[-1]) for d in details if "سؤال الخروج" in d}
-
-
 # ---- الحصص الـ48 ----
 
 
@@ -71,12 +64,7 @@ def test_48_lesson_periods_pass_every_blocking_criterion(preps):
     for row in preps:
         for result in blocking_failures(row.checks):
             failures.setdefault((row.prep.lesson, row.prep.k), []).append(result)
-    assert {key: {r.code for r in rs} for key, rs in failures.items()} == {
-        key: {"T2b"} for key in MISSING_GENERATORS
-    }
-    for key, results in failures.items():
-        assert _missing_exit(results[0].details) == MISSING_GENERATORS[key]
-        assert all("سؤال الخروج" in d for d in results[0].details)
+    assert failures == {}
 
 
 def test_every_core_example_sits_in_exactly_one_period(preps):

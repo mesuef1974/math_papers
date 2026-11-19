@@ -169,6 +169,37 @@ def parabola_monotone_interval(rng: random.Random) -> Problem:
     )
 
 
+@variant("1.1", G10, example=3)
+def parabola_rule_from_table(rng: random.Random) -> Problem:
+    a = rng.choice([-4, -3, -2, -1, 1, 2, 3, 4, HALF, -HALF])
+    xs = (-4, -2, 0, 2, 4) if abs(a) == HALF else (-2, -1, 0, 1, 2)
+    at = rng.choice([6, -6, 8, -8] if abs(a) == HALF else [3, -3, 4, -4, 5])
+    values = [a * v * v for v in xs]
+    value = a * at * at
+    p = xs[-1]
+    header = " & ".join(str(v) for v in xs)
+    row = " & ".join(tex(v) for v in values)
+    table = rf"\begin{{array}}{{c|ccccc}} x & {header} \\ \hline f(x) & {row} \end{{array}}"
+
+    def text(da: Any, dv: Any) -> str:
+        return f"$a={tex(da)}$، و$f({at})={tex(dv)}$"
+
+    answer = text(a, value)
+    return Problem(
+        "1.1",
+        f"يبيّن الجدول قيمًا للدالة $f(x)=ax^2$: ${table}$ أوجد قيمة $a$، ثم أوجد $f({at})$.",
+        answer,
+        wrongs(answer, text(a, a * at), text(-a, -value), text(a * p, a * p * at * at), text(a, 2 * a * at)),
+        (
+            f"من الجدول $f({p})={tex(a * p * p)}$، فنعوّض في القاعدة: ${tex(a * p * p)}=a({p})^2$",
+            f"$a={frac(a * p * p, p * p)}={tex(a)}$",
+            f"$f({at})={lead(a)}({at})^2={tex(value)}$",
+        ),
+        "K",
+        {"type": "table_rule", "xs": xs, "values": tuple(values), "at": at, "answer": answer},
+    )
+
+
 @variant("1.1", G10, example=4)
 def square_area_cost(rng: random.Random) -> Problem:
     work, place = rng.choice([("تبليط", "أرضية"), ("تعشيب", "حديقة"), ("رصف", "ساحة")])
@@ -221,6 +252,92 @@ def vertex_text(h: int, k: int) -> str:
 def translation_text(h: int, k: int) -> str:
     return (
         f"إزاحة {units(abs(h))} إلى {RIGHT if h > 0 else LEFT}، و{units(abs(k))} إلى {UP if k > 0 else DOWN}"
+    )
+
+
+# معامل الدالة الرئيسة في أسئلة الإزاحة: الإزاحة لا تغيّر الاتساع ولا اتجاه الفتحة.
+PARENT_SCALES = (1, -1, 2, -2, 3, HALF)
+
+
+def shift_text(steps: int, direction: str, vertex: tuple[int, int]) -> str:
+    return f"إزاحة {units(steps)} إلى {direction}، والرأس $({vertex[0]},{vertex[1]})$"
+
+
+@variant("1.2", G10, example=1)
+def vertical_shift_of_parent(rng: random.Random) -> Problem:
+    a, k = rng.choice(PARENT_SCALES), nz(rng, -8, 8)
+    up, side = (UP, RIGHT) if k > 0 else (DOWN, LEFT)
+    flipped = DOWN if k > 0 else UP
+    answer = shift_text(abs(k), up, (0, k))
+    return Problem(
+        "1.2",
+        f"صف كيف ينتج التمثيل البياني للدالة $g(x)={ax2(a)}{signed(k)}$ من التمثيل البياني للدالة "
+        f"$f(x)={ax2(a)}$، وحدّد رأسه.",
+        answer,
+        (
+            shift_text(abs(k), flipped, (0, -k)),
+            shift_text(abs(k), side, (k, 0)),
+            shift_text(abs(k), up, (k, 0)),
+        ),
+        (
+            f"$g(x)=f(x){signed(k)}$: نضيف ${k}$ إلى كل قيمة من قيم $f$، فكل نقطة تنتقل رأسيًا.",
+            f"$k={k}$ {sign_word(k)}، فالإزاحة {units(abs(k))} إلى {up}.",
+            f"رأس $f$ هو $(0,0)$، فرأس $g$ هو $(0,{k})$.",
+        ),
+        "K",
+        {"type": "vertical_shift", "f": a * x**2, "g": a * x**2 + k, "answer": answer},
+    )
+
+
+@variant("1.2", G10, example=2)
+def horizontal_shift_of_parent(rng: random.Random) -> Problem:
+    a, h = rng.choice(PARENT_SCALES), nz(rng, -6, 6)
+    side, flipped = (RIGHT, LEFT) if h > 0 else (LEFT, RIGHT)
+    up = UP if h > 0 else DOWN
+    answer = shift_text(abs(h), side, (h, 0))
+    return Problem(
+        "1.2",
+        f"صف كيف ينتج التمثيل البياني للدالة $g(x)={lead(a)}{shifted(h)}^2$ من التمثيل البياني للدالة "
+        f"$f(x)={ax2(a)}$، وحدّد رأسه.",
+        answer,
+        (
+            shift_text(abs(h), flipped, (-h, 0)),
+            shift_text(abs(h), up, (0, h)),
+            shift_text(abs(h), flipped, (h, 0)),
+        ),
+        (
+            f"$g(x)=f(x-h)$ حيث $h={h}$: الدالة $g$ تأخذ عند $x={h}$ القيمة التي تأخذها $f$ عند $x=0$.",
+            f"$h={h}$ {sign_word(h)}، فالإزاحة {units(abs(h))} إلى {side}.",
+            f"رأس $f$ هو $(0,0)$، فرأس $g$ هو $({h},0)$.",
+        ),
+        "K",
+        {"type": "horizontal_shift", "f": a * x**2, "g": a * (x - h) ** 2, "answer": answer},
+    )
+
+
+@variant("1.2", G10, example=4)
+def mirror_of_y_intercept(rng: random.Random) -> Problem:
+    a, h, k = rng.choice(INTEGER_SCALES), nz(rng, -4, 4), rng.randint(-9, 9)
+    c = a * h * h + k
+
+    def text(px: int, value: int) -> str:
+        return f"المقطع $y$ هو $(0,{value})$، ونظيره حول محور التماثل $({px},{value})$"
+
+    answer = text(2 * h, c)
+    return Problem(
+        "1.2",
+        f"للدالة $f(x)={vertex_form(a, h, k)}$، أوجد المقطع $y$ لتمثيلها البياني، والنقطة المناظرة له "
+        "حول محور التماثل.",
+        answer,
+        wrongs(answer, text(-2 * h, c), text(2 * h, k), text(h, c), text(2 * h, -a * h * h + k)),
+        (
+            f"الرأس $({h},{k})$، ومحور التماثل $x={h}$.",
+            f"المقطع $y$: $f(0)={lead(a)}({minus(0, h)})^2{signed(k)}={c}$، أي النقطة $(0,{c})$.",
+            f"النقطة $(0,{c})$ تبعد ${abs(h)}$ عن المحور، فنظيرها على البعد نفسه في الجهة الأخرى: "
+            f"$x={h}+({h})={2 * h}$، أي $({2 * h},{c})$.",
+        ),
+        "A",
+        {"type": "mirror_point", "f": a * (x - h) ** 2 + k, "point": (2 * h, c), "answer": answer},
     )
 
 
@@ -482,7 +599,7 @@ def compare_maximum_values(rng: random.Random) -> Problem:
     )
 
 
-@variant("1.3", G10, example=2)
+@variant("1.3", G10, example=4)
 def ball_height_standard_form(rng: random.Random) -> Problem:
     at, start = rng.randint(2, 4), rng.randint(1, 9)
     peak = 5 * at * at + start
@@ -2569,6 +2686,44 @@ def leg_from_projection(rng: random.Random) -> Problem:
             "asked": which,
             "value": leg,
             "given": {"AD" if which == "AC" else "DB": projection, "AB": values["AB"]},
+        },
+    )
+
+
+@variant("3.4", G10, example=3)
+def segment_from_similar_right_triangles(rng: random.Random) -> Problem:
+    values = right_triangle_values(rng.choice(PROJECTION_SHAPES))
+    a, b, c, d = rng.choice(RIGHT_NAMES)
+    ac, bc, cd = values["AC"], values["BC"], values["CD"]
+    asked = rng.choice(["AD", "DB"])
+    value, other = (values["AD"], values["DB"]) if asked == "AD" else (values["DB"], values["AD"])
+    name = f"{a}{d}" if asked == "AD" else f"{d}{b}"
+    if asked == "AD":
+        ratio = f"\\dfrac{{{a}{d}}}{{{c}{d}}}=\\dfrac{{{a}{c}}}{{{c}{b}}}"
+        solve = f"{a}{d}=\\dfrac{{{cd}\\times {ac}}}{{{bc}}}"
+    else:
+        ratio = f"\\dfrac{{{c}{d}}}{{{d}{b}}}=\\dfrac{{{a}{c}}}{{{c}{b}}}"
+        solve = f"{d}{b}=\\dfrac{{{cd}\\times {bc}}}{{{ac}}}"
+    return Problem(
+        "3.4",
+        f"في المثلث ${a}{b}{c}$ القائم الزاوية في ${c}$ رُسم العمود ${c}{d}$ على الوتر ${a}{b}$. "
+        f"إذا كان ${a}{c}={ac}$ سم و${b}{c}={bc}$ سم و${c}{d}={cd}$ سم، فاستعمل تشابه المثلثين "
+        f"${a}{c}{d}$ و${c}{b}{d}$ لإيجاد طول ${name}$.",
+        lengths(value),
+        length_wrongs(value, other, values["AB"], cd),
+        (
+            f"المثلثان ${a}{c}{d}$ و${c}{b}{d}$ قائمان في ${d}$، والزاوية ${a}{c}{d}$ تطابق الزاوية ${b}$ "
+            f"(كلتاهما متممة للزاوية ${a}$)، فـ $\\triangle {a}{c}{d}\\sim\\triangle {c}{b}{d}$.",
+            f"الأضلاع المتناظرة متناسبة: ${ratio}$",
+            f"${solve}={value}$ سم.",
+        ),
+        "A",
+        {
+            "type": "similar_right_proportion",
+            "legs": (ac, bc),
+            "given": {"AC": ac, "BC": bc, "CD": cd},
+            "asked": asked,
+            "value": value,
         },
     )
 
