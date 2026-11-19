@@ -22,8 +22,10 @@ const mcqAnswers = computed(() =>
 );
 // أوراق العمل بلا درجات، فلا يُعرض لها عمود درجة فارغ.
 const hasMarks = computed(() => props.paper.questions.some((q) => q.parts.some((p) => p.marks > 0)));
-// عمود مصدر الفكرة في كتاب الطالب يظهر متى عُرف مصدر جزء واحد؛ الجزء بلا مصدر خانته «—».
-const hasSources = computed(() => props.paper.questions.some((q) => q.parts.some((p) => p.source_label)));
+// أعمدة مصدر الفكرة في كتاب الطالب («الصفحة» و«المثال» و«التدريب»، كما في Word) تظهر متى عُرف مصدر جزء واحد؛
+// الخانة المجهولة «—».
+const hasSources = computed(() => props.paper.questions.some((q) => q.parts.some((p) => p.source)));
+const sourceCells = (part: Part) => [part.source_page, part.source_example, part.source_exercises];
 
 // صفوف المفتاح لكل جزء: المقالي ذو الدرجة صف لكل بند من توزيعه (خطوات الطريقة ثم الجواب النهائي) بدرجته،
 // وغيره صف واحد فيه الإجابة وخطواتها. ترقيم الخطوات متصل عبر صفوف الجزء.
@@ -84,7 +86,11 @@ const keyParts = computed(() =>
             <th scope="col">الإجابة والخطوات</th>
             <th v-if="hasMarks" scope="col">الدرجة</th>
             <th scope="col">الدرس</th>
-            <th v-if="hasSources" scope="col">المصدر في الكتاب</th>
+            <template v-if="hasSources">
+              <th scope="col">الصفحة</th>
+              <th scope="col">المثال</th>
+              <th scope="col">التدريب</th>
+            </template>
             <th scope="col">المستوى</th>
             <th v-if="hasMarks" scope="col">المجموع</th>
           </tr>
@@ -105,9 +111,11 @@ const keyParts = computed(() =>
               </td>
               <td v-if="hasMarks" class="num step-mark"><bdi dir="ltr">{{ row.marks || "" }}</bdi></td>
               <td v-if="index === 0" class="lesson" :rowspan="rows.length">{{ part.lesson }}</td>
-              <td v-if="hasSources && index === 0" class="source" :rowspan="rows.length">
-                {{ isolateNumberRanges(part.source_label || "—") }}
-              </td>
+              <template v-if="hasSources && index === 0">
+                <td v-for="(cell, c) in sourceCells(part)" :key="c" class="source" :rowspan="rows.length">
+                  {{ isolateNumberRanges(cell || "—") }}
+                </td>
+              </template>
               <td v-if="index === 0" :rowspan="rows.length">
                 <span class="badge" :class="`badge-${part.level.toLowerCase()}`"><bdi dir="ltr">{{ KEY_LEVELS[part.level] }}</bdi></span>
               </td>
@@ -196,7 +204,7 @@ const keyParts = computed(() =>
   color: var(--color-brand-strong);
 }
 .source {
-  min-inline-size: 7em;
+  text-align: center;
 }
 .lesson,
 .num {

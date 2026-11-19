@@ -197,7 +197,8 @@ def test_key_marks_column_only_when_the_paper_has_marks(client):
 
 @pytest.mark.usefixtures("loaded_courses")
 def test_key_shows_the_book_source_of_each_part_like_the_screen(client):
-    """عمود «المصدر في الكتاب» بعد الدرس بنص الخادم نفسه لكل جزء (اختبار العاشر)، ولا عمود لورقة بلا مصادر."""
+    """أعمدة «الصفحة» و«المثال» و«التدريب» بعد الدرس بخلايا الخادم نفسها لكل جزء (اختبار العاشر، قرار المالك
+    2026-11-19)، ولا أعمدة لورقة بلا مصادر."""
     paper = client.get("/api/v1/papers/exam", {"blueprint": "g10-s1-2026-27-final", "seed": 7}).json()
     payload = {"papers": [paper], "profile": PROFILE, "show_key": True}
     doc = Document(io.BytesIO(build_docx(payload)))
@@ -210,27 +211,30 @@ def test_key_shows_the_book_source_of_each_part_like_the_screen(client):
         "الإجابة والخطوات",
         "الدرجة",
         "الدرس",
-        "المصدر في الكتاب",
+        "الصفحة",
+        "المثال",
+        "التدريب",
         "المستوى",
         "المجموع",
     ]
     expected = {
-        f"{q['number']} {p['label']}".strip(): p["source_label"]
+        f"{q['number']} {p['label']}".strip(): (
+            p["source_page"] or "—",
+            p["source_example"] or "—",
+            p["source_exercises"] or "—",
+        )
         for q in paper["questions"]
         for p in q["parts"]
     }
     # المدى «16–19» معزول بعلامتي الاتجاه في Word كي لا ينقلب
-    # وفي الخلية سطر للصفحة وسطر للمثال وسطر للتدريبات
     shown = {
-        row.cells[0].text: "، ".join(
-            re.sub("[\u200e\u200f\u2060]", "", p.text) for p in row.cells[4].paragraphs
-        )
+        row.cells[0].text: tuple(re.sub("[‎‏⁠]", "", row.cells[c].text) for c in (4, 5, 6))
         for row in table.rows[1:]
     }
-    assert shown == expected and all(label.startswith("ص ") for label in shown.values())
-    assert any("تدريب" in label for label in shown.values())
+    assert shown == expected and all(page.isdigit() for page, _, _ in shown.values())
+    assert any("–" in exercises for _, _, exercises in shown.values())
     # عمود المستوى بعمق المعرفة (قرار المالك 2026-11-18)
-    levels = {row.cells[0].text: row.cells[5].text for row in table.rows[1:]}
+    levels = {row.cells[0].text: row.cells[7].text for row in table.rows[1:]}
     names = {"K": "DOK 1", "A": "DOK 2", "R": "DOK 3"}
     assert levels == {
         f"{q['number']} {p['label']}".strip(): names[p["level"]]

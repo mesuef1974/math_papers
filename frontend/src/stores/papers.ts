@@ -76,6 +76,10 @@ export interface Part {
   // مصدر فكرة الجزء في كتاب الطالب (أرقام فقط)، ونصه المشتق في الخادم «ص 5، مثال 1»؛ فارغ لصيغة بلا مثال ولما حُفظ قبله.
   source?: BookSource | null;
   source_label?: string;
+  // خلايا أعمدة المفتاح «الصفحة» و«المثال» و«التدريب»، مشتقة في الخادم من source؛ فارغة حين لا تُعرف
+  source_page?: string;
+  source_example?: string;
+  source_exercises?: string;
   fingerprint: string;
   slot: Slot;
 }

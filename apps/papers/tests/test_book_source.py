@@ -8,7 +8,7 @@ from apps.curriculum.courses import GRADE10_SLUG
 from apps.knowledge.selectors import course_index
 from apps.papers import services
 from apps.papers.api import PartOut
-from apps.papers.domain.book_source import book_source, source_label
+from apps.papers.domain.book_source import book_source, source_cells, source_label
 from apps.papers.domain.generators import SKILL_EXAMPLES, skill_example
 
 FINAL = "g10-s1-2026-27-final"
@@ -76,3 +76,26 @@ def test_label_is_derived_and_not_taken_from_the_client():
     assert PartOut.model_validate({**part, "source_label": "ص 999، مثال 9"}).source_label == derived
     old = {key: value for key, value in part.items() if key != "source"}  # ورقة محفوظة قبل المصدر
     assert PartOut.model_validate(old).source_label == ""
+
+
+def test_source_cells_split_the_source_into_the_three_key_columns():
+    """«الصفحة» و«المثال» و«التدريب» (قرار المالك 2026-11-19): أرقام فقط، والمجهول فارغ لا مخترع."""
+    assert source_cells(book_source(2, 27, exercises=[28, 9, 11, 16, 17, 18, 19])) == {
+        "page": "27",
+        "example": "2",
+        "exercises": "9، 11، 16–19، 28",
+    }
+    assert source_cells(book_source(2, None)) == {"page": "", "example": "2", "exercises": ""}
+    assert source_cells(book_source(4, 35, "practice")) == {"page": "35", "example": "", "exercises": "4"}
+    assert source_cells(None) == {"page": "", "example": "", "exercises": ""}
+
+
+@pytest.mark.usefixtures("loaded_courses")
+def test_source_cells_are_derived_and_not_taken_from_the_client():
+    part = services.build_worksheet("1.1", 1, 3, course=GRADE10_SLUG)["questions"][0]["parts"][0]
+    out = PartOut.model_validate({**part, "source_page": "999", "source_example": "9"})
+    assert (out.source_page, out.source_example, out.source_exercises) == tuple(
+        source_cells(part["source"]).values()
+    )
+    old = PartOut.model_validate({key: value for key, value in part.items() if key != "source"})
+    assert (old.source_page, old.source_example, old.source_exercises) == ("", "", "")
