@@ -65,6 +65,16 @@ class PrepError(PlanningError):
 
 
 @dataclass(frozen=True)
+class TeacherEdit:
+    """تعديل المعلم لحصة واحدة كما يدخل الاشتقاق: `allocation` صادقة حين يخالف توزيعه توزيع `allocate` (للمصدر وحده؛
+    التوزيع نفسه في `groups`)، و`strategies` المرحلة → معرّف استراتيجية، و`removed` تمارين لا تدخل أي تدريب في الحصة."""
+
+    allocation: bool = False
+    strategies: Mapping[str, str] = field(default_factory=dict)
+    removed: frozenset[int] = frozenset()
+
+
+@dataclass(frozen=True)
 class PrepExample:
     n: int
     page: int | None
@@ -260,14 +270,19 @@ def lesson_examples(
     return tuple(out)
 
 
-def _classwork(examples: Sequence[PrepExample]) -> tuple[Classwork, ...]:
-    """تدريب صفي لكل مثال (غير مفاهيمي) من صف تحليله الأقل عمقًا، مرتبًا بالعمق فرقم المثال: التدرج من الأسهل."""
+def _classwork(
+    examples: Sequence[PrepExample], removed: frozenset[int] = frozenset()
+) -> tuple[Classwork, ...]:
+    """تدريب صفي لكل مثال (غير مفاهيمي) من صف تحليله الأقل عمقًا بلا ما حذفه المعلم، مرتبًا بالعمق فرقم المثال: التدرج من
+    الأسهل. المثال الذي حُذفت تمارين صفه كلها بلا تدريب صفي، فيفشل T4 ولا يُحفظ التعديل."""
     out = []
     for e in examples:
         if e.conceptual or not e.rows:
             continue
         dok, exercises = min(e.rows)
-        out.append(Classwork(e.n, dok, exercises[:CLASSWORK_PER_EXAMPLE]))
+        kept = tuple(x for x in exercises if x not in removed)
+        if kept:
+            out.append(Classwork(e.n, dok, kept[:CLASSWORK_PER_EXAMPLE]))
     return tuple(sorted(out, key=lambda c: (c.dok, c.example)))
 
 
@@ -276,10 +291,22 @@ def _exercises_by_depth(examples: Sequence[PrepExample]) -> list[tuple[int, int]
     return sorted({(d, x) for e in examples for d, ex in e.rows for x in ex})
 
 
+def stage_options(library: Iterable[Strategy], name: str) -> tuple[Strategy, ...]:
+    """الاستراتيجيات الصالحة لمرحلة: من أطوارها، بلا موارد، وحدّاها يتقاطعان مع حدّي المرحلة. مصدر واحد للاشتقاق وتعديل المعلم."""
+    _, _, lo, hi, phases = next(s for s in STAGES if s[0] == name)
+    return tuple(s for s in library if s.phase in phases and not s.needs and max(s.min, lo) <= min(s.max, hi))
+
+
 def _stages(
-    library: Sequence[Strategy], dok: frozenset[int], max_dok: int, minutes: int = PERIOD_MINUTES
+    library: Sequence[Strategy],
+    dok: frozenset[int],
+    max_dok: int,
+    minutes: int = PERIOD_MINUTES,
+    chosen_by_teacher: Mapping[str, str] | None = None,
 ) -> tuple[Stage, ...]:
-    """المراحل الست: لكل مرحلة أنسب استراتيجية بلا موارد لعمق الحصة، ثم الدقائق ضمن حدّي المرحلة واستراتيجيتها ومجموعها الزمن."""
+    """المراحل الست: لكل مرحلة أنسب استراتيجية بلا موارد لعمق الحصة (أو ما اختاره المعلم منها)، ثم الدقائق ضمن حدّي المرحلة
+    واستراتيجيتها ومجموعها الزمن."""
+    forced = chosen_by_teacher or {}
     shift = DEPTH_SHIFT.get(max_dok, 0)
     ideal: dict[str, float] = {}
     bounds: dict[str, tuple[int, int]] = {}
@@ -288,15 +315,18 @@ def _stages(
         ideal[name] = default + {"direct": shift, "guided": shift, "independent": -2 * shift}.get(name, 0)
         strategy = None
         if phases:
-            fits = [
-                s for s in library if s.phase in phases and not s.needs and max(s.min, lo) <= min(s.max, hi)
-            ]
+            fits = stage_options(library, name)
             if not fits:
                 raise PrepError(f"لا استراتيجية للمرحلة {name}")
-            strategy = sorted(
-                fits,
-                key=lambda s: (-len(dok & set(s.dok)), not s.min <= ideal[name] <= s.max, s.slug),
-            )[0]
+            if name in forced:
+                strategy = next((s for s in fits if s.slug == forced[name]), None)
+                if strategy is None:
+                    raise PrepError(f"الاستراتيجية {forced[name]} لا تصلح للمرحلة {name}")
+            else:
+                strategy = sorted(
+                    fits,
+                    key=lambda s: (-len(dok & set(s.dok)), not s.min <= ideal[name] <= s.max, s.slug),
+                )[0]
             lo, hi = max(strategy.min, lo), min(strategy.max, hi)
         chosen[name] = strategy.slug if strategy else None
         bounds[name] = (lo, hi)
@@ -318,8 +348,11 @@ def build_prep(
     unit_status: str | None = None,
     authored: Mapping[int, AuthoredObjective] | None = None,
     audience: str | None = None,
+    teacher: TeacherEdit | None = None,
 ) -> PeriodPrep:
-    """تحضير الحصة `k` من حصص الدرس (`groups` من `allocate`): مشتق كله من مدخلاته، فالمدخل نفسه يعطي التحضير نفسه."""
+    """تحضير الحصة `k` من حصص الدرس (`groups` من `allocate` أو توزيع المعلم): مشتق كله من مدخلاته، فالمدخل نفسه يعطي
+    التحضير نفسه. `teacher` تعديل المعلم لهذه الحصة: استراتيجيات اختارها لمراحل وتمارين حذفها من كل تدريبات الحصة."""
+    edit = teacher or TeacherEdit()
     n = len(groups)
     if not 1 <= k <= n:
         raise PrepError(f"الحصة {k} خارج حصص الدرس {n}")
@@ -332,9 +365,9 @@ def build_prep(
     basic_path = parse_ranges(guide.basic) if guide else frozenset()
     advanced_path = parse_ranges(guide.advanced) if guide else frozenset()
 
-    classwork = _classwork(own) if own else ()
+    classwork = _classwork(own, edit.removed) if own else ()
     taken = {x for c in classwork for x in c.exercises}
-    pool = [(d, x) for d, x in _exercises_by_depth(practice) if x not in taken]
+    pool = [(d, x) for d, x in _exercises_by_depth(practice) if x not in taken and x not in edit.removed]
     basic = tuple(x for _, x in [p for p in pool if p[1] in basic_path][:DIFFERENTIATION_SIZE])
     advanced = tuple(
         x
@@ -377,16 +410,16 @@ def build_prep(
         exit_ticket=exit_ticket,
         quiz=tuple(lesson.quiz_depths) if last else (),
         recall=recall,
-        stages=_stages(library, depths, max(depths, default=1)),
+        stages=_stages(library, depths, max(depths, default=1), chosen_by_teacher=edit.strategies),
         task_guide=(basic_path, advanced_path),
         unit_status=unit_status,
         sources={
             "examples": "index",
-            "allocation": "plan",
+            "allocation": "teacher" if edit.allocation else "plan",
             "objectives": "authored" if written else "index",
-            "practice": "index",
+            "practice": "teacher" if edit.removed else "index",
             "assessment": "generator",
-            "stages": "library",
+            "stages": "teacher" if edit.strategies else "library",
         },
     )
 

@@ -6,8 +6,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Collection, Sequence
-from dataclasses import dataclass, replace
+from collections.abc import Collection, Mapping, Sequence
+from dataclasses import dataclass, field, replace
 
 from django.contrib.auth.models import AbstractBaseUser
 from django.db.models import QuerySet
@@ -29,9 +29,10 @@ from .domain.objective_text import digest as text_digest
 from .domain.objective_text import shared_digest
 from .domain.plan_periods import PlanPeriod
 from .domain.plan_periods import plan_periods as derive_plan_periods
-from .domain.prep import PeriodPrep, build_prep, lesson_examples, recall_for
+from .domain.prep import PeriodPrep, build_prep, lesson_examples, recall_for, stage_options
 from .domain.prep import allocate as allocate_examples
 from .domain.prep_checks import CheckResult, check_lesson, check_prep
+from .domain.prep_override import LessonOverride, OverrideError, parse_override
 from .domain.prep_sheet import PrepSheet, prep_sheet
 from .domain.semester_plan import (
     TermPlan,
@@ -48,7 +49,15 @@ from .domain.strategies import (
     build_flow,
     load_library,
 )
-from .models import ClassOutcomeRecord, LessonRunRecord, ObjectiveOverride, ObjectiveSuggestion, PrepReview
+from .models import (
+    ClassOutcomeRecord,
+    DeckBuild,
+    LessonRunRecord,
+    ObjectiveOverride,
+    ObjectiveSuggestion,
+    PeriodPrepOverride,
+    PrepReview,
+)
 
 PLAN_COURSE = GRADE10_SLUG  # المقرر الافتراضي للتخطيط: أول مقرر له خطة فصلية في الجداول
 
@@ -179,6 +188,9 @@ class PreparedPeriod:
     period: PlanPeriod
     prep: PeriodPrep
     checks: tuple[CheckResult, ...]
+    allocation: tuple[tuple[int, ...], ...] = ()  # أمثلة كل حصة من حصص الدرس كما بُني التحضير
+    default_allocation: tuple[tuple[int, ...], ...] = ()  # توزيع `allocate` المشتق
+    override: str = "none"  # none | active | invalid (تعديل محفوظ لم يعد يطابق الدرس فأُهمل)
 
 
 def _example_clips(course: str) -> dict[str, dict[int, int]] | None:
@@ -193,8 +205,13 @@ def _example_clips(course: str) -> dict[str, dict[int, int]] | None:
     return clips
 
 
-def lesson_preps(course: str = PLAN_COURSE) -> tuple[PreparedPeriod, ...]:
-    """تحضير كل حصة دروس في الخطة الفصلية بترتيبها، مشتقًّا من الفهرس والخطة والمكتبة، مع معاييره T1 إلى T13."""
+def lesson_preps(
+    course: str = PLAN_COURSE, overrides: Mapping[str, object] | None = None, *, strict: bool = False
+) -> tuple[PreparedPeriod, ...]:
+    """تحضير كل حصة دروس في الخطة الفصلية بترتيبها، مشتقًّا من الفهرس والخطة والمكتبة، مع معاييره T1 إلى T13.
+
+    `overrides` تعديل معلم واحد لكل درس (رمزه → الشكل المحفوظ، `domain/prep_override.py`) يدخل الاشتقاق نفسه. المحفوظ الذي لم
+    يعد يطابق الدرس (تغيّر الفهرس أو المكتبة) يُهمل وتُعلَّم حصصه `invalid`؛ و`strict` يرفعه `OverrideError` (للحفظ)."""
     from apps.papers.domain.generators import SKILL_EXAMPLES
 
     plan = term_plan(course)
@@ -221,7 +238,19 @@ def lesson_preps(course: str = PLAN_COURSE) -> tuple[PreparedPeriod, ...]:
             generators=generators.get(code, ()),
             clips=None if clips is None else clips.get(code, {}),
         )
-        groups = allocate_examples([(e.n, e.weight) for e in examples], len(rows))
+        default_groups = allocate_examples([(e.n, e.weight) for e in examples], len(rows))
+        edit, state = LessonOverride(), "none"
+        if overrides and code in overrides:
+            try:
+                edit = parse_override(
+                    overrides[code], examples=[e.n for e in examples], n=len(rows), library=library
+                )
+                state = "active"
+            except OverrideError:
+                if strict:
+                    raise
+                state = "invalid"
+        groups = edit.groups(default_groups)
         unit = unit_prep(course, lesson.unit)
         previous_lesson = order[position - 1] if position else None
         built = []
@@ -240,6 +269,7 @@ def lesson_preps(course: str = PLAN_COURSE) -> tuple[PreparedPeriod, ...]:
                 unit_status=None if unit is None else unit.status,
                 authored=None if unit is None else unit.objectives(code),
                 audience=None if unit is None else unit.audience,
+                teacher=edit.edit_for(period.k, default_groups),
             )
             checks = check_prep(
                 prep,
@@ -252,7 +282,12 @@ def lesson_preps(course: str = PLAN_COURSE) -> tuple[PreparedPeriod, ...]:
         lesson_checks = check_lesson(
             [p for _, p, _ in built], [e.n for e in examples], lesson.standards, enrichment
         )
-        out += [PreparedPeriod(period, prep, checks + lesson_checks) for period, prep, checks in built]
+        out += [
+            PreparedPeriod(
+                period, prep, checks + lesson_checks, groups, tuple(map(tuple, default_groups)), state
+            )
+            for period, prep, checks in built
+        ]
     return tuple(out)
 
 
@@ -271,11 +306,24 @@ def _plan_course(course: str) -> Course:
     return found
 
 
-def _period_rows(course: str) -> list[tuple[PreparedPeriod, dict]]:
+def prep_overrides(course: str, owner: AbstractBaseUser | None) -> dict[str, object]:
+    """تعديلات المعلم المحفوظة لدروس المقرر: رمز الدرس → الشكل المحفوظ. بلا معلم: لا تعديل (التحضير المشترك)."""
+    if owner is None:
+        return {}
+    rows = PeriodPrepOverride.objects.filter(owner=owner, lesson__course__slug=course)
+    return dict(rows.values_list("lesson__code", "data"))
+
+
+def owner_preps(course: str, owner: AbstractBaseUser | None) -> tuple[PreparedPeriod, ...]:
+    """حصص الدروس بتحضير المعلم: المشترك وعليه تعديله إن وُجد."""
+    return lesson_preps(course, prep_overrides(course, owner))
+
+
+def _period_rows(course: str, owner: AbstractBaseUser | None = None) -> list[tuple[PreparedPeriod, dict]]:
     found = _plan_course(course)
     titles = dict(lessons(found).values_list("code", "title"))
     out = []
-    for item in lesson_preps(course):
+    for item in owner_preps(course, owner):
         statuses = {c.status for c in item.checks if c.blocking}
         row = {
             "lesson": item.prep.lesson,
@@ -285,35 +333,48 @@ def _period_rows(course: str) -> list[tuple[PreparedPeriod, dict]]:
             "n": item.prep.n,
             "week": item.period.week,
             "status": "fail" if "fail" in statuses else "pending" if "pending" in statuses else "pass",
+            "customized": item.override == "active",
         }
         out.append((item, row))
     return out
 
 
-def prep_periods(course: str) -> list[dict]:
-    """حصص الدروس بترتيب الخطة مع حالة معاييرها: للتنقل في صفحة التحضير."""
-    return [row for _, row in _period_rows(course)]
+def prep_periods(course: str, owner: AbstractBaseUser | None = None) -> list[dict]:
+    """حصص الدروس بترتيب الخطة مع حالة معاييرها بتحضير المعلم: للتنقل في صفحة التحضير."""
+    return [row for _, row in _period_rows(course, owner)]
 
 
-def deck_periods(course: str) -> list[dict]:
-    """حصص الدروس بترتيب الخطة لصفحة العروض: حالة معاييرها وعدد أمثلتها، و`clips` صادقة حين نُشر مقطع لكل مثال فيها."""
-    published: dict[str, set[int]] = {}
-    rows = Asset.objects.filter(course__slug=course, kind=Asset.Kind.EXAMPLE)
-    for code, number in rows.values_list("lesson__code", "number"):
-        published.setdefault(code, set()).add(number)
+def deck_periods(course: str, owner: AbstractBaseUser | None = None) -> list[dict]:
+    """حصص الدروس بترتيب الخطة لصفحة العروض بتحضير المعلم: حالة معاييرها وعدد أمثلتها، و`clips` صادقة حين نُشر مقطع لكل
+    مثال فيها، و`stale` صادقة حين يخالف آخر عرض طلبه المعلم للحصة مفتاحَ تحضيره الحالي (عدّل تحضيره بعده)."""
+    by_lesson: dict[str, list[Asset]] = {}
+    rows = Asset.objects.filter(course__slug=course, kind=Asset.Kind.EXAMPLE).order_by("number", "part")
+    for asset in rows.select_related("lesson"):
+        by_lesson.setdefault(asset.lesson.code, []).append(asset)
+    built: dict[tuple[str, int], str] = {}
+    if owner is not None:
+        builds = DeckBuild.objects.filter(owner=owner, lesson__course__slug=course)
+        built = {(code, k): key for code, k, key in builds.values_list("lesson__code", "k", "key")}
     out = []
-    for item, row in _period_rows(course):
+    for item, row in _period_rows(course, owner):
         numbers = {e.n for e in item.prep.examples}
+        assets = [a for a in by_lesson.get(item.prep.lesson, []) if a.number in numbers]
+        last = built.get((item.prep.lesson, item.prep.k))
         out.append(
-            {**row, "examples": len(numbers), "clips": numbers <= published.get(item.prep.lesson, set())}
+            {
+                **row,
+                "examples": len(numbers),
+                "clips": numbers <= {a.number for a in assets},
+                "stale": last is not None and last != deck_key(item.prep, assets),
+            }
         )
     return out
 
 
-def period_item(course: str, lesson: str, k: int) -> PreparedPeriod:
-    """حصة واحدة (الدرس ورقمها فيه) بتحضيرها المشترك ومعاييره."""
+def period_item(course: str, lesson: str, k: int, owner: AbstractBaseUser | None = None) -> PreparedPeriod:
+    """حصة واحدة (الدرس ورقمها فيه) بتحضيرها ومعاييره: المشترك، أو تحضير المعلم بتعديله إن أُعطي."""
     _plan_course(course)
-    item = next((p for p in lesson_preps(course) if p.prep.lesson == lesson and p.prep.k == k), None)
+    item = next((p for p in owner_preps(course, owner) if p.prep.lesson == lesson and p.prep.k == k), None)
     if item is None:
         raise PrepNotFoundError(f"لا حصة {k} للدرس {lesson} في خطة {course}")
     return item
@@ -362,6 +423,32 @@ class TeacherSheet:
     sheet: PrepSheet
     objectives: dict[int, ObjectiveState]
     review: dict | None
+    edit: dict = field(default_factory=dict)
+
+
+def prep_edit(item: PreparedPeriod, stored: object) -> dict:
+    """ما تحتاجه واجهة تعديل الحصة: توزيع الدرس الحالي والمشتق، وبدائل كل مرحلة واختيار المعلم، وتمارين الحصة وما حذفه."""
+    library = load_library()
+    period = {}
+    if item.override == "active" and isinstance(stored, dict):
+        period = stored.get("periods", {}).get(str(item.prep.k), {})
+    return {
+        "state": item.override,
+        "allocation": [list(g) for g in item.allocation],
+        "default_allocation": [list(g) for g in item.default_allocation],
+        "stages": [
+            {
+                "name": stage.name,
+                "current": stage.strategy,
+                "chosen": period.get("strategies", {}).get(stage.name),
+                "options": [{"slug": o.slug, "title": o.title} for o in stage_options(library, stage.name)],
+            }
+            for stage in item.prep.stages
+            if stage.strategy is not None
+        ],
+        "exercises": sorted({x for e in item.prep.practice_examples for _, ex in e.rows for x in ex}),
+        "removed": sorted(period.get("removed", [])),
+    }
 
 
 def sheet_digest(sheet: PrepSheet) -> str:
@@ -383,7 +470,11 @@ def _suggestion_view(row: ObjectiveSuggestion, shared: tuple[str | None, str | N
 def teacher_sheet(course: str, lesson: str, k: int, owner: AbstractBaseUser) -> TeacherSheet:
     """ورقة الحصة بنسخة المعلم: الشرط والمعيار من نسخته حين تختلف عن المعتمد، والمعايير T1 إلى T13 كما هي
     (السلوك وفعله وعمقه لا تتغير). الوحدة غير المعتمدة لا تُعدَّل فتظهر كما هي."""
-    item = period_item(course, lesson, k)
+    stored = prep_overrides(course, owner)
+    _plan_course(course)
+    item = next((p for p in lesson_preps(course, stored) if p.prep.lesson == lesson and p.prep.k == k), None)
+    if item is None:
+        raise PrepNotFoundError(f"لا حصة {k} للدرس {lesson} في خطة {course}")
     prep = item.prep
     editable = prep.unit_status == "approved"
     record = Lesson.objects.filter(course__slug=course, code=lesson).first()
@@ -437,7 +528,9 @@ def teacher_sheet(course: str, lesson: str, k: int, owner: AbstractBaseUser) -> 
         mark = PrepReview.objects.filter(owner=owner, lesson=record, k=k).first()
         if mark is not None:
             review = {"reviewed_at": mark.reviewed_at, "stale": mark.digest != sheet_digest(sheet)}
-    return TeacherSheet(sheet=sheet, objectives=states, review=review)
+    return TeacherSheet(
+        sheet=sheet, objectives=states, review=review, edit=prep_edit(item, stored.get(lesson))
+    )
 
 
 @dataclass(frozen=True)

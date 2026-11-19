@@ -12,6 +12,8 @@ export const MAX_POLLS = 90; // ثلاث دقائق، وبعدها يُترك ا
 export interface DeckPeriod extends PrepPeriod {
   examples: number;
   clips: boolean;
+  // آخر عرض طلبته للحصة بُني من تحضير عدّلتَه بعده
+  stale: boolean;
 }
 
 export function periodQuery(lesson: string, k: number): URLSearchParams {
@@ -27,7 +29,8 @@ interface DeckOut {
 }
 
 function message(error: unknown, fallback: string): string {
-  if (error instanceof ApiError && error.status === 422 && error.detail) return error.detail;
+  if (error instanceof ApiError && error.status === 422 && error.detail)
+    return error.detail;
   return accessMessage(error) ?? fallback;
 }
 
@@ -50,14 +53,17 @@ export const useDecksStore = defineStore("decks", {
   }),
   getters: {
     busy: (state) => state.status === "pending",
-    url: (state) => (state.status === "ready" ? downloadUrl(state.lesson, state.k) : ""),
+    url: (state) =>
+      state.status === "ready" ? downloadUrl(state.lesson, state.k) : "",
   },
   actions: {
     async load() {
       this.loading = true;
       this.error = "";
       try {
-        this.periods = await api.get<DeckPeriod[]>(`/decks/periods?course=${DECK_COURSE}`);
+        this.periods = await api.get<DeckPeriod[]>(
+          `/decks/periods?course=${DECK_COURSE}`,
+        );
         this.loaded = true;
       } catch (error) {
         this.error = message(error, "تعذر تحميل قائمة الحصص.");
@@ -84,7 +90,16 @@ export const useDecksStore = defineStore("decks", {
       this.detail = "";
       this.polls = 0;
       try {
-        const out = await api.post<DeckOut>("/decks/", { course: DECK_COURSE, lesson: this.lesson, k: this.k });
+        const out = await api.post<DeckOut>("/decks/", {
+          course: DECK_COURSE,
+          lesson: this.lesson,
+          k: this.k,
+        });
+        // الخادم سجّل هذا الطلب آخرَ عرض للحصة، فلم يعد قديمًا
+        const period = this.periods.find(
+          (p) => p.lesson === this.lesson && p.k === this.k,
+        );
+        if (period) period.stale = false;
         this.apply(out);
       } catch (error) {
         this.status = "idle";
@@ -108,7 +123,11 @@ export const useDecksStore = defineStore("decks", {
         return;
       }
       try {
-        this.apply(await api.get<DeckOut>(`/decks/status?${periodQuery(this.lesson, this.k)}`));
+        this.apply(
+          await api.get<DeckOut>(
+            `/decks/status?${periodQuery(this.lesson, this.k)}`,
+          ),
+        );
       } catch (error) {
         this.status = "idle";
         this.error = message(error, "تعذر قراءة حالة العرض.");
