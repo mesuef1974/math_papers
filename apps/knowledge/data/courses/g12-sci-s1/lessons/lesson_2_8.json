@@ -315,6 +315,7 @@
  "examples": [
   {
    "number": 1,
+   "page": 123,
    "skill": "ميل المماس لدائرة مركزها الأصل عند نقطة معطاة",
    "representation": "",
    "methods": [
@@ -325,6 +326,7 @@
   },
   {
    "number": 2,
+   "page": 123,
    "skill": "إيجاد dy/dx لعلاقة فيها حد ضرب xy وحد تربيعي في y (الحل يكمل في الصفحة التالية)",
    "representation": "",
    "methods": [
@@ -335,6 +337,7 @@
   },
   {
    "number": 3,
+   "page": 124,
    "skill": "اشتقاق ضمني لعلاقة فيها جذر x وجذر y وy² مع الضرب والسلسلة",
    "representation": "جبري",
    "methods": [
@@ -346,6 +349,7 @@
   },
   {
    "number": 4,
+   "page": 125,
    "skill": "إثبات أن dy/dx معرفة عند كل نقاط منحنى فيه sin y",
    "representation": "جبري",
    "methods": [
@@ -355,6 +359,7 @@
   },
   {
    "number": 5,
+   "page": 126,
    "skill": "سرعة لحظية ds/dt من علاقة ضمنية بين الموضع والزمن فيها جذر حاصل ضرب",
    "representation": "تطبيقي",
    "methods": [

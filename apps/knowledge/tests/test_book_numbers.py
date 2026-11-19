@@ -92,7 +92,11 @@ def test_annotate_is_pure_and_idempotent():
     once = annotate(lesson, {1: 61, 3: 64}, [{"example": 3, "exercises": [9]}])
     assert json.dumps(lesson, ensure_ascii=False) == before
     assert json.dumps(annotate(once, {1: 61, 3: 64}, [{"example": 3, "exercises": [9]}])) == json.dumps(once)
-    assert [e.get("page") for e in once["examples"]] == [61, None, 64, None, None]
+    given = {1: 61, 3: 64}  # ما غاب من الجدول يبقى كما كان في الملف
+    assert [e.get("page") for e in once["examples"]] == [
+        given.get(e["number"], e.get("page")) for e in lesson["examples"]
+    ]
+    assert [e["page"] for e in once["examples"] if e["number"] in given] == [61, 64]
     assert list(once["examples"][0])[:2] == ["number", "page"]
     assert annotate(once, {}, None) == once  # بلا مدخل جديد يبقى ما كُتب
 

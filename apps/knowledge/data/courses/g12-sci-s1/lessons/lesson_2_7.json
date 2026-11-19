@@ -293,6 +293,7 @@
  "examples": [
   {
    "number": 1,
+   "page": 114,
    "skill": "اشتقاق sin لزاوية خطية، ومضاعف sin لكثير حدود مع حد ثابت مثلثي، وقوة رابعة لـ sin",
    "representation": "",
    "methods": [
@@ -303,6 +304,7 @@
   },
   {
    "number": 2,
+   "page": 115,
    "skill": "اشتقاق cos لزاوية خطية، وقوة لـ cos (الحل يكمل في الصفحة التالية)",
    "representation": "",
    "methods": [
@@ -312,6 +314,7 @@
   },
   {
    "number": 3,
+   "page": 116,
    "skill": "سرعة لحظية من دالة موضع cos(t²+1) عند زمن معين",
    "representation": "تطبيقي",
    "methods": [
@@ -321,6 +324,7 @@
   },
   {
    "number": 4,
+   "page": 117,
    "skill": "مشتقة tan لزاوية خطية، وقوة لـ tan، وtan لفرق يتضمن sin",
    "representation": "جبري",
    "methods": [
@@ -331,6 +335,7 @@
   },
   {
    "number": 5,
+   "page": 117,
    "skill": "ميل المماس عند نقطة: جزء A ضرب x² في sin، وجزء B قسمة cos على (1−sin) مع تبسيط بفيثاغورس",
    "representation": "جبري/هندسي",
    "methods": [
