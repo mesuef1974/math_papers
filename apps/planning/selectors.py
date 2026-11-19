@@ -6,12 +6,11 @@
 
 from __future__ import annotations
 
-import hashlib
 from collections.abc import Collection, Sequence
 from dataclasses import dataclass, replace
 
 from django.contrib.auth.models import AbstractBaseUser
-from django.db.models import Count, QuerySet
+from django.db.models import QuerySet
 
 from apps.assets.models import Asset
 from apps.assets.selectors import asset_bytes
@@ -20,12 +19,11 @@ from apps.curriculum.courses import GRADE10_SLUG, grade_label
 from apps.curriculum.models import Course, Lesson
 from apps.curriculum.selectors import calendar_data, lessons, term_plan_data
 from apps.knowledge.domain.course_index import LessonIndex
-from apps.knowledge.domain.schemas import lesson_sort_key
 from apps.knowledge.domain.unit_prep import approved_standards, unit_prep
 from apps.knowledge.selectors import course_index, example_numbers, lesson_index
 
 from .domain.calendar_engine import Closure, Plan, Slot, Term, allocate, parse_terms, sessions
-from .domain.deck import Deck, ExampleClip, LessonContent, build_deck
+from .domain.deck import ExampleClip, deck_key_of
 from .domain.feedback import ClassOutcome, Decision, decide
 from .domain.objective_text import digest as text_digest
 from .domain.objective_text import shared_digest
@@ -108,19 +106,6 @@ def run_reports(owner: AbstractBaseUser, section: str | None = None) -> QuerySet
     return rows.filter(section=section) if section else rows
 
 
-def lesson_deck(
-    code: str,
-    content: LessonContent,
-    period_minutes: int = DEFAULT_PERIOD_MINUTES,
-    resources: Collection[str] = (),
-    course: str = PLAN_COURSE,
-) -> Deck:
-    """عرض الدرس: الفهرس المشتق وسير الحصة من هنا، والنصوص والمقصوصات من `content` (خارج المستودع)."""
-    lesson = _indexed_lesson(code, course)
-    flow = build_flow(period_minutes, profile_from_lesson(lesson), resources=resources)
-    return build_deck(lesson, content, flow)
-
-
 def _course_plan(course: str) -> tuple[Course, TermPlan]:
     row, raw = term_plan_data(course)
     plan = parse_term_plan(raw, row.semester)
@@ -155,48 +140,22 @@ def term1_schedule(
     return plan, items, allocate(items, free)
 
 
-# ───── عروض الدروس المنشورة من الأصول (المرحلة 4) ─────
-DECK_FORMAT = 1  # يُرفع حين يتغير شكل الملف الناتج بلا تغيير في مدخلاته، فيُعاد توليد المخزَّن
-DECK_PERIOD_RANGE = (30, 90)
+# ───── عروض الحصص من تحضيرها ومقاطع الأصول المنشورة (المرحلة 4) ─────
 PPTX_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
 
 
-def deck_assets(course_slug: str, lesson_code: str) -> list[Asset]:
-    """مقاطع أمثلة الدرس المنشورة بترتيب المثال فتتمته."""
+def deck_assets(course_slug: str, lesson_code: str, numbers: Collection[int]) -> list[Asset]:
+    """مقاطع أمثلة الحصة المنشورة (أرقامها `numbers`) بترتيب المثال فتتمته."""
     return list(
-        Asset.objects.filter(course__slug=course_slug, lesson__code=lesson_code, kind=Asset.Kind.EXAMPLE)
-        .select_related("lesson")
-        .order_by("number", "part")
+        Asset.objects.filter(
+            course__slug=course_slug, lesson__code=lesson_code, kind=Asset.Kind.EXAMPLE, number__in=numbers
+        ).order_by("number", "part")
     )
 
 
-def deck_lessons(course_slug: str) -> list[dict]:
-    """الدروس التي نُشرت لها مقاطع أمثلة: الرمز والعنوان وعدد الأمثلة (التتمات لا تُعدّ أمثلة)."""
-    rows = (
-        Asset.objects.filter(course__slug=course_slug, kind=Asset.Kind.EXAMPLE)
-        .values("lesson__code", "lesson__title", "lesson__unit")
-        .annotate(examples=Count("number", distinct=True), clips=Count("id"))
-    )
-    lessons = [
-        {
-            "lesson": r["lesson__code"],
-            "title": r["lesson__title"],
-            "examples": r["examples"],
-            "clips": r["clips"],
-        }
-        for r in rows
-    ]
-    return sorted(lessons, key=lambda r: lesson_sort_key(r["lesson"]))
-
-
-def deck_key(course_slug: str, lesson_code: str, period_minutes: int, assets: Sequence[Asset]) -> str:
-    """مفتاح الملف في التخزين: يشتق من كل ما يحدد الناتج (الدرس وعنوانه والزمن وتجزئة كل مقطع وصيغة الملف)،
-    فالمدخلات نفسها تعطي المفتاح نفسه ويكون الملف المخزَّن هو الجواب، وتغيّر مقطع أو الزمن يعطي مفتاحًا جديدًا."""
-    digest = hashlib.sha256()
-    digest.update(f"{DECK_FORMAT}|{course_slug}|{lesson_code}|{period_minutes}".encode())
-    for asset in assets:
-        digest.update(f"|{asset.lesson.title}|{asset.number}.{asset.part}:{asset.sha256}".encode())
-    return f"decks/{course_slug}/{lesson_code}-p{period_minutes}-{digest.hexdigest()[:16]}.pptx"
+def deck_key(prep: PeriodPrep, assets: Sequence[Asset]) -> str:
+    """مفتاح عرض الحصة من فهرس الأصول وحده (تجزئة كل مقطع مخزَّنة معه) فلا تُقرأ الصور لمعرفة الحالة."""
+    return deck_key_of(prep, ((a.number, a.part + 1, a.sha256) for a in assets))
 
 
 def clips_of(assets: Sequence[Asset], storage: Storage | None = None) -> tuple[ExampleClip, ...]:
@@ -305,26 +264,48 @@ def _plan_course(course: str) -> Course:
     found = Course.objects.filter(slug=course, term_plan__isnull=False).first()
     if found is None:
         raise PrepNotFoundError(f"لا خطة فصلية للمقرر {course}")
+    try:
+        course_index(course)  # التحضير يُشتق من فهرس المقرر نفسه، ولا يستعير فهرس مقرر آخر
+    except KeyError as error:
+        raise PrepNotFoundError(f"لا فهرس مشتق للمقرر {course}") from error
     return found
 
 
-def prep_periods(course: str) -> list[dict]:
-    """حصص الدروس بترتيب الخطة مع حالة معاييرها: للتنقل في صفحة التحضير."""
+def _period_rows(course: str) -> list[tuple[PreparedPeriod, dict]]:
     found = _plan_course(course)
     titles = dict(lessons(found).values_list("code", "title"))
     out = []
     for item in lesson_preps(course):
         statuses = {c.status for c in item.checks if c.blocking}
+        row = {
+            "lesson": item.prep.lesson,
+            "title": titles.get(item.prep.lesson, ""),
+            "unit": item.prep.unit,
+            "k": item.prep.k,
+            "n": item.prep.n,
+            "week": item.period.week,
+            "status": "fail" if "fail" in statuses else "pending" if "pending" in statuses else "pass",
+        }
+        out.append((item, row))
+    return out
+
+
+def prep_periods(course: str) -> list[dict]:
+    """حصص الدروس بترتيب الخطة مع حالة معاييرها: للتنقل في صفحة التحضير."""
+    return [row for _, row in _period_rows(course)]
+
+
+def deck_periods(course: str) -> list[dict]:
+    """حصص الدروس بترتيب الخطة لصفحة العروض: حالة معاييرها وعدد أمثلتها، و`clips` صادقة حين نُشر مقطع لكل مثال فيها."""
+    published: dict[str, set[int]] = {}
+    rows = Asset.objects.filter(course__slug=course, kind=Asset.Kind.EXAMPLE)
+    for code, number in rows.values_list("lesson__code", "number"):
+        published.setdefault(code, set()).add(number)
+    out = []
+    for item, row in _period_rows(course):
+        numbers = {e.n for e in item.prep.examples}
         out.append(
-            {
-                "lesson": item.prep.lesson,
-                "title": titles.get(item.prep.lesson, ""),
-                "unit": item.prep.unit,
-                "k": item.prep.k,
-                "n": item.prep.n,
-                "week": item.period.week,
-                "status": "fail" if "fail" in statuses else "pending" if "pending" in statuses else "pass",
-            }
+            {**row, "examples": len(numbers), "clips": numbers <= published.get(item.prep.lesson, set())}
         )
     return out
 

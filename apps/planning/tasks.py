@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from celery import shared_task
 
-from .services import build_lesson_deck
+from .services import build_period_deck_file
 
 
-@shared_task(name="planning.build_lesson_deck")
-def build_lesson_deck_task(course_slug: str, lesson_code: str, period_minutes: int) -> str:
-    """يبني عرض الدرس ويضعه في التخزين ويعيد مفتاحه؛ الفشل يُسجَّل في التخزين فتقرؤه الحالة."""
-    return build_lesson_deck(course_slug, lesson_code, period_minutes)
+@shared_task(name="planning.build_period_deck")
+def build_period_deck_task(course: str, lesson: str, k: int) -> str:
+    """يبني عرض الحصة ويضعه في التخزين ويعيد مفتاحه؛ الفشل يُسجَّل في التخزين فتقرؤه الحالة."""
+    return build_period_deck_file(course, lesson, k)
