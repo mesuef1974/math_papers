@@ -227,11 +227,60 @@ const periods = [
   { lesson: "1.2", title: sheet.lesson_title, unit: 1, k: 2, n: 3, week: 2, status: "pending" },
 ];
 
+// الوحدة معتمدة: المثال 1 بنسخة المعلم قديمة واقتراح مرفوض، والمثال 2 بالمعتمد، والحصة لم تُراجَع.
+const shared1 = { behavior: "يحسب قيم الدالة", condition: "من صيغة الرأس", criterion: "بلا خطأ" };
+const shared2 = { behavior: "يمثل الدالة", condition: "بيانيًا", criterion: "بثلاث نقاط" };
+const approved = {
+  ...sheet,
+  pending: false,
+  review: null as null | { reviewed_at: string; stale: boolean },
+  objectives: [
+    {
+      ...sheet.objectives[0],
+      pending: false,
+      text: "يحسب قيم الدالة من جدول بدقة",
+      shared: shared1,
+      mine: { condition: "من جدول", criterion: "بدقة" },
+      stale: true,
+      editable: true,
+      suggestion: {
+        status: "rejected",
+        condition: "من جدول",
+        criterion: "بدقة",
+        note: "المعيار غامض",
+        created_at: "2026-11-19T08:00:00Z",
+      },
+    },
+    {
+      ...sheet.objectives[1],
+      pending: false,
+      text: "يمثل الدالة بيانيًا بثلاث نقاط",
+      shared: shared2,
+      mine: null,
+      stale: false,
+      editable: true,
+      suggestion: null,
+    },
+  ],
+};
+
 const get = vi.fn();
+const put = vi.fn();
+const del = vi.fn();
+const post = vi.fn();
 const replace = vi.fn();
 vi.mock("@/api/client", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/api/client")>();
-  return { ...actual, api: { ...actual.api, get: (...a: unknown[]) => get(...a) } };
+  return {
+    ...actual,
+    api: {
+      ...actual.api,
+      get: (...a: unknown[]) => get(...a),
+      put: (...a: unknown[]) => put(...a),
+      del: (...a: unknown[]) => del(...a),
+      post: (...a: unknown[]) => post(...a),
+    },
+  };
 });
 vi.mock("vue-router", () => ({ useRoute: () => ({ query: {} }), useRouter: () => ({ replace }) }));
 
@@ -256,6 +305,120 @@ describe("PrepPage", () => {
     expect(wrapper.text()).toContain(sheet.objectives[0].text);
     expect(wrapper.findAll(".checks > li")).toHaveLength(sheet.checks.length);
     expect(wrapper.findAll("tbody tr").length).toBe(sheet.objectives.length * 2 + sheet.stages.length);
+  });
+
+  it("الوحدة المعلَّقة بلا تعديل ولا علامة مراجعة", async () => {
+    const wrapper = mount(PrepPage);
+    await flushPromises();
+    expect(wrapper.text()).not.toContain("تعديل");
+    expect(wrapper.text()).not.toContain("راجعتُ أهداف الحصة");
+  });
+
+  describe("مراجعة المعلم لأهداف حصته", () => {
+    const button = (wrapper: ReturnType<typeof mount>, label: string) =>
+      wrapper.findAll("button").filter((b) => b.text() === label);
+
+    beforeEach(() => {
+      get.mockImplementation((url: string) => Promise.resolve(url.endsWith("/1.2/1") ? approved : periods));
+      put.mockReset();
+      del.mockReset();
+      post.mockReset();
+    });
+
+    it("يعرض شارة «نسختي» وتنبيه القِدم بالنصين وحالة الاقتراح", async () => {
+      const wrapper = mount(PrepPage);
+      await flushPromises();
+      expect(wrapper.findAll(".status-mine")).toHaveLength(1);
+      const stale = wrapper.find(".stale");
+      expect(stale.text()).toContain("يحسب قيم الدالة من صيغة الرأس بلا خطأ");
+      expect(stale.text()).toContain(approved.objectives[0].text);
+      expect(wrapper.find(".suggestion").text()).toContain("رُفض اقتراحك");
+      expect(wrapper.find(".suggestion").text()).toContain("المعيار غامض");
+      expect(button(wrapper, "تعديل")).toHaveLength(2);
+    });
+
+    it("التعديل يفتح المحرر، والحفظ يرسل الشرط والمعيار ويغلقه بالورقة الجديدة", async () => {
+      const saved = {
+        ...approved,
+        objectives: [approved.objectives[0], { ...approved.objectives[1], mine: { condition: "بيانيًا", criterion: "بخمس نقاط" } }],
+      };
+      put.mockResolvedValue(saved);
+      const wrapper = mount(PrepPage);
+      await flushPromises();
+      await button(wrapper, "تعديل")[1].trigger("click");
+      expect(wrapper.find(".editing").exists()).toBe(true);
+      expect(button(wrapper, "تعديل").every((b) => b.attributes("disabled") !== undefined)).toBe(true);
+      await wrapper.findAll(".editing textarea")[1].setValue("بخمس نقاط");
+      await wrapper.find(".editing form").trigger("submit");
+      await flushPromises();
+      expect(put).toHaveBeenCalledWith("/preps/g10-s1/1.2/1/objectives/2", {
+        condition: "بيانيًا",
+        criterion: "بخمس نقاط",
+        suggest: false,
+        note: null,
+      });
+      expect(wrapper.find(".editing").exists()).toBe(false);
+      expect(wrapper.findAll(".status-mine")).toHaveLength(2);
+    });
+
+    it("الإلغاء يغلق المحرر بلا طلب", async () => {
+      const wrapper = mount(PrepPage);
+      await flushPromises();
+      await button(wrapper, "تعديل")[0].trigger("click");
+      await button(wrapper, "إلغاء")[0].trigger("click");
+      expect(wrapper.find(".editing").exists()).toBe(false);
+      expect(put).not.toHaveBeenCalled();
+    });
+
+    it("استرجاع المعتمد من تنبيه القِدم يحذف النسخة، وإبقاء نسختي يعيد حفظها بلا اقتراح", async () => {
+      del.mockResolvedValue(approved);
+      put.mockResolvedValue(approved);
+      const wrapper = mount(PrepPage);
+      await flushPromises();
+      await wrapper.findAll(".stale button")[1].trigger("click");
+      await flushPromises();
+      expect(del).toHaveBeenCalledWith("/preps/g10-s1/1.2/1/objectives/1");
+      await wrapper.findAll(".stale button")[0].trigger("click");
+      await flushPromises();
+      expect(put).toHaveBeenCalledWith("/preps/g10-s1/1.2/1/objectives/1", {
+        condition: "من جدول",
+        criterion: "بدقة",
+        suggest: false,
+        note: null,
+      });
+    });
+
+    it("خطأ الخادم يظهر والمحرر يبقى مفتوحًا", async () => {
+      const { ApiError } = await import("@/api/client");
+      put.mockRejectedValue(new ApiError(422, "الشرط قصير جدًا"));
+      const wrapper = mount(PrepPage);
+      await flushPromises();
+      await button(wrapper, "تعديل")[1].trigger("click");
+      await wrapper.find(".editing form").trigger("submit");
+      await flushPromises();
+      expect(wrapper.find(".alert-error").text()).toContain("الشرط قصير جدًا");
+      expect(wrapper.find(".editing").exists()).toBe(true);
+    });
+
+    it("علامة المراجعة: الزر ثم التاريخ، و«تحتاج مراجعة» حين تتغير النصوص", async () => {
+      post.mockResolvedValue({ ...approved, review: { reviewed_at: "2026-11-19T09:00:00Z", stale: false } });
+      const wrapper = mount(PrepPage);
+      await flushPromises();
+      expect(wrapper.text()).not.toContain("تحتاج مراجعة");
+      await button(wrapper, "راجعتُ أهداف الحصة")[0].trigger("click");
+      await flushPromises();
+      expect(post).toHaveBeenCalledWith("/preps/g10-s1/1.2/1/review");
+      expect(wrapper.find(".reviewed").text()).toContain("19 نوفمبر 2026");
+      expect(button(wrapper, "راجعتُ أهداف الحصة")).toHaveLength(0);
+
+      get.mockImplementation((url: string) =>
+        Promise.resolve(url.endsWith("/1.2/1") ? { ...approved, review: { reviewed_at: "2026-11-19T09:00:00Z", stale: true } } : periods),
+      );
+      const again = mount(PrepPage);
+      await flushPromises();
+      expect(again.text()).toContain("تحتاج مراجعة");
+      expect(button(again, "راجعتُ أهداف الحصة")).toHaveLength(1);
+    });
   });
 
   it("بلا صلاحية لا يطلب شيئًا", async () => {
