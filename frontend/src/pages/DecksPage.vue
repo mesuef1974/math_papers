@@ -3,28 +3,43 @@ import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import AppIcon from "@/components/AppIcon.vue";
 import EmptyState from "@/components/EmptyState.vue";
 import { useAuthStore } from "@/stores/auth";
-import { DEFAULT_PERIOD, useDecksStore } from "@/stores/decks";
+import { type DeckPeriod, useDecksStore } from "@/stores/decks";
 
-// عروض الدروس: المعلم يختار الدرس وزمن الحصة، فيُبنى العرض في الخادم من مقاطع الأمثلة المنشورة، ثم ينزّل ملف PPTX.
+// عروض الحصص: المعلم يختار حصة من حصص الدروس، فيُبنى في الخادم عرضها من تحضيرها ومقاطع أمثلتها المنشورة، ثم ينزّل ملف PPTX.
 const decks = useDecksStore();
 const auth = useAuthStore();
-const lesson = ref("");
-const period = ref(DEFAULT_PERIOD);
+const choice = ref("");
 
 onMounted(() => {
   if (auth.canGenerate) void decks.load();
 });
 onBeforeUnmount(() => decks.stop());
 
-const current = computed(() => decks.lessons.find((item) => item.lesson === lesson.value));
-const periodValid = computed(() => Number.isInteger(period.value) && period.value >= 30 && period.value <= 90);
+const id = (p: DeckPeriod) => `${p.lesson}|${p.k}`;
+const buildable = (p: DeckPeriod) => p.clips && p.status !== "fail";
+const anyBuildable = computed(() => decks.periods.some(buildable));
+const current = computed(() => decks.periods.find((p) => id(p) === choice.value));
+const built = computed(() => decks.periods.find((p) => p.lesson === decks.lesson && p.k === decks.k));
+const lessons = computed(() => {
+  const groups = new Map<string, DeckPeriod[]>();
+  for (const p of decks.periods) groups.set(p.lesson, [...(groups.get(p.lesson) ?? []), p]);
+  return [...groups.entries()].map(([lesson, periods]) => ({ lesson, title: periods[0].title, periods }));
+});
+
+function label(p: DeckPeriod): string {
+  const base = `الحصة ${p.k} من ${p.n} (الأسبوع ${p.week}، ${p.examples} أمثلة)`;
+  if (!p.clips) return `${base}: مقاطعها لم تُنشر`;
+  if (p.status === "fail") return `${base}: تحضيرها لم يجتز معاييره`;
+  return base;
+}
 
 function changed() {
-  decks.select(lesson.value, period.value);
+  if (current.value) decks.select(current.value.lesson, current.value.k);
 }
 
 async function build() {
-  decks.select(lesson.value, period.value);
+  if (!current.value) return;
+  decks.select(current.value.lesson, current.value.k);
   await decks.request();
 }
 </script>
@@ -32,53 +47,43 @@ async function build() {
 <template>
   <header class="page-head">
     <span class="eyebrow">العروض التقديمية</span>
-    <h1>عروض الدروس</h1>
+    <h1>عروض الحصص</h1>
     <p class="lead">
-      اختر الدرس وزمن الحصة، فيُبنى عرض بأمثلة الكتاب وسير الحصة والتقويم، وتنزّله ملف PowerPoint يُعرض من اليمين لليسار.
+      اختر الحصة، فيُبنى عرضها من تحضيرها: أهدافها وأمثلة الكتاب وحلولها والتدريب والفحص والواجب، وجانب المعلم في
+      ملاحظات المتحدث. تنزّله ملف PowerPoint يُعرض من اليمين لليسار.
     </p>
   </header>
 
   <p v-if="!auth.canGenerate" class="alert alert-error" role="alert">حسابك لا يملك صلاحية توليد الأوراق.</p>
   <div v-else class="panel" :aria-busy="decks.loading || decks.busy">
     <p v-if="decks.error" class="alert alert-error" role="alert">{{ decks.error }}</p>
-    <EmptyState v-if="decks.loaded && !decks.lessons.length">
-      لم تُنشر مقاطع أمثلة بعد، فلا عروض لبنائها. تُنشر من جهاز المالك بأمر النشر.
+    <EmptyState v-if="decks.loaded && !anyBuildable">
+      لم تُنشر مقاطع أمثلة أي حصة بعد، فلا عروض لبنائها. تُنشر من جهاز المالك بأمر النشر.
     </EmptyState>
-    <form v-else-if="decks.lessons.length" class="form" @submit.prevent="build">
+    <form v-else-if="decks.periods.length" class="form" @submit.prevent="build">
       <label class="field">
-        <span>الدرس</span>
-        <select v-model="lesson" class="input" required @change="changed">
-          <option value="" disabled>اختر الدرس</option>
-          <option v-for="item in decks.lessons" :key="item.lesson" :value="item.lesson">
-            {{ item.lesson }} — {{ item.title }} ({{ item.examples }} أمثلة)
-          </option>
+        <span>الحصة</span>
+        <select v-model="choice" class="input" required @change="changed">
+          <option value="" disabled>اختر الحصة</option>
+          <optgroup v-for="group in lessons" :key="group.lesson" :label="`${group.lesson} — ${group.title}`">
+            <option v-for="p in group.periods" :key="id(p)" :value="id(p)" :disabled="!buildable(p)">
+              {{ label(p) }}
+            </option>
+          </optgroup>
         </select>
       </label>
-      <label class="field narrow">
-        <span>زمن الحصة بالدقائق</span>
-        <input
-          v-model.number="period"
-          class="input"
-          type="number"
-          min="30"
-          max="90"
-          step="1"
-          required
-          @change="changed"
-        />
-      </label>
-      <button type="submit" class="btn btn-primary" :disabled="!lesson || !periodValid || decks.busy">
+      <button type="submit" class="btn btn-primary" :disabled="!current || !buildable(current) || decks.busy">
         <AppIcon name="generate" />{{ decks.busy ? "يُبنى العرض…" : "ابنِ العرض" }}
       </button>
     </form>
 
     <div v-if="decks.status === 'pending'" class="status" role="status">
-      يُبنى عرض الدرس {{ decks.lesson }} الآن، وسيظهر رابط التنزيل هنا حين يجهز.
+      يُبنى عرض الحصة الآن، وسيظهر رابط التنزيل هنا حين يجهز.
     </div>
     <div v-else-if="decks.status === 'ready'" class="status ready" role="status">
       <p>
         العرض جاهز: الدرس <bdi dir="ltr">{{ decks.lesson }}</bdi
-        ><template v-if="current">، {{ current.examples }} أمثلة</template>.
+        ><template v-if="built">، الحصة {{ built.k }} من {{ built.n }}</template>.
       </p>
       <a class="btn btn-primary" :href="decks.url" download><AppIcon name="print" />نزّل العرض</a>
     </div>
@@ -97,9 +102,6 @@ async function build() {
 }
 .form .field {
   flex: 1 1 280px;
-}
-.form .field.narrow {
-  flex: 0 1 160px;
 }
 .status {
   margin-block-start: var(--space-4);

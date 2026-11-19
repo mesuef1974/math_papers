@@ -1,39 +1,25 @@
-"""نموذج عرض الدرس: شرائح حتمية من الفهرس المشتق وسير الحصة، بلا Django ولا نص دليل في المستودع.
+"""عرض الحصة من تحضيرها (المرحلة 4 من `docs/lesson_prep_plan.md`): نموذج شرائح حتمي بلا Django ولا نص دليل.
 
-نصوص الأهداف والمصطلحات وصور الأمثلة المقصوصة من الكتاب محتوى محميّ يبقى خارج المستودع (قاعدة نطاق المحتوى)؛ فهي مدخلات
-`LessonContent` يمرّرها المعلم محليًا. ما يُشتق هنا فقط: ترتيب الشرائح، وتمثيلات كل مثال وعمق تمارينه من الفهرس، وسير الحصة
-بدقائقه، وملخص اختبار الدرس. الناقص لا يُخمَّن: مدخل فارغ لا تُرسم له شريحة، ومثال مقصوص رقمه خارج الفهرس خطأ لا تجاهل.
-التصدير في `pptx_export.py` وهو وحده يعرف شكل الملف.
-
-عرض الحصة (`build_period_deck`، المرحلة 4 من `docs/lesson_prep_plan.md`) مدخله الوحيد تحضير حصة ومقاطع أمثلتها: لكل شريحة
-مرحلتها من مراحل التحضير ودقائقها وملاحظات المتحدث، وكل نص فيها من قوالب `PERIOD_TEXT` أو من سلوك هدف مؤلَّف معتمد.
-معاييره في `deck_checks.py`.
+المدخل الوحيد تحضير حصة ومقاطع أمثلتها: لكل شريحة مرحلتها من مراحل التحضير ودقائقها وملاحظات المتحدث، وكل نص فيها من
+قوالب `PERIOD_TEXT` أو من سلوك هدف مؤلَّف معتمد. صور الأمثلة المقصوصة من كتاب الطالب تأتي من طبقة الأصول الخاصة ولا تدخل
+المستودع. الناقص لا يُخمَّن: مثال بلا مقطع أو مقطع خارج الحصة خطأ لا تجاهل. معايير النموذج في `deck_checks.py`، والتصدير
+ومعايير الملف (S7 وS8 وS12) في `pptx_export.py` و`pptx_checks.py`.
 """
 
 from __future__ import annotations
 
 import hashlib
 from collections import Counter
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, replace
 
-from apps.knowledge.domain.course_index import LessonIndex
 from apps.papers.domain.bidi import isolate_number_ranges
 from apps.papers.domain.book_source import number_list
 
 from .calendar_engine import PlanningError
 from .prep import PeriodPrep, PrepExample, prep_digest
 from .prep_sheet import STAGE_LABELS, recall_label, split_minutes
-from .strategies import Flow
 
-PHASE_LABELS = {
-    "opening": "التهيئة",
-    "explore": "الاستكشاف",
-    "explain": "الشرح",
-    "practice": "التدريب",
-    "check": "الفحص",
-    "close": "الإغلاق",
-}
 REPRESENTATION_LABELS = {
     "بياني": "بياني",
     "جبري": "جبري",
@@ -64,121 +50,6 @@ class ExampleClip:
             raise DeckError(f"أبعاد صورة المثال {self.n} غير صالحة")
         if not self.png.startswith(b"\x89PNG\r\n\x1a\n"):
             raise DeckError(f"صورة المثال {self.n} ليست PNG")
-
-
-@dataclass(frozen=True)
-class LessonContent:
-    """ما يضعه المعلم من نصوصه المحلية: عنوان الدرس وأهدافه ومصطلحاته (عربي، إنجليزي) والأمثلة المقصوصة."""
-
-    title: str
-    objectives: tuple[str, ...] = ()
-    vocabulary: tuple[tuple[str, str], ...] = ()
-    examples: tuple[ExampleClip, ...] = ()
-
-
-@dataclass(frozen=True)
-class TitleSlide:
-    title: str
-    subtitle: str
-
-
-@dataclass(frozen=True)
-class BulletsSlide:
-    title: str
-    bullets: tuple[str, ...]
-
-
-@dataclass(frozen=True)
-class TableSlide:
-    title: str
-    header: tuple[str, ...]
-    rows: tuple[tuple[str, ...], ...]
-    footnote: str = ""
-
-
-@dataclass(frozen=True)
-class ExampleSlide:
-    title: str
-    clip: ExampleClip
-    notes: tuple[str, ...]
-
-
-Slide = TitleSlide | BulletsSlide | TableSlide | ExampleSlide
-
-
-@dataclass(frozen=True)
-class Deck:
-    lesson: str
-    slides: tuple[Slide, ...]
-
-
-def _example_notes(lesson: LessonIndex, n: int) -> tuple[str, ...]:
-    indexed = next((e for e in lesson.examples if e.n == n), None)
-    if indexed is None:
-        raise DeckError(f"المثال {n} غير موجود في الدرس {lesson.lesson} بالفهرس")
-    notes: list[str] = []
-    if indexed.representations:
-        notes.append(
-            "التمثيلات: " + "، ".join(REPRESENTATION_LABELS.get(r, r) for r in indexed.representations)
-        )
-    doks = sorted({row.dok for row in lesson.analysis if row.example == n})
-    if doks:
-        notes.append("عمق التمارين المرتبطة: " + "، ".join(f"DOK {d}" for d in doks))
-    return tuple(notes)
-
-
-def _flow_slide(flow: Flow) -> TableSlide:
-    rows = tuple((PHASE_LABELS[s.phase], s.strategy.title, f"{s.minutes}", f"{s.start}") for s in flow.steps)
-    return TableSlide(
-        title="سير الحصة",
-        header=("الطور", "الاستراتيجية", "الدقائق", "يبدأ عند الدقيقة"),
-        rows=rows,
-        footnote=f"زمن الحصة {flow.period_minutes} دقيقة",
-    )
-
-
-def _assessment_slide(lesson: LessonIndex) -> TableSlide | None:
-    if not lesson.quiz_depths:
-        return None
-    counts = Counter(lesson.quiz_depths)
-    rows = tuple((f"DOK {d}", f"{counts[d]}") for d in sorted(counts))
-    return TableSlide(
-        title="التقويم",
-        header=("العمق المعرفي", "عدد أسئلة اختبار الدرس"),
-        rows=rows,
-        footnote=f"عدد التمارين في الدرس {lesson.exercises_total}",
-    )
-
-
-def build_deck(lesson: LessonIndex, content: LessonContent, flow: Flow) -> Deck:
-    """ترتيب الشرائح: العنوان، الأهداف، المصطلحات، مثال لكل مقصوص بترتيب رقمه وتتمته بعده، سير الحصة، التقويم."""
-    if not content.title.strip():
-        raise DeckError("عنوان الدرس فارغ")
-    numbers = [(c.n, c.part) for c in content.examples]
-    if len(set(numbers)) != len(numbers):
-        raise DeckError("رقم مثال مكرر في المقصوصات")
-
-    subtitle = f"الدرس {lesson.lesson}"
-    if lesson.standards:
-        subtitle += " · " + "، ".join(lesson.standards)
-    slides: list[Slide] = [TitleSlide(content.title, subtitle)]
-    if content.objectives:
-        slides.append(BulletsSlide("أهداف الدرس", content.objectives))
-    if content.vocabulary:
-        slides.append(
-            TableSlide("المصطلحات", ("المصطلح", "Term"), tuple((ar, en) for ar, en in content.vocabulary))
-        )
-    for clip in sorted(content.examples, key=lambda c: (c.n, c.part)):
-        if clip.part == 1:
-            slides.append(ExampleSlide(f"مثال {clip.n}", clip, _example_notes(lesson, clip.n)))
-        else:
-            _example_notes(lesson, clip.n)  # رقم خارج الفهرس خطأ حتى للتتمة
-            slides.append(ExampleSlide(f"تابع المثال {clip.n}", clip, ()))
-    slides.append(_flow_slide(flow))
-    assessment = _assessment_slide(lesson)
-    if assessment is not None:
-        slides.append(assessment)
-    return Deck(lesson.lesson, tuple(slides))
 
 
 # ---- عرض الحصة من تحضيرها ----
@@ -283,12 +154,17 @@ def _t(name: str, **values: object) -> str:
     return isolate_number_ranges(PERIOD_TEXT[name].format(**values))
 
 
-def period_deck_key(prep: PeriodPrep, clips: Sequence[ExampleClip]) -> str:
-    """مفتاح ملف العرض: يشتق من تجزئة التحضير وتجزئة كل مقطع، فتغيّر أيهما يعطي مفتاحًا جديدًا."""
+def deck_key_of(prep: PeriodPrep, clip_digests: Iterable[tuple[int, int, str]]) -> str:
+    """مفتاح ملف العرض من تجزئة التحضير وتجزئة SHA-256 لكل مقطع (المثال، الجزء، التجزئة): يكفي فهرس الأصول لحسابه
+    دون قراءة الصور، وتغيّر التحضير أو مقطع أو صيغة الملف يعطي مفتاحًا جديدًا."""
     digest = hashlib.sha256(f"{PERIOD_DECK_FORMAT}|{prep_digest(prep)}".encode())
-    for clip in sorted(clips, key=lambda c: (c.n, c.part)):
-        digest.update(f"|{clip.n}.{clip.part}:{hashlib.sha256(clip.png).hexdigest()}".encode())
+    for n, part, sha in sorted(clip_digests):
+        digest.update(f"|{n}.{part}:{sha}".encode())
     return f"decks/{prep.course}/{prep.lesson}-k{prep.k}of{prep.n}-p{prep.minutes}-{digest.hexdigest()[:16]}.pptx"
+
+
+def period_deck_key(prep: PeriodPrep, clips: Sequence[ExampleClip]) -> str:
+    return deck_key_of(prep, ((c.n, c.part, hashlib.sha256(c.png).hexdigest()) for c in clips))
 
 
 def objective_bullet(prep: PeriodPrep, index: int) -> str:
