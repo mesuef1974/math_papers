@@ -2,15 +2,14 @@
 
 import json
 import re
-import struct
 import zipfile
-import zlib
 from io import BytesIO
 from posixpath import dirname, join, normpath
 
 import pytest
 from lxml import etree
 
+from apps.assets.tests.conftest import make_png
 from apps.curriculum.courses import GRADE10_SLUG  # noqa: E402
 from apps.knowledge.domain.contract import read_source  # noqa: E402
 from apps.planning.domain.deck import (
@@ -34,21 +33,8 @@ P = "{http://schemas.openxmlformats.org/presentationml/2006/main}"
 RAW_BOOK_REFS = re.compile(r"For Qatar|Savvas|ISBN", re.IGNORECASE)
 
 
-def _png(w: int, h: int) -> bytes:
-    """PNG أبيض صالح بلا مكتبة صور (Pillow ليست من تبعيات المشروع)."""
-
-    def chunk(kind: bytes, data: bytes) -> bytes:
-        body = kind + data
-        return struct.pack(">I", len(data)) + body + struct.pack(">I", zlib.crc32(body))
-
-    rows = b"".join(b"\x00" + b"\xff\xff\xff" * w for _ in range(h))
-    ihdr = struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0)
-    signature = b"\x89PNG\r\n\x1a\n"
-    return signature + chunk(b"IHDR", ihdr) + chunk(b"IDAT", zlib.compress(rows)) + chunk(b"IEND", b"")
-
-
 def _clip(n: int, w: int = 968, h: int = 795) -> ExampleClip:
-    return ExampleClip(n=n, png=_png(w, h), width_px=w, height_px=h)
+    return ExampleClip(n=n, png=make_png(w, h), width_px=w, height_px=h)
 
 
 def _content(**kw) -> LessonContent:
@@ -110,7 +96,7 @@ def test_clip_must_be_a_real_png_with_dimensions():
     with pytest.raises(DeckError):
         ExampleClip(n=1, png=b"JPEG", width_px=10, height_px=10)
     with pytest.raises(DeckError):
-        ExampleClip(n=1, png=_png(2, 2), width_px=0, height_px=10)
+        ExampleClip(n=1, png=make_png(2, 2), width_px=0, height_px=10)
 
 
 @pytest.mark.parametrize("period", [40, 45, 60])
@@ -207,7 +193,7 @@ def test_every_lesson_builds_a_deck_and_a_valid_package(code):
 
 def _write_clips(root, index: dict[str, list[dict]], sizes: dict[str, tuple[int, int]]):
     for name, (w, h) in sizes.items():
-        (root / name).write_bytes(_png(w, h))
+        (root / name).write_bytes(make_png(w, h))
     (root / "index.json").write_text(json.dumps(index), encoding="utf-8")
 
 
@@ -257,5 +243,7 @@ def test_loader_errors_are_loud(tmp_path):
 def test_continuation_of_unindexed_example_is_an_error():
     with pytest.raises(DeckError):
         lesson_deck(
-            "2.6", _content(examples=(ExampleClip(n=9, png=_png(5, 5), width_px=5, height_px=5, part=2),)), 45
+            "2.6",
+            _content(examples=(ExampleClip(n=9, png=make_png(5, 5), width_px=5, height_px=5, part=2),)),
+            45,
         )

@@ -1,5 +1,8 @@
 import pytest
 
+# تجهيزات مشتركة في وحدات مستقلة (pytest لا يقبل pytest_plugins إلا في conftest الجذري)
+pytest_plugins = ["apps.planning.tests.period_decks"]
+
 
 @pytest.fixture
 def staff_user(django_user_model):

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable, Sequence
 from datetime import date, datetime
 from pathlib import Path
 
@@ -22,7 +23,8 @@ from apps.papers import services as papers
 
 from . import selectors
 from .domain.calendar_engine import PlanningError
-from .domain.deck import DeckError, LessonContent
+from .domain.deck import DeckError, ExampleClip, LessonContent, build_period_deck
+from .domain.deck_checks import check_deck
 from .domain.feedback import ClassOutcome, Decision
 from .domain.lesson_run import LessonRun
 from .domain.objective_text import (
@@ -33,10 +35,12 @@ from .domain.objective_text import (
     clean_part,
     shared_digest,
 )
-from .domain.prep import Objective
+from .domain.prep import Objective, PeriodPrep
+from .domain.prep_checks import CheckResult, blocking_failures
 from .domain.suggestion_apply import AcceptedSuggestion, ApplyResult, apply_accepted
 from .models import ClassOutcomeRecord, LessonRunRecord, ObjectiveOverride, ObjectiveSuggestion, PrepReview
-from .pptx_export import build_pptx
+from .pptx_checks import check_pptx
+from .pptx_export import build_period_pptx, build_pptx
 
 REMEDIAL_PER_PERIOD = 5  # أسئلة لكل حصة إعادة تدريس؛ المراجعة السريعة بلا حصة تأخذ حصة واحدة في الحساب
 
@@ -165,6 +169,28 @@ def build_lesson_deck(
     if storage.exists(_error_key(key)):
         storage.delete(_error_key(key))
     return key
+
+
+def _refuse(results: Sequence[CheckResult], stage: str) -> None:
+    failed = blocking_failures(results)
+    if failed:
+        details = "؛ ".join(f"{r.code}: {r.details[0]}" if r.details else r.code for r in failed)
+        raise DeckError(f"العرض لا يجتاز معايير {stage}: {details}")
+
+
+def export_period_deck(
+    prep: PeriodPrep, clips: Sequence[ExampleClip], prep_results: Iterable[CheckResult]
+) -> tuple[bytes, tuple[CheckResult, ...]]:
+    """ملف PPTX لعرض الحصة ومعاييره كلها: الحاجب الفاشل على النموذج يمنع التصدير، وعلى الملف (S7 وS8 وS12) يمنع تسليمه.
+
+    حتمي بلا تخزين: المهمة الخلفية تضعه تحت مفتاح العرض (`PeriodDeck.key`)، فالمدخل نفسه يعطي الملف نفسه."""
+    deck = build_period_deck(prep, clips)
+    results = check_deck(deck, prep, clips, prep_results)
+    _refuse(results, "النموذج")
+    data = build_period_pptx(deck)
+    on_file = check_pptx(data, deck)
+    _refuse(on_file, "الملف")
+    return data, results + on_file
 
 
 def clear_deck_failure(key: str, storage: Storage | None = None) -> None:

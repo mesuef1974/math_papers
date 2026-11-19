@@ -8,7 +8,6 @@ from dataclasses import replace
 
 import pytest
 
-from apps.curriculum.courses import GRADE10_SLUG
 from apps.papers.domain.bidi import LRM
 from apps.planning.domain.deck import (
     DeckError,
@@ -33,38 +32,10 @@ from apps.planning.domain.deck_checks import (
 )
 from apps.planning.domain.prep import prep_digest
 from apps.planning.domain.prep_checks import FAIL, PASS, CheckResult
-from apps.planning.selectors import lesson_preps
 
-PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 16
-
-
-def fake_clips(prep, png: bytes = PNG) -> tuple[ExampleClip, ...]:
-    """مقطع لكل مثال وتتماته بعدد مقاطعه المعروف (وواحد إن لم تُنشر الأصول)."""
-    return tuple(
-        ExampleClip(n=e.n, png=png, width_px=1600, height_px=900, part=part)
-        for e in prep.examples
-        for part in range(1, (e.continuations or 1) + 1)
-    )
-
-
-@pytest.fixture
-def preps(loaded_courses):
-    return lesson_preps(GRADE10_SLUG)
-
-
-@pytest.fixture
-def built(preps):
-    """(التحضير، معاييره، المقاطع، العرض) لكل حصة."""
-    out = []
-    for row in preps:
-        clips = fake_clips(row.prep)
-        out.append((row.prep, row.checks, clips, build_period_deck(row.prep, clips)))
-    return out
-
-
-def _middle(built):
-    """حصة أمثلة فيها تدريب صفي وتمايز وبطاقة خروج ورقم تمرين متتالٍ (للمدى)."""
-    return next(b for b in built if b[0].examples and b[0].classwork and b[0].exit_ticket and b[0].basic)
+from .period_decks import CLIP_PNG as PNG
+from .period_decks import fake_clips
+from .period_decks import middle_of as _middle
 
 
 def _fails(result: CheckResult) -> bool:

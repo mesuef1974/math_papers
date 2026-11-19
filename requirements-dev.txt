@@ -8,3 +8,4 @@ django-stubs[compatible-mypy]>=5.1
 detect-secrets>=1.5
 pre-commit>=4.0
 pyyaml>=6.0
+python-pptx>=1.0  # S12: الاختبارات تفتح ملف العرض بمكتبة مستقلة؛ تبعية تطوير لا تشغيل (قرار المالك 2026-11-19)
