@@ -118,6 +118,27 @@ def test_notes_alt_text_and_direction(sample):
 
 
 @pytest.mark.django_db
+def test_files_open_in_python_pptx_with_notes_alt_text_and_no_empty_placeholder(decks):
+    """شاهد مستقل عن قارئ pptx_checks: python-pptx يفتح الملفات الـ48 بشرائحها وملاحظاتها ونصوصها البديلة."""
+    from pptx import Presentation
+
+    for deck in decks:
+        presentation = Presentation(BytesIO(build_period_pptx(deck)))
+        assert len(presentation.slides) == len(deck.slides), deck.key
+        for model, slide in zip(deck.slides, presentation.slides, strict=True):
+            assert slide.has_notes_slide, deck.key
+            assert slide.notes_slide.notes_text_frame.text.replace("\n", "") == "".join(model.notes)
+            for placeholder in (*slide.placeholders, *slide.notes_slide.placeholders):
+                assert placeholder.text_frame.text.strip(), (deck.key, model.title)
+            texts = "".join(sh.text_frame.text for sh in slide.shapes if sh.has_text_frame)
+            assert model.title in texts
+            clips = [sh for sh in slide.shapes if sh.name.startswith("مقطع")]
+            assert len(clips) == (model.clip is not None), (deck.key, model.title)
+            for clip in clips:
+                assert clip._element.nvPicPr.cNvPr.get("descr") == model.alt
+
+
+@pytest.mark.django_db
 def test_file_is_deterministic(sample):
     assert build_period_pptx(sample) == build_period_pptx(sample)
 

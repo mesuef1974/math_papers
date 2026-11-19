@@ -8,3 +8,4 @@ django-stubs[compatible-mypy]>=5.1
 detect-secrets>=1.5
 pre-commit>=4.0
 pyyaml>=6.0
+python-pptx>=1.0  # الاختبارات تفتح ملف عرض الحصة بمكتبة مستقلة عن قارئ pptx_checks؛ تبعية تطوير لا تشغيل
