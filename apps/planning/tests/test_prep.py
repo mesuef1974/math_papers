@@ -44,8 +44,8 @@ from apps.planning.domain.strategies import load_library
 from apps.planning.selectors import lesson_preps
 
 LIBRARY = {s.slug: s for s in load_library()}
-APPROVED_UNITS = {1}  # وحدات العاشر التي اعتمد المالك نصوصها (prep/unit-<n>.json)
-DRAFT_UNITS = {2, 3}  # وحدات كُتبت نصوصها ولم تُعتمد بعد: T2c يحجبها وحده
+APPROVED_UNITS = {1, 2, 3}  # وحدات العاشر التي اعتمد المالك نصوصها (prep/unit-<n>.json)
+DRAFT_UNITS: set[int] = set()  # وحدات كُتبت نصوصها ولم تُعتمد بعد: T2c يحجبها وحده
 
 
 @pytest.fixture

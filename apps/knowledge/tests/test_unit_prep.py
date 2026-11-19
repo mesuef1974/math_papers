@@ -103,7 +103,9 @@ def test_problems_catch_missing_example_wrong_depth_and_enrichment(loaded_course
 def test_standard_texts_appear_only_after_their_unit_is_approved(tmp_path):
     root = tmp_path / "courses"
     shutil.copytree(COURSES_DIR / GRADE10_SLUG, root / GRADE10_SLUG)
-    assert set(approved_standards(GRADE10_SLUG, root)) == {"10.3.1", "10.3.2", "10.3.3"}
+    unit_one = {"10.3.1", "10.3.2", "10.3.3"}
+    every = set(course_standards(GRADE10_SLUG, root).standards)
+    assert unit_one < every and set(approved_standards(GRADE10_SLUG, root)) == every
     draft = _raw() | {"status": "draft", "approval": None}
     (root / GRADE10_SLUG / "prep" / "unit-1.json").write_text(
         json.dumps(draft, ensure_ascii=False), encoding="utf-8"
@@ -111,7 +113,7 @@ def test_standard_texts_appear_only_after_their_unit_is_approved(tmp_path):
     unit_prep.cache_clear()
     course_standards.cache_clear()
     try:
-        assert approved_standards(GRADE10_SLUG, root) == {}
+        assert set(approved_standards(GRADE10_SLUG, root)) == every - unit_one
     finally:
         unit_prep.cache_clear()
         course_standards.cache_clear()

@@ -96,8 +96,13 @@ def test_every_lesson_period_opens_and_downloads_in_the_ministry_template(teache
 
 
 @pytest.mark.django_db
-def test_unapproved_objectives_are_marked_pending_in_page_and_word(teacher_client):
-    base = f"{API}/{GRADE10_SLUG}/2.1/1"  # الوحدة 2 مسودة لم يعتمدها المالك بعد
+def test_unapproved_objectives_are_marked_pending_in_page_and_word(teacher_client, monkeypatch):
+    def draft(course, unit):  # الوحدات 1-3 كلها معتمدة؛ تُعاد الوحدة 2 مسودةً لاختبار العلامة
+        data = unit_prep(course, unit)
+        return data.model_copy(update={"status": "draft", "approval": None}) if unit == 2 else data
+
+    monkeypatch.setattr("apps.planning.selectors.unit_prep", draft)
+    base = f"{API}/{GRADE10_SLUG}/2.1/1"
     sheet = teacher_client.get(base).json()
     assert sheet["pending"] is True
     first = sheet["objectives"][0]
