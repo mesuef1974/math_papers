@@ -2,16 +2,22 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+import json
+from datetime import date, datetime
+from pathlib import Path
 
 from django.contrib.auth.models import AbstractBaseUser
 from django.db import transaction
 from django.utils import timezone
+from pydantic import ValidationError
 
 from apps.assets.storage import Storage, get_storage
 from apps.core.services import record_audit
 from apps.curriculum import selectors as curriculum
 from apps.curriculum.models import Lesson
+from apps.knowledge.domain.contract import COURSES_DIR
+from apps.knowledge.domain.unit_prep import PREP_DIR, UnitPrep, course_standards, unit_prep, unit_problems
+from apps.knowledge.selectors import course_index
 from apps.papers import services as papers
 
 from . import selectors
@@ -28,6 +34,7 @@ from .domain.objective_text import (
     shared_digest,
 )
 from .domain.prep import Objective
+from .domain.suggestion_apply import AcceptedSuggestion, ApplyResult, apply_accepted
 from .models import ClassOutcomeRecord, LessonRunRecord, ObjectiveOverride, ObjectiveSuggestion, PrepReview
 from .pptx_export import build_pptx
 
@@ -311,3 +318,62 @@ def decide_suggestion(
         payload={"suggestion": row.pk, "decision": decision, "note": row.decision_note},
     )
     return row
+
+
+def apply_objective_suggestions(
+    course: str, unit: int, *, root: Path = COURSES_DIR, today: date | None = None, write: bool = True
+) -> ApplyResult:
+    """يكتب الاقتراحات المقبولة لوحدة في `prep/unit-<n>.json` (الشرط والمعيار وحدهما) ويحدّث سطر الاعتماد بتاريخ اليوم.
+    يتحقق من الناتج بمخطط `UnitPrep` ومطابقته للفهرس (`unit_problems`) قبل الكتابة، ولا يمس الملف إن لم يتغير شيء
+    (idempotent). الكتابة محلية في المستودع، ثم طلب دمج يعتمده المالك؛ `write=False` معاينة بلا كتابة."""
+    path = root / course / PREP_DIR / f"unit-{unit}.json"
+    if not path.is_file():
+        raise PlanningError(f"لا ملف للوحدة {unit} في المقرر {course}")
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    if UnitPrep.model_validate(raw).status != "approved":
+        raise PlanningError(f"الوحدة {unit} مسودة: لا اقتراحات تُطبَّق على وحدة غير معتمدة")
+    rows = (
+        ObjectiveSuggestion.objects.filter(
+            decision=ObjectiveSuggestion.ACCEPTED, lesson__course__slug=course, lesson__unit=unit
+        )
+        .select_related("lesson")
+        .order_by("decided_at", "id")
+    )
+    accepted = [
+        AcceptedSuggestion(
+            suggestion=row.pk,
+            lesson=row.lesson.code,
+            example=row.example,
+            condition=row.condition,
+            criterion=row.criterion,
+            base_digest=row.base_digest,
+        )
+        for row in rows
+    ]
+    result = apply_accepted(raw, accepted, today or timezone.localdate())
+    if not result.changed:
+        return result
+    try:
+        data = UnitPrep.model_validate(result.raw)
+    except ValidationError as error:
+        raise PlanningError(f"ملف الوحدة بعد التطبيق يخالف المخطط: {error}") from error
+    plan = selectors.term_plan(course)
+    problems = unit_problems(
+        data,
+        course_index(course).lessons,
+        plan.enrichment_lessons,
+        plan.enrichment_examples,
+        course_standards(course, root),
+    )
+    if problems:
+        raise PlanningError("ملف الوحدة بعد التطبيق لا يطابق الفهرس: " + "؛ ".join(problems))
+    if write:
+        path.write_text(json.dumps(result.raw, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        unit_prep.cache_clear()
+        course_standards.cache_clear()
+        record_audit(
+            action="prep.suggestion.apply",
+            target=f"{course}/unit-{unit}",
+            payload={"suggestions": [item.suggestion for item in result.applied]},
+        )
+    return result
