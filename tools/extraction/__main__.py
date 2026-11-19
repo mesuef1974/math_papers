@@ -3,7 +3,8 @@
 مراحل الرؤية (خادم llama محلي يُشغَّل ويُغلق آليًا؛ مستأنَفة، وخارج `all` وأختامها): vision_pages، vision_examples، vision_vocab، reps (انظر `vision.py` و`reps.py`)؛ وتقبل `--pages A Z` و`--lessons 1.1 ...`.
 المراحل: validate (فحص book.yaml)، ocr (تصيير وقراءة؛ ببيئة guide_extract)، tables (جدول تحليل التمارين)، layout، images، objectives، examples، fusion (دمج OCR والرؤية والجدول)، checks، lesson (سجل الدرس)، all
 (الأربع الأخيرة بعد layout؛ وtables قبل layout حين layout.anchor=analysis). وخارج `all`: printed_pages (جدول الصفحات المطبوعة من صناديق OCR؛ غير الرتيب يُرفض برمز الخروج 6)
-وexercise_links (ربط التدريبات بالأمثلة من الرؤية وexamples.json، للمراجعة). المخرجات في مجلد الكتاب خارج المستودع، ويطبع كل مرحلة ملخصها العددي.
+وexercise_links (ربط التدريبات بالأمثلة من الرؤية وexamples.json، للمراجعة)، وstudent_clips (مقاطع الأمثلة من كتاب الطالب بدقته
+الأصلية؛ مطابقة دون العتبة بلا مراجعة رمز الخروج 7) وstudent_decks (شاهدها: عروض حصص المقرر في قاعدة وتخزين مؤقتين). المخرجات في مجلد الكتاب خارج المستودع، ويطبع كل مرحلة ملخصها العددي.
 كل مرحلة تتخطى نفسها ما لم تتغير تجزئة مدخلها (`stamps.py`)، و`--force` يعيدها؛ وتصحيحات الكتاب اليدوية (`corrections.py`)
 تُطبَّق على مخرج مرحلتها بأسبابها.
 """
@@ -30,6 +31,7 @@ from . import (
     publish,
     reps,
     stamps,
+    student_clips,
     tables,
     vision,
 )
@@ -129,6 +131,26 @@ def stage_exercise_links(book: Book) -> None:
     print(json.dumps(exercise_links.summarize(result), ensure_ascii=False))
 
 
+def stage_student_clips(book: Book) -> None:
+    result = student_clips.run(book, student_clips.load_table(book))
+    _write(book.output("student_clips"), result)
+    print(json.dumps(student_clips.summarize(result), ensure_ascii=False))
+    pending = student_clips.unreviewed(result)
+    if pending:  # التقرير مكتوب ليُراجَع، والمرحلة لا تُختم حتى تُعتمد أو تُصلَح
+        raise student_clips.StudentClipsError(
+            f"{len(pending)} مقطعًا دون العتبة أو بلا صفحة، بلا مراجعة: {'، '.join(pending[:10])}"
+        )
+
+
+def stage_student_decks(book: Book) -> None:
+    cfg = student_clips.settings(book)
+    if not cfg.get("course"):
+        raise publish.PublishError("لا student_clips.course في book.yaml")
+    result = publish.build_student_decks(book, cfg["course"], book.dir(cfg["target"]))
+    publish.write_result(book, "student_decks", result)
+    print(result["decks"].splitlines()[-1])
+
+
 def stage_fusion(book: Book) -> None:
     result = fusion.build(book, _layout(book))
     _write(book.output("fusion"), result)
@@ -220,6 +242,8 @@ STAGES: dict[str, Callable[[Book], Any]] = {
     "publish": stage_publish,
     "printed_pages": stage_printed_pages,
     "exercise_links": stage_exercise_links,
+    "student_clips": stage_student_clips,
+    "student_decks": stage_student_decks,
 }
 TARGETED = ("load", "publish")  # مراحل لها وجهة خارج مجلد الكتاب: ختمها يشمل بصمة الوجهة
 
@@ -296,6 +320,9 @@ def main(argv: list[str] | None = None) -> int:
     except printed_pages.PrintedPagesError as e:
         print(f"جدول الصفحات المطبوعة مرفوض: {e}", file=sys.stderr)
         return 6
+    except student_clips.StudentClipsError as e:
+        print(f"مقاطع كتاب الطالب: {e}", file=sys.stderr)
+        return 7
     return 0
 
 

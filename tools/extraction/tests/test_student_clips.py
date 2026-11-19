@@ -1,0 +1,474 @@
+"""مرحلة student_clips: هندسة نقل الصندوق والبحث بمطابِق تحليلي مختلق (بلا OpenCV)، ثم المطابِق الحقيقي والمرحلة كلها على
+ملفَي PDF اصطناعيين حين تتوفر pymupdf وOpenCV (بيئة guide_extract)؛ لا صفحة كتاب حقيقية."""
+
+import json
+import math
+
+import pytest
+import yaml
+
+from tools.extraction import publish, stamps, student_clips
+from tools.extraction.__main__ import main, run_stage
+from tools.extraction.config import Book
+
+from .conftest import TOY_PAGES, make_book
+
+SEARCH = student_clips.DEFAULTS["search"]
+PAGE = (600.0, 800.0)
+
+
+# ───── نقل الصندوق ─────
+def test_transfer_box_maps_panel_onto_student_page():
+    panel = (20.0, 30.0, 335.0, 390.0)
+    page = (0.0, 0.0, 630.0, 720.0)  # ضعف اللوحة في المحورين
+    assert student_clips.transfer_box(panel, panel, page) == page
+    assert student_clips.transfer_box((50.0, 60.0, 120.0, 100.0), panel, page) == (60.0, 60.0, 200.0, 140.0)
+
+
+def test_transfer_box_scales_each_axis_and_round_trips():
+    src, dst = (10.0, 10.0, 110.0, 60.0), (5.0, 0.0, 305.0, 200.0)  # ×3 أفقيًا و×4 رأسيًا
+    box = (35.0, 20.0, 60.0, 45.0)
+    moved = student_clips.transfer_box(box, src, dst)
+    assert moved == (80.0, 40.0, 155.0, 140.0)
+    assert student_clips.transfer_box(moved, dst, src) == pytest.approx(box)
+    with pytest.raises(ValueError, match="فارغ"):
+        student_clips.transfer_box(box, (0.0, 0.0, 0.0, 5.0), dst)
+
+
+def test_panel_rect_keeps_wide_left_images_and_fixes_width():
+    cfg = {"min_width": 900, "max_x0": 100, "width": 315}
+    rects = [
+        (22.0, 40.0, 263.0, 200.0, 1004),
+        (20.0, 200.0, 261.0, 390.0, 1004),
+        (400.0, 10.0, 700.0, 500.0, 1200),  # عمود الدليل الأيمن: خارج اللوحة
+        (30.0, 5.0, 60.0, 20.0, 120),  # أيقونة
+    ]
+    assert student_clips.panel_rect(rects, cfg) == (20.0, 40.0, 335.0, 390.0)
+    assert student_clips.panel_rect(rects, {**cfg, "width": None}) == (20.0, 40.0, 263.0, 390.0)
+    assert student_clips.panel_rect(rects[2:], cfg) is None
+
+
+def test_pixel_box_snaps_outward_and_stays_inside_the_scan():
+    bbox, size = (0.0, 0.0, 600.0, 800.0), (2500, 3333)  # 300 بكسل لكل بوصة
+    assert student_clips.pixel_box((72.0, 144.0, 144.0, 216.0), bbox, size) == (300, 599, 600, 900)
+    assert student_clips.pixel_box((-10.0, 790.0, 30.1, 900.0), bbox, size) == (0, 3291, 126, 3333)
+    assert round(student_clips.native_dpi(bbox, size)) == 300
+    with pytest.raises(ValueError, match="خارج"):
+        student_clips.pixel_box((700.0, 0.0, 720.0, 10.0), bbox, size)
+
+
+def test_scan_image_needs_cover_and_upright_placement():
+    full = {
+        "xref": 7,
+        "bbox": (0, 0, 600, 800),
+        "width": 2500,
+        "height": 3333,
+        "transform": (600, 0, 0, 800, 0, 0),
+    }
+    figure = {"xref": 8, "bbox": (100, 100, 300, 300), "width": 800, "height": 800}
+    assert student_clips.scan_image([figure, full], PAGE, 0.85) is full
+    assert student_clips.scan_image([figure], PAGE, 0.85) is None  # صفحة متجهية فيها رسم نقطي
+    rotated = {**full, "transform": (0, 800, -600, 0, 600, 0)}
+    assert student_clips.scan_image([rotated], PAGE, 0.85) is None
+    assert student_clips.scan_image([{**full, "xref": 0}], PAGE, 0.85) is None
+
+
+# ───── المطابقة (مطابِق تحليلي: الدرجة تهبط بالبعد عن الموضع والمقياس الحقيقيين) ─────
+def analytic(true_box, base, calls=None, ceiling=1.0):
+    """مطابِق مختلق: يعيد موضع الصندوق الحقيقي إن وقع في النافذة (وإلا أقرب موضع فيها) بدرجة تهبط بخطأ المقياس والموضع."""
+    tx, ty, true_w = true_box[0], true_box[1], true_box[2] - true_box[0]
+
+    def match(dpi, size, window):
+        if calls is not None:
+            calls.append((dpi, size, window))
+        x0, y0, x1, y1 = window or (0.0, 0.0, *PAGE)
+        if x1 - x0 < size[0] or y1 - y0 < size[1]:
+            return (-1.0, 0.0, 0.0)
+        x = min(max(tx, x0), x1 - size[0])
+        y = min(max(ty, y0), y1 - size[1])
+        miss = math.hypot(x - tx, y - ty) / 50
+        scale_error = abs(size[0] / base[0] - true_w / base[0]) * 5
+        return (ceiling - miss - scale_error, x, y)
+
+    return match
+
+
+def test_refine_corrects_offset_and_scale_within_the_window():
+    predicted = (100.0, 200.0, 300.0, 350.0)  # 200×150
+    true = (130.0, 180.0, 130.0 + 200 * 1.07, 180.0 + 150 * 1.07)
+    calls = []
+    box, score, widened = student_clips.refine(
+        analytic(true, (200.0, 150.0), calls), predicted, PAGE, SEARCH, 0.8
+    )
+    assert not widened and score > 0.95
+    assert box == pytest.approx(true, abs=0.01 * 200 + 0.01)  # المقياس إلى ربع الخطوة
+    assert {c[0] for c in calls} == {SEARCH["dpi"], SEARCH["fine_dpi"]}
+    assert all(c[2] is not None for c in calls)  # لم يحتج إلى الصفحة كلها
+
+
+def test_refine_widens_to_the_whole_page_when_the_window_misses():
+    predicted = (50.0, 50.0, 250.0, 200.0)
+    true = (350.0, 600.0, 550.0, 750.0)  # خارج نافذة 15% حول المنقول
+    calls = []
+    box, score, widened = student_clips.refine(
+        analytic(true, (200.0, 150.0), calls), predicted, PAGE, SEARCH, 0.8
+    )
+    assert widened and score > 0.95
+    assert box == pytest.approx(true, abs=0.5)
+    assert any(c[2] is None for c in calls)
+
+
+def test_refine_reports_a_weak_match_without_inventing_a_score():
+    predicted = (100.0, 200.0, 300.0, 350.0)
+    box, score, widened = student_clips.refine(
+        analytic(predicted, (200.0, 150.0), ceiling=0.6), predicted, PAGE, SEARCH, 0.8
+    )
+    assert widened and score == pytest.approx(0.6)
+    assert student_clips.status_of(score, "1.1_m1_p28.png", 0.8, []) == "review"
+    assert student_clips.status_of(score, "1.1_m1_p28.png", 0.8, ["1.1_m1_p28.png"]) == "approved"
+    assert student_clips.status_of(0.8, "1.1_m1_p28.png", 0.8, []) == "ok"
+
+
+def test_refine_survives_a_template_larger_than_the_page():
+    def never(dpi, size, window):
+        return (-1.0, 0.0, 0.0)
+
+    box, score, widened = student_clips.refine(never, (0.0, 0.0, 900.0, 900.0), PAGE, SEARCH, 0.8)
+    assert score == -1.0 and widened and box == (0.0, 0.0, *PAGE)
+
+
+def test_steps_are_inclusive_and_exact():
+    assert student_clips.steps(0.85, 1.15, 0.02)[:2] == [0.85, 0.87]
+    assert student_clips.steps(0.85, 1.15, 0.02)[-1] == 1.15
+    assert len(student_clips.steps(0.85, 1.15, 0.02)) == 16
+
+
+# ───── الإزاحة والأسماء والتقرير ─────
+def clip(name):
+    return student_clips.parse(name)
+
+
+def test_parse_names():
+    assert clip("2.10_m3_p189_cont.png") == student_clips.ClipName(
+        "2.10_m3_p189_cont.png", "2.10", 3, 189, True
+    )
+    assert clip("1.1_m1_p28.png").cont is False
+    assert clip("index.json") is None and clip("1.1_m1_p28_thumb.png") is None
+
+
+def test_estimate_offset_takes_the_best_mean_and_rejects_weak_or_absent():
+    samples = [clip("1.1_m1_p28.png"), clip("3.5_m2_p274.png")]
+
+    def score_at(c, offset):
+        if offset > 12:
+            return None  # صفحة خارج الملف
+        return 0.95 if offset == 9 else 0.3
+
+    assert student_clips.estimate_offset(score_at, samples, range(0, 41), 0.8) == (9, pytest.approx(0.95))
+    with pytest.raises(student_clips.StudentClipsError, match="page_offset"):
+        student_clips.estimate_offset(lambda c, o: 0.4, samples, range(0, 5), 0.8)
+    with pytest.raises(student_clips.StudentClipsError, match="لا مرشّح"):
+        student_clips.estimate_offset(lambda c, o: None, samples, range(0, 5), 0.8)
+
+
+def test_pick_samples_spreads_over_main_clips():
+    names = [f"1.{i}_m1_p{20 + i}.png" for i in range(1, 8)] + ["1.2_m1_p23_cont.png"]
+    clips = [clip(n) for n in sorted(names)]
+    picked = student_clips.pick_samples(clips, 3)
+    assert [c.file for c in picked] == ["1.1_m1_p21.png", "1.4_m1_p24.png", "1.7_m1_p27.png"]
+    assert not any(c.cont for c in picked)
+    assert student_clips.pick_samples(clips[:2], 3) == [c for c in clips[:2] if not c.cont]
+
+
+def test_summary_counts_and_unreviewed():
+    result = {
+        "page_offset": 9,
+        "unmatched": ["x.png"],
+        "clips": [
+            {"file": "a.png", "status": "ok", "score": 0.97, "kind": "vector", "dpi": 600},
+            {"file": "b.png", "status": "approved", "score": 0.71, "kind": "scan", "dpi": 300},
+            {"file": "c.png", "status": "review", "score": 0.42},
+            {"file": "d.png", "status": "missing"},
+        ],
+    }
+    assert student_clips.summarize(result) == {
+        "clips": 4,
+        "written": 2,
+        "review": ["c.png", "d.png"],
+        "min_score": 0.42,
+        "min_dpi": 300,
+        "kinds": {"vector": 1, "scan": 1},
+        "page_offset": 9,
+        "unmatched_names": 1,
+    }
+    assert student_clips.unreviewed(result) == ["c.png", "d.png"]
+
+
+# ───── الإعداد والأختام وسطر الأوامر ─────
+def toy(tmp_path, **over):
+    dirs = {"examples_hires": "hires", "examples_student": "student"}
+    over.setdefault("student_pdf", {"dir": "books", "pattern": "student*.pdf"})
+    book = make_book(tmp_path, TOY_PAGES, dirs=dirs, **over)
+    (tmp_path / "hires").mkdir(exist_ok=True)
+    (tmp_path / "books").mkdir(exist_ok=True)
+    (tmp_path / "guide.pdf").write_bytes(b"guide")
+    (tmp_path / "books" / "student.pdf").write_bytes(b"student")
+    (tmp_path / "printed_pages.json").write_text(json.dumps({"3": 13}), encoding="utf-8")
+    return book
+
+
+def test_config_errors():
+    assert student_clips.errors({}) == []
+    assert student_clips.errors({"student_pdf": {"dir": "d", "pattern": "*.pdf"}, "student_clips": {}}) == []
+    errs = student_clips.errors(
+        {
+            "student_pdf": {"dir": "d"},
+            "student_clips": {"threshold": 1.5, "page_offset": "9", "offsets": [5, 1], "approved": "x"},
+        }
+    )
+    assert len(errs) == 5
+    assert student_clips.errors({"student_clips": 3}) == ["student_clips يجب أن يكون خريطة"]
+
+
+def test_book_with_bad_student_clips_config_is_rejected(tmp_path):
+    with pytest.raises(ValueError, match="threshold"):
+        make_book(tmp_path, TOY_PAGES, student_clips={"threshold": 0})
+
+
+def test_settings_merge_nested_defaults(tmp_path):
+    book = toy(
+        tmp_path, student_clips={"search": {"margin": 0.3}, "panel": {"width": None}, "page_offset": 9}
+    )
+    cfg = student_clips.settings(book)
+    assert cfg["search"]["margin"] == 0.3 and cfg["search"]["step"] == SEARCH["step"]
+    assert cfg["panel"] == {"min_width": 900, "max_x0": 100, "width": None}
+    assert (cfg["page_offset"], cfg["threshold"], cfg["vector_dpi"]) == (9, 0.8, 600)
+
+
+def test_student_pdf_is_resolved_and_missing_is_explicit(tmp_path):
+    book = toy(tmp_path)
+    assert student_clips.student_pdf(book) == tmp_path / "books" / "student.pdf"
+    (tmp_path / "books" / "student.pdf").unlink()
+    with pytest.raises(student_clips.StudentClipsError, match="لا ملف يطابق"):
+        student_clips.student_pdf(book)
+    cfg = yaml.safe_load((tmp_path / "book.yaml").read_text(encoding="utf-8"))
+    del cfg["student_pdf"]
+    (tmp_path / "book.yaml").write_text(yaml.safe_dump(cfg, allow_unicode=True), encoding="utf-8")
+    with pytest.raises(student_clips.StudentClipsError, match="student_pdf"):
+        student_clips.student_pdf(Book.load(tmp_path))
+
+
+def fake_run(scores):
+    def run(book, table):
+        clips = [
+            {
+                "file": name,
+                "status": student_clips.status_of(score, name, 0.8, student_clips.settings(book)["approved"]),
+                "score": score,
+                "kind": "vector",
+                "dpi": 600,
+            }
+            for name, score in scores.items()
+        ]
+        return {"page_offset": 9, "offset_score": None, "threshold": 0.8, "clips": clips, "unmatched": []}
+
+    return run
+
+
+def test_stage_writes_report_stamps_and_follows_its_inputs(tmp_path, monkeypatch, capsys):
+    book = toy(tmp_path)
+    monkeypatch.setattr(student_clips, "run", fake_run({"1.1_m1_p3.png": 0.93}))
+    assert main([str(tmp_path), "student_clips"]) == 0
+    assert '"written": 1' in capsys.readouterr().out
+    report = json.loads((tmp_path / "student_clips.json").read_text(encoding="utf-8"))
+    assert report["clips"][0]["score"] == 0.93 and report["clips"][0]["dpi"] == 600
+    assert run_stage(book, "student_clips") is False  # مختومة
+    (tmp_path / "books" / "student.pdf").write_bytes(b"student v2")  # كتاب الطالب مدخل
+    assert run_stage(book, "student_clips") is True
+    (tmp_path / "hires" / "1.1_m2_p4.png").write_bytes(b"png")  # والمقاطع الحالية
+    assert run_stage(book, "student_clips") is True
+    (tmp_path / "printed_pages.json").write_text(json.dumps({"3": 14}), encoding="utf-8")  # والجدول
+    assert run_stage(book, "student_clips") is True
+    assert run_stage(book, "student_clips") is False
+
+
+def test_weak_match_without_review_exits_seven_and_leaves_no_stamp(tmp_path, monkeypatch, capsys):
+    toy(tmp_path)
+    monkeypatch.setattr(student_clips, "run", fake_run({"1.1_m1_p3.png": 0.93, "1.1_m2_p4.png": 0.55}))
+    assert main([str(tmp_path), "student_clips"]) == 7
+    assert "1.1_m2_p4.png" in capsys.readouterr().err
+    assert (tmp_path / "student_clips.json").exists()  # التقرير مكتوب ليُراجَع
+    stamp_file = tmp_path / ".stamps.json"
+    assert not stamp_file.exists() or "student_clips" not in json.loads(
+        stamp_file.read_text(encoding="utf-8")
+    )
+    # اعتماد المالك للمطابقة الضعيفة يمرّرها
+    toy(tmp_path, student_clips={"approved": ["1.1_m2_p4.png"]})
+    assert main([str(tmp_path), "student_clips"]) == 0
+
+
+def test_missing_student_pdf_or_table_exits_seven(tmp_path, monkeypatch, capsys):
+    toy(tmp_path)
+    (tmp_path / "printed_pages.json").unlink()
+    assert main([str(tmp_path), "student_clips"]) == 7
+    assert "printed_pages" in capsys.readouterr().err
+    (tmp_path / "books" / "student.pdf").unlink()
+    assert main([str(tmp_path), "student_clips"]) == 7
+    assert "لا ملف يطابق" in capsys.readouterr().err
+
+
+def test_student_decks_runs_on_a_throwaway_database_and_storage(tmp_path, monkeypatch, capsys):
+    toy(tmp_path, student_clips={"course": "g10-s1"})
+    (tmp_path / "student").mkdir()
+    (tmp_path / "student_clips.json").write_text("{}", encoding="utf-8")
+    calls = []
+
+    def run(book, args, env=None):
+        calls.append((args, env))
+        return "g10-s1: جديد 1" if args[0] == "publish_assets" else "ناجح 48 فاشل 0"
+
+    monkeypatch.setattr(publish, "run_manage", run)
+    assert main([str(tmp_path), "student_decks"]) == 0
+    assert capsys.readouterr().out.splitlines()[-1] == "ناجح 48 فاشل 0"
+    assert [c[0][0] for c in calls] == ["migrate", "load_course", "publish_assets", "build_period_decks"]
+    assert calls[2][0] == ["publish_assets", "g10-s1", "--source", str(tmp_path / "student")]
+    envs = [c[1] for c in calls]
+    assert all(e == envs[0] for e in envs)
+    assert envs[0]["DATABASE_URL"].startswith("sqlite:///") and envs[0]["ASSETS_STORAGE"] == "local"
+    assert str(tmp_path) not in envs[0]["ASSETS_LOCAL_ROOT"]  # خارج مجلد الكتاب: مؤقت يُحذف
+    assert (
+        json.loads((tmp_path / "student_decks.json").read_text(encoding="utf-8"))["decks"] == "ناجح 48 فاشل 0"
+    )
+
+
+def test_student_decks_failures_exit_five(tmp_path, monkeypatch, capsys):
+    toy(tmp_path)
+    assert main([str(tmp_path), "student_decks"]) == 5  # بلا course
+    assert "student_clips.course" in capsys.readouterr().err
+    toy(tmp_path, student_clips={"course": "g10-s1"})
+    assert main([str(tmp_path), "student_decks"]) == 5  # بلا مجلد مقاطع
+    (tmp_path / "student").mkdir()
+
+    def failing(book, args, env=None):
+        if args[0] == "build_period_decks":
+            raise publish.PublishError("فشل build_period_decks: ناجح 40 فاشل 8")
+        return "تم"
+
+    monkeypatch.setattr(publish, "run_manage", failing)
+    assert main([str(tmp_path), "student_decks"]) == 5
+    assert "ناجح 40 فاشل 8" in capsys.readouterr().err
+    assert not (tmp_path / "student_decks.json").exists()
+
+
+def test_other_stage_stamps_do_not_depend_on_the_student_book(tmp_path):
+    book = toy(tmp_path)
+    before = stamps.digest(book, "printed_pages")
+    (tmp_path / "books" / "student.pdf").write_bytes(b"changed")
+    assert stamps.digest(book, "printed_pages") == before
+
+
+# ───── المطابِق الحقيقي والمرحلة كلها (بيئة guide_extract: pymupdf وOpenCV) ─────
+def _texture(np, width, height, seed):
+    """صورة رمادية بتفاصيل غير دورية: مستطيلات عشوائية على بياض."""
+    rng = np.random.default_rng(seed)
+    image = np.full((height, width), 255, dtype=np.uint8)
+    for _ in range(120):
+        x, y = int(rng.integers(0, width - 20)), int(rng.integers(0, height - 20))
+        w, h = int(rng.integers(4, 60)), int(rng.integers(4, 40))
+        image[y : y + h, x : x + w] = int(rng.integers(0, 200))
+    return image
+
+
+def test_cv_matcher_finds_a_scaled_shifted_crop():
+    np = pytest.importorskip("numpy")
+    cv2 = pytest.importorskip("cv2")
+    page_px = _texture(np, 1200, 1600, seed=1)  # الصفحة 600×800 نقطة بدقة 144
+
+    def page_image(dpi):
+        k = dpi / 144
+        return cv2.resize(page_px, (round(1200 * k), round(1600 * k)), interpolation=cv2.INTER_AREA)
+
+    true = (150.0, 260.0, 390.0, 440.0)
+    crop = page_px[520:880, 300:780]
+    template = cv2.resize(crop, (700, 525), interpolation=cv2.INTER_CUBIC)  # المقطع الحالي بمقياس آخر
+    predicted = (120.0, 300.0, 120.0 + 240 / 1.08, 300.0 + 180 / 1.08)  # منقول بإزاحة ومقياس خاطئين
+    match = student_clips.cv_matcher(page_image, template)
+    box, score, widened = student_clips.refine(match, predicted, PAGE, SEARCH, 0.8)
+    assert score > 0.9 and not widened
+    assert box == pytest.approx(true, abs=3.0)
+    other = student_clips.cv_matcher(page_image, _texture(np, 700, 525, seed=99))
+    assert student_clips.refine(other, predicted, PAGE, SEARCH, 0.8)[1] < 0.5  # محتوى آخر لا يطابق
+
+
+def test_stage_end_to_end_on_synthetic_pdfs(tmp_path):
+    np = pytest.importorskip("numpy")
+    cv2 = pytest.importorskip("cv2")
+    pymupdf = pytest.importorskip("pymupdf")
+
+    def png(array):
+        return cv2.imencode(".png", array)[1].tobytes()
+
+    # كتاب الطالب: صفحتا تمهيد ثم صفحة ممسوحة (مطبوعها 1) وصفحة متجهية (مطبوعها 2): الإزاحة 2
+    scan = _texture(np, 1250, 1667, seed=5)  # 150 بكسل لكل بوصة على 600×800 نقطة
+    student = pymupdf.open()
+    for _ in range(2):
+        student.new_page(width=600, height=800)
+    page = student.new_page(width=600, height=800)
+    page.insert_image(page.rect, stream=png(scan))
+    page = student.new_page(width=600, height=800)
+    rng = np.random.default_rng(8)
+    for _ in range(90):
+        x, y = float(rng.uniform(20, 520)), float(rng.uniform(20, 740))
+        rect = pymupdf.Rect(x, y, x + float(rng.uniform(5, 60)), y + float(rng.uniform(5, 40)))
+        shade = float(rng.uniform(0, 0.7))
+        page.draw_rect(rect, color=None, fill=(shade, shade, shade))
+    (tmp_path / "books").mkdir()
+    student.save(tmp_path / "books" / "student.pdf")
+
+    # الدليل: كل صفحة طالب مصغَّرة إلى النصف في لوحة يسار الصفحة (صورة مضمَّنة عريضة)
+    panel = pymupdf.Rect(20, 40, 320, 440)
+    guide = pymupdf.open()
+    for number in (3, 4):
+        pix = student[number - 1].get_pixmap(dpi=150, alpha=False)
+        page = guide.new_page(width=800, height=600)
+        page.insert_image(panel, stream=pix.tobytes("png"))
+    guide.save(tmp_path / "guide.pdf")
+
+    make_book(
+        tmp_path,
+        {1: "x", 2: "y"},
+        dirs={"examples_hires": "hires", "examples_student": "student"},
+        pdf={"dir": ".", "pattern": "guide.pdf"},
+        student_pdf={"dir": "books", "pattern": "student.pdf"},
+        student_clips={"panel": {"min_width": 900, "max_x0": 100, "width": None}, "offsets": [0, 2]},
+    )
+    (tmp_path / "printed_pages.json").write_text(json.dumps({"1": 1, "2": 2}), encoding="utf-8")
+    hires = tmp_path / "hires"
+    hires.mkdir()
+    guide = pymupdf.open(tmp_path / "guide.pdf")
+    boxes = {"1.1_m1_p1.png": (1, (60, 90, 240, 210)), "1.1_m2_p2.png": (2, (80, 200, 290, 360))}
+    for name, (number, rect) in boxes.items():
+        pix = guide[number - 1].get_pixmap(dpi=400, clip=pymupdf.Rect(*rect), alpha=False)
+        (hires / name).write_bytes(pix.tobytes("png"))
+    guide.close()
+
+    assert main([str(tmp_path), "student_clips"]) == 0
+    report = json.loads((tmp_path / "student_clips.json").read_text(encoding="utf-8"))
+    assert report["page_offset"] == 2
+    first, second = report["clips"]
+    assert (first["kind"], first["dpi"], first["student_page"]) == ("scan", 150, 3)
+    assert (second["kind"], second["dpi"], second["student_page"]) == ("vector", 600, 4)
+    assert min(first["score"], second["score"]) >= 0.8 and first["guide_score"] > 0.95
+    # الصندوق في صفحة الطالب ضعف صندوق الدليل بعد طرح أصل اللوحة
+    for entry, (_, rect) in zip(report["clips"], boxes.values(), strict=True):
+        expected = student_clips.transfer_box(tuple(map(float, rect)), tuple(panel), (0.0, 0.0, 600.0, 800.0))
+        assert entry["box"] == pytest.approx(expected, abs=4.0)
+    # الممسوح بكسلات الأصل نفسها بلا استيفاء، والمتجهي بـ600 بكسل لكل بوصة
+    data = np.frombuffer((tmp_path / "student" / "1.1_m1_p1.png").read_bytes(), dtype=np.uint8)
+    cropped = cv2.imdecode(data, cv2.IMREAD_GRAYSCALE)
+    left, top, right, bottom = student_clips.pixel_box(
+        tuple(first["box"]), (0.0, 0.0, 600.0, 800.0), (1250, 1667)
+    )
+    assert cropped.shape == (bottom - top, right - left) == (first["height"], first["width"])
+    assert (cropped == scan[top:bottom, left:right]).all()
+    assert second["width"] == pytest.approx((second["box"][2] - second["box"][0]) * 600 / 72, abs=2)

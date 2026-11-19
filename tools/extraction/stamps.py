@@ -12,7 +12,7 @@ from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import Any
 
-from . import corrections
+from . import corrections, student_clips
 from .config import Book
 from .lesson import lessons_dir
 
@@ -42,6 +42,9 @@ INPUTS: dict[str, dict[str, Any]] = {
     "printed_pages": {"dirs": ("ocr", "boxes"), "after": (), "pdf": False},
     "exercise_links": {"dirs": ("vision",), "after": ("layout", "examples"), "pdf": False},
     "publish": {"dirs": (), "after": (), "pdf": False},  # ومجلد المقاطع (publish.clips) ووجهة التخزين
+    # ومجلد المقاطع الحالية (student_clips.source) وملف كتاب الطالب
+    "student_clips": {"dirs": (), "after": ("printed_pages",), "pdf": True},
+    "student_decks": {"dirs": (), "after": ("student_clips",), "pdf": False},  # ومجلد مقاطع كتاب الطالب
 }
 
 
@@ -87,6 +90,10 @@ def digest(book: Book, stage: str, pdf: Callable[[Book], Path] | None = None, ta
         roots[clips] = book.dir(clips)
     if stage == "load":
         roots["lessons"] = lessons_dir(book)
+    if stage in ("student_clips", "student_decks"):
+        key = student_clips.settings(book)["source" if stage == "student_clips" else "target"]
+        if book.has_dir(key):
+            roots[key] = book.dir(key)
     for key, root in roots.items():
         for path in _files(root) if root.is_dir() else ():
             h.update(f"{key}/{path.relative_to(root).as_posix()}:{_file_digest(path)}".encode())
@@ -98,6 +105,8 @@ def digest(book: Book, stage: str, pdf: Callable[[Book], Path] | None = None, ta
     if spec["pdf"]:
         path = (pdf or Book.pdf)(book)
         h.update(f"pdf:{_file_digest(path)}".encode())
+    if stage == "student_clips":
+        h.update(f"student_pdf:{_file_digest(student_clips.student_pdf(book))}".encode())
     return h.hexdigest()
 
 

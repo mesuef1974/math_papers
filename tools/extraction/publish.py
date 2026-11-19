@@ -19,6 +19,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -82,8 +83,10 @@ def _django(book: Book) -> tuple[Path, str]:
     return (root if root.is_absolute() else book.root / root), cfg.get("python", sys.executable)
 
 
-def run_manage(book: Book, args: list[str]) -> str:
-    """يشغّل `manage.py <args>` في جذر المستودع بلا نافذة، ويعيد مخرجه أو يرفع PublishError بمخرج الخطأ."""
+def run_manage(book: Book, args: list[str], env: dict[str, str] | None = None) -> str:
+    """يشغّل `manage.py <args>` في جذر المستودع بلا نافذة، ويعيد مخرجه أو يرفع PublishError بمخرج الخطأ.
+
+    `env` يعلو بيئة التشغيل لهذا الأمر وحده (وجهة مؤقتة: قاعدة وتخزين)."""
     root, python = _django(book)
     if not (root / "manage.py").is_file():
         raise PublishError(f"لا manage.py في {root}")
@@ -93,7 +96,7 @@ def run_manage(book: Book, args: list[str]) -> str:
         capture_output=True,
         text=True,
         encoding="utf-8",
-        env={**os.environ, "PYTHONIOENCODING": "utf-8"},
+        env={**os.environ, "PYTHONIOENCODING": "utf-8", **(env or {})},
         creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         check=False,
     )
@@ -139,6 +142,27 @@ def build_publish(book: Book, run: Runner | None = None) -> dict[str, Any]:
         raise PublishError(f"مجلد المقاطع غير موجود: dirs.{cfg['clips']}")
     reported = run(book, ["publish_assets", cfg["course"], "--source", str(source)])
     return {"course": cfg["course"], "clips": cfg["clips"], "publish": reported}
+
+
+def build_student_decks(
+    book: Book, course: str, clips: Path, run: Callable[..., str] | None = None
+) -> dict[str, Any]:
+    """شاهد مقاطع كتاب الطالب على معايير العروض: قاعدة SQLite مؤقتة وتخزين محلي مؤقت، ثم الهجرات وتحميل المقررات ونشر
+    المقاطع وبناء عرض كل حصة (`build_period_decks`). لا يمسّ قاعدة بيئة التشغيل ولا تخزينها، ولا يبقى منه إلا سطر النتيجة."""
+    run = run or run_manage
+    if not clips.is_dir():
+        raise PublishError(f"مجلد مقاطع كتاب الطالب غير موجود: {clips.name}")
+    with tempfile.TemporaryDirectory(prefix="student_decks_") as tmp:
+        env = {
+            "DATABASE_URL": f"sqlite:///{(Path(tmp) / 'decks.sqlite3').as_posix()}",
+            "ASSETS_STORAGE": "local",
+            "ASSETS_LOCAL_ROOT": str(Path(tmp) / "assets"),
+        }
+        run(book, ["migrate", "--no-input"], env=env)
+        run(book, ["load_course", "--all"], env=env)
+        published = run(book, ["publish_assets", course, "--source", str(clips)], env=env)
+        decks = run(book, ["build_period_decks", course], env=env)
+    return {"course": course, "publish": published, "decks": decks}
 
 
 def summarize(result: dict[str, Any]) -> dict[str, Any]:

@@ -63,6 +63,27 @@ python -m tools.extraction <مجلد الكتاب> all          # layout ثم im
 المعتمدة `ok` وحدها (`--include-review` يكتب غير المراجَع)، وعمق المجموعة من مستوى قالب التمرين (K=1، A=2، R=3، و2 إن غاب).
 idempotent ولا يمسّ حقلًا آخر؛ راجع `git diff` بعده ثم `load_course`.
 
+## مقاطع الأمثلة من كتاب الطالب (`student_clips.py`)
+
+مرحلتان خارج `all` (بيئة guide_extract: pymupdf وOpenCV وnumpy). المقاطع المصيَّرة من الدليل دقتها دقة صور صفحة الطالب المضمَّنة
+فيه؛ `student_clips` تعيد كل مقطع بالاسم نفسه من كتاب الطالب نفسه بدقته الأصلية:
+
+- لكل مقطع في `dirs.<source>` (`<درس>_m<مثال>_p<صفحة الدليل>[_cont].png`): موضعه في صفحة الدليل بمطابقة قالب، ثم صفحة الطالب من
+  `printed_pages.json` و`page_offset` (صفحة ملف الطالب = المطبوع + الإزاحة؛ الغائبة تُقدَّر بأعلى متوسط مطابقة لعيّنة `samples` على
+  المدى `offsets`)، ثم نقل الصندوق من لوحة صفحة الطالب في الدليل (اتحاد مستطيلات صورها المضمَّنة العريضة، `panel`) إلى صفحة
+  الطالب، ثم تصحيح الإزاحة والمقياس بمطابقة قالب OpenCV (`search`: نافذة `margin` حول المنقول، ثم الصفحة كلها إن بقيت الدرجة دون
+  `threshold`، ثم صفحات الجوار `drift`، ثم تدقيق بـ `fine_dpi`).
+- التصيير بلا رفع دقة: صفحة ممسوحة (صورة مضمَّنة غير مدوَّرة تغطي `scan_cover` من الصفحة) تُقصّ بكسلاتها نفسها بلا استيفاء
+  (`kind: scan` و`dpi` دقتها المضمَّنة)، وغيرها يُصيَّر بـ `vector_dpi` (600).
+- المخرجات: المقاطع في `dirs.<target>` و`student_clips.json` (لكل مقطع: صفحاته وصندوقه و`kind` و`dpi` ومقاسه و`score` و`guide_score`
+  و`status`). المطابقة دون العتبة `review` ولا يُكتب مقطعها، ورمز الخروج 7 بلا ختم حتى يُصلَح الإعداد أو يُدرج اسمها في
+  `student_clips.approved` بعد مراجعة المالك (`approved`). صفحة دليل بلا رقم مطبوع `missing`.
+- الإعداد: `student_pdf: {dir, pattern}` (ملف كتاب الطالب خارج المستودع)، و`student_clips` اختياري: `source` و`target` (مفتاحان من
+  `dirs`؛ الافتراضي `examples_hires` و`examples_student`)، `clip_dpi` (دقة تصيير المقاطع الحالية، 400)، وما سبق، و`course`.
+- `student_decks` شاهدها: قاعدة SQLite مؤقتة وتخزين محلي مؤقت، ثم `migrate` و`load_course --all` و`publish_assets <course>` و
+  `build_period_decks <course>`، وتطبع سطره «ناجح N فاشل M» (فشل حصة رمز الخروج 5 بأسبابه). يلزمها `student_clips.course`، و
+  `django.python` حين يختلف مفسّر المشروع عن مفسّر بيئة الاستخراج.
+
 ## سجل الدرس والمفردات والانحدار (`lesson.py`، `vocabulary.py`، `regression.py`)
 
 مرحلة `lesson` (آخر `all`): تجمع لكل درس `lessons/lesson_X_Y.json` (`dirs.lessons`، افتراضًا `lessons` في مجلد الكتاب) من layout وobjectives
