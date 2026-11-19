@@ -228,9 +228,8 @@ def test_only_the_owner_decides_once(teacher_client):
     teacher = suggestion.owner
     with pytest.raises(PermissionError):
         services.decide_suggestion(teacher, suggestion.pk, ObjectiveSuggestion.ACCEPTED)
-    owner = get_user_model().objects.create_superuser(
-        "owner", password="Rasm-Bayani-2026"
-    )  # pragma: allowlist secret
+    password = "Rasm-Bayani-2026"  # pragma: allowlist secret
+    owner = get_user_model().objects.create_superuser("owner", password=password)
     with pytest.raises(services.PlanningError):
         services.decide_suggestion(owner, suggestion.pk, "maybe")
     decided = services.decide_suggestion(
