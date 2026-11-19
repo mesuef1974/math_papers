@@ -36,6 +36,7 @@ FONT_NATURAL_LINE = 1.703
 PRINT_LEADING = 1.6
 LINE_MULTIPLE = round(PRINT_LEADING / FONT_NATURAL_LINE, 3)
 SYMBOL_FONT = "Segoe UI Symbol"
+NB_HYPHEN = "‑"  # الشرطة غير القاطعة؛ add_text يكتبها عنصر w:noBreakHyphen
 LRM = "‎"
 RLM = "‏"
 # ألوان هوية «أوراق» على الورق: النص حبر أسود، والعنابي للعناوين والشارات والخطوط الرئيسة، والذهبي للتزيين
@@ -133,13 +134,19 @@ def add_text(paragraph: Paragraph, text: str, **fmt) -> None:
     if not text:
         return
     force_rtl = fmt.pop("force_rtl", False)
-    for chunk in re.split(r"(\t)", text):
-        if chunk == "\t":
+    for segment in re.split("(\t)", text):
+        if segment == "\t":
             paragraph._p.append(parse_xml(f"<w:r {W}><w:tab/></w:r>"))
-        elif chunk:
-            rtl = force_rtl or bool(ARABIC.search(chunk))
-            xml = f'<w:r {W}>{rpr(rtl=rtl, **fmt)}<w:t xml:space="preserve">{escape(chunk)}</w:t></w:r>'
-            paragraph._p.append(parse_xml(xml))
+            continue
+        # اتجاه المقطع كله واحد: الشرطة غير القاطعة تقسمه تشغيلات، ولو اختلف اتجاهها لانقلب المدى («-20272026»)
+        rtl = force_rtl or bool(ARABIC.search(segment))
+        for chunk in re.split(f"({NB_HYPHEN})", segment):
+            if chunk == NB_HYPHEN:
+                # شرطة Word غير القاطعة: لا يُكسر عندها السطر («2026-» في سطر و«2027» في الذي يليه)
+                paragraph._p.append(parse_xml(f"<w:r {W}>{rpr(rtl=rtl, **fmt)}<w:noBreakHyphen/></w:r>"))
+            elif chunk:
+                xml = f'<w:r {W}>{rpr(rtl=rtl, **fmt)}<w:t xml:space="preserve">{escape(chunk)}</w:t></w:r>'
+                paragraph._p.append(parse_xml(xml))
 
 
 def add_math(paragraph: Paragraph, latex: str) -> None:

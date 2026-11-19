@@ -254,11 +254,35 @@ def _head(table, question: dict, widths: list[float]) -> None:
     x.keep_row_with_next(row)
 
 
+MATH = re.compile(r"\$[^$]*\$")
+TINY = '<w:spacing w:before="0" w:after="0" w:line="20" w:lineRule="exact"/>'
+
+
+def arabic_option(text: str) -> bool:
+    """بديل فيه كلام عربي خارج المعادلات («$4$ ساعات») فقرته عربية الاتجاه؛ في فقرة لاتينية يُقرأ «ساعات 4»."""
+    return bool(x.ARABIC.search(MATH.sub("", text)))
+
+
+def _nested(cell, table) -> None:
+    """python-docx يضع الجدول المتداخل بين فقرتين فارغتين (فقرة الخلية الأولى والفقرة التي يشترطها Word بعده)،
+    فكان كل بديل ثلاثة أسطر وإطار السؤال الموضوعي نصف صفحة. الأولى تُحذف (الخلية تبدأ بجدول) والأخيرة نقطة واحدة."""
+    before = table._tbl.getprevious()
+    if before is not None and _blank(before) and len(before) <= 1:
+        cell._tc.remove(before)
+    after = table._tbl.getnext()
+    if after is not None and after.tag == qn("w:p"):
+        for ppr in after.findall(qn("w:pPr")):
+            after.remove(ppr)
+        after.insert(0, parse_xml(f"<w:pPr {x.W}>{TINY}</w:pPr>"))
+
+
 def _option(cell, index: int, part: dict, width: float, keep: bool) -> None:
-    """صف بديل: الحرف في مربع صغير ثم القيمة، من اليسار إلى اليمين كما في القالب."""
+    """صف بديل: الحرف في مربع صغير ثم القيمة، من اليسار إلى اليمين كما في القالب. القيمة العربية فقرة عربية
+    الاتجاه محاذاتها يسار، فتلاصق المربع."""
     inner = x.make_table(
         cell, 1, [0.6, width - 0.6], rtl=False, borders=None, align="left", cell_margin_cm=0.08
     )
+    _nested(cell, inner)
     x.set_row(inner.rows[0])
     letter, value = inner.cell(0, 0), inner.cell(0, 1)
     x.set_cell(letter, 0.6, borders=x.box(6, x.INK, inside=False))
@@ -266,10 +290,12 @@ def _option(cell, index: int, part: dict, width: float, keep: bool) -> None:
         x.new_paragraph(letter, rtl=False, align="center", after=0, keep_next=keep), LETTERS[index], size=9
     )
     x.set_cell(value, width - 0.6)
-    par = x.new_paragraph(value, rtl=False, align="left", after=0, keep_next=keep, indent_cm=0.2)
+    graphs = part.get("option_graphs") or []
+    rtl = not (graphs and index < len(graphs)) and arabic_option(part["options"][index])
+    # w:ind start في الفقرة العربية طرفها الأيمن، فالإزاحة عن المربع للاتينية وحدها
+    par = x.new_paragraph(value, rtl=rtl, align="left", after=0, keep_next=keep, indent_cm=0 if rtl else 0.2)
     # فقرة فيها معادلة وحدها يعرضها Word معادلة مستقلة في الوسط؛ المسافة قبلها تبقيها في السطر عند اليسار
     x.add_text(par, " ", size=11)
-    graphs = part.get("option_graphs") or []
     if graphs and index < len(graphs):
         png, w, h = render_graph(graphs[index], compact=True)
         scale = min(1.0, 3.6 / (h / 96 * 2.54))
@@ -277,7 +303,7 @@ def _option(cell, index: int, part: dict, width: float, keep: bool) -> None:
     else:
         from ..builder import rich
 
-        rich(value, part["options"][index], size=11, rtl=False, first=par, keep_next=keep)
+        rich(value, part["options"][index], size=11, rtl=rtl, first=par, keep_next=keep)
 
 
 def _options(cell, part: dict, width: float, keep: bool) -> None:
@@ -291,6 +317,7 @@ def _options(cell, part: dict, width: float, keep: bool) -> None:
     grid = x.make_table(
         cell, rows, [col] * columns, rtl=False, borders=None, align="left", cell_margin_cm=0.05
     )
+    _nested(cell, grid)
     for r in range(rows):
         x.set_row(grid.rows[r], height_cm=0.7)
         for c in range(columns):
@@ -310,6 +337,7 @@ def _work_box(cell, part: dict, width: float) -> None:
     )
     height_cm = min(max(60 + part["marks"] * 45, 96), 300) / 96 * 2.54
     box = x.make_table(cell, 1, [width - 0.6], borders=x.box(8, x.INK, inside=False))
+    _nested(cell, box)
     x.set_row(box.rows[0], height_cm=height_cm)
     x.set_cell(box.cell(0, 0), width - 0.6, borders=x.box(8, x.INK, inside=False), valign="top")
     x.new_paragraph(box.cell(0, 0), after=0)
