@@ -4,6 +4,9 @@
 - POST /decks/                       يطلب بناء عرض (مهمة خلفية) ويعيد حالته ومفتاحه
 - GET  /decks/status?course=&lesson= الحالة: pending | ready | failed
 - GET  /decks/download?course=&lesson=  ملف PPTX الجاهز
+- GET  /preps/<مقرر>                 حصص الدروس بترتيب الخطة وحالة معاييرها
+- GET  /preps/<مقرر>/<درس>/<k>       تحضير الحصة بنصوصه ومعاييره
+- GET  /preps/<مقرر>/<درس>/<k>/word  التحضير في Word بنموذج الوزارة
 """
 
 from __future__ import annotations
@@ -23,6 +26,7 @@ from apps.papers.access import TeacherAuth
 from . import selectors, services
 from .domain.deck import DeckError
 from .domain.strategies import DEFAULT_PERIOD_MINUTES
+from .prep_word import DOCX_CONTENT_TYPE, prep_docx, prep_filename
 from .tasks import build_lesson_deck_task
 
 logger = logging.getLogger(__name__)
@@ -114,6 +118,111 @@ def download(request: HttpRequest, filters: Query[DeckQuery]):
     )
     response = HttpResponse(data, content_type=selectors.PPTX_CONTENT_TYPE)
     response["Content-Disposition"] = f'attachment; filename="{_filename(filters.course, filters.lesson)}"'
+    response["Cache-Control"] = "private, no-store"
+    response["X-Content-Type-Options"] = "nosniff"
+    return response
+
+
+class PrepPeriodOut(Schema):
+    lesson: str
+    title: str
+    unit: int
+    k: int
+    n: int
+    week: int
+    status: str
+
+
+class ObjectiveOut(Schema):
+    example: int | None
+    text: str
+    pending: bool
+    teach_activity: str
+    teach_assessment: str
+    teach_minutes: int
+    check_activity: str
+    check_assessment: str
+    check_minutes: int
+
+
+class StageOut(Schema):
+    name: str
+    label: str
+    minutes: int
+    strategy: str
+
+
+class CheckOut(Schema):
+    code: str
+    title: str
+    status: str
+    kind: str
+    details: list[str]
+
+
+class PrepOut(Schema):
+    course: str
+    lesson: str
+    lesson_title: str
+    unit: int
+    k: int
+    n: int
+    week: int
+    minutes: int
+    year: str
+    semester: str
+    grade: str
+    day_date: str
+    outcomes: str
+    main_sources: str
+    support_sources: str
+    warmup: str
+    warmup_minutes: int
+    objectives: list[ObjectiveOut]
+    closing: str
+    closing_minutes: int
+    homework: str
+    basic: str
+    advanced: str
+    quiz: str
+    stages: list[StageOut]
+    checks: list[CheckOut]
+    pending: bool
+
+
+def _sheet(course: str, lesson: str, k: int):
+    try:
+        return selectors.period_sheet(course, lesson, k)
+    except selectors.PrepNotFoundError as error:
+        raise HttpError(404, str(error)) from error
+
+
+@router.get("preps/{course}", response=list[PrepPeriodOut])
+def prep_periods(request: HttpRequest, course: str):
+    try:
+        return selectors.prep_periods(course)
+    except selectors.PrepNotFoundError as error:
+        raise HttpError(404, str(error)) from error
+
+
+@router.get("preps/{course}/{lesson}/{k}", response=PrepOut)
+def prep(request: HttpRequest, course: str, lesson: str, k: int):
+    return _sheet(course, lesson, k)
+
+
+@router.get("preps/{course}/{lesson}/{k}/word")
+def prep_word(request: HttpRequest, course: str, lesson: str, k: int):
+    sheet = _sheet(course, lesson, k)
+    user = request.user
+    data = prep_docx(sheet, teacher=user.get_full_name() or user.get_username())
+    record_audit(
+        action="preps.word",
+        actor=user,
+        target=f"{course}/{lesson}/{k}",
+        request_id=request_id_of(request),
+    )
+    response = HttpResponse(data, content_type=DOCX_CONTENT_TYPE)
+    response["Content-Disposition"] = f'attachment; filename="{prep_filename(sheet)}"'
     response["Cache-Control"] = "private, no-store"
     response["X-Content-Type-Options"] = "nosniff"
     return response
