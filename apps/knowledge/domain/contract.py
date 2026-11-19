@@ -10,8 +10,7 @@
   أرقام فقط (سؤال وموضع ودرس ونوع ودرجة ومستوى)، بلا نص من وثيقة؛
 - `sources.json` (اختياري): الملفات المصدرية خارج المستودع بتجزئاتها، وإليها يشير كل ما اشتُق منها بمعرّفها؛
 - `term_plan.json` (اختياري): الخطة الفصلية للوزارة (أسابيع وبنود وحصص وإثرائي)؛
-- `past_exams.json` و`coverage.json` (اختياريان): اختبارات سابقة مسقَطة على الدروس، وتغطية المذكرات والحلول، أعدادًا فقط؛
-- `prep/unit-<n>.json` (اختياري): أهداف أمثلة الوحدة بصيغة ABCD بصياغتنا وحالة اعتمادها (`prep_units.py`).
+- `past_exams.json` و`coverage.json` (اختياريان): اختبارات سابقة مسقَطة على الدروس، وتغطية المذكرات والحلول، أعدادًا فقط.
 التقويم الأكاديمي مشترك بين المقررات: ملف لكل سنة في `apps/knowledge/data/calendars/`.
 الدرس الواحد له مصدر واحد: ملف بصياغتنا أو سجل في الفهرس المشتق، لا كلاهما.
 تجزئة المحتوى (`content_hash`) تُحسب من العقد بعد التحقق، فهي واحدة أيًّا كان شكل المصدر. مقرر بلا جداول تجزئته كما كانت
@@ -29,7 +28,6 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from .course_index import CourseIndex, LessonIndex
-from .prep_units import PREP_DIR, PREP_FILE, PrepUnitData
 from .schemas import (
     LESSON_CODE,
     MAX_UNIT,
@@ -64,7 +62,7 @@ TERM_PLAN = "term_plan.json"
 PAST_EXAMS = "past_exams.json"
 COVERAGE = "coverage.json"
 # أقسام العقد الاختيارية: الفارغ منها خارج التجزئة، فدخول قسم جديد العقدَ لا يُصدر إصدارًا لمقرر لا يملكه
-OPTIONAL = ("blueprints", "sources", "term_plan", "past_exams", "coverage", "prep_units")
+OPTIONAL = ("blueprints", "sources", "term_plan", "past_exams", "coverage")
 LANGUAGES = ("ar", "en")
 SLUG = r"^[a-z0-9]+(?:-[a-z0-9]+)*$"
 
@@ -136,7 +134,6 @@ class CourseKnowledge(_Strict):
     term_plan: TermPlanData | None = None
     past_exams: list[PastExamData] = Field(default_factory=list)
     coverage: list[CoverageData] = Field(default_factory=list)
-    prep_units: list[PrepUnitData] = Field(default_factory=list)
 
     def model_post_init(self, __context: object) -> None:
         codes = [lesson.code for lesson in self.lessons]
@@ -161,39 +158,6 @@ class CourseKnowledge(_Strict):
         self._check_sources()
         self._check_term_plan()
         self._check_evidence()
-        self._check_prep_units()
-
-    def _check_prep_units(self) -> None:
-        """هدف الوحدة لمثال من درسها في المقرر غير إثرائي، وفعله من جدول أفعال عمق المثال (أعلى عمق في صفوف تحليله)."""
-        if not self.prep_units:
-            return
-        from apps.planning.domain.prep import REJECTED_VERBS, VERBS_BY_DOK
-
-        numbers = [u.unit for u in self.prep_units]
-        if len(numbers) != len(set(numbers)):
-            raise ValueError("ملف تحضير مكرر للوحدة الواحدة")
-        units = {ref.code: ref.unit for ref in self.lessons}
-        examples = {p.lesson: {e.number for e in p.examples} for p in self.profiles}
-        depth: dict[tuple[str, int], int] = {}
-        for p in self.profiles:
-            for g in p.exercise_groups:
-                key = (p.lesson, g.example)
-                depth[key] = max(depth.get(key, 1), g.dok)
-        plan = self.term_plan
-        enrichment_lessons = set(plan.enrichment_lessons) if plan else set()
-        enrichment = {code: set(n) for code, n in plan.enrichment_examples.items()} if plan else {}
-        for unit in self.prep_units:
-            for o in unit.objectives:
-                where = f"الوحدة {unit.unit}، {o.lesson} مثال {o.example}"
-                if units.get(o.lesson) != unit.unit:
-                    raise ValueError(f"{where}: الدرس ليس من الوحدة في المقرر")
-                if o.example not in examples.get(o.lesson, ()):
-                    raise ValueError(f"{where}: لا مثال بهذا الرقم في الدرس")
-                if o.lesson in enrichment_lessons or o.example in enrichment.get(o.lesson, ()):
-                    raise ValueError(f"{where}: مثال إثرائي لا هدف له")
-                dok = depth.get((o.lesson, o.example), 1)
-                if o.verb in REJECTED_VERBS or o.verb not in VERBS_BY_DOK[dok]:
-                    raise ValueError(f"{where}: الفعل «{o.verb}» ليس من أفعال العمق {dok}")
 
     def _check_blueprints(self) -> None:
         """بند الجدول لدرس من المقرر يدخل الاختبار: الدرس الإثرائي (`examinable: false`) لا يُسأل عنه."""
@@ -311,23 +275,6 @@ def read_index(directory: Path) -> CourseIndex | None:
     return CourseIndex(**_read(path)) if path.is_file() else None
 
 
-def read_prep_units(directory: Path) -> list[PrepUnitData]:
-    """ملفات `prep/unit-<n>.json` بترتيب الوحدة؛ رقم الملف يطابق الوحدة فيه، ولا ملف آخر في المجلد."""
-    folder = directory / PREP_DIR
-    if not folder.is_dir():
-        return []
-    units = []
-    for path in sorted(folder.iterdir()):
-        match = PREP_FILE.match(path.name)
-        if match is None:
-            raise ValueError(f"ملف غير متوقع في {PREP_DIR}/: {path.name}")
-        unit = PrepUnitData(**_read(path))
-        if unit.unit != int(match.group(1)):
-            raise ValueError(f"{path.name} يحمل الوحدة {unit.unit}")
-        units.append(unit)
-    return sorted(units, key=lambda u: u.unit)
-
-
 def read_course_dir(directory: Path) -> CourseKnowledge:
     manifest = _read(directory / MANIFEST)
     profiles = [LessonData(**_read(p)) for p in sorted((directory / "lessons").glob("lesson_*.json"))]
@@ -354,7 +301,6 @@ def read_course_dir(directory: Path) -> CourseKnowledge:
         term_plan=TermPlanData(**optional[TERM_PLAN]) if TERM_PLAN in optional else None,
         past_exams=[PastExamData(**x) for x in optional.get(PAST_EXAMS, [])],
         coverage=[CoverageData(**x) for x in optional.get(COVERAGE, [])],
-        prep_units=read_prep_units(directory),
     )
     if knowledge.course.slug != directory.name:
         raise ValueError(f"اسم المجلد {directory.name} لا يطابق معرّف المقرر {knowledge.course.slug}")

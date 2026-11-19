@@ -2,7 +2,8 @@
 
 `allocate` يوزّع أمثلة الدرس الأساسية على حصصه، و`build_prep` يبني تحضير حصة واحدة (`PeriodPrep`): أمثلتها وأهدافها
 وتدريباتها وتقويمها وربطها بما قبلها ومراحلها الست بأزمنتها. كل حقل نصي فيه رمز أو فئة مغلقة أو معرّف من مكتبتنا؛ نصوص
-الأهداف من ملف الوحدة (`prep/unit-<n>.json`، `AuthoredObjective`)، وغيابها حالة «معلَّق» لا فشل (`prep_checks`). التصميم والمعايير: `docs/lesson_prep_plan.md`.
+الأهداف من ملف الوحدة المؤلَّف (`prep/unit-<n>.json`، `knowledge.domain.unit_prep`) بمصدر «مؤلَّف»، وغيابها حالة «معلَّق»
+لا فشل (`prep_checks`). التصميم والمعايير: `docs/lesson_prep_plan.md`.
 """
 
 from __future__ import annotations
@@ -13,6 +14,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 
 from apps.knowledge.domain.course_index import LessonIndex
+from apps.knowledge.domain.unit_prep import AuthoredObjective
 
 from .calendar_engine import PlanningError
 from .strategies import Strategy, distribute
@@ -96,20 +98,6 @@ class Objective:
     @property
     def parts(self) -> tuple[str | None, ...]:
         return (self.audience, self.behavior, self.condition, self.criterion)
-
-
-@dataclass(frozen=True)
-class AuthoredObjective:
-    """نص هدف مثال من ملف الوحدة بصياغتنا (المحمَّل إلى `curriculum.PrepObjective`)."""
-
-    audience: str
-    behavior: str
-    condition: str
-    criterion: str
-
-    @property
-    def verb(self) -> str:
-        return self.behavior.split()[0]
 
 
 @dataclass(frozen=True)
@@ -304,23 +292,6 @@ def _stages(
     return tuple(Stage(name, split[name], chosen[name], bounds[name]) for name in STAGE_NAMES)
 
 
-def _objective(example: PrepExample, text: AuthoredObjective | None) -> Objective:
-    """هدف المثال بعمقه: نصه من ملف الوحدة إن وُجد، وإلا الفعل الأول من جدول عمقه وأجزاؤه معلَّقة."""
-    dok = max(example.max_dok, 1)
-    if text is None:
-        return Objective(example=example.n, dok=dok, verb=VERBS_BY_DOK[dok][0])
-    return Objective(
-        example=example.n,
-        dok=dok,
-        verb=text.verb,
-        audience=text.audience,
-        behavior=text.behavior,
-        condition=text.condition,
-        criterion=text.criterion,
-        source="authored",
-    )
-
-
 def build_prep(
     *,
     course: str,
@@ -332,6 +303,7 @@ def build_prep(
     library: Sequence[Strategy],
     unit_status: str | None = None,
     authored: Mapping[int, AuthoredObjective] | None = None,
+    audience: str | None = None,
 ) -> PeriodPrep:
     """تحضير الحصة `k` من حصص الدرس (`groups` من `allocate`): مشتق كله من مدخلاته، فالمدخل نفسه يعطي التحضير نفسه."""
     n = len(groups)
@@ -367,8 +339,8 @@ def build_prep(
                 exit_ticket = ExitTicket(c.example, c.dok)
                 break
 
-    authored = authored or {}
-    objectives = tuple(_objective(e, authored.get(e.n)) for e in own)
+    written = authored or {}
+    objectives = tuple(_objective(e, written.get(e.n), audience) for e in own)
     depths = frozenset(d for e in practice for d, _ in e.rows)
     return PeriodPrep(
         course=course,
@@ -397,11 +369,28 @@ def build_prep(
         sources={
             "examples": "index",
             "allocation": "plan",
-            "objectives": "authored" if any(o.source == "authored" for o in objectives) else "index",
+            "objectives": "authored" if written else "index",
             "practice": "index",
             "assessment": "generator",
             "stages": "library",
         },
+    )
+
+
+def _objective(example: PrepExample, authored: AuthoredObjective | None, audience: str | None) -> Objective:
+    """هدف المثال: من ملف الوحدة إن كُتب (بفعله وعمقه كما كُتبا، فيفحصهما T2)، وإلا عمق المثال وأول أفعاله بلا نص."""
+    dok = max(example.max_dok, 1)
+    if authored is None:
+        return Objective(example=example.n, dok=dok, verb=VERBS_BY_DOK[dok][0])
+    return Objective(
+        example=example.n,
+        dok=authored.dok,
+        verb=authored.verb,
+        audience=audience,
+        behavior=authored.behavior,
+        condition=authored.condition,
+        criterion=authored.criterion,
+        source="authored",
     )
 
 

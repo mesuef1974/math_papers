@@ -11,7 +11,6 @@ from .assessment import (
     Scope,
 )
 from .catalog import ACADEMIC_YEAR_LENGTH, Course, Lesson
-from .prep import PrepObjective, PrepUnit
 from .schedule import (
     AcademicCalendar,
     CalendarEvent,
@@ -39,8 +38,6 @@ __all__ = [
     "PlanEnrichment",
     "PlanEntry",
     "PlanWeek",
-    "PrepObjective",
-    "PrepUnit",
     "ResourceCoverage",
     "Scope",
     "SourceDocument",

@@ -242,8 +242,6 @@ def load_contract(contract: CourseKnowledge) -> LoadReport:
         curriculum.sync_past_exam(exam, course, lessons, sources, report.changed)
     for cover in contract.coverage:
         curriculum.sync_coverage(cover, lessons, sources, report.changed)
-    for unit in contract.prep_units:
-        curriculum.sync_prep_unit(unit, course, lessons, report.changed)
     previous = latest_release(course)
     if previous is None or previous.content_hash != report.content_hash:
         KnowledgeRelease.objects.create(

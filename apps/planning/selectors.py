@@ -17,10 +17,11 @@ from apps.assets.models import Asset
 from apps.assets.selectors import asset_bytes
 from apps.assets.storage import Storage
 from apps.curriculum.courses import GRADE10_SLUG, grade_label
-from apps.curriculum.models import Course, PrepObjective, PrepUnit
+from apps.curriculum.models import Course
 from apps.curriculum.selectors import calendar_data, lessons, term_plan_data
 from apps.knowledge.domain.course_index import LessonIndex
 from apps.knowledge.domain.schemas import lesson_sort_key
+from apps.knowledge.domain.unit_prep import approved_standards, unit_prep
 from apps.knowledge.selectors import course_index, example_numbers, lesson_index
 
 from .domain.calendar_engine import Closure, Plan, Slot, Term, allocate, parse_terms, sessions
@@ -28,7 +29,7 @@ from .domain.deck import Deck, ExampleClip, LessonContent, build_deck
 from .domain.feedback import ClassOutcome, Decision, decide
 from .domain.plan_periods import PlanPeriod
 from .domain.plan_periods import plan_periods as derive_plan_periods
-from .domain.prep import AuthoredObjective, PeriodPrep, build_prep, lesson_examples, recall_for
+from .domain.prep import PeriodPrep, build_prep, lesson_examples, recall_for
 from .domain.prep import allocate as allocate_examples
 from .domain.prep_checks import CheckResult, check_lesson, check_prep
 from .domain.prep_sheet import PrepSheet, prep_sheet
@@ -231,18 +232,6 @@ def _example_clips(course: str) -> dict[str, dict[int, int]] | None:
     return clips
 
 
-def _authored(course: str) -> tuple[dict[int, str], dict[str, dict[int, AuthoredObjective]]]:
-    """حالة كل ملف وحدة، ونصوص أهداف الأمثلة لكل درس، من جدولي تحضير الوحدة."""
-    statuses = dict(PrepUnit.objects.filter(course__slug=course).values_list("unit", "status"))
-    texts: dict[str, dict[int, AuthoredObjective]] = {}
-    rows = PrepObjective.objects.filter(unit__course__slug=course).select_related("unit", "lesson")
-    for row in rows:
-        texts.setdefault(row.lesson.code, {})[row.example] = AuthoredObjective(
-            row.unit.audience, row.behavior, row.condition, row.criterion
-        )
-    return statuses, texts
-
-
 def lesson_preps(course: str = PLAN_COURSE) -> tuple[PreparedPeriod, ...]:
     """تحضير كل حصة دروس في الخطة الفصلية بترتيبها، مشتقًّا من الفهرس والخطة والمكتبة، مع معاييره T1 إلى T13."""
     from apps.papers.domain.generators import SKILL_EXAMPLES
@@ -253,7 +242,6 @@ def lesson_preps(course: str = PLAN_COURSE) -> tuple[PreparedPeriod, ...]:
     library = load_library()
     by_slug = {s.slug: s for s in library}
     clips = _example_clips(course)
-    statuses, texts = _authored(course)
     generators: dict[str, set[int]] = {}
     for (c, code, _), number in SKILL_EXAMPLES.items():
         if c == course:
@@ -273,6 +261,7 @@ def lesson_preps(course: str = PLAN_COURSE) -> tuple[PreparedPeriod, ...]:
             clips=None if clips is None else clips.get(code, {}),
         )
         groups = allocate_examples([(e.n, e.weight) for e in examples], len(rows))
+        unit = unit_prep(course, lesson.unit)
         previous_lesson = order[position - 1] if position else None
         built = []
         for i, period in enumerate(rows):
@@ -287,8 +276,9 @@ def lesson_preps(course: str = PLAN_COURSE) -> tuple[PreparedPeriod, ...]:
                 k=period.k,
                 recall=recall_for(period.k, previous_lesson, after_break),
                 library=library,
-                unit_status=statuses.get(lesson.unit),
-                authored=texts.get(code),
+                unit_status=None if unit is None else unit.status,
+                authored=None if unit is None else unit.objectives(code),
+                audience=None if unit is None else unit.audience,
             )
             checks = check_prep(
                 prep,
@@ -354,4 +344,5 @@ def period_sheet(course: str, lesson: str, k: int) -> PrepSheet:
         year=found.academic_year,
         semester=found.semester,
         grade=grade_label(found.grade, found.track),
+        standard_texts=approved_standards(course),
     )
