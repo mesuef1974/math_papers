@@ -69,8 +69,18 @@ def test_derivation_is_pure_and_numbers_each_entry_key():
     from datetime import date
 
     weeks = (
-        PlanWeek(1, date(2026, 8, 30), date(2026, 9, 3), (Entry("review", 1, scope="midterm"), Entry("lesson", 2, "1.1"))),
-        PlanWeek(2, date(2026, 9, 6), date(2026, 9, 10), (Entry("lesson", 1, "1.1"), Entry("review", 1, scope="final"))),
+        PlanWeek(
+            1,
+            date(2026, 8, 30),
+            date(2026, 9, 3),
+            (Entry("review", 1, scope="midterm"), Entry("lesson", 2, "1.1")),
+        ),
+        PlanWeek(
+            2,
+            date(2026, 9, 6),
+            date(2026, 9, 10),
+            (Entry("lesson", 1, "1.1"), Entry("review", 1, scope="final")),
+        ),
     )
     plan = TermPlan("t1", 5, None, (), frozenset(), {}, weeks)
     got = [(p.key, p.k, p.n, p.week, p.number) for p in derive_plan_periods("c", plan)]
