@@ -18,6 +18,7 @@ from docx.oxml import parse_xml
 from docx.oxml.ns import nsdecls
 from docx.shared import Cm, Pt
 
+from ..domain.bidi import isolate_number_ranges
 from ..domain.book_source import source_cells
 from . import ooxml as x
 from . import school
@@ -115,17 +116,6 @@ def split_math(text: str) -> list[tuple[bool, bool, str]]:
     if buffer:
         out.append((False, False, buffer))
     return out
-
-
-NUMBER_RANGE = re.compile(r"\d+(?:\s*[-–/]\s*\d+)+")
-
-
-def isolate_number_ranges(text: str) -> str:
-    """في فقرة عربية يقلب Word المدى «2026-2027» إلى «2027-2026» (الأرقام بعد حرف عربي أرقام عربية والشرطة لا تصلها)؛
-    علامة LRM قبله تجعله تشغيلًا من اليسار إلى اليمين، وRLM بعده تُنهيه فلا يُسحب إليه رقم يليه
-    (التذييل «العاشر، 2026-2027 – 10» كان يُقرأ «العاشر، 10 – 2026-2027»). نظير isolateNumberRanges في utils/bidi.ts."""
-    # والشرطة فيه غير قاطعة، فلا ينكسر العنوان الطويل بعد «2026-» ويبدأ السطر التالي بـ«2027»
-    return NUMBER_RANGE.sub(lambda match: f"{x.LRM}{match.group(0).replace('-', x.NB_HYPHEN)}{x.RLM}", text)
 
 
 def header_of(paper: dict, profile: dict, date: str, section: str, multi: bool) -> dict:
@@ -895,8 +885,12 @@ def key_label(paper: dict) -> str:
     return "دليل تقدير الدرجات" if paper["kind"] == "exam" else "مفتاح الحل"
 
 
-def key_pages(doc, paper: dict, header: dict, *, page_break: bool = True, heading: bool = True) -> None:
-    """المفتاح بترويسة «أوراق»، أو بلا ترويسة (heading=False) حين تسبقه ترويسة قالب المدرسة."""
+def key_pages(
+    doc, paper: dict, header: dict, *, page_break: bool = True, heading: bool = True, sources: bool = False
+) -> None:
+    """المفتاح بترويسة «أوراق»، أو بلا ترويسة (heading=False) حين تسبقه ترويسة قالب المدرسة.
+    sources: أعمدة المصدر ثابتة ولو لم يُعرف مصدر أي جزء (مفتاح قالب المدرسة لكل مقرر، قرار المالك 2026-11-19)،
+    والخانة المجهولة «—»؛ وبدونه تظهر الأعمدة متى عُرف مصدر جزء واحد."""
     if heading:
         title = f"{key_label(paper)}: {header['title']}"
         paper_header(doc, {**header, "title": title}, compact=True, page_break=page_break)
@@ -952,7 +946,9 @@ def key_pages(doc, paper: dict, header: dict, *, page_break: bool = True, headin
         )
     # مع الدرجات: عمود لدرجة كل بند بعد الخطوات، وعمود لمجموع الجزء في آخر الجدول. ومع مصدر جزء واحد على الأقل
     # أعمدة المصدر الثلاثة «الصفحة» و«المثال» و«التدريب» بعد الدرس (كما في AnswerKey.vue)، مشتقة من أرقام المصدر.
-    has_sources = any(part.get("source") for question in paper["questions"] for part in question["parts"])
+    has_sources = sources or any(
+        part.get("source") for question in paper["questions"] for part in question["parts"]
+    )
     columns = [_KeyColumn("question", "السؤال", 1.7 if has_marks else 1.9)]
     columns.append(_KeyColumn("answer", "الإجابة والخطوات", 0.0, per_item=True))
     if has_marks:
@@ -1196,7 +1192,7 @@ def build_docx(payload: dict[str, Any]) -> bytes:
         for index, (paper, header) in enumerate(zip(papers, headers, strict=True)):
             if school_template:
                 school.key_header(doc, paper, header, key_label(paper), first=index == 0)
-                key_pages(doc, paper, header, heading=False)
+                key_pages(doc, paper, header, heading=False, sources=True)
             else:
                 if index == 0:
                     _configure_section(doc.sections[0], "مفتاح الحل")

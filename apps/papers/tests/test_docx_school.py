@@ -354,3 +354,54 @@ def test_essay_instructions_stay_on_the_page_of_the_first_essay_question():
         assert _keeps_next(box) and _keeps_next(gap), lead
         head = question.find(f"{W}tr")
         assert "السؤال رقم" in "".join(head.itertext()) and _keeps_next(head), lead
+
+
+FORECAST = "g12-sci-s1-2026-27-forecast"
+
+
+def test_key_only_file_keeps_the_source_columns_for_every_course_even_without_sources():
+    """مفتاح قالب المدرسة بأعمدة «الصفحة» و«المثال» و«التدريب» لكل مقرر: صيغ الثاني عشر برقم مثالها وبلا صفحة
+    ولا تدريب بعد، فتبقى الأعمدة، والمثال رقمه، وخانتا الصفحة والتدريب «—» لا مخترعة (قرار المالك 2026-11-19)."""
+    load_all()
+    a = papers.build_exam(FORECAST, seed=7)
+    sources = [p.get("source") for q in a["questions"] for p in q["parts"]]
+    assert all(s and s["number"] for s in sources)
+    assert not any(s.get("page") or s.get("exercises") for s in sources)
+    doc = Document(
+        io.BytesIO(build_docx({"papers": [a], "profile": PROFILE, "template": "school", "key_only": True}))
+    )
+    table = next(t for t in doc.tables if t.rows[0].cells[0].text == "السؤال")
+    assert [c.text for c in table.rows[0].cells][3:7] == ["الدرس", "الصفحة", "المثال", "التدريب"]
+    row = table.rows[1].cells
+    assert row[4].text == row[6].text == "—"
+    assert row[5].text.isdigit()
+
+
+def _has_keep(element) -> bool:
+    return element.find(f".//{W}keepNext") is not None
+
+
+@pytest.mark.parametrize("slug", [FINAL, FORECAST])
+def test_question_frames_stay_whole_when_they_fit_and_break_between_parts_when_longer(slug):
+    """لكل مقرر: السؤال الذي تتسع له صفحة كل صف فيه عدا الأخير يلحق بما بعده (كل فقراته)، فلا ينقسم. والأطول من
+    صفحة (مقاليات الثاني عشر) لا فقرة تلحق بالتالي في صفوف أجزائه، لأن Word يربط الصف بفقرة واحدة فيه فيدفع السؤال
+    كله إلى صفحة جديدة ويترك التعليمات وحدها. وفي الحالين الشريط يلحق بالجزء الأول، والتعليمات بالسؤال بعدها."""
+    load_all()
+    a = papers.build_exam(slug, seed=7)
+    doc = Document(io.BytesIO(build_docx({"papers": [a], "profile": PROFILE, "template": "school"})))
+    body = list(doc.element.body)
+    frames = [e for e in body if e.tag == f"{W}tbl" and "السؤال رقم" in "".join(e.itertext())]
+    assert len(frames) == len(a["questions"])
+    released = 0
+    for frame in frames:
+        rows = frame.findall(f"{W}tr")
+        assert _keeps_next(rows[0]) and not _keeps_next(rows[-1])
+        if all(_keeps_next(row) for row in rows[:-1]):
+            continue
+        assert not any(_has_keep(row) for row in rows[1:]), "".join(rows[0].itertext())
+        released += 1
+    assert released == (3 if slug == FORECAST else 0)
+    for index, element in enumerate(body):
+        if element.tag == f"{W}tbl" and "".join(element.itertext()).startswith("تعليمات"):
+            assert _keeps_next(element) and _keeps_next(body[index + 1])
+            assert body[index + 2] in frames

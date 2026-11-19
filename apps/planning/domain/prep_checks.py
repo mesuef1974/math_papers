@@ -37,6 +37,9 @@ BLOCKING = frozenset(
     {"T1", "T2", "T2b", "T2c", "T3", "T4", "T5", "T6", "T7", "T8", "T10", "T11", "T12", "T13"}
 )
 WARNING = frozenset({"T9"})
+# معايير العرض (`deck_checks.py`، «معايير العرض»): S7 وS8 وS12 على ملف PPTX الناتج
+DECK_BLOCKING = frozenset({"S1", "S2", "S3b", "S3", "S4", "S6", "S7", "S8", "S9", "S10", "S12", "S13"})
+DECK_WARNING = frozenset({"S5", "S11"})
 STANDARD_CODE = re.compile(r"^\d{1,2}[A-Z]?\.\d{1,2}\.\d{1,2}$")
 ALL_VERBS = frozenset(v for verbs in VERBS_BY_DOK.values() for v in verbs)
 
@@ -49,7 +52,7 @@ class CheckResult:
 
     @property
     def blocking(self) -> bool:
-        return self.code in BLOCKING
+        return self.code in BLOCKING or self.code in DECK_BLOCKING
 
 
 def _result(code: str, problems: Iterable[str], pending: Iterable[str] = ()) -> CheckResult:

@@ -12,7 +12,7 @@ from dataclasses import dataclass
 
 from apps.papers.domain.book_source import number_list
 
-from .prep import PeriodPrep, PrepExample
+from .prep import PeriodPrep, PrepExample, Recall
 from .prep_checks import BLOCKING, WARNING, CheckResult
 from .strategies import Strategy
 
@@ -126,8 +126,7 @@ def _example_ref(example: PrepExample) -> str:
     return f"مثال {example.n} (ص {example.page})" if example.page else f"مثال {example.n}"
 
 
-def _recall(prep: PeriodPrep) -> str:
-    recall = prep.recall
+def recall_label(recall: Recall) -> str:
     if recall.kind == "previous_lesson":
         return f"استدعاء الدرس {recall.lesson}"
     if recall.kind == "previous_period":
@@ -271,7 +270,7 @@ def prep_sheet(
         outcomes=_outcomes(prep.standards, standard_texts or {}),
         main_sources="كتاب الطالب: " + "، ".join(pages) if pages else "كتاب الطالب",
         support_sources=SUPPORT_SOURCES,
-        warmup=f"{titles.get(stages['warmup'].strategy or '', '')}: {_recall(prep)}",
+        warmup=f"{titles.get(stages['warmup'].strategy or '', '')}: {recall_label(prep.recall)}",
         warmup_minutes=stages["warmup"].minutes,
         objectives=_objective_rows(prep, titles),
         closing=_closing(prep, titles.get(stages["closing"].strategy or "", "")),
