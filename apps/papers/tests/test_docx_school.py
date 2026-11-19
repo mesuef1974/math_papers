@@ -62,9 +62,9 @@ def test_school_exam_fills_the_template_cover_and_frames_every_question():
         "انتهى الجزء الأول من الاختبار",
         "انتهت الأسئلة نرجو لكم التوفيق",
         "وضح خطوات الحل في المستطيل أدناه",
-        "دليل تقدير الدرجات",  # المفتاح بإخراج «أوراق» بعد النموذجين
     ):
         assert expected in text, expected
+    assert "دليل تقدير الدرجات" not in text  # المفتاح ملف مستقل (key_only) ولو طُلب show_key
     heads = Counter(
         t.text for t in doc.element.body.iter(f"{W}t") if t.text and t.text.startswith("السؤال رقم (")
     )
@@ -81,7 +81,7 @@ def test_school_exam_fills_the_template_cover_and_frames_every_question():
 
 def test_each_form_is_a_section_numbered_from_one_and_shape_ids_stay_unique():
     doc = Document(io.BytesIO(build_docx(two_forms(show_key=True))))
-    assert len(doc.sections) == 3  # النموذجان والمفتاح
+    assert len(doc.sections) == 2  # النموذجان؛ المفتاح ملف مستقل
     for section in doc.sections:
         assert section._sectPr.find(f"{W}pgNumType").get(f"{W}start") == "1"
     for section in doc.sections:
@@ -198,7 +198,7 @@ def test_school_worksheet_takes_the_template_header_only_and_frames_its_question
         assert absent not in text, absent
     assert headers_of(doc) == [f"السؤال رقم ({n})" for n in range(1, 5)]
     assert "وضح خطوات الحل في المستطيل أدناه" in text
-    assert len(doc.sections) == 2  # الورقة والمفتاح، كل منهما مرقّم من 1
+    assert len(doc.sections) == 1 and "مفتاح الحل" not in text  # المفتاح ملف مستقل
     assert all(s._sectPr.find(f"{W}pgNumType").get(f"{W}start") == "1" for s in doc.sections)
 
 
@@ -262,5 +262,58 @@ def test_docx_api_accepts_only_known_templates(client):
     assert ok.status_code == 202, ok.content
     bad = client.post(
         "/api/v1/docx", json.dumps({**payload, "template": "other"}), content_type="application/json"
+    )
+    assert bad.status_code == 422
+
+
+def test_key_only_file_has_the_template_header_and_the_key_of_each_form_without_questions():
+    doc = Document(io.BytesIO(build_docx(two_forms(key_only=True))))
+    text = all_text(doc)
+    assert not re.search(r"\{\w+\}", text)
+    for expected in (
+        "مدرسة الاختبار الثانوية",
+        "دليل تقدير الدرجات: اختبار نهاية الفصل الأول (النموذج أ)",
+        "دليل تقدير الدرجات: اختبار نهاية الفصل الأول (النموذج ب)",
+        "مادة الرياضيات للصف العاشر",
+        "إجابات الأسئلة الموضوعية",
+        "الحلول والخطوات بدرجاتها",
+    ):
+        assert expected in text, expected
+    # لا أسئلة ولا غلاف الاختبار ولا ترويسة «أوراق» المكررة
+    assert headers_of(doc) == []
+    for absent in ("المراجع", "المنسق", "زمن الاختبار", school.CLOSING):
+        assert absent not in text, absent
+    assert len(doc.sections) == 2  # قسم بترقيمه لكل نموذج
+    assert all(s._sectPr.find(f"{W}pgNumType").get(f"{W}start") == "1" for s in doc.sections)
+    ids = Counter(pr.get("id") for pr in doc.element.body.iter(f"{WP}docPr"))
+    assert max(ids.values()) == 1
+
+
+def test_key_only_worksheet_bundle_gives_each_key_the_template_header():
+    load_all()
+    plan = [e for e in papers.bundle_plan(FINAL) if e["lesson"] in ("1.1", "1.2")]
+    sheets = [papers.build_bundle_item(FINAL, e["lesson"], 9) for e in plan]
+    payload = {
+        "papers": sheets,
+        "profile": PROFILE,
+        "template": "school",
+        "key_only": True,
+        "bundle": {"plan": plan, "seed": 9},
+    }
+    doc = Document(io.BytesIO(build_docx(payload)))
+    text = all_text(doc)
+    assert len(doc.sections) == 2 and headers_of(doc) == []
+    assert all(f"مفتاح الحل: {s['title']}" in text for s in sheets)
+    assert "رقم الحزمة" not in text
+
+
+def test_docx_api_names_the_key_file_and_rejects_key_only_outside_the_school_template(client):
+    payload = two_forms(key_only=True)
+    payload["papers"] = [payload["papers"][0]]
+    ok = client.post("/api/v1/docx", json.dumps(payload), content_type="application/json")
+    assert ok.status_code == 202, ok.content
+    assert ok.json()["filename"].startswith("مفتاح")
+    bad = client.post(
+        "/api/v1/docx", json.dumps({**payload, "template": "awraq"}), content_type="application/json"
     )
     assert bad.status_code == 422

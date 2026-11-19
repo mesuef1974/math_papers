@@ -203,10 +203,12 @@ def _header_only(elements: list, values: dict[str, str]) -> list:
     return kept
 
 
-def cover(doc, header: dict, paper: dict, duration: str, *, full: bool = True) -> None:
-    """الغلاف كاملًا للاختبار، أو ترويسته وحدها (full=False) لورقة العمل."""
+def cover(doc, header: dict, paper: dict, duration: str, *, full: bool = True, prefix: str = "") -> None:
+    """الغلاف كاملًا للاختبار، أو ترويسته وحدها (full=False) لورقة العمل وللمفتاح المستقل (prefix قبل العنوان)."""
     body = doc.element.body
     values = cover_values(header, paper, duration)
+    if prefix:
+        values["{exam}"] = f"{prefix}: {values['{exam}']}"
     elements = [copy.deepcopy(element) for element in doc._school_cover]
     if not full:
         elements = _header_only(elements, values)
@@ -425,6 +427,15 @@ def worksheet_sheet(doc, paper: dict, header: dict, *, first: bool, last: bool =
         question(doc, item)
     if last:
         x.add_text(x.new_paragraph(doc, align="center", before=6, after=0), CLOSING, size=11)
+
+
+def key_header(doc, paper: dict, header: dict, label: str, *, first: bool) -> None:
+    """ترويسة المفتاح المستقل: قسم بترقيمه لكل نموذج أو ورقة، وترويسة القالب وحدها بعنوان «<label>: <العنوان>»."""
+    if not first:
+        doc.add_section(WD_SECTION.NEW_PAGE)
+    _footer(doc.sections[-1])
+    cover(doc, header, paper, "", full=False, prefix=label)
+    x.spacer(doc, 6)
 
 
 def _footer(section) -> None:
