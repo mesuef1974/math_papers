@@ -94,7 +94,10 @@ def test_problems_catch_missing_example_wrong_depth_and_enrichment(loaded_course
     assert any("الدرس 1.1" in p and "[1, 2, 3, 4]" in p for p in problems)
     assert any("1.2 مثال 1" in p for p in problems)
     assert "درس ليس في الوحدة أو إثرائي: 1.4" in problems
-    assert any("معيار بلا وصف" in p for p in unit_problems(UnitPrep.model_validate(_raw()), lessons, ["1.4"], {}, None))
+    assert any(
+        "معيار بلا وصف" in p
+        for p in unit_problems(UnitPrep.model_validate(_raw()), lessons, ["1.4"], {}, None)
+    )
 
 
 def test_standard_texts_appear_only_after_their_unit_is_approved(tmp_path):
@@ -102,7 +105,9 @@ def test_standard_texts_appear_only_after_their_unit_is_approved(tmp_path):
     shutil.copytree(COURSES_DIR / GRADE10_SLUG, root / GRADE10_SLUG)
     assert set(approved_standards(GRADE10_SLUG, root)) == {"10.3.1", "10.3.2", "10.3.3"}
     draft = _raw() | {"status": "draft", "approval": None}
-    (root / GRADE10_SLUG / "prep" / "unit-1.json").write_text(json.dumps(draft, ensure_ascii=False), encoding="utf-8")
+    (root / GRADE10_SLUG / "prep" / "unit-1.json").write_text(
+        json.dumps(draft, ensure_ascii=False), encoding="utf-8"
+    )
     unit_prep.cache_clear()
     course_standards.cache_clear()
     try:

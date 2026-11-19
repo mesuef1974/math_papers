@@ -114,9 +114,9 @@ def test_approved_unit_objectives_and_outcomes_reach_page_and_word(teacher_clien
     base = f"{API}/{GRADE10_SLUG}/1.2/1"
     sheet = teacher_client.get(base).json()
     assert sheet["pending"] is False
-    expected = [
-        " ".join((o.behavior, o.condition, o.criterion)) for o in unit.objectives("1.2").values()
-    ][: len(sheet["objectives"])]
+    expected = [" ".join((o.behavior, o.condition, o.criterion)) for o in unit.objectives("1.2").values()][
+        : len(sheet["objectives"])
+    ]
     assert [o["text"] for o in sheet["objectives"]] == expected
     assert {c["code"]: c["status"] for c in sheet["checks"]}["T2c"] == "pass"
     texts = approved_standards(GRADE10_SLUG)

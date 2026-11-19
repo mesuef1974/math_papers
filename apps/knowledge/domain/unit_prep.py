@@ -117,7 +117,9 @@ def unit_files(course: str, root: Path = COURSES_DIR) -> list[int]:
     folder = root / course / PREP_DIR
     if not folder.is_dir():
         return []
-    return sorted(int(m.group(1)) for p in folder.iterdir() if (m := re.fullmatch(r"unit-(\d+)\.json", p.name)))
+    return sorted(
+        int(m.group(1)) for p in folder.iterdir() if (m := re.fullmatch(r"unit-(\d+)\.json", p.name))
+    )
 
 
 @lru_cache(maxsize=16)
