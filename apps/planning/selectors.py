@@ -25,6 +25,8 @@ from apps.knowledge.selectors import course_index, example_numbers, lesson_index
 from .domain.calendar_engine import Closure, Plan, Slot, Term, allocate, parse_terms, sessions
 from .domain.deck import Deck, ExampleClip, LessonContent, build_deck
 from .domain.feedback import ClassOutcome, Decision, decide
+from .domain.plan_periods import PlanPeriod
+from .domain.plan_periods import plan_periods as derive_plan_periods
 from .domain.semester_plan import (
     TermPlan,
     check_catalog,
@@ -120,6 +122,11 @@ def _course_plan(course: str) -> tuple[Course, TermPlan]:
 def term_plan(course: str = PLAN_COURSE) -> TermPlan:
     """خطة الوزارة الفصلية للمقرر من جداولها، بعد مطابقة دروسها على جدول دروسه وأمثلتها الإثرائية على أمثلته المحمَّلة (فهرس مشتق أو معرفة بصياغتنا). `KeyError` بلا خطة."""
     return _course_plan(course)[1]
+
+
+def plan_periods(course: str = PLAN_COURSE) -> tuple[PlanPeriod, ...]:
+    """حصص الخطة الفصلية للمقرر مرقّمة: `k` من `n` لكل بند عبر الأسابيع، ورقمها في الفصل وأسبوعها. `KeyError` بلا خطة."""
+    return derive_plan_periods(course, term_plan(course))
 
 
 def calendar_terms(year: str) -> dict[str, Term]:
