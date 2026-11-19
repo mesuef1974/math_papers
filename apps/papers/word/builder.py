@@ -895,8 +895,12 @@ def key_label(paper: dict) -> str:
     return "دليل تقدير الدرجات" if paper["kind"] == "exam" else "مفتاح الحل"
 
 
-def key_pages(doc, paper: dict, header: dict, *, page_break: bool = True, heading: bool = True) -> None:
-    """المفتاح بترويسة «أوراق»، أو بلا ترويسة (heading=False) حين تسبقه ترويسة قالب المدرسة."""
+def key_pages(
+    doc, paper: dict, header: dict, *, page_break: bool = True, heading: bool = True, sources: bool = False
+) -> None:
+    """المفتاح بترويسة «أوراق»، أو بلا ترويسة (heading=False) حين تسبقه ترويسة قالب المدرسة.
+    sources: أعمدة المصدر ثابتة ولو لم يُعرف مصدر أي جزء (مفتاح قالب المدرسة لكل مقرر، قرار المالك 2026-11-19)،
+    والخانة المجهولة «—»؛ وبدونه تظهر الأعمدة متى عُرف مصدر جزء واحد."""
     if heading:
         title = f"{key_label(paper)}: {header['title']}"
         paper_header(doc, {**header, "title": title}, compact=True, page_break=page_break)
@@ -952,7 +956,9 @@ def key_pages(doc, paper: dict, header: dict, *, page_break: bool = True, headin
         )
     # مع الدرجات: عمود لدرجة كل بند بعد الخطوات، وعمود لمجموع الجزء في آخر الجدول. ومع مصدر جزء واحد على الأقل
     # أعمدة المصدر الثلاثة «الصفحة» و«المثال» و«التدريب» بعد الدرس (كما في AnswerKey.vue)، مشتقة من أرقام المصدر.
-    has_sources = any(part.get("source") for question in paper["questions"] for part in question["parts"])
+    has_sources = sources or any(
+        part.get("source") for question in paper["questions"] for part in question["parts"]
+    )
     columns = [_KeyColumn("question", "السؤال", 1.7 if has_marks else 1.9)]
     columns.append(_KeyColumn("answer", "الإجابة والخطوات", 0.0, per_item=True))
     if has_marks:
@@ -1196,7 +1202,7 @@ def build_docx(payload: dict[str, Any]) -> bytes:
         for index, (paper, header) in enumerate(zip(papers, headers, strict=True)):
             if school_template:
                 school.key_header(doc, paper, header, key_label(paper), first=index == 0)
-                key_pages(doc, paper, header, heading=False)
+                key_pages(doc, paper, header, heading=False, sources=True)
             else:
                 if index == 0:
                     _configure_section(doc.sections[0], "مفتاح الحل")
