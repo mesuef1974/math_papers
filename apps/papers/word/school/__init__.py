@@ -349,8 +349,11 @@ def _work_box(cell, part: dict, width: float) -> None:
 
 
 def question(doc, item: dict) -> None:
-    """إطار السؤال: الشريط ثم صف لكل جزء. صف الجزء لا ينقسم بين صفحتين (نصه مع بدائله أو مستطيل حله)،
-    والشريط يلحق بصف الجزء الأول، فلا يبقى رأس سؤال في آخر صفحة ونصه في التي تليها."""
+    """إطار السؤال: الشريط ثم صف لكل جزء. صف الجزء لا ينقسم بين صفحتين (نصه مع بدائله أو مستطيل حله)، والشريط
+    يلحق بصف الجزء الأول. السؤال الذي تتسع له صفحة يلحق كل صف فيه عدا الأخير بما بعده، فيبقى كله في صفحة ومعه
+    مربع التعليمات قبله. والأطول من صفحة (مقاليات الثاني عشر) تُنزع keepNext من صفوف أجزائه كلها: Word يربط الصف
+    بما بعده إن كانت فيه فقرة واحدة تلحق بالتالي، فكان يعامل السؤال كتلة أطول من صفحة فيدفعه إلى صفحة جديدة
+    ويترك التعليمات وحدها؛ فينقسم بين فروعه لا داخلها (قرار المالك 2026-11-19، مقيس في Word)."""
     from ..builder import graph_picture, rich
 
     widths = [6.0, CONTENT_CM - 9.6, 3.6]
@@ -375,7 +378,33 @@ def question(doc, item: dict) -> None:
         else:
             _work_box(merged, part, inner)
         x.spacer(merged, 2)
+    if sum(_row_height_cm(row) for row in table.rows) <= PAGE_FIT_CM:
+        for row in table.rows[:-1]:
+            x.keep_row_with_next(row)
+    else:
+        for row in table.rows[1:]:
+            _release_row(row)
     x.spacer(doc, 8)
+
+
+# ارتفاع ما يتسع له متن الصفحة تحت هوامش القالب وتذييله، بهامش أمان؛ التقدير يزيد ولا ينقص فيُقسَم السؤال المشكوك فيه
+PAGE_FIT_CM = 24.0
+TEXT_LINE_CM = 0.6
+
+
+def _row_height_cm(row) -> float:
+    """تقدير زائد لارتفاع صف: الصور بامتدادها، والصفوف المتداخلة (مستطيل الحل والبدائل) بارتفاعها، وسطر لكل فقرة نص."""
+    tr = row._tr
+    pictures = sum(int(e.get("cy")) for e in tr.iter(qn("wp:extent"))) / 360000
+    rows = sum(int(h.get(qn("w:val"))) for h in tr.iter(qn("w:trHeight"))) / 567
+    lines = sum(1 for p in tr.iter(qn("w:p")) if "".join(p.itertext()).strip()) * TEXT_LINE_CM
+    return pictures + rows + lines
+
+
+def _release_row(row) -> None:
+    """صف جزء لا يلحق بما بعده: يُنزع keepNext من كل فقرة فيه (الصف cantSplit فلا تنفصل أجزاؤه بدونه)."""
+    for keep in list(row._tr.iter(qn("w:keepNext"))):
+        keep.getparent().remove(keep)
 
 
 def exam_sheet(doc, paper: dict, header: dict, duration: str, *, first: bool) -> None:
