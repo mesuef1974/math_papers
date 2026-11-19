@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import hashlib
 from collections.abc import Collection, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from django.contrib.auth.models import AbstractBaseUser
 from django.db.models import Count, QuerySet
@@ -17,7 +17,7 @@ from apps.assets.models import Asset
 from apps.assets.selectors import asset_bytes
 from apps.assets.storage import Storage
 from apps.curriculum.courses import GRADE10_SLUG, grade_label
-from apps.curriculum.models import Course
+from apps.curriculum.models import Course, Lesson
 from apps.curriculum.selectors import calendar_data, lessons, term_plan_data
 from apps.knowledge.domain.course_index import LessonIndex
 from apps.knowledge.domain.schemas import lesson_sort_key
@@ -27,6 +27,8 @@ from apps.knowledge.selectors import course_index, example_numbers, lesson_index
 from .domain.calendar_engine import Closure, Plan, Slot, Term, allocate, parse_terms, sessions
 from .domain.deck import Deck, ExampleClip, LessonContent, build_deck
 from .domain.feedback import ClassOutcome, Decision, decide
+from .domain.objective_text import digest as text_digest
+from .domain.objective_text import shared_digest
 from .domain.plan_periods import PlanPeriod
 from .domain.plan_periods import plan_periods as derive_plan_periods
 from .domain.prep import PeriodPrep, build_prep, lesson_examples, recall_for
@@ -48,7 +50,7 @@ from .domain.strategies import (
     build_flow,
     load_library,
 )
-from .models import ClassOutcomeRecord, LessonRunRecord
+from .models import ClassOutcomeRecord, LessonRunRecord, ObjectiveOverride, ObjectiveSuggestion, PrepReview
 
 PLAN_COURSE = GRADE10_SLUG  # المقرر الافتراضي للتخطيط: أول مقرر له خطة فصلية في الجداول
 
@@ -327,15 +329,20 @@ def prep_periods(course: str) -> list[dict]:
     return out
 
 
-def period_sheet(course: str, lesson: str, k: int) -> PrepSheet:
-    """ورقة تحضير حصة واحدة (الدرس ورقمها فيه) بنصوصها ومعاييرها."""
-    found = _plan_course(course)
+def period_item(course: str, lesson: str, k: int) -> PreparedPeriod:
+    """حصة واحدة (الدرس ورقمها فيه) بتحضيرها المشترك ومعاييره."""
+    _plan_course(course)
     item = next((p for p in lesson_preps(course) if p.prep.lesson == lesson and p.prep.k == k), None)
     if item is None:
         raise PrepNotFoundError(f"لا حصة {k} للدرس {lesson} في خطة {course}")
-    title = lessons(found).filter(code=lesson).values_list("title", flat=True).first() or ""
+    return item
+
+
+def _render(course: str, item: PreparedPeriod, prep: PeriodPrep) -> PrepSheet:
+    found = _plan_course(course)
+    title = lessons(found).filter(code=prep.lesson).values_list("title", flat=True).first() or ""
     return prep_sheet(
-        item.prep,
+        prep,
         item.checks,
         {s.slug: s for s in load_library()},
         lesson_title=title,
@@ -346,3 +353,107 @@ def period_sheet(course: str, lesson: str, k: int) -> PrepSheet:
         grade=grade_label(found.grade, found.track),
         standard_texts=approved_standards(course),
     )
+
+
+def period_sheet(course: str, lesson: str, k: int) -> PrepSheet:
+    """ورقة تحضير حصة واحدة بنصوصها المعتمدة ومعاييرها (بلا نسخة معلم)."""
+    item = period_item(course, lesson, k)
+    return _render(course, item, item.prep)
+
+
+# ───── مراجعة المعلم لأهداف حصته (docs/teacher_objective_review_plan.md) ─────
+
+
+@dataclass(frozen=True)
+class ObjectiveState:
+    """حال هدف مثال عند معلم: النص المعتمد، ونسخته إن عدّل، وقِدمها، وآخر اقتراح له."""
+
+    example: int
+    shared: dict | None  # السلوك والشرط والمعيار المعتمدة؛ None قبل اعتماد الوحدة
+    mine: dict | None  # الشرط والمعيار في نسخة المعلم
+    stale: bool
+    editable: bool
+    suggestion: dict | None
+
+
+@dataclass(frozen=True)
+class TeacherSheet:
+    sheet: PrepSheet
+    objectives: dict[int, ObjectiveState]
+    review: dict | None
+
+
+def sheet_digest(sheet: PrepSheet) -> str:
+    """بصمة نصوص أهداف الحصة كما تظهر للمعلم: علامة المراجعة تحتاج تجديدًا إن تغيّرت."""
+    return text_digest(row.text for row in sheet.objectives)
+
+
+def _suggestion_view(row: ObjectiveSuggestion, shared: tuple[str | None, str | None]) -> dict:
+    applied = row.decision == ObjectiveSuggestion.ACCEPTED and (row.condition, row.criterion) == shared
+    return {
+        "status": "applied" if applied else row.decision,
+        "condition": row.condition,
+        "criterion": row.criterion,
+        "note": row.decision_note,
+        "created_at": row.created_at,
+    }
+
+
+def teacher_sheet(course: str, lesson: str, k: int, owner: AbstractBaseUser) -> TeacherSheet:
+    """ورقة الحصة بنسخة المعلم: الشرط والمعيار من نسخته حين تختلف عن المعتمد، والمعايير T1 إلى T13 كما هي
+    (السلوك وفعله وعمقه لا تتغير). الوحدة غير المعتمدة لا تُعدَّل فتظهر كما هي."""
+    item = period_item(course, lesson, k)
+    prep = item.prep
+    editable = prep.unit_status == "approved"
+    record = Lesson.objects.filter(course__slug=course, code=lesson).first()
+    numbers = [o.example for o in prep.objectives]
+    overrides: dict[int, ObjectiveOverride] = {}
+    suggestions: dict[int, ObjectiveSuggestion] = {}
+    if editable and record is not None:
+        overrides = {
+            o.example: o
+            for o in ObjectiveOverride.objects.filter(owner=owner, lesson=record, example__in=numbers)
+        }
+        for row in ObjectiveSuggestion.objects.filter(
+            owner=owner, lesson=record, example__in=numbers
+        ).order_by("created_at", "id"):
+            suggestions[row.example] = row  # الأحدث يغلب
+    states: dict[int, ObjectiveState] = {}
+    personal = []
+    for objective in prep.objectives:
+        shared_pair = (objective.condition, objective.criterion)
+        override = overrides.get(objective.example)
+        mine = override if override and (override.condition, override.criterion) != shared_pair else None
+        if mine is not None:
+            objective = replace(
+                objective, condition=mine.condition, criterion=mine.criterion, source="teacher"
+            )
+        personal.append(objective)
+        original = next(o for o in prep.objectives if o.example == objective.example)
+        states[objective.example] = ObjectiveState(
+            example=objective.example,
+            shared=(
+                {
+                    "behavior": original.behavior,
+                    "condition": original.condition,
+                    "criterion": original.criterion,
+                }
+                if editable
+                else None
+            ),
+            mine=None if mine is None else {"condition": mine.condition, "criterion": mine.criterion},
+            stale=mine is not None and mine.base_digest != shared_digest(original),
+            editable=editable,
+            suggestion=(
+                _suggestion_view(suggestions[objective.example], shared_pair)
+                if objective.example in suggestions
+                else None
+            ),
+        )
+    sheet = _render(course, item, replace(prep, objectives=tuple(personal)))
+    review = None
+    if record is not None:
+        mark = PrepReview.objects.filter(owner=owner, lesson=record, k=k).first()
+        if mark is not None:
+            review = {"reviewed_at": mark.reviewed_at, "stale": mark.digest != sheet_digest(sheet)}
+    return TeacherSheet(sheet=sheet, objectives=states, review=review)
