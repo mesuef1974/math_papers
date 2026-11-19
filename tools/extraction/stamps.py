@@ -40,7 +40,12 @@ INPUTS: dict[str, dict[str, Any]] = {
         "pdf": False,
     },  # ومجلد سجلات الدروس ووجهة التحميل (انظر digest)
     "printed_pages": {"dirs": ("ocr", "boxes"), "after": (), "pdf": False},
-    "exercise_links": {"dirs": ("vision",), "after": ("layout", "examples"), "pdf": False},
+    "exercise_badges": {"dirs": ("ocr", "render", "boxes"), "after": ("layout", "examples"), "pdf": False},
+    "exercise_links": {
+        "dirs": ("vision",),
+        "after": ("layout", "examples", "exercise_badges"),
+        "pdf": False,
+    },
     "publish": {"dirs": (), "after": (), "pdf": False},  # ومجلد المقاطع (publish.clips) ووجهة التخزين
     # ومجلد المقاطع الحالية (student_clips.source) وملف كتاب الطالب
     "student_clips": {"dirs": (), "after": ("printed_pages",), "pdf": True},

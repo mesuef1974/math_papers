@@ -189,6 +189,7 @@ class Book:
             "publish": "publish.json",
             "printed_pages": "printed_pages.json",
             "exercise_links": "exercise_links.json",
+            "exercise_badges": "exercise_badges.json",
             "student_clips": "student_clips.json",
             "student_decks": "student_decks.json",
         }
