@@ -2,7 +2,8 @@
   "schema_version": 1,
   "course": "g10-s1",
   "unit": 3,
-  "status": "draft",
+  "status": "approved",
+  "approval": "اعتُمد من المالك — 2026-11-19",
   "audience": "طالب الصف العاشر",
   "lessons": [
     {
