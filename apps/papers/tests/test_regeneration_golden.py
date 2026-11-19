@@ -15,11 +15,24 @@ SLUG = "g12-sci-s1-2026-27-forecast"
 SEED = 20261116
 
 
+def without_display(value):
+    """نسخة بلا مفتاح source في أي جزء."""
+    if isinstance(value, dict):
+        return {k: without_display(v) for k, v in value.items() if k != "source"}
+    if isinstance(value, list):
+        return [without_display(v) for v in value]
+    return value
+
+
 def digest(paper: dict) -> int:
     """أول 64 بتًا من SHA-1 رقمًا عشريًا: كاشف الأسرار يعدّ السداسي العشري الطويل سرًّا.
-    سطر الصف (grade) حقل عرض من المقرر أُضيف بعد التثبيت ولا يمسّ المسائل، فلا يدخل البصمة."""
+    سطر الصف (grade) ومصدر الجزء في الكتاب (source، من رقم مثال الصيغة) حقلا عرض أُضيفا بعد التثبيت ولا يمسّان
+    المسائل، فلا يدخلان البصمة."""
     text = json.dumps(
-        {k: v for k, v in paper.items() if k != "grade"}, sort_keys=True, ensure_ascii=False, default=str
+        without_display({k: v for k, v in paper.items() if k != "grade"}),
+        sort_keys=True,
+        ensure_ascii=False,
+        default=str,
     )
     return int(hashlib.sha1(text.encode("utf-8"), usedforsecurity=False).hexdigest()[:16], 16)
 

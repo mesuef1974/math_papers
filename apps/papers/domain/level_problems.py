@@ -33,7 +33,7 @@ def joined(points: list) -> str:
 
 
 # الوحدة الأولى
-@variant("1.1")
+@variant("1.1", example=2)
 def limit_exists_parameter(rng: random.Random) -> Problem:
     """قيمة ثابت تجعل النهاية موجودة: يجب أن تتساوى النهايتان من الجهتين."""
     c = nz(rng, -2, 3)
@@ -60,7 +60,7 @@ def limit_exists_parameter(rng: random.Random) -> Problem:
     )
 
 
-@variant("1.2")
+@variant("1.2", example=1)
 def limit_properties(rng: random.Random) -> Problem:
     c = rng.randint(-3, 4)
     lf, lg = nz(rng, -6, 6), nz(rng, -5, 5)
@@ -91,7 +91,7 @@ def limit_properties(rng: random.Random) -> Problem:
     )
 
 
-@variant("1.2")
+@variant("1.2", example=3)
 def limit_parameter_factoring(rng: random.Random) -> Problem:
     """قيمة k تجعل النهاية موجودة (البسط يجب أن ينعدم)، ثم قيمة النهاية."""
     c = nz(rng, -3, 3)
@@ -123,7 +123,7 @@ def limit_parameter_factoring(rng: random.Random) -> Problem:
     )
 
 
-@variant("1.3")
+@variant("1.3", example=2)
 def limit_sine_simple(rng: random.Random) -> Problem:
     a, b = nz(rng, 2, 9), nz(rng, 1, 5)
     value = sp.Rational(a, b)
@@ -141,7 +141,7 @@ def limit_sine_simple(rng: random.Random) -> Problem:
     )
 
 
-@variant("1.3")
+@variant("1.3", example=4)
 def limit_sine_tangent_product(rng: random.Random) -> Problem:
     """نهاية حاصل ضرب نسبتين مثلثيتين: تتطلب تفكيك الكسر إلى نهايتين معروفتين."""
     a, b = rng.randint(2, 7), rng.randint(2, 7)
@@ -162,7 +162,7 @@ def limit_sine_tangent_product(rng: random.Random) -> Problem:
     )
 
 
-@variant("1.4")
+@variant("1.4", example=5)
 def continuity_yes_no(rng: random.Random) -> Problem:
     c = rng.randint(-2, 3)
     a, b = nz(rng, -3, 3), rng.randint(-4, 4)
@@ -190,7 +190,7 @@ def continuity_yes_no(rng: random.Random) -> Problem:
     )
 
 
-@variant("1.4")
+@variant("1.4", example=2)
 def continuity_two_constants(rng: random.Random) -> Problem:
     p = rng.choice([-2, -1, 1])
     q = p + rng.choice([2, 3])
@@ -220,7 +220,7 @@ def continuity_two_constants(rng: random.Random) -> Problem:
 
 
 # الوحدة الثانية
-@variant("2.1")
+@variant("2.1", example=2)
 def average_rate_from_table(rng: random.Random) -> Problem:
     a0, a1, a2 = rng.randint(-3, 3), rng.randint(-4, 4), nz(rng, -2, 2)
     f = a2 * x**2 + a1 * x + a0
@@ -244,7 +244,7 @@ def average_rate_from_table(rng: random.Random) -> Problem:
     )
 
 
-@variant("2.1")
+@variant("2.1", example=4)
 def instantaneous_equals_average(rng: random.Random) -> Problem:
     lo = rng.randint(-3, 1)
     hi = lo + 2 * rng.randint(1, 3)
@@ -265,7 +265,7 @@ def instantaneous_equals_average(rng: random.Random) -> Problem:
     )
 
 
-@variant("2.2")
+@variant("2.2", example=1)
 def derivative_definition_at_point(rng: random.Random) -> Problem:
     a2, a1, a0 = nz(rng, -3, 3), rng.randint(-5, 5), rng.randint(-4, 4)
     a = rng.randint(-2, 3)
@@ -287,7 +287,7 @@ def derivative_definition_at_point(rng: random.Random) -> Problem:
     )
 
 
-@variant("2.2")
+@variant("2.2", example=5)
 def differentiability_piecewise(rng: random.Random) -> Problem:
     c = rng.randint(-2, 2)
     p = rng.randint(-3, 3)
@@ -315,7 +315,7 @@ def differentiability_piecewise(rng: random.Random) -> Problem:
     )
 
 
-@variant("2.3")
+@variant("2.3", example=4)
 def derivative_polynomial_simple(rng: random.Random) -> Problem:
     n1, n2 = rng.sample([2, 3, 4, 5], 2)
     a, b, c = nz(rng, -6, 6), nz(rng, -5, 5), rng.randint(-9, 9)
@@ -337,7 +337,7 @@ def derivative_polynomial_simple(rng: random.Random) -> Problem:
     )
 
 
-@variant("2.3")
+@variant("2.3", example=5)
 def tangent_line_equation(rng: random.Random) -> Problem:
     a3, a2, a1 = rng.choice([0, 0, 1, -1]), nz(rng, -2, 3), rng.randint(-4, 4)
     f = a3 * x**3 + a2 * x**2 + a1 * x + rng.randint(-3, 3)
@@ -371,7 +371,7 @@ def tangent_line_equation(rng: random.Random) -> Problem:
     )
 
 
-@variant("2.3")
+@variant("2.3", example=5)
 def horizontal_tangent_points(rng: random.Random) -> Problem:
     f, p, q, _ = cubic_with_critical_points(rng)
     answer = joined([p, q])
@@ -390,7 +390,7 @@ def horizontal_tangent_points(rng: random.Random) -> Problem:
     )
 
 
-@variant("2.4")
+@variant("2.4", example=4)
 def derivative_from_values(rng: random.Random) -> Problem:
     a = rng.randint(-2, 3)
     fa, dfa, ga, dga = nz(rng, -5, 5), rng.randint(-4, 5), nz(rng, -4, 4), rng.randint(-4, 4)
@@ -421,7 +421,7 @@ def derivative_from_values(rng: random.Random) -> Problem:
     )
 
 
-@variant("2.4")
+@variant("2.4", example=3)
 def quotient_constant(rng: random.Random) -> Problem:
     c = nz(rng, -3, 3)
     v = nz(rng, -3, 3)
@@ -442,7 +442,7 @@ def quotient_constant(rng: random.Random) -> Problem:
     )
 
 
-@variant("2.5")
+@variant("2.5", example=1)
 def chain_given_inner(rng: random.Random) -> Problem:
     n = rng.choice([2, 3, 4, 5])
     a, b = nz(rng, -4, 5), nz(rng, -6, 6)
@@ -464,7 +464,7 @@ def chain_given_inner(rng: random.Random) -> Problem:
     )
 
 
-@variant("2.5")
+@variant("2.5", example=2)
 def chain_from_values(rng: random.Random) -> Problem:
     a, b = rng.randint(-2, 3), rng.randint(-3, 3)
     dg, df = nz(rng, -4, 4), nz(rng, -4, 4)
@@ -483,7 +483,7 @@ def chain_from_values(rng: random.Random) -> Problem:
     )
 
 
-@variant("2.6")
+@variant("2.6", example=1)
 def derivative_exp_log_simple(rng: random.Random) -> Problem:
     if rng.random() < 0.5:
         a, b = nz(rng, -5, 5), nz(rng, -4, 4)
@@ -504,7 +504,7 @@ def derivative_exp_log_simple(rng: random.Random) -> Problem:
     )
 
 
-@variant("2.6")
+@variant("2.6", example=2)
 def exponential_horizontal_tangent(rng: random.Random) -> Problem:
     a = rng.choice([-2, -1, 1, 2, sp.Rational(1, 2), sp.Rational(-1, 2)])
     c = nz(rng, -3, 3)
@@ -532,7 +532,7 @@ def exponential_horizontal_tangent(rng: random.Random) -> Problem:
     )
 
 
-@variant("2.7")
+@variant("2.7", example=1)
 def derivative_trig_simple(rng: random.Random) -> Problem:
     a, b = nz(rng, -5, 5), nz(rng, -5, 5)
     f = a * sp.sin(x) + b * sp.cos(x)
@@ -559,7 +559,7 @@ TRIG_TANGENTS = [  # (الدالة، النقاط في [0,π]) نقاط المم
 ]
 
 
-@variant("2.7")
+@variant("2.7", example=5)
 def trig_horizontal_tangent(rng: random.Random) -> Problem:
     base, points = rng.choice(TRIG_TANGENTS)
     f = rng.choice([1, 2, 3, -1, -2]) * base  # الضرب في ثابت لا يغيّر نقاط المماس الأفقي
@@ -577,7 +577,7 @@ def trig_horizontal_tangent(rng: random.Random) -> Problem:
     )
 
 
-@variant("2.8")
+@variant("2.8", example=1)
 def implicit_ellipse_expression(rng: random.Random) -> Problem:
     a, b = rng.randint(1, 4), rng.randint(1, 4)
     c = rng.randint(5, 30)
@@ -594,7 +594,7 @@ def implicit_ellipse_expression(rng: random.Random) -> Problem:
     )
 
 
-@variant("2.9")
+@variant("2.9", example=2)
 def second_derivative_simple(rng: random.Random) -> Problem:
     a, b, c = nz(rng, -4, 4), nz(rng, -5, 5), rng.randint(-6, 6)
     f = a * x**3 + b * x**2 + c * x
@@ -610,7 +610,7 @@ def second_derivative_simple(rng: random.Random) -> Problem:
     )
 
 
-@variant("2.9")
+@variant("2.9", example=5)
 def motion_velocity_acceleration(rng: random.Random) -> Problem:
     t = sp.Symbol("t")
     b, c = rng.randint(-6, 3), rng.randint(-9, 9)
@@ -636,7 +636,7 @@ def motion_velocity_acceleration(rng: random.Random) -> Problem:
     )
 
 
-@variant("2.9")
+@variant("2.9", example=5)
 def motion_at_rest(rng: random.Random) -> Problem:
     p = rng.randint(1, 3)
     q = p + rng.choice([2, 4])
@@ -660,7 +660,7 @@ def motion_at_rest(rng: random.Random) -> Problem:
 
 
 # الوحدة الثالثة
-@variant("3.1")
+@variant("3.1", example=2)
 def critical_numbers(rng: random.Random) -> Problem:
     f, p, q, _ = cubic_with_critical_points(rng)
     answer = joined([p, q])
@@ -679,7 +679,7 @@ def critical_numbers(rng: random.Random) -> Problem:
     )
 
 
-@variant("3.2")
+@variant("3.2", example=2)
 def extremum_from_linear_derivative(rng: random.Random) -> Problem:
     p = rng.randint(-4, 4)
     s = nz(rng, -3, 3)
@@ -706,7 +706,7 @@ def extremum_from_linear_derivative(rng: random.Random) -> Problem:
     )
 
 
-@variant("3.3")
+@variant("3.3", example=3)
 def concavity_from_second_derivative(rng: random.Random) -> Problem:
     h = rng.randint(-4, 4)
     a = nz(rng, -3, 3)
@@ -742,7 +742,7 @@ DECLINE_CONTEXTS = (
 )
 
 
-@variant("3.1")
+@variant("3.1", example=2)
 def decline_start(rng: random.Random) -> Problem:
     """نموذج تطبيقي: N'(t) = -3(t-q)(t+p)، فيتزايد حتى t=q ثم يتناقص داخل المجال."""
     p = rng.randint(1, 5)
@@ -782,7 +782,7 @@ SURFACE_SHAPES = (
 )
 
 
-@variant("3.5")
+@variant("3.5", example=3)
 def surface_in_one_variable(rng: random.Random) -> Problem:
     """المهارة السابقة لمسائل القيم المثلى: التعويض من قيد الحجم لكتابة الدالة بمتغير واحد."""
     volume = 4 * rng.randint(2, 60)

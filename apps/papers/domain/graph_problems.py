@@ -30,7 +30,7 @@ def union_outside(p: int, q: int) -> str:
     return rf"$(-\infty,{p})\cup({q},\infty)$"
 
 
-@variant("1.4")
+@variant("1.4", example=1)
 def discontinuity_type_from_graph(rng: random.Random) -> Problem:
     c = rng.randint(-2, 2)
     kind = rng.choice(list(TYPES))
@@ -79,7 +79,7 @@ def discontinuity_type_from_graph(rng: random.Random) -> Problem:
     )
 
 
-@variant("2.1")
+@variant("2.1", example=5)
 def tangent_slope_from_graph(rng: random.Random) -> Problem:
     a, b = rng.randint(-2, 2), rng.randint(-2, 2)
     slope = rng.choice([-3, -2, -1, 1, 2, 3])
@@ -116,7 +116,7 @@ def derivative_graph(rng: random.Random, double_root: bool = False) -> tuple[Gra
     return Graph(WINDOW, label=DERIV).add_curve(fprime, -5, 5), fprime, p, q, s
 
 
-@variant("3.1")
+@variant("3.1", example=2)
 def monotonic_from_derivative_graph(rng: random.Random) -> Problem:
     graph, _, p, q, s = derivative_graph(rng)
     ask_increasing = rng.choice([True, False])
@@ -147,7 +147,7 @@ def monotonic_from_derivative_graph(rng: random.Random) -> Problem:
     )
 
 
-@variant("3.2")
+@variant("3.2", example=2)
 def extremum_from_derivative_graph(rng: random.Random) -> Problem:
     double = rng.random() < 0.35
     graph, _, p, q, s = derivative_graph(rng, double_root=double)
@@ -179,7 +179,7 @@ def extremum_from_derivative_graph(rng: random.Random) -> Problem:
     )
 
 
-@variant("3.3")
+@variant("3.3", example=3)
 def concavity_from_derivative_graph(rng: random.Random) -> Problem:
     h = rng.randint(-2, 2)
     r = rng.choice([1, 2])
@@ -219,7 +219,7 @@ def concavity_from_derivative_graph(rng: random.Random) -> Problem:
     )
 
 
-@variant("3.1")
+@variant("3.1", example=2)
 def function_from_derivative_graph(rng: random.Random) -> Problem:
     """خيار من أربعة رسوم للدالة f: الصحيح، ومعكوسه، ومزاح أفقيًا، ورسم f′ نفسه."""
     graph, fprime, p, q, _ = derivative_graph(rng)
