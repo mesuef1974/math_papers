@@ -19,9 +19,9 @@ from apps.knowledge.tests.test_course_index import field, lesson_output
 from apps.planning import selectors as planning
 from apps.planning import services as planning_services
 from apps.planning.domain.calendar_engine import PlanningError
-from apps.planning.domain.deck import DeckError
 from apps.planning.domain.feedback import ClassOutcome
 from apps.planning.models import ClassOutcomeRecord
+from apps.planning.selectors import PrepNotFoundError
 
 pytestmark = pytest.mark.django_db
 
@@ -115,7 +115,7 @@ def test_deck_never_borrows_another_course_lesson(third_course):
         width=4,
         height=3,
     )
-    with pytest.raises(DeckError, match="فهرس المقرر"):
+    with pytest.raises(PrepNotFoundError, match="فهرس مشتق"):
         planning_services.prepare_deck(GRADE12_SLUG, "2.6", 45)
 
 

@@ -1,5 +1,7 @@
-"""عروض الدروس من الأصول المنشورة: شرط انتهاء المرحلة 4 (الدروس الـ19 بعدد شرائح يطابق أمثلتها) والمهمة والواجهة."""
+"""عروض الحصص من الأصول المنشورة: شرط انتهاء المرحلة 4 (48 عرضًا تجتاز المعايير الحاجبة بعدد شرائح أمثلة يطابق تحضيرها
+وتتماته) والمهمة الخلفية والواجهة البرمجية."""
 
+import hashlib
 import io
 import zipfile
 
@@ -10,11 +12,9 @@ from apps.assets.storage import get_storage
 from apps.assets.tests.conftest import make_png
 from apps.curriculum.courses import GRADE10_SLUG
 from apps.curriculum.models import Lesson
-from apps.knowledge.selectors import course_index
-from apps.knowledge.services import load_course
 from apps.planning import selectors, services
 from apps.planning.domain.deck import DeckError
-from apps.planning.tasks import build_lesson_deck_task
+from apps.planning.tasks import build_period_deck_task
 
 pytestmark = pytest.mark.django_db
 API = "/api/v1/decks"
@@ -22,132 +22,174 @@ API = "/api/v1/decks"
 
 def _slides(data: bytes) -> list[str]:
     with zipfile.ZipFile(io.BytesIO(data)) as z:
-        return sorted(n for n in z.namelist() if n.startswith("ppt/slides/slide") and n.endswith(".xml"))
+        return [n for n in z.namelist() if n.startswith("ppt/slides/slide") and n.endswith(".xml")]
 
 
-def _publish(lesson_code: str, numbers: list[int], with_cont: tuple[int, ...] = ()) -> None:
+def _clip_slides(data: bytes) -> int:
+    with zipfile.ZipFile(io.BytesIO(data)) as z:
+        return sum(
+            'name="مقطع' in z.read(n).decode("utf-8")
+            for n in z.namelist()
+            if n.startswith("ppt/slides/slide")
+        )
+
+
+def _publish(lesson_code: str, examples) -> None:
+    """مقطع لكل مثال وتتماته بدقة تجتاز S7؛ التجزئة المخزَّنة تجزئة الصورة نفسها كما يكتبها النشر."""
     lesson = Lesson.objects.get(course__slug=GRADE10_SLUG, code=lesson_code)
-    for number in numbers:
-        for part in (0, 1) if number in with_cont else (0,):
-            png = make_png(60 + number, 40 + part, shade=number * 7 + part)
-            storage_key = f"assets/{GRADE10_SLUG}/{lesson_code}/example{number}-{part}-test.png"
-            get_storage().put(storage_key, png, "image/png")
+    for e in examples:
+        for part in range(e.continuations or 1):
+            if Asset.objects.filter(lesson=lesson, kind=Asset.Kind.EXAMPLE, number=e.n, part=part).exists():
+                continue
+            png = make_png(1600, 900, shade=e.n * 7 + part)
+            sha = hashlib.sha256(png).hexdigest()
+            key = f"assets/{GRADE10_SLUG}/{lesson_code}/example{e.n}-{part}-{sha[:16]}.png"
+            get_storage().put(key, png, "image/png")
             Asset.objects.create(
                 course=lesson.course,
                 lesson=lesson,
                 kind=Asset.Kind.EXAMPLE,
-                number=number,
+                number=e.n,
                 part=part,
-                key=storage_key,
-                sha256=f"{lesson_code}-{number}-{part}".ljust(64, "0"),
+                key=key,
+                sha256=sha,
                 size=len(png),
-                width=60 + number,
-                height=40 + part,
+                width=1600,
+                height=900,
             )
 
 
 @pytest.fixture
-def g10(db):
-    load_course(GRADE10_SLUG)
+def preps(loaded_courses):
+    return selectors.lesson_preps(GRADE10_SLUG)
 
 
-def test_every_grade10_lesson_builds_a_deck_matching_its_examples(g10):
-    lessons = [lesson for lesson in course_index(GRADE10_SLUG).lessons if lesson.examples]
-    assert len(lessons) == 19
-    for lesson in lessons:
-        _publish(lesson.lesson, [e.n for e in lesson.examples])
-    for lesson in lessons:
-        key = services.build_lesson_deck(GRADE10_SLUG, lesson.lesson, 45)
+@pytest.fixture
+def period(preps):
+    """أول حصة فيها أمثلة، بمقاطعها منشورة."""
+    item = next(p for p in preps if p.prep.examples)
+    _publish(item.prep.lesson, item.prep.examples)
+    return item.prep
+
+
+def test_forty_eight_periods_build_decks_matching_their_preps(preps):
+    assert len(preps) == 48
+    for item in preps:
+        _publish(item.prep.lesson, item.prep.examples)
+    for item in preps:
+        prep = item.prep
+        key = services.build_period_deck_file(GRADE10_SLUG, prep.lesson, prep.k)
+        assert services.deck_state(key) == ("ready", ""), key
         data = get_storage().get(key)
-        examples = len(lesson.examples)
-        # عنوان + أمثلة + سير الحصة (+ التقويم إن وُجدت أعماق لاختبار الدرس)
-        assert len(_slides(data)) == 1 + examples + 1 + (1 if lesson.quiz_depths else 0), lesson.lesson
+        clips = sum(e.continuations or 1 for e in prep.examples)
+        # مقاطع كل مثال وتتماته ثم شريحة كشف حله
+        assert _clip_slides(data) == clips + len(prep.examples), key
 
 
-def test_continuation_clips_get_their_own_slides(g10):
-    _publish("2.6", [1, 2], with_cont=(2,))
-    key = services.build_lesson_deck(GRADE10_SLUG, "2.6", 45)
-    lesson = next(item for item in course_index(GRADE10_SLUG).lessons if item.lesson == "2.6")
-    assert len(_slides(get_storage().get(key))) == 1 + 3 + 1 + (1 if lesson.quiz_depths else 0)
+def test_build_is_idempotent_and_key_follows_inputs(period):
+    first = services.build_period_deck_file(GRADE10_SLUG, period.lesson, period.k)
+    stored = get_storage().get(first)
+    assert services.build_period_deck_file(GRADE10_SLUG, period.lesson, period.k) == first
+    assert get_storage().get(first) == stored
+    assert first.startswith(f"decks/{GRADE10_SLUG}/{period.lesson}-k{period.k}of{period.n}-p45-")
+    Asset.objects.filter(lesson__code=period.lesson, number=period.examples[0].n).update(sha256="f" * 64)
+    assert services.prepare_deck(GRADE10_SLUG, period.lesson, period.k) != first
 
 
-def test_build_is_idempotent_and_key_follows_inputs(g10):
-    _publish("2.6", [1])
-    first = services.build_lesson_deck(GRADE10_SLUG, "2.6", 45)
-    bytes_first = get_storage().get(first)
-    assert services.build_lesson_deck(GRADE10_SLUG, "2.6", 45) == first
-    assert get_storage().get(first) == bytes_first
-    assert services.prepare_deck(GRADE10_SLUG, "2.6", 60) != first
-    Asset.objects.filter(lesson__code="2.6").update(sha256="f" * 64)
-    assert services.prepare_deck(GRADE10_SLUG, "2.6", 45) != first
+def test_unknown_period_and_missing_clips_are_rejected_before_any_work(preps):
+    with pytest.raises(selectors.PrepNotFoundError):
+        services.prepare_deck(GRADE10_SLUG, "9.9", 1)
+    with pytest.raises(selectors.PrepNotFoundError):
+        services.prepare_deck(GRADE10_SLUG, preps[0].prep.lesson, 99)
+    item = next(p for p in preps if p.prep.examples)
+    with pytest.raises(DeckError, match="لا مقاطع منشورة"):
+        services.prepare_deck(GRADE10_SLUG, item.prep.lesson, item.prep.k)
 
 
-@pytest.mark.parametrize(
-    ("lesson", "period"),
-    [("2.6", 10), ("9.9", 45), ("2.6", 45)],  # زمن خارج المدى، درس مجهول، لا مقاطع منشورة
-)
-def test_invalid_requests_are_rejected_before_any_work(g10, lesson, period):
-    with pytest.raises(DeckError):
-        services.prepare_deck(GRADE10_SLUG, lesson, period)
-
-
-def test_failure_is_recorded_and_visible(g10, monkeypatch):
-    _publish("2.6", [1])
-    key = services.prepare_deck(GRADE10_SLUG, "2.6", 45)
+def test_failure_is_recorded_and_visible(period, monkeypatch):
+    key = services.prepare_deck(GRADE10_SLUG, period.lesson, period.k)
 
     def boom(*args, **kwargs):
         raise DeckError("مقطع تالف")
 
-    monkeypatch.setattr(services, "build_pptx", boom)
+    monkeypatch.setattr(services, "build_period_pptx", boom)
     with pytest.raises(DeckError):
-        services.build_lesson_deck(GRADE10_SLUG, "2.6", 45)
+        services.build_period_deck_file(GRADE10_SLUG, period.lesson, period.k)
     assert services.deck_state(key) == ("failed", "مقطع تالف")
     services.clear_deck_failure(key)
     assert services.deck_state(key) == ("pending", "")
 
 
-def test_lessons_listing_counts_examples_not_continuations(g10):
-    _publish("1.1", [1, 2], with_cont=(2,))
-    title = Lesson.objects.get(course__slug=GRADE10_SLUG, code="1.1").title
-    assert selectors.deck_lessons(GRADE10_SLUG) == [
-        {"lesson": "1.1", "title": title, "examples": 2, "clips": 3}
-    ]
+def test_blocking_file_check_stops_the_write(period, monkeypatch):
+    from apps.planning.domain.prep_checks import CheckResult
+
+    monkeypatch.setattr(
+        services, "check_pptx", lambda data, rebuilt: (CheckResult("S7", "fail", ("دقة المقطع 90",)),)
+    )
+    key = services.prepare_deck(GRADE10_SLUG, period.lesson, period.k)
+    with pytest.raises(DeckError):
+        services.build_period_deck_file(GRADE10_SLUG, period.lesson, period.k)
+    state, detail = services.deck_state(key)
+    assert state == "failed" and "S7" in detail
+    assert not get_storage().exists(key)
 
 
-def test_task_runs_in_place_and_returns_key(g10):
-    _publish("2.6", [1])
-    key = build_lesson_deck_task.delay(GRADE10_SLUG, "2.6", 45).get()
+def test_stored_clip_that_does_not_match_its_digest_is_refused(period):
+    asset = Asset.objects.filter(lesson__code=period.lesson, number=period.examples[0].n).first()
+    get_storage().put(asset.key, make_png(1600, 900, shade=255), "image/png")
+    key = services.prepare_deck(GRADE10_SLUG, period.lesson, period.k)
+    with pytest.raises(DeckError):
+        services.build_period_deck_file(GRADE10_SLUG, period.lesson, period.k)
+    assert "تجزئته" in services.deck_state(key)[1]
+
+
+def test_periods_listing_marks_published_clips(period):
+    rows = selectors.deck_periods(GRADE10_SLUG)
+    assert len(rows) == 48
+    row = next(r for r in rows if (r["lesson"], r["k"]) == (period.lesson, period.k))
+    assert row["clips"] is True and row["examples"] == len(period.examples)
+    others = [r for r in rows if r["lesson"] != period.lesson and r["examples"]]
+    assert others and not any(r["clips"] for r in others)
+
+
+def test_task_runs_in_place_and_returns_key(period):
+    key = build_period_deck_task.delay(GRADE10_SLUG, period.lesson, period.k).get()
     assert services.deck_state(key) == ("ready", "")
 
 
 # ───── الواجهة ─────
 def test_api_requires_login(client):
-    assert client.get(f"{API}/lessons?course={GRADE10_SLUG}").status_code == 401
+    assert client.get(f"{API}/periods?course={GRADE10_SLUG}").status_code == 401
 
 
 def test_api_outsider_is_forbidden(outsider_client):
-    assert outsider_client.get(f"{API}/lessons?course={GRADE10_SLUG}").status_code == 403
+    assert outsider_client.get(f"{API}/periods?course={GRADE10_SLUG}").status_code == 403
 
 
-def test_api_request_status_download_flow(teacher_client, g10):
-    _publish("2.6", [1, 2])
-    listing = teacher_client.get(f"{API}/lessons?course={GRADE10_SLUG}").json()
-    assert [(r["lesson"], r["examples"]) for r in listing] == [("2.6", 2)]
-    body = {"course": GRADE10_SLUG, "lesson": "2.6", "period_minutes": 45}
+def test_api_request_status_download_flow(teacher_client, period):
+    listing = teacher_client.get(f"{API}/periods?course={GRADE10_SLUG}").json()
+    assert len(listing) == 48 and sum(r["clips"] for r in listing) >= 1
+    body = {"course": GRADE10_SLUG, "lesson": period.lesson, "k": period.k}
     posted = teacher_client.post(f"{API}/", body, content_type="application/json")
     assert posted.status_code == 200 and posted.json()["status"] == "ready"
-    query = f"course={GRADE10_SLUG}&lesson=2.6&period_minutes=45"
+    name = f"{GRADE10_SLUG}-lesson-{period.lesson}-k{period.k}of{period.n}.pptx"
+    assert posted.json()["filename"] == name
+    query = f"course={GRADE10_SLUG}&lesson={period.lesson}&k={period.k}"
     assert teacher_client.get(f"{API}/status?{query}").json()["status"] == "ready"
     response = teacher_client.get(f"{API}/download?{query}")
     assert response.status_code == 200
     assert response["Content-Type"] == selectors.PPTX_CONTENT_TYPE
-    assert "attachment" in response["Content-Disposition"]
-    assert zipfile.is_zipfile(io.BytesIO(response.content))
+    assert f'filename="{name}"' in response["Content-Disposition"]
+    assert len(_slides(response.content)) > 0
 
 
-def test_api_download_before_build_is_404_and_bad_input_422(teacher_client, g10):
-    _publish("2.6", [1])
-    query = f"course={GRADE10_SLUG}&lesson=2.6&period_minutes=45"
-    assert teacher_client.get(f"{API}/download?{query}").status_code == 404
-    bad = {"course": GRADE10_SLUG, "lesson": "2.6", "period_minutes": 5}
+def test_api_errors(teacher_client, preps):
+    item = next(p for p in preps if p.prep.examples)
+    query = f"course={GRADE10_SLUG}&lesson={item.prep.lesson}&k={item.prep.k}"
+    assert teacher_client.get(f"{API}/status?{query}").status_code == 422  # لا مقاطع منشورة
+    assert teacher_client.get(f"{API}/status?course={GRADE10_SLUG}&lesson=9.9&k=1").status_code == 404
+    assert teacher_client.get(f"{API}/periods?course=unknown").status_code == 404
+    _publish(item.prep.lesson, item.prep.examples)
+    assert teacher_client.get(f"{API}/download?{query}").status_code == 404  # قبل البناء
+    bad = {"course": GRADE10_SLUG, "lesson": item.prep.lesson, "k": 0}
     assert teacher_client.post(f"{API}/", bad, content_type="application/json").status_code == 422

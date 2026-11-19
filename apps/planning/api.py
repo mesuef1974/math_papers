@@ -1,9 +1,9 @@
 """عروض الدروس للمعلم المسجَّل (خلف `TeacherAuth`).
 
-- GET  /decks/lessons?course=        الدروس التي نُشرت لها مقاطع أمثلة
-- POST /decks/                       يطلب بناء عرض (مهمة خلفية) ويعيد حالته ومفتاحه
-- GET  /decks/status?course=&lesson= الحالة: pending | ready | failed
-- GET  /decks/download?course=&lesson=  ملف PPTX الجاهز
+- GET  /decks/periods?course=        حصص الدروس بحالة معاييرها وجاهزية مقاطع أمثلتها
+- POST /decks/                       يطلب بناء عرض حصة (مهمة خلفية) ويعيد حالته
+- GET  /decks/status?course=&lesson=&k=   الحالة: pending | ready | failed
+- GET  /decks/download?course=&lesson=&k= ملف PPTX الجاهز
 - GET  /preps/<مقرر>                 حصص الدروس بترتيب الخطة وحالة معاييرها
 - GET  /preps/<مقرر>/<درس>/<k>       تحضير الحصة بنصوصه ومعاييره
 - GET  /preps/<مقرر>/<درس>/<k>/word  التحضير في Word بنموذج الوزارة (بنسخة المعلم من أهدافه)
@@ -32,31 +32,32 @@ from apps.papers.access import TeacherAuth
 from . import selectors, services
 from .domain.deck import DeckError
 from .domain.objective_text import ObjectiveLockedError, ObjectiveNotFoundError, ObjectiveTextError
-from .domain.strategies import DEFAULT_PERIOD_MINUTES
 from .prep_word import DOCX_CONTENT_TYPE, prep_docx, prep_filename
-from .tasks import build_lesson_deck_task
+from .tasks import build_period_deck_task
 
 logger = logging.getLogger(__name__)
 router = Router(tags=["العروض"], auth=TeacherAuth(), throttle=[UserRateThrottle()])
 
 
-class DeckLessonOut(Schema):
+class PrepPeriodOut(Schema):
     lesson: str
     title: str
+    unit: int
+    k: int
+    n: int
+    week: int
+    status: str
+
+
+class DeckPeriodOut(PrepPeriodOut):
     examples: int
-    clips: int
+    clips: bool
 
 
 class DeckRequest(Schema):
     course: str
     lesson: str
-    period_minutes: int = DEFAULT_PERIOD_MINUTES
-
-
-class DeckQuery(Schema):
-    course: str
-    lesson: str
-    period_minutes: int = DEFAULT_PERIOD_MINUTES
+    k: int = Field(ge=1)
 
 
 class DeckOut(Schema):
@@ -65,31 +66,38 @@ class DeckOut(Schema):
     filename: str
 
 
-def _prepare(course: str, lesson: str, period: int) -> str:
+def _prepare(course: str, lesson: str, k: int) -> str:
     try:
-        return services.prepare_deck(course, lesson, period)
+        return services.prepare_deck(course, lesson, k)
+    except selectors.PrepNotFoundError as error:
+        raise HttpError(404, str(error)) from error
     except DeckError as error:
         raise HttpError(422, str(error)) from error
 
 
-def _filename(course: str, lesson: str) -> str:
-    return f"{course}-lesson-{lesson}.pptx"
+def _filename(course: str, lesson: str, key: str) -> str:
+    """اسم الملف من مفتاحه: المقرر والدرس ورقم الحصة من عددها (`…-k2of3-…`)."""
+    period = key.rsplit("/", 1)[-1].split("-")[1]
+    return f"{course}-lesson-{lesson}-{period}.pptx"
 
 
-@router.get("decks/lessons", response=list[DeckLessonOut])
-def lessons(request: HttpRequest, course: str):
-    return selectors.deck_lessons(course)
+@router.get("decks/periods", response=list[DeckPeriodOut])
+def deck_periods(request: HttpRequest, course: str):
+    try:
+        return selectors.deck_periods(course)
+    except selectors.PrepNotFoundError as error:
+        raise HttpError(404, str(error)) from error
 
 
 @router.post("decks/", response=DeckOut)
 def request_deck(request: HttpRequest, payload: DeckRequest):
-    key = _prepare(payload.course, payload.lesson, payload.period_minutes)
+    key = _prepare(payload.course, payload.lesson, payload.k)
     state, detail = services.deck_state(key)
     if state != "ready":
         if state == "failed":
             services.clear_deck_failure(key)
         try:
-            build_lesson_deck_task.delay(payload.course, payload.lesson, payload.period_minutes)
+            build_period_deck_task.delay(payload.course, payload.lesson, payload.k)
         except Exception:  # الوضع الفوري يرفع هنا؛ الفشل مسجَّل في التخزين فيقرؤه الرد
             logger.exception("فشل بناء عرض %s", key)
         state, detail = services.deck_state(key)  # الوضع الفوري (تطوير واختبار) ينتهي هنا جاهزًا
@@ -97,22 +105,22 @@ def request_deck(request: HttpRequest, payload: DeckRequest):
         action="decks.request",
         actor=request.user,
         target=key,
-        payload={"course": payload.course, "lesson": payload.lesson, "period": payload.period_minutes},
+        payload={"course": payload.course, "lesson": payload.lesson, "k": payload.k},
         request_id=request_id_of(request),
     )
-    return {"status": state, "detail": detail, "filename": _filename(payload.course, payload.lesson)}
+    return {"status": state, "detail": detail, "filename": _filename(payload.course, payload.lesson, key)}
 
 
 @router.get("decks/status", response=DeckOut)
-def deck_status(request: HttpRequest, filters: Query[DeckQuery]):
-    key = _prepare(filters.course, filters.lesson, filters.period_minutes)
+def deck_status(request: HttpRequest, filters: Query[DeckRequest]):
+    key = _prepare(filters.course, filters.lesson, filters.k)
     state, detail = services.deck_state(key)
-    return {"status": state, "detail": detail, "filename": _filename(filters.course, filters.lesson)}
+    return {"status": state, "detail": detail, "filename": _filename(filters.course, filters.lesson, key)}
 
 
 @router.get("decks/download")
-def download(request: HttpRequest, filters: Query[DeckQuery]):
-    key = _prepare(filters.course, filters.lesson, filters.period_minutes)
+def download(request: HttpRequest, filters: Query[DeckRequest]):
+    key = _prepare(filters.course, filters.lesson, filters.k)
     try:
         data = get_storage().get(key)
     except StorageError as error:
@@ -124,20 +132,12 @@ def download(request: HttpRequest, filters: Query[DeckQuery]):
         request_id=request_id_of(request),
     )
     response = HttpResponse(data, content_type=selectors.PPTX_CONTENT_TYPE)
-    response["Content-Disposition"] = f'attachment; filename="{_filename(filters.course, filters.lesson)}"'
+    response["Content-Disposition"] = (
+        f'attachment; filename="{_filename(filters.course, filters.lesson, key)}"'
+    )
     response["Cache-Control"] = "private, no-store"
     response["X-Content-Type-Options"] = "nosniff"
     return response
-
-
-class PrepPeriodOut(Schema):
-    lesson: str
-    title: str
-    unit: int
-    k: int
-    n: int
-    week: int
-    status: str
 
 
 class SharedObjectiveOut(Schema):

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable
 from datetime import date, datetime
 from pathlib import Path
 
@@ -11,6 +12,7 @@ from django.db import transaction
 from django.utils import timezone
 from pydantic import ValidationError
 
+from apps.assets.models import Asset
 from apps.assets.storage import Storage, get_storage
 from apps.core.services import record_audit
 from apps.curriculum import selectors as curriculum
@@ -19,10 +21,12 @@ from apps.knowledge.domain.contract import COURSES_DIR
 from apps.knowledge.domain.unit_prep import PREP_DIR, UnitPrep, course_standards, unit_prep, unit_problems
 from apps.knowledge.selectors import course_index
 from apps.papers import services as papers
+from apps.papers.domain.book_source import number_list
 
 from . import selectors
 from .domain.calendar_engine import PlanningError
-from .domain.deck import DeckError, LessonContent
+from .domain.deck import DeckError, build_period_deck
+from .domain.deck_checks import check_deck
 from .domain.feedback import ClassOutcome, Decision
 from .domain.lesson_run import LessonRun
 from .domain.objective_text import (
@@ -34,9 +38,11 @@ from .domain.objective_text import (
     shared_digest,
 )
 from .domain.prep import Objective
+from .domain.prep_checks import CheckResult, blocking_failures
 from .domain.suggestion_apply import AcceptedSuggestion, ApplyResult, apply_accepted
 from .models import ClassOutcomeRecord, LessonRunRecord, ObjectiveOverride, ObjectiveSuggestion, PrepReview
-from .pptx_export import build_pptx
+from .pptx_checks import check_pptx
+from .pptx_export import build_period_pptx
 
 REMEDIAL_PER_PERIOD = 5  # أسئلة لكل حصة إعادة تدريس؛ المراجعة السريعة بلا حصة تأخذ حصة واحدة في الحساب
 
@@ -109,27 +115,31 @@ def save_run_report(
     )
 
 
-# ───── توليد عرض الدرس من الأصول المنشورة (المرحلة 4) ─────
+# ───── عرض الحصة من تحضيرها ومقاطع الأصول المنشورة (المرحلة 4 من docs/lesson_prep_plan.md) ─────
 def _error_key(key: str) -> str:
     return f"{key}.error"
 
 
-def prepare_deck(course_slug: str, lesson_code: str, period_minutes: int) -> str:
-    """يتحقق من الطلب ويعيد مفتاح الملف في التخزين؛ كل رفض `DeckError` برسالة عربية. لا يكتب شيئًا."""
-    low, high = selectors.DECK_PERIOD_RANGE
-    if not low <= period_minutes <= high:
-        raise DeckError(f"زمن الحصة بين {low} و{high} دقيقة")
-    assets = selectors.deck_assets(course_slug, lesson_code)
-    if not assets:
-        raise DeckError(f"لا مقاطع أمثلة منشورة للدرس {lesson_code} في المقرر {course_slug}")
-    try:
-        # يفشل مبكرًا إن غاب الدرس من فهرس مقرره أو استحال توزيع الزمن
-        selectors.lesson_flow(lesson_code, period_minutes, course=course_slug)
-    except KeyError as error:
-        raise DeckError(f"الدرس {lesson_code} غير موجود في فهرس المقرر") from error
-    except PlanningError as error:
-        raise DeckError(str(error)) from error
-    return selectors.deck_key(course_slug, lesson_code, period_minutes, assets)
+def _deck_failure(results: Iterable[CheckResult]) -> str:
+    return "؛ ".join(f"{r.code}: {r.details[0]}" if r.details else r.code for r in blocking_failures(results))
+
+
+def _prepared(course: str, lesson: str, k: int) -> tuple[selectors.PreparedPeriod, list[Asset], str]:
+    """الحصة وأصولها ومفتاح ملفها؛ `PrepNotFoundError` لحصة مجهولة و`DeckError` برسالة عربية لما يمنع البناء. لا يكتب شيئًا."""
+    item = selectors.period_item(course, lesson, k)
+    if blocking_failures(item.checks):
+        raise DeckError(f"تحضير الحصة لم يجتز معاييره الحاجبة: {_deck_failure(item.checks)}")
+    numbers = [e.n for e in item.prep.examples]
+    assets = selectors.deck_assets(course, lesson, numbers)
+    missing = sorted(set(numbers) - {a.number for a in assets})
+    if missing:
+        raise DeckError(f"لا مقاطع منشورة للأمثلة {number_list(missing)} من الدرس {lesson}")
+    return item, assets, selectors.deck_key(item.prep, assets)
+
+
+def prepare_deck(course: str, lesson: str, k: int) -> str:
+    """يتحقق من طلب عرض الحصة ويعيد مفتاح ملفه في التخزين."""
+    return _prepared(course, lesson, k)[2]
 
 
 def deck_state(key: str, storage: Storage | None = None) -> tuple[str, str]:
@@ -142,21 +152,27 @@ def deck_state(key: str, storage: Storage | None = None) -> tuple[str, str]:
     return "pending", ""
 
 
-def build_lesson_deck(
-    course_slug: str, lesson_code: str, period_minutes: int, storage: Storage | None = None
-) -> str:
-    """يبني ملف PPTX للدرس ويضعه في التخزين تحت مفتاحه المشتق؛ idempotent: الملف الموجود لا يُعاد بناؤه.
+def build_period_deck_file(course: str, lesson: str, k: int, storage: Storage | None = None) -> str:
+    """يبني ملف PPTX للحصة ويضعه في التخزين تحت مفتاحه المشتق؛ idempotent: الملف الموجود لا يُعاد بناؤه.
 
-    الدرس وأمثلته المقصوصة من التخزين والفهرس المشتق وحدهما: لا أهداف ولا مصطلحات (نص الدليل لا يصعد إلى الإنتاج)."""
+    المدخل تحضير الحصة المشترك ومقاطع أمثلتها من طبقة الأصول. معايير النموذج (S1 إلى S13) ثم معايير الملف (S7 وS8 وS12)
+    تُفحص قبل الكتابة، والحاجب الفاشل يُسجَّل سببًا في التخزين فتقرؤه الحالة ولا يُكتب ملف."""
     storage = storage or get_storage()
-    key = prepare_deck(course_slug, lesson_code, period_minutes)
+    item, assets, key = _prepared(course, lesson, k)
     if storage.exists(key):
         return key
-    assets = selectors.deck_assets(course_slug, lesson_code)
     try:
-        content = LessonContent(title=assets[0].lesson.title, examples=selectors.clips_of(assets, storage))
-        deck = selectors.lesson_deck(lesson_code, content, period_minutes, course=course_slug)
-        data = build_pptx(deck)
+        clips = selectors.clips_of(assets, storage)
+        deck = build_period_deck(item.prep, clips)
+        if deck.key != key:
+            raise DeckError("مقطع في التخزين لا يطابق تجزئته في فهرس الأصول")
+        data = build_period_pptx(deck)
+        results = (
+            *check_deck(deck, item.prep, clips, item.checks),
+            *check_pptx(data, build_period_pptx(deck)),
+        )
+        if blocking_failures(results):
+            raise DeckError(f"العرض لم يجتز معاييره: {_deck_failure(results)}")
     except Exception as error:
         message = str(error) if isinstance(error, PlanningError) else "تعذّر بناء العرض"
         storage.put(_error_key(key), message.encode("utf-8"), "text/plain; charset=utf-8")
