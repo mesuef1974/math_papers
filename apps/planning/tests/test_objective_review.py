@@ -11,7 +11,7 @@ from apps.core.models import AuditLog
 from apps.curriculum.courses import GRADE10_SLUG
 from apps.curriculum.models import Lesson
 from apps.papers.access import ensure_teacher
-from apps.planning import selectors, services
+from apps.planning import services
 from apps.planning.domain.objective_text import ObjectiveTextError, clean_note, clean_part, digest
 from apps.planning.models import ObjectiveOverride, ObjectiveSuggestion, PrepReview
 
@@ -43,28 +43,10 @@ def put(client, example, condition=CONDITION, criterion=CRITERION, **extra):
     )
 
 
-LOCKED_UNIT = 2
-
-
-@pytest.fixture
-def draft_unit(monkeypatch):
-    """يعيد ملف الوحدة LOCKED_UNIT مسودةً في الاختبار وحده، فيبقى القفل مشهودًا مهما اعتُمدت الوحدات الحقيقية."""
-    real = selectors.unit_prep
-
-    def as_draft(course, unit, *args, **kwargs):
-        prep = real(course, unit, *args, **kwargs)
-        if prep is None or unit != LOCKED_UNIT:
-            return prep
-        return prep.model_copy(update={"status": "draft", "approval": None})
-
-    monkeypatch.setattr(selectors, "unit_prep", as_draft)
-    return LOCKED_UNIT
-
-
-def locked_period(client) -> str:
-    """أول حصة في الوحدة التي جعلها التجهيز draft_unit مسودة."""
+def locked_period(client, unit: int) -> str:
+    """أول حصة في الوحدة unit (مسودة بالتجهيز draft_unit)."""
     periods = client.get(API).json()
-    period = next(p for p in periods if p["unit"] == LOCKED_UNIT)
+    period = next(p for p in periods if p["unit"] == unit)
     return f"{API}/{period['lesson']}/{period['k']}"
 
 
@@ -113,7 +95,7 @@ def test_approved_unit_objectives_are_editable_with_shared_text_and_no_copy(teac
 
 
 def test_unapproved_unit_is_locked(teacher_client, draft_unit):
-    path = locked_period(teacher_client)
+    path = locked_period(teacher_client, draft_unit)
     rows = [o for o in objectives(teacher_client, path)["objectives"] if o["example"] is not None]
     assert rows and all(not o["editable"] and o["shared"] is None for o in rows)
     response = teacher_client.put(
