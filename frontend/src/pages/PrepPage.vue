@@ -3,8 +3,18 @@ import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import AppIcon from "@/components/AppIcon.vue";
 import EmptyState from "@/components/EmptyState.vue";
+import ObjectiveEditor from "@/components/ObjectiveEditor.vue";
+import { usePrepObjectives, type ObjectiveDraft } from "@/composables/usePrepObjectives";
 import { useAuthStore } from "@/stores/auth";
-import { periodKey, usePrepsStore, type CheckStatus, type PrepPeriod } from "@/stores/preps";
+import {
+  periodKey,
+  usePrepsStore,
+  type CheckStatus,
+  type PrepObjective,
+  type PrepPeriod,
+  type SharedObjective,
+  type SuggestionStatus,
+} from "@/stores/preps";
 import { isolateNumberRanges } from "@/utils/bidi";
 
 // تحضير الحصة: المعلم يختار حصة من حصص الدروس بترتيب الخطة، فيرى تحضيرها بمراحله ومعاييره، وينزّله Word بنموذج الوزارة.
@@ -16,6 +26,27 @@ const router = useRouter();
 const selected = ref("");
 
 const STATUS_LABELS: Record<CheckStatus, string> = { pass: "ناجح", fail: "فاشل", pending: "معلَّق" };
+const SUGGESTION_LABELS: Record<SuggestionStatus, string> = {
+  pending: "اقتراحك قيد المراجعة",
+  accepted: "قُبل اقتراحك وسيصل النسخة المعتمدة",
+  rejected: "رُفض اقتراحك",
+  applied: "قُبل اقتراحك وصار في النسخة المعتمدة",
+};
+
+// مراجعة المعلم لأهداف حصته: هدف واحد يُعدَّل في مكانه، ونسخته الشخصية لا يراها غيره.
+const review = usePrepObjectives();
+const editing = ref<number | null>(null);
+const reviewedOn = (iso: string) =>
+  new Date(iso).toLocaleDateString("ar-u-nu-latn", { day: "numeric", month: "long", year: "numeric" });
+const sharedText = (s: SharedObjective) => [s.behavior, s.condition, s.criterion].filter(Boolean).join(" ");
+
+async function saveObjective(objective: PrepObjective, draft: ObjectiveDraft) {
+  if (objective.example !== null && (await review.save(objective.example, draft))) editing.value = null;
+}
+
+async function resetObjective(objective: PrepObjective) {
+  if (objective.example !== null && (await review.reset(objective.example))) editing.value = null;
+}
 
 const lessons = computed(() => {
   const groups = new Map<string, PrepPeriod[]>();
@@ -34,6 +65,8 @@ const others = computed(() => sheet.value?.checks.filter((c) => c.kind !== "bloc
 async function openSelected() {
   const [lesson, k] = selected.value.split("/");
   if (!lesson || !k) return;
+  editing.value = null;
+  review.error.value = "";
   await router.replace({ query: { lesson, k } });
   await preps.open(lesson, Number(k));
 }
@@ -116,7 +149,26 @@ watch(selected, (value, previous) => {
       </div>
     </dl>
 
-    <h3>أهداف التعلم</h3>
+    <div class="objectives-head">
+      <h3>أهداف التعلم</h3>
+      <template v-if="!sheet.pending">
+        <p v-if="sheet.review && !sheet.review.stale" class="reviewed">
+          راجعتَها في {{ reviewedOn(sheet.review.reviewed_at) }}
+        </p>
+        <template v-else>
+          <span v-if="sheet.review?.stale" class="badge status-fail">تحتاج مراجعة</span>
+          <button
+            type="button"
+            class="btn btn-secondary btn-small review-btn"
+            :disabled="review.busy.value !== null"
+            @click="review.markReviewed()"
+          >
+            راجعتُ أهداف الحصة
+          </button>
+        </template>
+      </template>
+    </div>
+    <p v-if="review.error.value" class="alert alert-error" role="alert">{{ review.error.value }}</p>
     <div class="table-scroll">
       <table class="grid">
         <thead>
@@ -130,9 +182,46 @@ watch(selected, (value, previous) => {
         <tbody>
           <template v-for="(objective, i) in sheet.objectives" :key="i">
             <tr>
-              <td rowspan="2">
+              <td rowspan="2" class="objective">
                 <span v-if="objective.pending" class="badge status-pending">معلَّق</span>
+                <span v-if="objective.mine" class="badge status-mine">نسختي</span>
                 {{ objective.text }}
+                <div v-if="objective.stale && objective.mine && objective.shared" class="alert alert-info stale">
+                  <p>تغيّر النص المعتمد بعد تعديلك:</p>
+                  <p>المعتمد الآن: {{ sharedText(objective.shared) }}</p>
+                  <p>نسختك: {{ objective.text }}</p>
+                  <div class="actions">
+                    <button
+                      type="button"
+                      class="btn btn-secondary btn-small"
+                      :disabled="review.busy.value !== null"
+                      @click="review.keepMine(objective)"
+                    >
+                      إبقاء نسختي
+                    </button>
+                    <button
+                      type="button"
+                      class="btn btn-secondary btn-small"
+                      :disabled="review.busy.value !== null"
+                      @click="resetObjective(objective)"
+                    >
+                      استرجاع المعتمد
+                    </button>
+                  </div>
+                </div>
+                <p v-if="objective.suggestion" class="suggestion">
+                  {{ SUGGESTION_LABELS[objective.suggestion.status] }}<template v-if="objective.suggestion.note">:
+                    {{ objective.suggestion.note }}</template>
+                </p>
+                <button
+                  v-if="objective.editable && editing !== objective.example"
+                  type="button"
+                  class="btn btn-secondary btn-small edit-btn"
+                  :disabled="editing !== null || review.busy.value !== null"
+                  @click="editing = objective.example"
+                >
+                  تعديل
+                </button>
               </td>
               <td>{{ objective.teach_activity }}</td>
               <td>{{ objective.teach_assessment }}</td>
@@ -141,6 +230,17 @@ watch(selected, (value, previous) => {
             <tr>
               <td>{{ objective.check_activity }}</td>
               <td>{{ objective.check_assessment }}</td>
+            </tr>
+            <tr v-if="editing !== null && editing === objective.example" class="editing">
+              <td colspan="4">
+                <ObjectiveEditor
+                  :objective="objective"
+                  :busy="review.busy.value !== null"
+                  @save="saveObjective(objective, $event)"
+                  @cancel="editing = null"
+                  @reset="resetObjective(objective)"
+                />
+              </td>
             </tr>
           </template>
         </tbody>
@@ -245,6 +345,57 @@ watch(selected, (value, previous) => {
 }
 .grid th {
   background: var(--color-surface-sunken);
+}
+.objectives-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+}
+.review-btn {
+  margin-inline-start: auto;
+}
+.reviewed {
+  margin: 0;
+  margin-inline-start: auto;
+  color: var(--color-ink-soft);
+  font-size: var(--text-sm);
+}
+.objective {
+  text-align: start;
+}
+.objective .badge {
+  margin-inline-end: var(--space-1);
+}
+.stale,
+.suggestion {
+  margin-block: var(--space-2) 0;
+  font-size: var(--text-sm);
+}
+.stale p {
+  margin: 0;
+}
+.suggestion {
+  color: var(--color-ink-soft);
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-block-start: var(--space-2);
+}
+.edit-btn {
+  display: flex;
+  margin-block-start: var(--space-2);
+}
+.grid .editing td {
+  text-align: start;
+  background: var(--color-surface-sunken);
+}
+.status-mine {
+  color: var(--color-ink);
+  background: var(--color-brand-soft);
+  border-color: transparent;
 }
 .checks {
   list-style: none;
