@@ -457,3 +457,27 @@ def teacher_sheet(course: str, lesson: str, k: int, owner: AbstractBaseUser) -> 
         if mark is not None:
             review = {"reviewed_at": mark.reviewed_at, "stale": mark.digest != sheet_digest(sheet)}
     return TeacherSheet(sheet=sheet, objectives=states, review=review)
+
+
+@dataclass(frozen=True)
+class SuggestionReview:
+    """ما يحتاجه المالك ليقرّر اقتراحًا: النص المعتمد الحالي بجوار المقترح، وحالته المشتقة."""
+
+    shared: (
+        tuple[str, str, str] | None
+    )  # السلوك والشرط والمعيار المعتمدة الآن، أو None إن غاب الهدف من ملف الوحدة
+    status: str  # pending أو accepted أو rejected أو applied
+    stale: bool  # تغيّر المعتمد بعد كتابة الاقتراح
+
+
+def suggestion_review(row: ObjectiveSuggestion) -> SuggestionReview:
+    """النص المعتمد لهدف الاقتراح من ملف وحدته، و«مُطبَّق» حين يساوي المقبولُ المعتمدَ الحالي."""
+    unit = unit_prep(row.lesson.course.slug, row.lesson.unit)
+    authored = unit.objectives(row.lesson.code).get(row.example) if unit is not None else None
+    if authored is None:
+        return SuggestionReview(shared=None, status=row.decision, stale=True)
+    shared = (authored.behavior, authored.condition, authored.criterion)
+    view = _suggestion_view(row, shared[1:])
+    return SuggestionReview(
+        shared=shared, status=view["status"], stale=text_digest(shared) != row.base_digest
+    )
