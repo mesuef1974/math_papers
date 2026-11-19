@@ -189,8 +189,11 @@ def test_key_marks_column_only_when_the_paper_has_marks(client):
                 return heads, [cell.text for cell in table.rows[1].cells]
         raise AssertionError("لا جدول حلول في الوثيقة")
 
-    heads, first = key_heads("worksheet")  # ورقة العمل بلا درجات: لا عمود فارغ
-    assert heads == ["السؤال", "الإجابة والخطوات", "الدرس", "المستوى"] and len(first) == 4
+    heads, first = key_heads(
+        "worksheet"
+    )  # ورقة العمل بلا درجات: لا عمود فارغ، وأعمدة المصدر لأن صيغها برقم مثال
+    assert heads == ["السؤال", "الإجابة والخطوات", "الدرس", "الصفحة", "المثال", "التدريب", "المستوى"]
+    assert len(first) == 7
     heads, first = key_heads("exam")
     assert heads[2] == "الدرجة" and heads[-1] == "المجموع" and first[-1].strip().isdigit()
 
@@ -267,7 +270,7 @@ def test_key_distributes_essay_marks_over_steps_and_final_answer(client):
         cells = row.cells  # الخلايا المدموجة رأسيًا تعيد نص أول صف في الجزء
         label = cells[0].text
         sums[label] = sums.get(label, 0) + float(cells[2].text)
-        totals[label] = float(cells[5].text)
+        totals[label] = float(cells[-1].text)  # «المجموع» آخر عمود، بعد أعمدة المصدر إن وُجدت
         finals[label] = finals.get(label, 0) + cells[1].text.startswith("الجواب النهائي")
     assert sums == totals
     essay = [
