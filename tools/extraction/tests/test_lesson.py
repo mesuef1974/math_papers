@@ -42,6 +42,21 @@ def test_stage_writes_lesson_records_and_skips_when_unchanged(tmp_path, capsys):
     assert "تُخطيت" in capsys.readouterr().out
 
 
+def test_exercise_total_without_independent_witness_is_review(tmp_path):
+    """كتاب بلا جدول تحليل: أقصى تمرين قرأته الرؤية وحدها فوق سلسلة OCR يُراجَع، والذي تسنده السلسلة ok."""
+    rec = {"id": "1.1", "unit": 1, "status": "ok", "pages_pdf": [2, 5], "opener": 2, "quiz": None}
+    book = toy_book(tmp_path)
+    got = lesson.build(book, rec, {})
+    assert got["exercises"]["value"] == [1, 2, 3] and got["exercises"]["status"] == "ok"
+    write(tmp_path, "vision/0005.json", {"examples": [], "exercises": [4, 5], "practices": []})
+    got = lesson.build(book, rec, {})
+    assert got["exercises"]["value"] == [1, 2, 3, 4, 5]
+    assert got["checks"]["exercises_max_corroborated_independently"] is False
+    assert got["exercises"]["status"] == "review"
+    # لا «دليل مهام» ولا جدول اختبار في الكتاب: الحقلان مفقودان ولا يُختلقان
+    assert got["task_guide"]["status"] == got["lesson_quiz"]["status"] == "missing"
+
+
 def test_objectives_wrapper_is_trimmed_and_status_kept():
     objectives = {
         "lexicon_version": "v1",
