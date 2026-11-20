@@ -267,6 +267,7 @@ def profile_from_index(lesson: LessonIndex) -> LessonData:
         exercises_total=lesson.exercises_total,
         vocab_new=lesson.vocabulary.new,
         vocab_review=lesson.vocabulary.review,
+        exercise_pages=list(lesson.exercise_pages),
     )
 
 

@@ -17,6 +17,8 @@ from pydantic import (
     model_serializer,
 )
 
+from .exercise_pages import ExercisePages, check_ranges
+
 KINDS = (
     "learning_goal", "guide_step", "prerequisite", "concept_step", "think_question", "struggling",
     "fast_finisher", "follow_up", "study_tip", "caution", "reminder", "guidance", "real_world", "history",
@@ -174,6 +176,7 @@ class LessonData(_Strict):
     exercises_total: int | None = Field(default=None, ge=0, le=99)
     vocab_new: int | None = Field(default=None, ge=0)
     vocab_review: int | None = Field(default=None, ge=0)
+    exercise_pages: Annotated[list[ExercisePages], AfterValidator(check_ranges)] = Field(default_factory=list)
     objective: Safe = ""
     rationale: Safe = ""
     motivation: Safe = ""

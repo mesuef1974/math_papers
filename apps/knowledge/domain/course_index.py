@@ -9,10 +9,11 @@ from __future__ import annotations
 
 import re
 from collections.abc import Mapping
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field
 
+from .exercise_pages import ExercisePages, check_ranges
 from .schemas import BLOOMS, LESSON_CODE, MAX_UNIT, PRACTICE_CODE, REPRESENTATIONS, GroupKind, lesson_sort_key
 
 BLOOM_VALUES = (*BLOOMS, "unclassified")
@@ -64,6 +65,7 @@ class LessonIndex(_Strict):
     task_guide: TaskGuide | None = None
     quiz_depths: list[int] = Field(default_factory=list)
     vocabulary: VocabularyCount
+    exercise_pages: Annotated[list[ExercisePages], AfterValidator(check_ranges)] = Field(default_factory=list)
 
 
 class CourseIndex(_Strict):
@@ -113,10 +115,16 @@ def _printed_page(example: dict, printed: Mapping[int, int]) -> int | None:
     return printed.get(page_pdf) if isinstance(page_pdf, int) else None
 
 
-def build_lesson_index(lesson: dict, grade: int, printed: Mapping[int, int] | None = None) -> dict:
+def build_lesson_index(
+    lesson: dict,
+    grade: int,
+    printed: Mapping[int, int] | None = None,
+    exercise_pages: list[dict] | None = None,
+) -> dict:
     """يشتق سجل الفهرس من مخرج درس واحد؛ كل ما ليس رقمًا أو فئة مغلقة يُهمَل.
 
     `printed` جدول صفحة ملف الدليل → رقم الصفحة المطبوعة (صفحة الدليل تحمل رقم صفحة الطالب المضمَّنة فيها).
+    `exercise_pages` مديات صفحات تمارين الدرس المقبولة (`exercise_pages.accepted_ranges`)، وغيابها قائمة فارغة.
     """
     printed = printed or {}
     vocab = _value(lesson.get("vocabulary")) or []
@@ -148,9 +156,18 @@ def build_lesson_index(lesson: dict, grade: int, printed: Mapping[int, int] | No
             "new": sum(v.get("kind") == "new" for v in vocab),
             "review": sum(v.get("kind") == "review" for v in vocab),
         },
+        "exercise_pages": list(exercise_pages or []),
     }
 
 
-def build_index(lessons: list[dict], grade: int, printed: Mapping[int, int] | None = None) -> CourseIndex:
+def build_index(
+    lessons: list[dict],
+    grade: int,
+    printed: Mapping[int, int] | None = None,
+    exercise_pages: Mapping[str, list[dict]] | None = None,
+) -> CourseIndex:
     ordered = sorted(lessons, key=lambda d: lesson_sort_key(d["id"]))
-    return CourseIndex(lessons=[LessonIndex(**build_lesson_index(d, grade, printed)) for d in ordered])
+    pages = exercise_pages or {}
+    return CourseIndex(
+        lessons=[LessonIndex(**build_lesson_index(d, grade, printed, pages.get(d["id"]))) for d in ordered]
+    )

@@ -16,6 +16,7 @@ from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import asdict, dataclass, field
 
 from apps.knowledge.domain.course_index import LessonIndex
+from apps.knowledge.domain.exercise_pages import page_map
 from apps.knowledge.domain.unit_prep import AuthoredObjective
 
 from .calendar_engine import PlanningError
@@ -170,6 +171,8 @@ class PeriodPrep:
     task_guide: tuple[frozenset[int], frozenset[int]] = (frozenset(), frozenset())
     unit_status: str | None = None  # حالة ملف الوحدة: None (لم يُولَّد) أو draft أو approved
     sources: Mapping[str, str] = field(default_factory=dict)
+    # صفحة كل تمرين في الحصة (الصفي والمساران والواجب) في كتاب الطالب حين تُعرف؛ الفارغ خارج التجزئة
+    exercise_pages: Mapping[int, int] = field(default_factory=dict)
 
     @property
     def practice_examples(self) -> tuple[PrepExample, ...]:
@@ -184,7 +187,7 @@ class PeriodPrep:
 def prep_digest(prep: PeriodPrep) -> str:
     """تجزئة ثابتة لكل حقول التحضير (المجموعات مرتبة): تغيّر أي حقل يغيّرها فيُعلَّم عرضه قديمًا.
 
-    `practice` الفارغ في المثال خارج التجزئة: دخول الحقل لا يعلّم عروض مقرر بلا صفوف `practice` قديمةً."""
+    `practice` الفارغ في المثال و`exercise_pages` الفارغ خارج التجزئة: دخول الحقل لا يعلّم عروض مقرر بلا قيمه قديمةً."""
 
     def plain(value: object) -> object:
         if isinstance(value, (set, frozenset)):
@@ -195,6 +198,8 @@ def prep_digest(prep: PeriodPrep) -> str:
     for example in (*payload["examples"], *payload["review"]):
         if not example["practice"]:
             del example["practice"]
+    if not payload["exercise_pages"]:
+        del payload["exercise_pages"]
     data = json.dumps(payload, default=plain, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(data.encode("utf-8")).hexdigest()
 
@@ -492,7 +497,15 @@ def build_prep(
             "assessment": "generator",
             "stages": "teacher" if edit.strategies else "library",
         },
+        exercise_pages=_period_pages(
+            lesson, (*(x for c in classwork for x in c.exercises), *basic, *advanced, *homework)
+        ),
     )
+
+
+def _period_pages(lesson: LessonIndex, exercises: Iterable[int]) -> dict[int, int]:
+    pages = page_map(lesson.exercise_pages)
+    return {x: pages[x] for x in sorted(set(exercises)) if x in pages}
 
 
 def _objective(example: PrepExample, authored: AuthoredObjective | None, audience: str | None) -> Objective:

@@ -79,6 +79,8 @@ class LessonProfile(models.Model):
     exercises_total = models.PositiveSmallIntegerField(null=True, blank=True)
     vocab_new = models.PositiveSmallIntegerField(null=True, blank=True)
     vocab_review = models.PositiveSmallIntegerField(null=True, blank=True)
+    # صفحات التمارين المطبوعة: مديات {first, last, page} (domain/exercise_pages.py)؛ فارغ = لم تُستخرج
+    exercise_pages = models.JSONField(default=list, blank=True)
 
     class Meta:
         ordering = ["lesson__course_id", "lesson__unit", "lesson__number", "lesson__code"]

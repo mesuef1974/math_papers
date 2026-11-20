@@ -134,6 +134,7 @@ def course_index_from_tables(course: str) -> CourseIndex:
                 ),
                 "quiz_depths": profile.quiz_depths,
                 "vocabulary": {"new": profile.vocab_new or 0, "review": profile.vocab_review or 0},
+                "exercise_pages": profile.exercise_pages,
             }
         )
     return CourseIndex(lessons=lessons)
