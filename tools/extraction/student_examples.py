@@ -11,6 +11,11 @@
    القراءة: سطر «حاول أن تحل» المنسوب إليه (`try`) أو غير المقروء رقمه (`try_unread`) أو سطر «مثال» التالي (`label`)، وإلا
    عند علامة التمارين (`stop`: `end_patterns`، الافتراضي `markers.exercises` سطرًا وحده) أو نهاية الدرس (`lesson`). عناوين
    «مثال» الزائدة عن العدد المتوقع في آخر الدرس بلا سطر «حاول أن تحل» تُسقط (عناوين في صفحات التمارين).
+   سطر «مثال» نوعان يُصحَّحان قبل العدّ، بقياس أسطر «مثال» المقروءة في الكتاب كله: كلمة «مثال N» داخل سطر من المتن صندوقها
+   بارتفاع خط المتن لا الشارة، فما قصر عن `label_height` من وسيط ارتفاع أسطر «مثال» ليس عنوانًا (`inline`). والشارة التي
+   لم يكشفها OCR الصفحة (لا صندوق لها) تُستردّ حيث يدل الترتيب على فواتها وحده: سطر «حاول أن تحل» لم يسبقه سطر «مثال» منذ
+   سطر «حاول أن تحل» الذي قبله أو منذ أول الدرس؛ فيُبحث بينهما، في مواضع الشارة الأفقية (`label_bands`)، عن كتلة حبر
+   بارتفاع الشارة (`recover.height`) لا يغطيها صندوق، وتُقرأ بالتعرّف وحده، ولا تُعتمد إلا إن قُرئت «مثال» (`recovered`).
 4. العدد المتوقع لكل درس من `lessons/lesson_*.json` للمقرر `course`؛ الدرس الذي يخالفه `review` ولا تُكتب مقاطعه.
 5. القصّ بعرض العمود من سطر «مثال» حتى ما قبل نهايته، وما في عمود أو صفحة تالية تتمة (`_cont`). الحواف تُضبط على الحبر من
    تصيير رمادي للصفحة (`probe_dpi`): أعلى المقطع أول صف حبر في كتلة سطر «مثال» (شارته)، وأسفله ما قبل كتلة سطر النهاية، ثم
@@ -34,6 +39,7 @@ import json
 import math
 import os
 import re
+import statistics
 import struct
 from collections.abc import Callable, Sequence
 from contextlib import AbstractContextManager
@@ -43,6 +49,7 @@ from typing import Any
 
 from . import exercise_try, student_clips
 from .config import Book
+from .examples import LABEL_LINE
 from .fusion import settings as fusion_settings
 from .printed_pages import Boxes, pairs
 from .reps import schema
@@ -67,6 +74,9 @@ DEFAULTS: dict[str, Any] = {
     "column_pages": {},
     "gutter": {"band": [0.35, 0.65], "max_cross": 2, "min_fill": 0.25},
     "end_patterns": None,  # أنماط تُطابَق على سطر بعد `text.norm`
+    "label_height": 0.75,  # أدنى ارتفاع لسطر «مثال» من وسيط ارتفاع أسطره في الكتاب (0 يعطّله)
+    # استرداد شارة «مثال» بلا صندوق: `ink` ما دونه حبر في صورة الصفحة، و`height` مدى ارتفاع كتلتها من الوسيط نفسه
+    "recover": {"ink": 200, "height": [0.8, 1.5]},
     "probe_dpi": 144,
     "white": 245,  # ما دونه حبر
     "rise": 1.5,  # أقصى صعود (أضعاف ارتفاع السطر) إلى أول صف أبيض فوق سطر «مثال» أو سطر النهاية
@@ -138,8 +148,13 @@ def settings(book: Book) -> dict[str, Any]:
     cfg = book.get("student_examples", {}) or {}
     out = {**DEFAULTS, **cfg}
     out["gutter"] = {**DEFAULTS["gutter"], **(cfg.get("gutter") or {})}
+    out["recover"] = {**DEFAULTS["recover"], **(cfg.get("recover") or {})}
     out["column_pages"] = {int(k): int(v) for k, v in (cfg.get("column_pages") or {}).items()}
     return out
+
+
+def _is_map(value: Any) -> bool:
+    return value is None or isinstance(value, dict)
 
 
 def errors(cfg: dict[str, Any]) -> list[str]:
@@ -170,6 +185,17 @@ def errors(cfg: dict[str, Any]) -> list[str]:
         value = node.get(key, DEFAULTS[key])
         if not isinstance(value, int | float) or isinstance(value, bool) or value <= 0:
             errs.append(f"student_examples.{key} عدد موجب من النقاط")
+    floor = node.get("label_height", DEFAULTS["label_height"])
+    if not isinstance(floor, int | float) or isinstance(floor, bool) or not 0 <= floor <= 1:
+        errs.append("student_examples.label_height كسر بين 0 و1")
+    recover = {**DEFAULTS["recover"], **(node.get("recover") or {})} if _is_map(node.get("recover")) else None
+    if recover is None or not (
+        isinstance(recover["ink"], int)
+        and isinstance(recover["height"], list)
+        and len(recover["height"]) == 2
+        and all(isinstance(v, int | float) for v in recover["height"])
+    ):
+        errs.append("student_examples.recover: ink عدد صحيح وheight قائمة من كسرين")
     if not isinstance(node.get("approved", []), list):
         errs.append("student_examples.approved قائمة أسماء مقاطع")
     if not isinstance(node.get("vision", True), bool):
@@ -393,6 +419,130 @@ def lesson_columns(
     return columns, raw, end
 
 
+RawSlot = tuple[int, int, list[RawEvent]]  # (العمود بترتيب القراءة، صفحة الملف، أحداثه من الأعلى)
+
+
+def label_boxes(raw: Sequence[RawSlot]) -> list[list[int]]:
+    return [box for _, _, found in raw for kind, box, _ in found if kind == "label"]
+
+
+def drop_inline(raw: Sequence[RawSlot], floor: float) -> tuple[list[RawSlot], int]:
+    """(الأحداث بلا أسطر «مثال» الأقصر من `floor`، عددها): كلمة «مثال N» داخل سطر من المتن لا عنوان مثال."""
+    kept = [
+        (key, page, [e for e in found if e[0] != "label" or e[1][3] - e[1][1] >= floor])
+        for key, page, found in raw
+    ]
+    return kept, len(label_boxes(raw)) - len(label_boxes(kept))
+
+
+def label_bands(boxes: Sequence[Sequence[int]]) -> list[tuple[int, int]]:
+    """مواضع شارة «مثال» الأفقية في الكتاب [(x0, x1)]: صناديق أسطر «مثال» مجموعةً بحافتها اليمنى (فرق دون ربع عرضها
+    الوسيط)، فلكل جهة صفحة ولكل عمود موضعه."""
+    if not boxes:
+        return []
+    slack = statistics.median(box[2] - box[0] for box in boxes) / 4
+    bands: list[tuple[int, int]] = []
+    for box in sorted(boxes, key=lambda b: b[2]):
+        if bands and box[2] - bands[-1][1] <= slack:
+            bands[-1] = (min(bands[-1][0], box[0]), box[2])
+        else:
+            bands.append((box[0], box[2]))
+    return bands
+
+
+def label_gaps(columns: Sequence[Column], raw: Sequence[RawSlot]) -> list[list[dict[str, Any]]]:
+    """حيث فات سطر «مثال»: أجزاء (`segments`) ما بين كل سطر «حاول أن تحل» لم يسبقه سطر «مثال» وبين الحدث الذي قبله
+    (سطر «حاول أن تحل» آخر، أو أول الدرس)."""
+    out = []
+    last: tuple[int, str, list[int]] | None = None
+    for key, _, found in raw:
+        for kind, box, _ in found:
+            if kind == "try" and (last is None or last[1] == "try"):
+                start = (0, columns[0].top) if last is None else (last[0], float(last[2][3]))
+                out.append(segments(columns, start, (key, float(box[1]))))
+            last = (key, kind, box)
+    return out
+
+
+def unboxed_labels(
+    image: Any,
+    boxes: Boxes,
+    band: tuple[int, int],
+    span: tuple[float, float],
+    height: float,
+    read: exercise_try.Ocr,
+    cfg: dict[str, Any],
+) -> list[list[int]]:
+    """صناديق شارات «مثال» التي لم يكشفها OCR الصفحة، في النطاق الأفقي `band` بين الصفين `span` من صورتها (Pillow):
+    كتلة حبر متصلة الصفوف بارتفاع الشارة (`cfg.height` من `height`) لا يقاطعها صندوق مقروء، وقراءتها بالتعرّف «مثال»."""
+    x0, x1 = band
+    top, bottom = max(int(span[0]), 0), math.ceil(span[1])
+    if bottom <= top:
+        return []
+    ink = cfg["ink"]
+    strip = image.crop((x0, top, x1, bottom)).convert("L").point(lambda v: 255 * (v < ink))
+    low, high = (k * height for k in cfg["height"])
+    label = re.compile(LABEL_LINE)
+    out: list[list[int]] = []
+    start = None
+    for row, inked in enumerate([*strip.getprojection()[1], 0]):
+        if inked and start is None:
+            start = row
+        elif not inked and start is not None:
+            y0, y1, start = top + start, top + row, None
+            if not low <= y1 - y0 <= high:
+                continue
+            if any(b[1] < y1 and b[3] > y0 and b[0] < x1 and b[2] > x0 for _, b in boxes):
+                continue
+            left, _, right, _ = strip.crop((0, y0 - top, x1 - x0, y1 - top)).getbbox()
+            pad = max(2, (y1 - y0) // 12)
+            text, _ = read(image.crop((x0 + left - pad, y0 - pad, x0 + right + pad, y1 + pad)))
+            if label.match(norm(text or "")):
+                out.append([x0 + left, y0, x0 + right, y1])
+    return out
+
+
+def recover_labels(
+    columns: Sequence[Column],
+    raw: Sequence[RawSlot],
+    bands: Sequence[tuple[int, int]],
+    height: float,
+    boxes_of: Callable[[int], Boxes | None],
+    image_of: Callable[[int], Any],
+    read: exercise_try.Ocr,
+    cfg: dict[str, Any],
+) -> tuple[list[RawSlot], int]:
+    """(الأحداث ومعها أسطر «مثال» المستردّة في مواضعها، عددها): لكل موضع فات فيه سطر «مثال» (`label_gaps`) شاراته التي
+    لا صندوق لها (`unboxed_labels`) في كل موضع أفقي للشارة داخل العمود. بلا صورة للصفحة لا استرداد."""
+    extra: dict[int, list[list[int]]] = {}
+    for gap in label_gaps(columns, raw) if bands and height else []:
+        for part in gap:
+            column = columns[part["column"]]
+            image = image_of(column.page)
+            if image is None:
+                continue
+            boxes = boxes_of(column.page) or []
+            mine = extra.setdefault(part["column"], [])
+            for band in bands:
+                if not (column.x0 <= band[0] and band[1] <= column.x1):
+                    continue
+                for box in unboxed_labels(image, boxes, band, (part["y0"], part["y1"]), height, read, cfg):
+                    if not any(b[1] < box[3] and b[3] > box[1] for b in mine):  # الشارة نفسها بموضعين أفقيين
+                        mine.append(box)
+    out = [
+        (
+            key,
+            page,
+            sorted(
+                [*found, *(("label", box, "") for box in extra.get(key, []))],
+                key=lambda e: (e[1][1], -e[1][2]),
+            ),
+        )
+        for key, page, found in raw
+    ]
+    return out, sum(len(found) for found in extra.values())
+
+
 def segments(
     columns: Sequence[Column], start: tuple[int, float], stop: tuple[int, float]
 ) -> list[dict[str, Any]]:
@@ -465,8 +615,19 @@ def scan(
     inverse = {printed: page for page, printed in student_table.items()}
     lessons: dict[str, Any] = {}
     tried: dict[str, Any] = {"book": book.id, "lessons": {}}
+    located = []
     for r in layout["lessons"]:
         pages, printed, missing = lesson_pages(r["pages_pdf"], guide_table, inverse)
+        found = None
+        if pages is not None:
+            found = lesson_columns(pages, boxes_of, size_of, cfg, try_cfg["marker"], stops)
+        located.append((r, pages, printed, missing, found))
+    # مقياس سطر «مثال» من أسطره المقروءة في الكتاب كله: ارتفاعه الوسيط، ومواضع شارته الأفقية
+    read_labels = [box for *_, found in located if found for box in label_boxes(found[1])]
+    height = float(statistics.median(box[3] - box[1] for box in read_labels)) if read_labels else 0.0
+    floor = cfg["label_height"] * height
+    bands = label_bands([box for box in read_labels if box[3] - box[1] >= floor])
+    for r, pages, printed, missing, found in located:
         lesson: dict[str, Any] = {
             "expected": want.get(r["id"]),
             "found": 0,
@@ -478,14 +639,20 @@ def scan(
             "labels": 0,
             "opened": 0,
             "dropped": 0,
+            "inline": 0,
+            "recovered": 0,
         }
         lessons[r["id"]] = lesson
         events: list[exercise_try.Slot] = []
         fallback = 0
-        if pages is None:
+        if found is None:
             lesson["reasons"].append("pages")
         else:
-            columns, raw, end = lesson_columns(pages, boxes_of, size_of, cfg, try_cfg["marker"], stops)
+            columns, raw, end = found
+            raw, lesson["inline"] = drop_inline(raw, floor)
+            raw, lesson["recovered"] = recover_labels(
+                columns, raw, bands, height, boxes_of, image_of, read, cfg["recover"]
+            )
             events, fallback = exercise_try.read_events(raw, image_of, read, cap, try_cfg)
             examples = plan(columns, events, end)
             while lesson["expected"] is not None and len(examples) > lesson["expected"]:
@@ -682,6 +849,8 @@ def _lesson_report(lesson: dict[str, Any]) -> dict[str, Any]:
         "labels": lesson["labels"],
         "opened": lesson["opened"],
         "dropped": lesson["dropped"],
+        "inline": lesson["inline"],
+        "recovered": lesson["recovered"],
         "two_column_pages": sorted({c.page for c in columns if c.index}),
         "examples": [
             {
