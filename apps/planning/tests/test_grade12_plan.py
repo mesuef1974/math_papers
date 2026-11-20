@@ -77,13 +77,13 @@ def test_grade12_schedule_places_every_planned_period():
     assert not placed.unplaced
 
 
-APPROVED_UNITS_G12 = {1, 2}  # وحدات الثاني عشر التي اعتمد المالك نصوصها (prep/unit-<n>.json)
+APPROVED_UNITS_G12 = {1, 2, 3}  # وحدات الثاني عشر التي اعتمد المالك نصوصها (prep/unit-<n>.json)
 
 
 def test_grade12_approved_units_pass_objectives_and_approval():
     """حصص الوحدة المعتمدة تجتاز T2 وT2c، وكل مثال أساسي في حصة واحدة؛ ما سواها معلَّق لا فاشل."""
     preps = [row for row in lesson_preps(GRADE12_SLUG) if row.prep.unit in APPROVED_UNITS_G12]
-    assert len(preps) == 45  # 15 للوحدة 1 و30 للثانية
+    assert len(preps) == 64  # 15 للوحدة 1 و30 للثانية و19 للثالثة
     assert [row.prep.lesson for row in preps].count("1.3") == 3
     for row in preps:
         by = {r.code: r for r in row.checks}
@@ -106,4 +106,9 @@ def test_grade12_approved_units_pass_objectives_and_approval():
         "2.7": [1, 2, 3, 4, 5],
         "2.8": [1, 2, 3],  # 4 و5 إثرائيان
         "2.9": [1, 2, 3, 4, 5],  # 6 إثرائي
+        "3.1": [1, 2, 3, 4],
+        "3.2": [1, 2, 3, 4, 5, 6],
+        "3.3": [1, 2, 3, 4],
+        "3.4": [1, 2, 3],
+        "3.5": [1, 2, 3],
     }
