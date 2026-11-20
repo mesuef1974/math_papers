@@ -1704,7 +1704,16 @@ def critical_where_derivative_undefined(rng: random.Random) -> Problem:
         "3.1",
         f"أوجد القيم الحرجة للدالة $f(x)={shown}$.",
         f"$x={c}$",
-        wrongs(f"$x={c}$", NONE_FOUND, f"$x={-c}$", "$x=0$", f"$x={c + 1}$", f"$x={d}$", f"$x={c - 1}$", f"$x={c + 2}$"),
+        wrongs(
+            f"$x={c}$",
+            NONE_FOUND,
+            f"$x={-c}$",
+            "$x=0$",
+            f"$x={c + 1}$",
+            f"$x={d}$",
+            f"$x={c - 1}$",
+            f"$x={c + 2}$",
+        ),
         (
             rf"$f(x)={coefficient(k)}({tex(x - c)})^{{2/3}}{f'{d:+d}' if d else ''}$، "
             rf"فـ $f'(x)={frac(2 * k, '3' + cube_root_text(x - c))}$",
