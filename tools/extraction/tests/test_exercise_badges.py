@@ -270,3 +270,72 @@ def test_links_take_badge_lessons_and_fall_back_to_adjacency_without_badges(tmp_
     # الدرس بلا شارات يبقى على قاعدة التجاور
     assert second["method"] == "adjacency"
     assert second["value"] == [{"example": 1, "exercises": [1, 2], "pages": [8]}]
+
+
+# ───── إصلاحات المراجعة ─────
+def test_badges_outside_the_exercise_area_are_ignored():
+    # دائرة رقم الصفحة أسفلها، وشارة في الهامش الأيمن، وزخرفة في الترويسة: لا تقطع شارة المثال 1 ولا تُحسب إحالة
+    got = _link(
+        _page(
+            badges=[(900, 100, 1), (960, 250, 2), (500, 10, 2), (900, 1300, 2)],
+            anchors=[(1, 880, 200), (2, 880, 300), (3, 880, 400)],
+        )
+    )
+    assert got["links"] == [
+        {"example": 1, "exercises": [1, 2, 3], "pages": [5]},
+        {"example": 2, "exercises": [], "pages": []},
+    ]
+
+
+def test_a_page_without_exercise_numbers_has_no_badges():
+    got = _link(
+        _page(badges=[(900, 100, 1)], anchors=[(1, 880, 200)]),
+        _page(badges=[(900, 1300, 2)]),  # صفحة بلا تدريبات: شارتها لا تنتقل إلى ما بعدها
+        _page(anchors=[(2, 880, 200)]),
+    )
+    assert got["links"][0] == {"example": 1, "exercises": [1, 2], "pages": [5, 7]}
+
+
+def test_a_lone_number_does_not_make_a_column():
+    # «7» رقم منفرد بين العمودين (في نص تدريب أو على حافة العمود الأيمن): لا يصير عمودًا يزيح ترتيب الأعمدة
+    badges = [{"box": [900, 100, 940, 140], "examples": [1]}, {"box": [400, 400, 440, 440], "examples": [2]}]
+    anchors = [
+        {"n": n, "box": [right - 20, y, right, y + 24]}
+        for n, right, y in [
+            (1, 950, 200),
+            (2, 950, 600),
+            (7, 700, 450),
+            (3, 450, 150),
+            (4, 450, 300),
+            (5, 450, 500),
+        ]
+    ]
+    assert exercise_badges._columns(anchors, 1000, exercise_badges.COLUMN_GAP) == [950, 450]
+    got = exercise_badges.assign(badges, anchors, 1000)
+    assert got["links"][1]["exercises"] == [1, 2, 3, 4, 7]
+    assert got["links"][2]["exercises"] == [5]
+
+
+def test_lone_numbers_are_columns_when_no_column_has_two():
+    anchors = [{"n": 1, "box": [930, 200, 950, 224]}, {"n": 2, "box": [430, 200, 450, 224]}]
+    assert exercise_badges._columns(anchors, 1000, exercise_badges.COLUMN_GAP) == [950, 450]
+
+
+@pytest.mark.parametrize(
+    "starts, span, want",
+    [([3, 4], (3, 8), 5), ([3, 8], (3, 8), None), ([], (3, 8), 3)],
+)
+def test_after_examples_starts_after_the_last_example_page(starts, span, want):
+    assert (
+        exercise_badges.after_examples([{"n": i + 1, "start": s} for i, s in enumerate(starts)], span) == want
+    )
+
+
+def test_stage_without_an_exercises_marker_scans_after_the_last_example(tmp_path, monkeypatch):
+    book = _book(tmp_path, monkeypatch)
+    monkeypatch.setattr(exercise_badges, "exercises_start", lambda *args: None)  # كتاب بلا markers.exercises
+    assert main([str(tmp_path), "exercise_badges"]) == 0
+    assert _lessons(book, "exercise_badges")["1.1"]["value"] == [
+        {"example": 1, "exercises": [1, 2], "pages": [5]},
+        {"example": 2, "exercises": [3], "pages": [5]},
+    ]

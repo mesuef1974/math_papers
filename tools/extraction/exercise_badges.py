@@ -191,19 +191,36 @@ def exercise_anchors(boxes: Boxes, cap: int) -> list[dict[str, Any]]:
 
 
 def _columns(anchors: list[dict[str, Any]], width: float, gap: float) -> list[int]:
-    """الحد الأيمن لكل عمود تدريبات في صفحة، من اليمين إلى اليسار: تجميع الحواف اليمنى لأرقامها."""
-    bounds: list[int] = []
-    last = None
-    for x in sorted({a["box"][2] for a in anchors}, reverse=True):
-        if last is None or last - x > gap * width:
-            bounds.append(x)
-        last = x
-    return bounds
+    """الحد الأيمن لكل عمود تدريبات في صفحة، من اليمين إلى اليسار: تجميع الحواف اليمنى لأرقامها. العمود رقمان فأكثر؛
+    الرقم المنفرد بعيدًا عن الأعمدة (رقم في نص تدريب، أو على حافة عمود) لا يصنع عمودًا ويلحق بأقرب عمود، إلا في صفحة
+    لا عمود فيها برقمين فتبقى المجموعات المنفردة أعمدتها."""
+    groups: list[list[int]] = []
+    for x in sorted((a["box"][2] for a in anchors), reverse=True):
+        if not groups or groups[-1][-1] - x > gap * width:
+            groups.append([x])
+        else:
+            groups[-1].append(x)
+    full = [g[0] for g in groups if len(g) >= 2]
+    return full or [g[0] for g in groups]
 
 
 def _column(x: float, bounds: list[int], slack: float) -> int:
     """العمود الذي يقع فيه x: أقصى عمود يسارًا حدّه الأيمن عند x أو يمينه."""
     return max((i for i, bound in enumerate(bounds) if x <= bound + slack), default=0)
+
+
+def _inside(
+    box: list[int], anchors: list[dict[str, Any]], bounds: list[int], reach: float, slack: float
+) -> bool:
+    """هل الشارة في منطقة التدريبات: لا يمين الحد الأيمن لأول عمود (الهامش)، ورأسيًا بين أعلى رقم تدريب بمسافة
+    `reach` فوقه (عنوان المجموعة) وأسفل رقم؛ فدوائر أرقام الصفحات وزخارف الترويسة والتذييل لا تُعدّ إحالات. صفحة بلا
+    أرقام تدريبات لا شارة لها."""
+    if not anchors:
+        return False
+    x0, y0, x1, y1 = box
+    top = min(a["box"][1] for a in anchors) - reach
+    bottom = max(a["box"][3] for a in anchors)
+    return (x0 + x1) / 2 <= bounds[0] + slack and top <= (y0 + y1) / 2 <= bottom
 
 
 def assign(
@@ -217,6 +234,8 @@ def assign(
         bounds = _columns(here, width, gap)
         slack = gap * width / 3
         for badge in (b for b in badges if b.get("page", 0) == page):
+            if not _inside(badge["box"], here, bounds, gap * width, slack):
+                continue
             x0, y0, x1, y1 = badge["box"]
             # الشارة في سطر تدريبها الأول تسبقه: موضعها أعلى حافتها لا مركزها
             order.append((page, _column((x0 + x1) / 2, bounds, slack), y0 - (y1 - y0) / 2, 0, badge))
@@ -279,6 +298,12 @@ def link(scans: dict[int, dict[str, Any]], accepted: set[int], jump: int) -> dic
     }
 
 
+def after_examples(known: list[dict[str, Any]], span: tuple[int, int]) -> int | None:
+    """بداية التمارين بلا علامة `markers.exercises`: الصفحة التي بعد بداية آخر مثال، ما دامت في الدرس."""
+    page = max((e["start"] for e in known), default=span[0] - 1) + 1
+    return page if span[0] <= page <= span[1] else None
+
+
 def build(
     book: Book,
     layout: dict[str, Any],
@@ -293,9 +318,12 @@ def build(
     texts = load_pages(book)
     result: dict[str, Any] = {"book": book.id, "lessons": {}}
     for r in layout["lessons"]:
-        accepted = {e["n"] for e in examples["lessons"].get(r["id"], {}).get("value") or []}
+        known = examples["lessons"].get(r["id"], {}).get("value") or []
+        accepted = {e["n"] for e in known}
         span = (r["pages_pdf"][0], r["pages_pdf"][1]) if r["pages_pdf"] else None
-        start = exercises_start(book, span, texts) if span and accepted else None
+        start = (
+            (exercises_start(book, span, texts) or after_examples(known, span)) if span and accepted else None
+        )
         scans = {}
         for page in range(start, span[1] + 1) if start else ():
             image = image_of(page)
