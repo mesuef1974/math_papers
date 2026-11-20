@@ -26,6 +26,7 @@ from apps.planning.domain.prep import (
     STAGE_NAMES,
     Classwork,
     ExitTicket,
+    PeriodPrep,
     PrepError,
     PrepExample,
     Recall,
@@ -467,10 +468,12 @@ def test_grade10_preps_are_untouched_by_the_practice_field(preps):
 
 
 def _digest_before_145(prep):
-    """بصمة التحضير كما كانت تُحسب قبل دخول حقل `practice` (#145): كل الحقول، ومنها ما يساوي قيمته الافتراضية."""
+    """بصمة التحضير كما كانت تُحسب قبل دخول حقلي `practice` (#145) و`exercise_pages` (#148): كل الحقول الأخرى، ومنها
+    ما يساوي قيمته الافتراضية."""
     old = asdict(prep)
     for example in (*old["examples"], *old["review"]):
         del example["practice"]
+    assert not old.pop("exercise_pages")
     text = json.dumps(old, default=sorted, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
@@ -506,6 +509,9 @@ def test_digest_drops_marked_fields_at_their_default_by_one_rule():
     assert _digest_payload(Outer((), note="x")) == {"items": [], "extra": {}, "note": "x"}
     marked = {f.name for f in fields(PrepExample) if f.metadata.get("digest_omits_default")}
     assert marked == {"practice"}
+    assert {f.name for f in fields(PeriodPrep) if f.metadata.get("digest_omits_default")} == {
+        "exercise_pages"
+    }
 
 
 # ---- تصحيحات بعد #145: عمق المثال بلا «حاول أن تحل»، وصفوف try وحدها للتدريب الصفي ----
