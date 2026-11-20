@@ -6,9 +6,16 @@
 from __future__ import annotations
 
 import re
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    ConfigDict,
+    Field,
+    SerializerFunctionWrapHandler,
+    model_serializer,
+)
 
 KINDS = (
     "learning_goal", "guide_step", "prerequisite", "concept_step", "think_question", "struggling",
@@ -33,6 +40,7 @@ PRACTICE_CODE = re.compile(r"^MP\.\d$")
 BLOOM_OR_UNCLASSIFIED = (*BLOOMS, "unclassified")  # الصنف الأخير: بند لم يُصنَّف فلا يُخمَّن
 SOURCES = ("authored", "extracted")  # صياغتنا من الدليل، أو مستخرج آليًا ومطابق للمعيار الذهبي
 STATUSES = ("draft", "reviewed")
+GROUP_KINDS = ("try", "practice")
 RANGE = re.compile(r"^\d{1,2}(?:\s*[-–]\s*\d{1,2})?(?:\s*[,،]\s*\d{1,2}(?:\s*[-–]\s*\d{1,2})?)*$")
 
 
@@ -72,7 +80,21 @@ class ObjectiveData(_Strict):
     text: Safe = ""  # فارغ للمصادر التي لا يدخل نصها المستودع
 
 
-class ExerciseGroupData(_Strict):
+class GroupKind(_Strict):
+    """نوع صف التمارين: `try` تمرين المثال نفسه (جدول «تحليل التمارين» أو سطر «حاول أن تحل»)، و`practice` تمارين قسم
+    «تمارين» المربوطة بالمثال. الافتراضي لا يُكتب عند التسلسل، فالملفات والتجزئات التي سبقت الحقل لا تتغير."""
+
+    kind: Literal[*GROUP_KINDS] = "try"  # type: ignore[valid-type]
+
+    @model_serializer(mode="wrap")
+    def _without_default_kind(self, handler: SerializerFunctionWrapHandler) -> dict[str, Any]:
+        data = handler(self)
+        if data.get("kind") == "try":
+            del data["kind"]
+        return data
+
+
+class ExerciseGroupData(GroupKind):
     """صف من تحليل التمارين: مثال وعمق معرفي وأرقام التمارين المرتبطة بهما."""
 
     example: int = Field(ge=1, le=20)

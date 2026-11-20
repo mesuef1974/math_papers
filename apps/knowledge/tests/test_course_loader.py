@@ -13,7 +13,12 @@ from apps.curriculum.models import Course, Lesson
 from apps.knowledge import models as km
 from apps.knowledge.domain import contract
 from apps.knowledge.domain.contract import CourseKnowledge, read_source, source_hash, source_slugs
-from apps.knowledge.selectors import course_index, course_index_from_tables, knowledge_state
+from apps.knowledge.selectors import (
+    course_index,
+    course_index_from_tables,
+    example_exercises,
+    knowledge_state,
+)
 from apps.knowledge.services import load_all, load_contract, load_course
 
 pytestmark = pytest.mark.django_db
@@ -112,6 +117,24 @@ def test_loader_repairs_drift_in_new_tables():
     report = load_course(GRADE10_SLUG)
     assert report.changed["exercise_groups"] == 1 and report.changed["objectives"] == 1
     assert km.KnowledgeRelease.objects.filter(course__slug=GRADE10_SLUG).count() == 1  # المحتوى لم يتغير
+
+
+def test_group_kind_reaches_the_tables_and_the_index():
+    knowledge = read_source(GRADE10_SLUG).model_copy(deep=True)
+    profile = next(p for p in knowledge.profiles if p.lesson == "1.4")
+    extra = profile.exercise_groups[0].model_copy(update={"kind": "practice", "exercises": [98, 99]})
+    profile.exercise_groups.append(extra)
+    load_contract(knowledge)
+    rows = km.ExerciseGroup.objects.filter(profile__lesson__course__slug=GRADE10_SLUG)
+    assert rows.filter(kind="practice").count() == 1 and rows.exclude(kind="try").count() == 1
+    lesson = next(row for row in course_index_from_tables(GRADE10_SLUG).lessons if row.lesson == "1.4")
+    assert [(row.kind, row.exercises) for row in lesson.analysis][-1] == ("practice", [98, 99])
+    assert {row.kind for row in lesson.analysis[:-1]} == {"try"}
+    # مصدر الجزء في الأوراق من تمرين المثال وحده
+    assert not {98, 99} & set(example_exercises(GRADE10_SLUG, "1.4", extra.example))
+    assert load_contract(knowledge).changed["exercise_groups"] == 0  # idempotent
+    assert load_course(GRADE10_SLUG).changed["exercise_groups"] == 1  # الملف يغلب: الصف الزائد يزول
+    assert not rows.filter(kind="practice").exists()
 
 
 def test_release_recorded_only_when_hash_changes():

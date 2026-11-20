@@ -3,11 +3,20 @@
 حصص العاشر تجتاز المعايير الحاجبة كلها، وكل مثال أساسي في حصة واحدة، وكل معيار حاجب يُشغَّل على حالة فاشلة. النصوص والاعتماد والمقاطع معلَّقة لا فاشلة حتى يُعتمد ملف الوحدة.
 """
 
-from dataclasses import replace
+import hashlib
+import json
+from dataclasses import asdict, replace
 
 import pytest
 
 from apps.curriculum.courses import GRADE10_SLUG
+from apps.knowledge.domain.course_index import (
+    AnalysisRow,
+    ExampleIndex,
+    LessonIndex,
+    TaskGuide,
+    VocabularyCount,
+)
 from apps.planning.domain.prep import (
     PERIOD_MINUTES,
     STAGE_NAMES,
@@ -15,8 +24,14 @@ from apps.planning.domain.prep import (
     ExitTicket,
     PrepError,
     Recall,
+    TeacherEdit,
     allocate,
+    build_prep,
+    derived_paths,
+    lesson_examples,
     parse_ranges,
+    prep_digest,
+    recall_for,
 )
 from apps.planning.domain.prep_checks import (
     BLOCKING,
@@ -24,6 +39,7 @@ from apps.planning.domain.prep_checks import (
     PASS,
     PENDING,
     blocking_failures,
+    check_prep,
     t1_coverage,
     t2_objectives,
     t2b_chain,
@@ -312,3 +328,131 @@ def test_t13_fails_on_free_text(middle):
         )
     )
     _fails(t13_closed_fields(replace(middle, sources={"objectives": "guide"}), LIBRARY))
+
+
+# ---- درس بلا دليل مهام (الثاني عشر): الصفي من صفوف try، والتمايز والواجب من صفوف practice ----
+
+TRY = {1: (1, [1]), 2: (2, [2]), 3: (3, [3])}  # مثال → (عمقه، تمرين «حاول أن تحل»)
+PRACTICE = {1: [10, 11, 12, 13], 2: [14, 15, 16, 17, 18], 3: [20, 21, 22, 23, 24, 25, 26]}
+
+
+def _unguided(practice=True, guide=None):
+    rows = [AnalysisRow(example=n, dok=d, exercises=ex) for n, (d, ex) in TRY.items()]
+    if practice:
+        rows += [
+            AnalysisRow(example=n, dok=TRY[n][0], exercises=ex, kind="practice") for n, ex in PRACTICE.items()
+        ]
+    lesson = LessonIndex(
+        lesson="1.1",
+        unit=1,
+        examples=[ExampleIndex(n=n) for n in TRY],
+        analysis=rows,
+        exercises_total=26,
+        task_guide=guide,
+        quiz_depths=[1, 2],
+        vocabulary=VocabularyCount(new=0, review=0),
+    )
+    examples = lesson_examples(lesson, "g12-like", generators=TRY)
+    groups = allocate([(e.n, e.weight) for e in examples], 3)
+    preps = [
+        build_prep(
+            course="g12-like",
+            lesson=lesson,
+            examples=examples,
+            groups=groups,
+            k=k,
+            recall=recall_for(k, None, False),
+            library=list(LIBRARY.values()),
+        )
+        for k in (1, 2, 3)
+    ]
+    return lesson, examples, preps
+
+
+def _checks(lesson, prep):
+    return check_prep(prep, LIBRARY, previous_lesson=None, after_break=False, quiz_depths=lesson.quiz_depths)
+
+
+def test_unguided_lesson_trains_from_try_rows_and_differentiates_from_practice_rows():
+    lesson, examples, preps = _unguided()
+    # الوزن والتوزيع من صفوف try وحدها، وعمق المثال لا يتغير بصف practice
+    assert [(e.weight, e.max_dok) for e in examples] == [(1, 1), (2, 2), (3, 3)]
+    assert [tuple(e.n for e in p.examples) for p in preps] == [(1, 2), (3,), ()]
+    tried = {x for _, ex in TRY.values() for x in ex}
+    for prep in preps:
+        assert {x for c in prep.classwork for x in c.exercises} <= tried
+        assert bool(prep.classwork) == bool(prep.examples)
+        own = {x for e in prep.practice_examples for x in PRACTICE[e.n]}
+        for numbers in (prep.basic, prep.advanced, prep.homework):
+            assert numbers and set(numbers) <= own, (prep.k, numbers)
+        assert not set(prep.homework) & {*prep.basic, *prep.advanced}
+        assert blocking_failures(_checks(lesson, prep)) == ()
+    first, second, last = preps
+    # الأساسي من أمثلة عمقها 1-2، والمتقدم من أعلى عمق في الدرس
+    assert (last.basic, last.advanced) == ((10, 11, 12), (20, 21, 22))
+    assert last.task_guide == (frozenset(range(10, 19)), frozenset(range(20, 27)))
+    assert last.homework == (13, 14, 15, 16, 17, 18, 23, 24)
+    # حصة بلا مثال بأعلى عمق الدرس: المتقدم من أعلى أمثلتها عمقًا
+    assert (first.basic, first.advanced, first.homework) == ((10, 11, 12), (14, 15, 16), (13, 17, 18))
+    # حصة كل أمثلتها فوق العمق 2: الأساسي من أدناها، والمتقدم يقدّم ما لم يأخذه الأساسي
+    assert (second.basic, second.advanced, second.homework) == ((20, 21, 22), (23, 24, 25), (26,))
+    assert {r.code: r.status for r in _checks(lesson, first)}["T9"] == PASS
+
+
+def test_unguided_lesson_without_practice_rows_still_fails_t8():
+    lesson, _, preps = _unguided(practice=False)
+    for prep in preps:
+        assert not prep.basic and not prep.advanced and not prep.homework
+        assert "T8" in {r.code for r in blocking_failures(_checks(lesson, prep))}
+
+
+def test_teacher_removed_practice_exercise_leaves_every_list():
+    lesson, examples, preps = _unguided()
+    groups = [tuple(e.n for e in p.examples) for p in preps]
+    edited = build_prep(
+        course="g12-like",
+        lesson=lesson,
+        examples=examples,
+        groups=groups,
+        k=3,
+        recall=recall_for(3, None, False),
+        library=list(LIBRARY.values()),
+        teacher=TeacherEdit(removed=frozenset({10, 20})),
+    )
+    assert (edited.basic, edited.advanced) == ((11, 12, 13), (21, 22, 23))
+    assert not {10, 20} & set(edited.homework)
+
+
+def test_task_guide_wins_over_practice_rows():
+    """مع دليل المهام المساران منه كما كانا، وصفوف practice تمارين كغيرها."""
+    _, _, preps = _unguided(guide=TaskGuide(basic="1-12", advanced="13-26"))
+    last = preps[-1]
+    assert last.task_guide == (frozenset(range(1, 13)), frozenset(range(13, 27)))
+    assert (last.basic, last.advanced) == ((1, 10, 11), (20, 21, 22))
+    assert last.homework == (2, 3, 12)
+
+
+def test_derived_paths_are_empty_without_practice_rows():
+    _, examples, _ = _unguided(practice=False)
+    assert derived_paths(examples, examples) == (frozenset(), frozenset())
+
+
+def test_grade10_preps_are_untouched_by_the_practice_field(preps):
+    """العاشر بدليل مهام وبلا صفوف practice: الحقل فارغ وتجزئة التحضير كما كانت قبله (لا عرض يُعلَّم قديمًا)."""
+    for row in preps:
+        prep = row.prep
+        assert all(not e.practice for e in (*prep.examples, *prep.review))
+        assert prep.task_guide[0] and prep.task_guide[1]
+        old = asdict(prep)
+        for example in (*old["examples"], *old["review"]):
+            del example["practice"]
+        text = json.dumps(
+            old,
+            default=sorted,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        assert prep_digest(prep) == hashlib.sha256(text.encode("utf-8")).hexdigest()
+    _, _, unguided = _unguided()
+    assert prep_digest(unguided[0]) != prep_digest(replace(unguided[0], examples=()))

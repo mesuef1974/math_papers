@@ -146,13 +146,18 @@ class LessonObjective(models.Model):
 
 
 class ExerciseGroup(models.Model):
-    """مجموعة تمارين: مثال الدرس الذي تدرّب عليه وعمقها المعرفي وأرقامها."""
+    """مجموعة تمارين: مثال الدرس الذي تدرّب عليه وعمقها المعرفي وأرقامها، ونوعها (تمرين المثال أو تمارين قسم «تمارين»)."""
+
+    class Kind(models.TextChoices):
+        TRY = "try", "تمرين المثال"
+        PRACTICE = "practice", "تمارين الدرس"
 
     profile = models.ForeignKey(LessonProfile, on_delete=models.CASCADE, related_name="exercise_groups")
     order = models.PositiveSmallIntegerField()
     example = models.PositiveSmallIntegerField()
     dok = models.PositiveSmallIntegerField()
     exercises = models.JSONField(default=list)
+    kind = models.CharField(max_length=10, choices=Kind.choices, default=Kind.TRY)
 
     class Meta:
         ordering = ["profile_id", "order"]

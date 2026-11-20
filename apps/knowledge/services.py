@@ -120,7 +120,10 @@ def _load_lesson(data: LessonData, lessons: dict[str, Lesson], report: LoadRepor
         {"order": n, "bloom": o.bloom, "text": o.text} for n, o in enumerate(data.objectives, start=1)
     ]
     _sync_children(report, "objectives", profile.objectives, objectives, LessonObjective, **parent)
-    groups = [{"order": n, **g.model_dump()} for n, g in enumerate(data.exercise_groups, start=1)]
+    groups = [
+        {"order": n, "example": g.example, "dok": g.dok, "exercises": g.exercises, "kind": g.kind}
+        for n, g in enumerate(data.exercise_groups, start=1)
+    ]
     _sync_children(report, "exercise_groups", profile.exercise_groups, groups, ExerciseGroup, **parent)
     _sync_children(
         report,

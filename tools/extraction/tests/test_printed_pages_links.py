@@ -178,3 +178,93 @@ def test_lessons_without_vision_are_missing(toy):
     assert main([str(toy.root), "exercise_links"]) == 0
     lessons = json.loads((toy.out / "exercise_links.json").read_text(encoding="utf-8"))["lessons"]
     assert {v["status"] for v in lessons.values()} == {"missing"}
+
+
+# ───── practice: تمارين قسم «تمارين» بجانب صفوف «حاول أن تحل» ─────
+def _read_stage(book, name, value, **extra):
+    """مخرج مرحلة ربط مقروء للدرس 1.1 مكتوبًا باليد (المرحلتان تحتاجان صورًا وتعرّفًا)."""
+    lessons = {"1.1": {"value": value, "source": "derived", "status": "review", "unlinked": [], **extra}}
+    (book.out / f"{name}.json").write_text(
+        json.dumps({"book": book.id, "lessons": lessons}), encoding="utf-8"
+    )
+
+
+def _links(book):
+    return json.loads((book.out / "exercise_links.json").read_text(encoding="utf-8"))["lessons"]
+
+
+def test_try_lesson_with_badges_gets_practice_rows_without_try_exercises(tmp_path):
+    book = _vision_book(tmp_path)
+    tried = [
+        {"example": 1, "exercises": [2], "pages": [3]},
+        {"example": 2, "exercises": [], "pages": []},  # بلا سطر مقروء: يُقترح له practice كغيره
+    ]
+    _read_stage(book, "exercise_try", tried)
+    badges = [
+        {"example": 1, "exercises": [1, 2, 3], "pages": [5]},
+        {"example": 2, "exercises": [2, 4], "pages": [5]},
+    ]
+    _read_stage(book, "exercise_badges", badges, badges=2, unreadable=0)
+    assert main([str(tmp_path), "exercise_links"]) == 0
+    first, second = _links(book)["1.1"], _links(book)["1.2"]
+    assert (first["method"], first["status"], first["value"]) == ("try", "review", tried)
+    practice = first["practice"]
+    assert (practice["source"], practice["status"], practice["method"]) == ("derived", "review", "badges")
+    assert practice["value"] == [
+        {"example": 1, "exercises": [1, 3], "pages": [5]},
+        {"example": 2, "exercises": [4], "pages": [5]},  # 2 تمرين «حاول أن تحل» للمثال 1: لا يتكرر
+    ]
+    assert "practice" not in second  # درس بلا «حاول أن تحل»: صفوفه وحدها
+
+
+def test_practice_needs_a_readable_badge_and_a_try_lesson(tmp_path):
+    book = _vision_book(tmp_path)
+    rows = [{"example": 1, "exercises": [1, 2], "pages": [5]}]
+    _read_stage(book, "exercise_badges", rows, badges=1, unreadable=0)
+    assert main([str(tmp_path), "exercise_links"]) == 0
+    first = _links(book)["1.1"]
+    assert first["method"] == "badges" and "practice" not in first  # الشارات صفوف الدرس نفسها
+    _read_stage(book, "exercise_try", [{"example": 1, "exercises": [2], "pages": [3]}])
+    _read_stage(book, "exercise_badges", rows, badges=1, unreadable=1)
+    assert main([str(tmp_path), "exercise_links", "--force"]) == 0
+    first = _links(book)["1.1"]
+    assert first["method"] == "try" and "practice" not in first  # لا شارة مقروءة
+
+
+def test_owner_corrections_approve_try_rows_and_practice_separately(tmp_path):
+    book = _vision_book(tmp_path)
+    _read_stage(book, "exercise_try", [{"example": 1, "exercises": [2], "pages": [3]}])
+    _read_stage(
+        book,
+        "exercise_badges",
+        [{"example": 1, "exercises": [1, 2, 3], "pages": [5]}],
+        badges=1,
+        unreadable=0,
+    )
+    approved = [{"example": 1, "exercises": [2]}]
+
+    def correct(*items):
+        (book.out / "corrections.yaml").write_text(
+            yaml.safe_dump(
+                [{"stage": "exercise_links", "reason": "راجعه المالك على الكتاب", **item} for item in items],
+                allow_unicode=True,
+            ),
+            encoding="utf-8",
+        )
+        assert main([str(tmp_path), "exercise_links", "--force"]) == 0
+        return _links(book)["1.1"]
+
+    entry = correct({"path": ["lessons", "1.1"], "value": approved})
+    assert (entry["value"], entry["status"]) == (approved, "ok")  # التصحيح يغلب، وpractice تنتظر اعتمادها
+    assert entry["practice"]["status"] == "review"
+    wanted = [{"example": 1, "exercises": [3]}]
+    entry = correct(
+        {"path": ["lessons", "1.1"], "value": approved},
+        {"path": ["lessons", "1.1", "practice"], "value": wanted},
+    )
+    assert (entry["practice"]["value"], entry["practice"]["source"], entry["practice"]["status"]) == (
+        wanted,
+        "teacher",
+        "ok",
+    )
+    assert (entry["value"], entry["status"]) == (approved, "ok")
