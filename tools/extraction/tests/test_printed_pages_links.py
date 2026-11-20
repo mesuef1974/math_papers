@@ -193,7 +193,7 @@ def _links(book):
     return json.loads((book.out / "exercise_links.json").read_text(encoding="utf-8"))["lessons"]
 
 
-def test_try_lesson_with_badges_gets_practice_rows_without_try_exercises(tmp_path):
+def test_try_lesson_with_badges_gets_the_badge_rows_as_practice(tmp_path):
     book = _vision_book(tmp_path)
     tried = [
         {"example": 1, "exercises": [2], "pages": [3]},
@@ -210,11 +210,39 @@ def test_try_lesson_with_badges_gets_practice_rows_without_try_exercises(tmp_pat
     assert (first["method"], first["status"], first["value"]) == ("try", "review", tried)
     practice = first["practice"]
     assert (practice["source"], practice["status"], practice["method"]) == ("derived", "review", "badges")
-    assert practice["value"] == [
-        {"example": 1, "exercises": [1, 3], "pages": [5]},
-        {"example": 2, "exercises": [4], "pages": [5]},  # 2 تمرين «حاول أن تحل» للمثال 1: لا يتكرر
-    ]
+    # كما قُرئت: 2 تمرين «حاول أن تحل» الخام يبقى هنا، والكاتب يحذف ما في صفوف try النهائية
+    assert practice["value"] == badges
     assert "practice" not in second  # درس بلا «حاول أن تحل»: صفوفه وحدها
+    summary = exercise_links.summarize({"lessons": _links(book)})
+    assert summary["practice_review"] == ["1.1"] and "1.1" in summary["review"]
+
+
+def test_exercise_the_owner_removes_from_try_rows_stays_in_practice(tmp_path):
+    book = _vision_book(tmp_path)
+    _read_stage(book, "exercise_try", [{"example": 1, "exercises": [2], "pages": [3]}])
+    badges = [{"example": 1, "exercises": [1, 2, 3], "pages": [5]}]
+    _read_stage(book, "exercise_badges", badges, badges=1, unreadable=0)
+    corrected = [{"example": 1, "exercises": [1]}]  # المالك: تمرين المثال 1 لا 2
+    (book.out / "corrections.yaml").write_text(
+        yaml.safe_dump(
+            [
+                {
+                    "stage": "exercise_links",
+                    "path": ["lessons", "1.1"],
+                    "value": corrected,
+                    "reason": "راجعه المالك على الكتاب",
+                }
+            ],
+            allow_unicode=True,
+        ),
+        encoding="utf-8",
+    )
+    assert main([str(tmp_path), "exercise_links"]) == 0
+    entry = _links(book)["1.1"]
+    assert (entry["value"], entry["status"]) == (corrected, "ok")
+    assert entry["practice"]["value"] == badges  # 2 لم يعد في صفوف try، فيبقى من تمارين المثال
+    summary = exercise_links.summarize({"lessons": _links(book)})
+    assert summary["practice_review"] == ["1.1"] and "1.1" not in summary["review"]
 
 
 def test_practice_needs_a_readable_badge_and_a_try_lesson(tmp_path):
@@ -257,6 +285,7 @@ def test_owner_corrections_approve_try_rows_and_practice_separately(tmp_path):
     entry = correct({"path": ["lessons", "1.1"], "value": approved})
     assert (entry["value"], entry["status"]) == (approved, "ok")  # التصحيح يغلب، وpractice تنتظر اعتمادها
     assert entry["practice"]["status"] == "review"
+    assert entry["practice"]["value"] == [{"example": 1, "exercises": [1, 2, 3], "pages": [5]}]
     wanted = [{"example": 1, "exercises": [3]}]
     entry = correct(
         {"path": ["lessons", "1.1"], "value": approved},

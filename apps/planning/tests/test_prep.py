@@ -5,11 +5,12 @@
 
 import hashlib
 import json
-from dataclasses import asdict, replace
+from dataclasses import asdict, dataclass, field, fields, replace
 
 import pytest
 
 from apps.curriculum.courses import GRADE10_SLUG
+from apps.knowledge.domain.book_numbers import annotate
 from apps.knowledge.domain.course_index import (
     AnalysisRow,
     ExampleIndex,
@@ -17,14 +18,20 @@ from apps.knowledge.domain.course_index import (
     TaskGuide,
     VocabularyCount,
 )
+from apps.knowledge.domain.unit_prep import AuthoredObjective, LessonObjectives, UnitPrep, unit_problems
+from apps.planning.domain.deck import _period_example_notes
 from apps.planning.domain.prep import (
+    DIGEST_OMITS_DEFAULT,
     PERIOD_MINUTES,
     STAGE_NAMES,
     Classwork,
     ExitTicket,
+    PeriodPrep,
     PrepError,
+    PrepExample,
     Recall,
     TeacherEdit,
+    _digest_payload,
     allocate,
     build_prep,
     derived_paths,
@@ -458,3 +465,138 @@ def test_grade10_preps_are_untouched_by_the_practice_field(preps):
         assert prep_digest(prep) == hashlib.sha256(text.encode("utf-8")).hexdigest()
     _, _, unguided = _unguided()
     assert prep_digest(unguided[0]) != prep_digest(replace(unguided[0], examples=()))
+
+
+def _digest_before_145(prep):
+    """بصمة التحضير كما كانت تُحسب قبل دخول حقلي `practice` (#145) و`exercise_pages` (#148): كل الحقول الأخرى، ومنها
+    ما يساوي قيمته الافتراضية."""
+    old = asdict(prep)
+    for example in (*old["examples"], *old["review"]):
+        del example["practice"]
+    assert not old.pop("exercise_pages")
+    text = json.dumps(old, default=sorted, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def test_digest_without_practice_rows_equals_the_digest_before_the_field():
+    _, _, plain = _unguided(practice=False)
+    _, _, with_rows = _unguided()
+    for prep, other in zip(plain, with_rows, strict=True):
+        assert prep_digest(prep) == _digest_before_145(prep)
+        assert prep_digest(other) != prep_digest(prep)  # صف practice يغيّر البصمة
+
+
+def test_digest_drops_marked_fields_at_their_default_by_one_rule():
+    """القاعدة عامة لا خاصة بـ `practice`: أي حقل معلَّم في أي صنف يخرج بقيمته الافتراضية، وغير المعلَّم يبقى."""
+
+    @dataclass(frozen=True)
+    class Inner:
+        n: int
+        flag: bool = False  # غير معلَّم: في البصمات المحفوظة، فيبقى
+        late: tuple[int, ...] = field(default=(), metadata=DIGEST_OMITS_DEFAULT)
+        tags: frozenset[int] = field(default_factory=frozenset, metadata=DIGEST_OMITS_DEFAULT)
+
+    @dataclass(frozen=True)
+    class Outer:
+        items: tuple[Inner, ...]
+        extra: dict[str, Inner] = field(default_factory=dict)
+        note: str | None = field(default=None, metadata=DIGEST_OMITS_DEFAULT)
+
+    assert _digest_payload(Outer((Inner(1), Inner(2, late=(3,))), {"a": Inner(4, tags=frozenset({5}))})) == {
+        "items": [{"n": 1, "flag": False}, {"n": 2, "flag": False, "late": [3]}],
+        "extra": {"a": {"n": 4, "flag": False, "tags": frozenset({5})}},
+    }
+    assert _digest_payload(Outer((), note="x")) == {"items": [], "extra": {}, "note": "x"}
+    marked = {f.name for f in fields(PrepExample) if f.metadata.get("digest_omits_default")}
+    assert marked == {"practice"}
+    assert {f.name for f in fields(PeriodPrep) if f.metadata.get("digest_omits_default")} == {
+        "exercise_pages"
+    }
+
+
+# ---- تصحيحات بعد #145: عمق المثال بلا «حاول أن تحل»، وصفوف try وحدها للتدريب الصفي ----
+
+
+def _untried():
+    """درس مثاله الثاني بلا صف try (كـ2.6/1 و2.9/5)، وتمارينه في القوالب بعمق 3: صفوفه كما يكتبها `annotate`."""
+    source = {
+        "lesson": "1.1",
+        "templates": [{"label": "1-2", "level": "K"}, {"label": "5-7", "level": "R"}],
+        "examples": [{"number": 1}, {"number": 2}],
+    }
+    written = annotate(
+        source, {}, [{"example": 1, "exercises": [1]}], None, [{"example": 2, "exercises": [5, 6, 7]}]
+    )
+
+    def index(groups):
+        return LessonIndex(
+            lesson="1.1",
+            unit=1,
+            examples=[ExampleIndex(n=1), ExampleIndex(n=2)],
+            analysis=[AnalysisRow(**row) for row in groups],
+            exercises_total=7,
+            quiz_depths=[1, 2],
+            vocabulary=VocabularyCount(new=0, review=0),
+        )
+
+    groups = written["exercise_groups"]
+    return index([row for row in groups if "kind" not in row]), index(groups)
+
+
+def test_practice_row_leaves_the_depth_of_an_example_without_a_try_row():
+    before, after = _untried()
+    assert [row.kind for row in after.analysis] == ["try", "practice"]
+    objective = AuthoredObjective(
+        example=2, dok=1, verb="يحسب", behavior="يحسب قيمة", condition="من جدول", criterion="بلا خطأ"
+    )
+    unit = UnitPrep(
+        course="g12-like",
+        unit=1,
+        status="draft",
+        audience="الطالب",
+        lessons=[
+            LessonObjectives(
+                lesson="1.1", objectives=[objective.model_copy(update={"example": 1}), objective]
+            )
+        ],
+    )
+    for lesson in (before, after):
+        examples = lesson_examples(lesson, "g12-like", generators=(1, 2))
+        assert [max(e.max_dok, 1) for e in examples] == [1, 1]
+        assert [e.weight for e in examples] == [1, 0]
+        assert unit_problems(unit, [lesson], [], {}, None) == []  # unit_prep: عمق الهدف يطابق الفهرس
+        prep = build_prep(
+            course="g12-like",
+            lesson=lesson,
+            examples=examples,
+            groups=((1,), (2,), ()),
+            k=2,
+            recall=recall_for(2, None, False),
+            library=list(LIBRARY.values()),
+            authored={2: objective},
+            audience="الطالب",
+        )
+        assert [(o.example, o.dok) for o in prep.objectives] == [(2, 1)]
+        assert t2_objectives(prep).status == PASS
+        assert t5_progression(prep).status == PASS
+    # ملاحظة العمق في العرض من المصدر نفسه (max_dok): عمق الهدف لا عمق تمارين الصف في القوالب
+    example = lesson_examples(after, "g12-like")[1]
+    assert (example.max_dok, example.practice) == (1, ((1, (5, 6, 7)),))
+    assert _period_example_notes(example) == ("عمق التمارين: DOK 1",)
+
+
+def test_classwork_from_a_practice_row_fails_t4_and_exit_depth_reads_try_rows():
+    lesson, _, preps = _unguided()
+    first = preps[0]
+    assert t4_classwork(first).status == PASS and t7_assessment(first).status == PASS
+    example = first.examples[0]
+    stray = example.practice[0][1][0]
+    assert example.dok_of(stray) is not None and stray in {x for _, ex in example.all_rows for x in ex}
+    work = (Classwork(example.n, example.practice[0][0], (stray,)), *first.classwork[1:])
+    failed = t4_classwork(replace(first, classwork=work))
+    assert failed.status == FAIL and f"تدريب ليس من صفوفه [{stray}]" in failed.details[0]
+    # عمق بطاقة الخروج من صفوف try والتدريب الصفي وحدها: عمق لا يحمله إلا صف practice ليس منها
+    deep = replace(example, practice=((3, example.practice[0][1]),))
+    period = replace(first, examples=(deep, *first.examples[1:]), exit_ticket=ExitTicket(example.n, 3))
+    assert 3 not in {d for e in period.examples for d, _ in e.rows}
+    assert t7_assessment(period).status == FAIL

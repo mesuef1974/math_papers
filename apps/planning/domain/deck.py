@@ -214,9 +214,8 @@ def _period_example_notes(example: PrepExample) -> tuple[str, ...]:
     if example.representations:
         labels = "، ".join(REPRESENTATION_LABELS.get(r, r) for r in example.representations)
         notes.append(_t("representations_note", labels=labels))
-    depths = sorted({d for d, _ in example.rows})
-    if depths:
-        notes.append(_t("depth_note", depths="، ".join(f"DOK {d}" for d in depths)))
+    if example.max_dok:  # عمق المثال من مصدر التحضير نفسه (هدفه وT2)، فلا يختلفان
+        notes.append(_t("depth_note", depths=f"DOK {example.max_dok}"))
     if example.conceptual:
         notes.append(_t("conceptual_note"))
     return tuple(notes)

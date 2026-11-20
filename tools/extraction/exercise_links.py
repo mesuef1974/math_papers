@@ -10,8 +10,9 @@
 (`method: try`، كل مثال لتدريب سطره)، وإلا فالذي في `exercise_badges.json` له شارة مقروءة (`method: badges`: كل تدريب لمثال
 شارته لا لكل أمثلة الصفحة)، وإلا فالتجاور (`method: adjacency`).
 الدرس المأخوذ من «حاول أن تحل» وله شارة مقروءة يحمل بجانب صفوفه غلافًا ثانيًا `practice` بالمخطط نفسه من الشارات
-(`method: badges`، بلا ما أخذته صفوف try): تمارين قسم «تمارين» لكل مثال، ومنها أمثلة بلا سطر مقروء. حالته `review` وتُعتمد
-وحدها بتصحيح مساره `[lessons, <الدرس>, practice]`؛ تصحيح صفوف الدرس يُبقيه.
+(`method: badges`): تمارين قسم «تمارين» لكل مثال، ومنها أمثلة بلا سطر مقروء. صفوف الشارات فيه كما قُرئت: تمرين في صفوف
+try الخام لا يُحذف منه هنا، فالتصحيح قد يُخرجه من صفوف try؛ الكاتب (`book_numbers.practice_groups`) يحذف ما في صفوف try
+النهائية. حالته `review` وتُعتمد وحدها بتصحيح مساره `[lessons, <الدرس>, practice]`؛ تصحيح صفوف الدرس يُبقيه.
 """
 
 from __future__ import annotations
@@ -93,12 +94,6 @@ def stage_lessons(book: Book, name: str) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))["lessons"] if path.exists() else {}
 
 
-def practice(badges: list[dict[str, Any]], tried: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """صفوف الشارات بلا أي تدريب أخذه سطر «حاول أن تحل» في الدرس: تمارين قسم «تمارين» لكل مثال، بلا تكرار لما في `tried`."""
-    taken = {x for row in tried for x in row["exercises"]}
-    return [{**row, "exercises": [x for x in row["exercises"] if x not in taken]} for row in badges]
-
-
 def build(book: Book, layout: dict[str, Any], examples: dict[str, Any]) -> dict[str, Any]:
     cfg = fusion_settings(book)
     read = [(method, stage_lessons(book, name), ok) for method, name, ok in READ]
@@ -123,7 +118,7 @@ def build(book: Book, layout: dict[str, Any], examples: dict[str, Any]) -> dict[
             )
             badges = badge_lessons.get(r["id"])
             if method == "try" and exercise_badges.readable(badges):
-                rows = practice(badges["value"], seen["value"])
+                rows = [dict(row) for row in badges["value"]]
                 result["lessons"][r["id"]]["practice"] = field(
                     rows,
                     "derived",
@@ -160,5 +155,6 @@ def summarize(result: dict[str, Any]) -> dict[str, Any]:
             bool(row["exercises"]) for v in ls.values() for row in v.get("practice", {}).get("value", [])
         ),
         "review": [k for k, v in ls.items() if v["status"] == "review"],
+        "practice_review": [k for k, v in ls.items() if v.get("practice", {}).get("status") == "review"],
         "missing": [k for k, v in ls.items() if v["status"] == "missing"],
     }

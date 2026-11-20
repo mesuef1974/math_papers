@@ -20,6 +20,7 @@ from .schemas import RANGE
 
 DOK = {"K": 1, "A": 2, "R": 3}
 DEFAULT_DOK = 2
+UNTRIED_DOK = 1  # عمق مثال بلا صف `try` كما يحسبه الفهرس (`max(…, 1)` في التحضير وفحص ملف الوحدة)
 MAX_EXAMPLE = 20  # حد `ExerciseGroupData.example`
 PRACTICE = "practice"  # من `schemas.GROUP_KINDS`؛ صف بلا `kind` نوعه `try`
 _LABEL_RANGE = re.compile(r"^\s*(\d{1,2})(?:\s*[-–]\s*(\d{1,2}))?(?!\d)")
@@ -89,14 +90,20 @@ def guide_numbers(record: Mapping[str, Any], accepted: Iterable[str] = ("ok",)) 
     return out
 
 
-def exercise_groups(
-    links: Iterable[Mapping[str, Any]], doks: Mapping[int, int], examples: set[int]
-) -> list[dict[str, Any]]:
-    """صفوف `exercise_groups` مرتبة بالمثال ثم العمق؛ رابط إلى مثال ليس في الدرس أو بلا تدريبات يُهمل."""
+def _merge_links(links: Iterable[Mapping[str, Any]], examples: set[int]) -> dict[int, set[int]]:
+    """مثال → تمارينه من كل صفوفه؛ رابط إلى مثال ليس في الدرس أو فوق `MAX_EXAMPLE` يُهمل."""
     merged: dict[int, set[int]] = {}
     for row in links:
         if row["example"] in examples and row["example"] <= MAX_EXAMPLE:
             merged.setdefault(row["example"], set()).update(int(x) for x in row["exercises"])
+    return merged
+
+
+def exercise_groups(
+    links: Iterable[Mapping[str, Any]], doks: Mapping[int, int], examples: set[int]
+) -> list[dict[str, Any]]:
+    """صفوف `exercise_groups` مرتبة بالمثال ثم العمق؛ رابط إلى مثال ليس في الدرس أو بلا تدريبات يُهمل."""
+    merged = _merge_links(links, examples)
     groups: list[dict[str, Any]] = []
     for example in sorted(merged):
         by_dok: dict[int, list[int]] = {}
@@ -107,30 +114,24 @@ def exercise_groups(
 
 
 def practice_groups(
-    links: Iterable[Mapping[str, Any]],
-    doks: Mapping[int, int],
-    examples: set[int],
-    tried: Iterable[Mapping[str, Any]],
+    links: Iterable[Mapping[str, Any]], examples: set[int], tried: Iterable[Mapping[str, Any]]
 ) -> list[dict[str, Any]]:
     """صفوف `kind: "practice"` (تمارين قسم «تمارين» لكل مثال)، صف لكل مثال مرتبة بالمثال، بلا أي تمرين في صفوف `tried`.
 
-    عمق الصف عمق مثاله: أعلى عمق في صفوف `tried` للمثال (وهي من القوالب)، والمثال بلا صف فيها أعلى عمق لتمارينه هذه في
-    القوالب. فلا يغيّر الصف عمق مثال له «حاول أن تحل».
+    الصف لا يغيّر عمق أي مثال: عمقه أعلى عمق في صفوف `tried` للمثال (وهي من القوالب)، والمثال بلا صف فيها عمقه كما
+    يحسبه الفهرس بلا صفوف (`UNTRIED_DOK`)، لا عمق تمارينه هذه في القوالب.
     """
+    tried = list(tried)
     taken = {x for row in tried for x in row["exercises"]}
     depth: dict[int, int] = {}
     for row in tried:
         depth[row["example"]] = max(depth.get(row["example"], 0), row["dok"])
-    merged: dict[int, set[int]] = {}
-    for row in links:
-        if row["example"] in examples and row["example"] <= MAX_EXAMPLE:
-            merged.setdefault(row["example"], set()).update(int(x) for x in row["exercises"])
     groups = []
-    for example in sorted(merged):
-        numbers = sorted(merged[example] - taken)
-        if numbers:
-            dok = depth.get(example) or max(doks.get(x, DEFAULT_DOK) for x in numbers)
-            groups.append({"example": example, "dok": dok, "exercises": numbers, "kind": PRACTICE})
+    for example, numbers in sorted(_merge_links(links, examples).items()):
+        rest = sorted(numbers - taken)
+        if rest:
+            dok = depth.get(example, UNTRIED_DOK)
+            groups.append({"example": example, "dok": dok, "exercises": rest, "kind": PRACTICE})
     return groups
 
 
@@ -159,8 +160,9 @@ def annotate(
     مجموعة يترك `exercise_groups` كما كانت. المفتاح الجديد `exercise_groups` يوضع قبل `examples`. `numbers`: من `GUIDE_FIELDS`
     (ما غاب يبقى كما كان)، ومكانها بعد `standards` (أو `lesson`) بترتيب `GUIDE_FIELDS` دائمًا. لا يُمسّ حقل غير هذه.
     `practice`: صفوف `{example, exercises}` لتمارين قسم «تمارين»، تُكتب بعد صفوف `links` صفوفًا بـ `kind: "practice"`
-    (`practice_groups`)؛ وNone أو ما لا ينتج صفًّا يُبقي صفوف `practice` التي في الملف (بعمق أمثلتها الحالي وبلا ما صار في
-    صفوف `links`)، كما تبقى صفوف `links` التي في الملف حين لا يأتي غير `practice`.
+    (`practice_groups`) ولو لم تنتج صفًّا: القائمة الفارغة تُفرغ صفوف `practice` التي في الملف. وNone وحده يُبقي صفوف
+    `practice` التي في الملف (بعمق أمثلتها الحالي وبلا ما صار في صفوف `links`)، كما تبقى صفوف `links` التي في الملف حين لا
+    يأتي غير `practice`.
     """
     unknown = set(numbers or {}) - set(GUIDE_FIELDS)
     if unknown:
@@ -169,7 +171,7 @@ def annotate(
     guide = {k: given[k] for k in GUIDE_FIELDS if k in given}
     anchor = "standards" if "standards" in lesson else "lesson"
     examples = [_with_page(e, pages.get(e["number"])) for e in lesson.get("examples", [])]
-    groups: list[dict[str, Any]] = []
+    groups: list[dict[str, Any]] | None = None  # None: المفتاح يبقى كما كان وفي موضعه
     if links is not None or practice is not None:
         doks = template_doks(lesson.get("templates", []))
         known = {e["number"] for e in examples}
@@ -178,12 +180,9 @@ def annotate(
         tried = (exercise_groups(links, doks, known) if links is not None else []) or [
             row for row in old if row.get("kind") != PRACTICE
         ]
-        extra = (practice_groups(practice, doks, known, tried) if practice is not None else []) or (
-            practice_groups(kept, doks, known, tried)
-        )
-        groups = tried + extra
+        groups = tried + practice_groups(kept if practice is None else practice, known, tried)
         if groups == old:
-            groups = []  # لا جديد: المفتاح يبقى في موضعه
+            groups = None
     out: dict[str, Any] = {}
     for key, value in lesson.items():
         if key in GUIDE_FIELDS:
@@ -192,7 +191,7 @@ def annotate(
             if groups:
                 out["exercise_groups"] = groups
             out[key] = examples
-        elif key != "exercise_groups" or not groups:
+        elif key != "exercise_groups" or groups is None:
             out[key] = value
         if key == anchor:
             out |= guide
