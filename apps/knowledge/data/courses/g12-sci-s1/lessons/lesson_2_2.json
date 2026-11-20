@@ -321,6 +321,50 @@
    "label": ""
   }
  ],
+ "exercise_groups": [
+  {
+   "example": 1,
+   "dok": 1,
+   "exercises": [
+    1
+   ]
+  },
+  {
+   "example": 2,
+   "dok": 2,
+   "exercises": [
+    6
+   ]
+  },
+  {
+   "example": 3,
+   "dok": 2,
+   "exercises": [
+    7
+   ]
+  },
+  {
+   "example": 4,
+   "dok": 2,
+   "exercises": [
+    19
+   ]
+  },
+  {
+   "example": 5,
+   "dok": 2,
+   "exercises": [
+    25
+   ]
+  },
+  {
+   "example": 6,
+   "dok": 2,
+   "exercises": [
+    27
+   ]
+  }
+ ],
  "examples": [
   {
    "number": 1,
