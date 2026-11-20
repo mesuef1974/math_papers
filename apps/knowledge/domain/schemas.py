@@ -17,6 +17,8 @@ from pydantic import (
     model_serializer,
 )
 
+from .exercise_pages import ExercisePages, check_ranges
+
 KINDS = (
     "learning_goal", "guide_step", "prerequisite", "concept_step", "think_question", "struggling",
     "fast_finisher", "follow_up", "study_tip", "caution", "reminder", "guidance", "real_world", "history",
@@ -102,13 +104,31 @@ class ExerciseGroupData(GroupKind):
     exercises: list[int] = Field(min_length=1)
 
 
+REPRESENTATIONS = ("جدول", "بياني", "جبري", "سياق")  # تمثيلات المثال المعدودة (فهرس المقرر ومعايير التحضير)
+_REPRESENTATION_WORDS = {
+    "جدول": ("جدول",),
+    "بياني": ("بياني", "رسم"),
+    "جبري": ("جبري",),
+    "سياق": ("سياق", "تطبيقي"),
+}
+
+
+def representations_in(text: str) -> list[str]:
+    """تمثيلات المثال المعدودة من وصفه بصياغتنا («جبري وبياني (الشكل 3.1.4)»): «تطبيقي» سياق، وما لا يقابله تمثيل يُترك."""
+    return [r for r in REPRESENTATIONS if any(word in text for word in _REPRESENTATION_WORDS[r])]
+
+
 class ExampleData(_Strict):
     number: int = Field(ge=1)
     page: int | None = Field(default=None, ge=1, le=999)  # صفحته المطبوعة في كتاب الطالب إن عُرفت
     skill: Safe = ""
     representation: Safe = ""
-    representations: list[Literal["جدول", "بياني", "جبري", "سياق"]] = Field(default_factory=list)
+    representations: list[Literal[*REPRESENTATIONS]] = Field(default_factory=list)  # type: ignore[valid-type]
     methods: list[Safe] = Field(default_factory=list)
+
+    def model_post_init(self, __context: object) -> None:
+        if not self.representations and self.representation:
+            self.representations = representations_in(self.representation)
 
 
 class TemplateData(_Strict):
@@ -156,6 +176,7 @@ class LessonData(_Strict):
     exercises_total: int | None = Field(default=None, ge=0, le=99)
     vocab_new: int | None = Field(default=None, ge=0)
     vocab_review: int | None = Field(default=None, ge=0)
+    exercise_pages: Annotated[list[ExercisePages], AfterValidator(check_ranges)] = Field(default_factory=list)
     objective: Safe = ""
     rationale: Safe = ""
     motivation: Safe = ""

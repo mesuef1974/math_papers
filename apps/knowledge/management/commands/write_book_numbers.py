@@ -21,11 +21,23 @@ from typing import Any
 from django.core.management.base import BaseCommand, CommandError
 from pydantic import ValidationError
 
-from apps.knowledge.domain.book_numbers import GUIDE_FIELDS, annotate, guide_numbers, template_max
+from apps.knowledge.domain.book_numbers import (
+    GUIDE_FIELDS,
+    annotate,
+    guide_numbers,
+    template_max,
+    with_exercise_pages,
+)
 from apps.knowledge.domain.contract import COURSES_DIR
+from apps.knowledge.domain.exercise_pages import accepted_ranges
 from apps.knowledge.domain.schemas import LessonData
 
-OWNED = ("page", "exercise_groups", *GUIDE_FIELDS)  # ما يكتبه الأمر؛ كل حقل سواه يبقى كما هو
+OWNED = (
+    "page",
+    "exercise_groups",
+    "exercise_pages",
+    *GUIDE_FIELDS,
+)  # ما يكتبه الأمر؛ كل حقل سواه يبقى كما هو
 
 
 def _json(path: Path, what: str) -> Any:
@@ -47,7 +59,11 @@ def _printed(path: Path) -> dict[int, int]:
 
 
 def _without_owned(lesson: dict[str, Any]) -> dict[str, Any]:
-    rest = {k: v for k, v in lesson.items() if k != "exercise_groups" and k not in GUIDE_FIELDS}
+    rest = {
+        k: v
+        for k, v in lesson.items()
+        if k not in ("exercise_groups", "exercise_pages") and k not in GUIDE_FIELDS
+    }
     rest["examples"] = [{k: v for k, v in e.items() if k != "page"} for e in lesson.get("examples", [])]
     return rest
 
@@ -61,6 +77,10 @@ class Command(BaseCommand):
         parser.add_argument("--examples", help="الافتراضي examples.json تحت المصدر")
         parser.add_argument("--printed-pages", help="الافتراضي printed_pages.json تحت المصدر")
         parser.add_argument("--links", help="الافتراضي exercise_links.json تحت المصدر إن وُجد")
+        parser.add_argument(
+            "--exercise-pages",
+            help="الافتراضي exercise_pages.json تحت المصدر إن وُجد (صفحات التمارين المطبوعة)",
+        )
         parser.add_argument("--records", help="مجلد سجلات مرحلة lesson؛ الافتراضي lessons تحت المصدر إن وُجد")
         parser.add_argument("--courses-dir", default=str(COURSES_DIR), help="جذر مجلدات المقررات")
         parser.add_argument(
@@ -82,6 +102,7 @@ class Command(BaseCommand):
         examples=None,
         printed_pages=None,
         links=None,
+        exercise_pages=None,
         records=None,
         courses_dir=None,
         include_review=False,
@@ -92,18 +113,21 @@ class Command(BaseCommand):
         files = sorted((Path(courses_dir or COURSES_DIR) / course / "lessons").glob("lesson_*.json"))
         if not files:
             raise CommandError(f"لا ملفات دروس بصياغتنا للمقرر {course}")
-        starts, printed, linked = {}, {}, {}
+        starts, printed, linked, exercise_paged = {}, {}, {}, {}
         if not guide_only:
             starts = _json(Path(examples) if examples else source / "examples.json", "ملف الأمثلة")["lessons"]
             printed = _printed(Path(printed_pages) if printed_pages else source / "printed_pages.json")
             links_path = Path(links) if links else source / "exercise_links.json"
             linked = _json(links_path, "ملف الروابط")["lessons"] if links or links_path.is_file() else {}
+            pages_path = Path(exercise_pages) if exercise_pages else source / "exercise_pages.json"
+            if exercise_pages or pages_path.is_file():
+                exercise_paged = _json(pages_path, "ملف صفحات التمارين")["lessons"]
         accepted = ("ok", "review") if include_review else ("ok",)
         records_dir = Path(records) if records else source / "lessons"
         if records and not records_dir.is_dir():
             raise CommandError(f"مجلد سجلات الدروس غير موجود: {records_dir}")
 
-        changed, pages, groups, held = [], 0, 0, []
+        changed, pages, groups, held, paged_lessons = [], 0, 0, [], 0
         guide_counts, contradicted = dict.fromkeys(GUIDE_FIELDS, 0), []
         for path in files:
             lesson = _json(path, "ملف الدرس")
@@ -131,7 +155,12 @@ class Command(BaseCommand):
             witness = template_max(lesson.get("templates", []))
             if witness and numbers.get("exercises_total", witness) != witness:
                 contradicted.append(f"{code} ({numbers.pop('exercises_total')}≠{witness})")
-            updated = annotate(lesson, known, rows, numbers, practice)
+            paged = exercise_paged.get(code)
+            if paged and paged.get("status") == "review" and not include_review:
+                held.append(f"{code} (exercise_pages)")
+            updated = with_exercise_pages(
+                annotate(lesson, known, rows, numbers, practice), accepted_ranges(paged, accepted)
+            )
             if _without_owned(updated) != _without_owned(lesson):  # حارس: لا حقل غير المملوكين يتغير
                 raise CommandError(f"تغيّر حقل غير {OWNED} في {path.name}")
             try:
@@ -140,6 +169,7 @@ class Command(BaseCommand):
                 raise CommandError(f"{path.name}: {error}") from error
             pages += sum(e.get("page") is not None for e in updated.get("examples", []))
             groups += len(updated.get("exercise_groups", []))
+            paged_lessons += bool(updated.get("exercise_pages"))
             for key in GUIDE_FIELDS:
                 guide_counts[key] += updated.get(key) not in (None, "", [])
             if json.dumps(updated, ensure_ascii=False) != json.dumps(lesson, ensure_ascii=False):
@@ -148,7 +178,8 @@ class Command(BaseCommand):
                 changed.append(code)
         self.stdout.write(
             f"{course}: {len(files)} درسًا، أمثلة بصفحة {pages}، مجموعات تدريبات {groups}، "
-            f"تغيّر {len(changed)} ملفًا" + (f"، روابط تنتظر المراجعة: {', '.join(held)}" if held else "")
+            f"دروس بصفحات تمارين {paged_lessons}، تغيّر {len(changed)} ملفًا"
+            + (f"، روابط تنتظر المراجعة: {', '.join(held)}" if held else "")
         )
         self.stdout.write(
             "أرقام الدليل (دروس فيها الحقل): "

@@ -11,13 +11,20 @@
    القراءة: سطر «حاول أن تحل» المنسوب إليه (`try`) أو غير المقروء رقمه (`try_unread`) أو سطر «مثال» التالي (`label`)، وإلا
    عند علامة التمارين (`stop`: `end_patterns`، الافتراضي `markers.exercises` سطرًا وحده) أو نهاية الدرس (`lesson`). عناوين
    «مثال» الزائدة عن العدد المتوقع في آخر الدرس بلا سطر «حاول أن تحل» تُسقط (عناوين في صفحات التمارين).
+   سطر «مثال» نوعان يُصحَّحان قبل العدّ، بقياس أسطر «مثال» المقروءة في الكتاب كله: كلمة «مثال N» داخل سطر من المتن صندوقها
+   بارتفاع خط المتن لا الشارة، فما قصر عن `label_height` من وسيط ارتفاع أسطر «مثال» ليس عنوانًا (`inline`). والشارة التي
+   لم يكشفها OCR الصفحة (لا صندوق لها) تُستردّ حيث يدل الترتيب على فواتها وحده: سطر «حاول أن تحل» لم يسبقه سطر «مثال» منذ
+   سطر «حاول أن تحل» الذي قبله أو منذ أول الدرس؛ فيُبحث بينهما، في مواضع الشارة الأفقية (`label_bands`)، عن كتلة حبر
+   بارتفاع الشارة (`recover.height`) لا يغطيها صندوق، وتُقرأ بالتعرّف وحده، ولا تُعتمد إلا إن قُرئت «مثال» (`recovered`).
 4. العدد المتوقع لكل درس من `lessons/lesson_*.json` للمقرر `course`؛ الدرس الذي يخالفه `review` ولا تُكتب مقاطعه.
 5. القصّ بعرض العمود من سطر «مثال» حتى ما قبل نهايته، وما في عمود أو صفحة تالية تتمة (`_cont`). الحواف تُضبط على الحبر من
    تصيير رمادي للصفحة (`probe_dpi`): أعلى المقطع أول صف حبر في كتلة سطر «مثال» (شارته)، وأسفله ما قبل كتلة سطر النهاية، ثم
    يُقصّ البياض حوله. المقطع يُصيَّر من PDF نفسه بـ `clip_dpi` (`student_clips.render_box`) لا من صورة التصيير.
 6. تحقق الرؤية (`vision: true`): لكل مقطع سؤال واحد بمخطط JSON (`CHECK`) عن رقم المثال في أعلاه، وهل يبدأ بعنوانه، وهل
    يُقطع نص أو رسم عند حافته السفلى أو الجانبية (`verdict`). المثال الذي خالف مقطع منه `review` ولا يُكتب ما لم يُدرج اسم
-   المقطع في `approved` بعد مراجعة المالك.
+   المقطع في `approved` بعد مراجعة المالك. حكم «بلا عنوان» على صورة المقطع كلها لا يكفي وحده (سطر العنوان يضيع في
+   صورة المقطع الطويل): يثبت العنوان أيضًا برقم المثال المقروء مطابقًا وسطر «مثال» من صناديق OCR عند أعلى المقطع
+   (`label_top` ضمن `title_top`)، وإلا يُعاد السؤال (`TITLE`) على شريط أعلى المقطع وحده (`title_strip` نقطة بـ `title_dpi`).
 
 المخرجات خارج المستودع: المقاطع في `dirs.<target>` بأسماء `publish_assets` (`NAME`)، وما لم يُعتمد يبقى في `<target>_review`
 للمراجعة، و`student_examples.json` (أرقام وحدها) و`student_try.json` بمخطط `exercise_try.json` (حالته `review` دائمًا، ولا
@@ -32,6 +39,7 @@ import json
 import math
 import os
 import re
+import statistics
 import struct
 from collections.abc import Callable, Sequence
 from contextlib import AbstractContextManager
@@ -41,6 +49,7 @@ from typing import Any
 
 from . import exercise_try, student_clips
 from .config import Book
+from .examples import LABEL_LINE
 from .fusion import settings as fusion_settings
 from .printed_pages import Boxes, pairs
 from .reps import schema
@@ -65,6 +74,9 @@ DEFAULTS: dict[str, Any] = {
     "column_pages": {},
     "gutter": {"band": [0.35, 0.65], "max_cross": 2, "min_fill": 0.25},
     "end_patterns": None,  # أنماط تُطابَق على سطر بعد `text.norm`
+    "label_height": 0.75,  # أدنى ارتفاع لسطر «مثال» من وسيط ارتفاع أسطره في الكتاب (0 يعطّله)
+    # استرداد شارة «مثال» بلا صندوق: `ink` ما دونه حبر في صورة الصفحة، و`height` مدى ارتفاع كتلتها من الوسيط نفسه
+    "recover": {"ink": 200, "height": [0.8, 1.5]},
     "probe_dpi": 144,
     "white": 245,  # ما دونه حبر
     "rise": 1.5,  # أقصى صعود (أضعاف ارتفاع السطر) إلى أول صف أبيض فوق سطر «مثال» أو سطر النهاية
@@ -76,6 +88,10 @@ DEFAULTS: dict[str, Any] = {
     "model": "small",
     "vision_dpi": 200,
     "question": None,
+    "title_strip": 60.0,  # نقاط: ارتفاع شريط أعلى المقطع الأول الذي يُعاد عليه سؤال العنوان
+    "title_dpi": 300,
+    "title_top": 12.0,  # نقاط: أقصى بعد لأعلى سطر «مثال» (صندوق OCR) تحت أعلى المقطع ليُعدّ عنوانه
+    "title_question": None,
     "approved": [],
 }
 COLUMNS = ("auto", 1, 2)
@@ -93,6 +109,12 @@ CHECK = schema(
         "cut_side": {"type": "boolean"},
     },
 )
+TITLE_QUESTION = (
+    "هذه صورة الشريط العلوي من مقطع مقصوص من صفحة كتاب رياضيات. title: هل يظهر فيها عنوان «مثال»؟ "
+    "number: الرقم المكتوب بجوار كلمة «مثال» (0 إن لم يوجد)."
+)
+TITLE = schema("clip_title", {"number": {"type": "integer"}, "title": {"type": "boolean"}})
+TOP = "top_"  # بادئة صورة الشريط العلوي في مجلد صور الرؤية
 PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
 
 Ask = Callable[[Path, str, dict[str, Any]], dict[str, Any]]
@@ -126,8 +148,13 @@ def settings(book: Book) -> dict[str, Any]:
     cfg = book.get("student_examples", {}) or {}
     out = {**DEFAULTS, **cfg}
     out["gutter"] = {**DEFAULTS["gutter"], **(cfg.get("gutter") or {})}
+    out["recover"] = {**DEFAULTS["recover"], **(cfg.get("recover") or {})}
     out["column_pages"] = {int(k): int(v) for k, v in (cfg.get("column_pages") or {}).items()}
     return out
+
+
+def _is_map(value: Any) -> bool:
+    return value is None or isinstance(value, dict)
 
 
 def errors(cfg: dict[str, Any]) -> list[str]:
@@ -138,7 +165,7 @@ def errors(cfg: dict[str, Any]) -> list[str]:
     if not isinstance(node, dict):
         return ["student_examples يجب أن يكون خريطة"]
     errs: list[str] = []
-    for key in ("ocr_dpi", "clip_dpi", "vision_dpi", "probe_dpi"):
+    for key in ("ocr_dpi", "clip_dpi", "vision_dpi", "probe_dpi", "title_dpi"):
         value = node.get(key, DEFAULTS[key])
         if not isinstance(value, int) or isinstance(value, bool) or value < 36:
             errs.append(f"student_examples.{key} عدد صحيح 36 فأكثر")
@@ -154,6 +181,21 @@ def errors(cfg: dict[str, Any]) -> list[str]:
             isinstance(value, list) and len(value) == size and all(isinstance(v, int | float) for v in value)
         ):
             errs.append(f"student_examples.{key} قائمة من {size} كسور")
+    for key in ("title_strip", "title_top"):
+        value = node.get(key, DEFAULTS[key])
+        if not isinstance(value, int | float) or isinstance(value, bool) or value <= 0:
+            errs.append(f"student_examples.{key} عدد موجب من النقاط")
+    floor = node.get("label_height", DEFAULTS["label_height"])
+    if not isinstance(floor, int | float) or isinstance(floor, bool) or not 0 <= floor <= 1:
+        errs.append("student_examples.label_height كسر بين 0 و1")
+    recover = {**DEFAULTS["recover"], **(node.get("recover") or {})} if _is_map(node.get("recover")) else None
+    if recover is None or not (
+        isinstance(recover["ink"], int)
+        and isinstance(recover["height"], list)
+        and len(recover["height"]) == 2
+        and all(isinstance(v, int | float) for v in recover["height"])
+    ):
+        errs.append("student_examples.recover: ink عدد صحيح وheight قائمة من كسرين")
     if not isinstance(node.get("approved", []), list):
         errs.append("student_examples.approved قائمة أسماء مقاطع")
     if not isinstance(node.get("vision", True), bool):
@@ -377,6 +419,130 @@ def lesson_columns(
     return columns, raw, end
 
 
+RawSlot = tuple[int, int, list[RawEvent]]  # (العمود بترتيب القراءة، صفحة الملف، أحداثه من الأعلى)
+
+
+def label_boxes(raw: Sequence[RawSlot]) -> list[list[int]]:
+    return [box for _, _, found in raw for kind, box, _ in found if kind == "label"]
+
+
+def drop_inline(raw: Sequence[RawSlot], floor: float) -> tuple[list[RawSlot], int]:
+    """(الأحداث بلا أسطر «مثال» الأقصر من `floor`، عددها): كلمة «مثال N» داخل سطر من المتن لا عنوان مثال."""
+    kept = [
+        (key, page, [e for e in found if e[0] != "label" or e[1][3] - e[1][1] >= floor])
+        for key, page, found in raw
+    ]
+    return kept, len(label_boxes(raw)) - len(label_boxes(kept))
+
+
+def label_bands(boxes: Sequence[Sequence[int]]) -> list[tuple[int, int]]:
+    """مواضع شارة «مثال» الأفقية في الكتاب [(x0, x1)]: صناديق أسطر «مثال» مجموعةً بحافتها اليمنى (فرق دون ربع عرضها
+    الوسيط)، فلكل جهة صفحة ولكل عمود موضعه."""
+    if not boxes:
+        return []
+    slack = statistics.median(box[2] - box[0] for box in boxes) / 4
+    bands: list[tuple[int, int]] = []
+    for box in sorted(boxes, key=lambda b: b[2]):
+        if bands and box[2] - bands[-1][1] <= slack:
+            bands[-1] = (min(bands[-1][0], box[0]), box[2])
+        else:
+            bands.append((box[0], box[2]))
+    return bands
+
+
+def label_gaps(columns: Sequence[Column], raw: Sequence[RawSlot]) -> list[list[dict[str, Any]]]:
+    """حيث فات سطر «مثال»: أجزاء (`segments`) ما بين كل سطر «حاول أن تحل» لم يسبقه سطر «مثال» وبين الحدث الذي قبله
+    (سطر «حاول أن تحل» آخر، أو أول الدرس)."""
+    out = []
+    last: tuple[int, str, list[int]] | None = None
+    for key, _, found in raw:
+        for kind, box, _ in found:
+            if kind == "try" and (last is None or last[1] == "try"):
+                start = (0, columns[0].top) if last is None else (last[0], float(last[2][3]))
+                out.append(segments(columns, start, (key, float(box[1]))))
+            last = (key, kind, box)
+    return out
+
+
+def unboxed_labels(
+    image: Any,
+    boxes: Boxes,
+    band: tuple[int, int],
+    span: tuple[float, float],
+    height: float,
+    read: exercise_try.Ocr,
+    cfg: dict[str, Any],
+) -> list[list[int]]:
+    """صناديق شارات «مثال» التي لم يكشفها OCR الصفحة، في النطاق الأفقي `band` بين الصفين `span` من صورتها (Pillow):
+    كتلة حبر متصلة الصفوف بارتفاع الشارة (`cfg.height` من `height`) لا يقاطعها صندوق مقروء، وقراءتها بالتعرّف «مثال»."""
+    x0, x1 = band
+    top, bottom = max(int(span[0]), 0), math.ceil(span[1])
+    if bottom <= top:
+        return []
+    ink = cfg["ink"]
+    strip = image.crop((x0, top, x1, bottom)).convert("L").point(lambda v: 255 * (v < ink))
+    low, high = (k * height for k in cfg["height"])
+    label = re.compile(LABEL_LINE)
+    out: list[list[int]] = []
+    start = None
+    for row, inked in enumerate([*strip.getprojection()[1], 0]):
+        if inked and start is None:
+            start = row
+        elif not inked and start is not None:
+            y0, y1, start = top + start, top + row, None
+            if not low <= y1 - y0 <= high:
+                continue
+            if any(b[1] < y1 and b[3] > y0 and b[0] < x1 and b[2] > x0 for _, b in boxes):
+                continue
+            left, _, right, _ = strip.crop((0, y0 - top, x1 - x0, y1 - top)).getbbox()
+            pad = max(2, (y1 - y0) // 12)
+            text, _ = read(image.crop((x0 + left - pad, y0 - pad, x0 + right + pad, y1 + pad)))
+            if label.match(norm(text or "")):
+                out.append([x0 + left, y0, x0 + right, y1])
+    return out
+
+
+def recover_labels(
+    columns: Sequence[Column],
+    raw: Sequence[RawSlot],
+    bands: Sequence[tuple[int, int]],
+    height: float,
+    boxes_of: Callable[[int], Boxes | None],
+    image_of: Callable[[int], Any],
+    read: exercise_try.Ocr,
+    cfg: dict[str, Any],
+) -> tuple[list[RawSlot], int]:
+    """(الأحداث ومعها أسطر «مثال» المستردّة في مواضعها، عددها): لكل موضع فات فيه سطر «مثال» (`label_gaps`) شاراته التي
+    لا صندوق لها (`unboxed_labels`) في كل موضع أفقي للشارة داخل العمود. بلا صورة للصفحة لا استرداد."""
+    extra: dict[int, list[list[int]]] = {}
+    for gap in label_gaps(columns, raw) if bands and height else []:
+        for part in gap:
+            column = columns[part["column"]]
+            image = image_of(column.page)
+            if image is None:
+                continue
+            boxes = boxes_of(column.page) or []
+            mine = extra.setdefault(part["column"], [])
+            for band in bands:
+                if not (column.x0 <= band[0] and band[1] <= column.x1):
+                    continue
+                for box in unboxed_labels(image, boxes, band, (part["y0"], part["y1"]), height, read, cfg):
+                    if not any(b[1] < box[3] and b[3] > box[1] for b in mine):  # الشارة نفسها بموضعين أفقيين
+                        mine.append(box)
+    out = [
+        (
+            key,
+            page,
+            sorted(
+                [*found, *(("label", box, "") for box in extra.get(key, []))],
+                key=lambda e: (e[1][1], -e[1][2]),
+            ),
+        )
+        for key, page, found in raw
+    ]
+    return out, sum(len(found) for found in extra.values())
+
+
 def segments(
     columns: Sequence[Column], start: tuple[int, float], stop: tuple[int, float]
 ) -> list[dict[str, Any]]:
@@ -449,8 +615,19 @@ def scan(
     inverse = {printed: page for page, printed in student_table.items()}
     lessons: dict[str, Any] = {}
     tried: dict[str, Any] = {"book": book.id, "lessons": {}}
+    located = []
     for r in layout["lessons"]:
         pages, printed, missing = lesson_pages(r["pages_pdf"], guide_table, inverse)
+        found = None
+        if pages is not None:
+            found = lesson_columns(pages, boxes_of, size_of, cfg, try_cfg["marker"], stops)
+        located.append((r, pages, printed, missing, found))
+    # مقياس سطر «مثال» من أسطره المقروءة في الكتاب كله: ارتفاعه الوسيط، ومواضع شارته الأفقية
+    read_labels = [box for *_, found in located if found for box in label_boxes(found[1])]
+    height = float(statistics.median(box[3] - box[1] for box in read_labels)) if read_labels else 0.0
+    floor = cfg["label_height"] * height
+    bands = label_bands([box for box in read_labels if box[3] - box[1] >= floor])
+    for r, pages, printed, missing, found in located:
         lesson: dict[str, Any] = {
             "expected": want.get(r["id"]),
             "found": 0,
@@ -462,14 +639,20 @@ def scan(
             "labels": 0,
             "opened": 0,
             "dropped": 0,
+            "inline": 0,
+            "recovered": 0,
         }
         lessons[r["id"]] = lesson
         events: list[exercise_try.Slot] = []
         fallback = 0
-        if pages is None:
+        if found is None:
             lesson["reasons"].append("pages")
         else:
-            columns, raw, end = lesson_columns(pages, boxes_of, size_of, cfg, try_cfg["marker"], stops)
+            columns, raw, end = found
+            raw, lesson["inline"] = drop_inline(raw, floor)
+            raw, lesson["recovered"] = recover_labels(
+                columns, raw, bands, height, boxes_of, image_of, read, cfg["recover"]
+            )
             events, fallback = exercise_try.read_events(raw, image_of, read, cap, try_cfg)
             examples = plan(columns, events, end)
             while lesson["expected"] is not None and len(examples) > lesson["expected"]:
@@ -496,11 +679,32 @@ def scan(
 
 
 # ───── تحقق الرؤية والمقارنة (نقي) ─────
+def top_reading(answer: dict[str, Any]) -> dict[str, Any] | None:
+    """جواب سؤال الشريط العلوي (`TITLE`) رقمًا ومنطقيًا وحدهما، أو None لجواب غير صالح."""
+    try:
+        return {"number": int(answer["number"]), "title": bool(answer["title"])}
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def anchored(gap: float | None, limit: float, margin: float) -> bool:
+    """هل سطر «مثال» من صناديق OCR عند أعلى المقطع؟ `gap` بُعد أعلى صندوقه تحت أعلى المقطع بالنقاط (None: المقطع لا
+    يبدأ بجزء سطر «مثال»)؛ والسطر الذي فوق أعلى المقطع بأكثر من هامشه ليس فيه."""
+    return gap is not None and -margin <= gap <= limit
+
+
 def verdict(
-    answer: dict[str, Any], example: int, first: bool, last: bool
+    answer: dict[str, Any],
+    example: int,
+    first: bool,
+    last: bool,
+    anchored: bool = False,
+    top: dict[str, Any] | None = None,
 ) -> tuple[dict[str, Any] | None, list[str]]:
     """(جواب النموذج أرقامًا ومنطقيات وحدها، مخالفاته). المقطع الأول يلزمه عنوان المثال ورقمه إن قُرئ (0: لم يُقرأ)،
-    والأخير ألّا يُقطع أسفله (ما قبله ينتهي بنهاية العمود قصدًا)، وكلها ألّا تُقطع جانبًا. جواب غير صالح `no_answer`."""
+    والأخير ألّا يُقطع أسفله (ما قبله ينتهي بنهاية العمود قصدًا)، وكلها ألّا تُقطع جانبًا. جواب غير صالح `no_answer`.
+    العنوان يثبت بجواب الصورة كلها، أو بجواب شريطها العلوي `top` (`top_reading`)، أو برقم المثال المقروء مطابقًا وسطر
+    «مثال» من صناديق OCR عند أعلى المقطع (`anchored`). والرقم المقروء من الشريط، إن قُرئ، يتقدّم على رقم الصورة كلها."""
     try:
         seen = {
             "number": int(answer["number"]),
@@ -510,10 +714,12 @@ def verdict(
         }
     except (KeyError, TypeError, ValueError):
         return None, ["no_answer"]
+    number = top["number"] if top and top["number"] else seen["number"]
+    titled = seen["title"] or bool(top and top["title"]) or (anchored and number == example)
     problems = []
-    if first and not seen["title"]:
+    if first and not titled:
         problems.append("title")
-    if first and seen["number"] not in (0, example):
+    if first and number not in (0, example):
         problems.append("number")
     if last and seen["cut_bottom"]:
         problems.append("cut_bottom")
@@ -643,6 +849,8 @@ def _lesson_report(lesson: dict[str, Any]) -> dict[str, Any]:
         "labels": lesson["labels"],
         "opened": lesson["opened"],
         "dropped": lesson["dropped"],
+        "inline": lesson["inline"],
+        "recovered": lesson["recovered"],
         "two_column_pages": sorted({c.page for c in columns if c.index}),
         "examples": [
             {
@@ -686,6 +894,7 @@ def cut(
     for old in (*staging.glob("*.png"), *probes.glob("*.png")):
         old.unlink()
     question = cfg["question"] or QUESTION
+    title_question = cfg["title_question"] or TITLE_QUESTION
     render_cfg = {"scan_cover": cfg["scan_cover"], "vector_dpi": cfg["clip_dpi"]}
     clips: list[dict[str, Any]] = []
     with pymupdf.open(student_clips.student_pdf(book)) as doc:
@@ -694,13 +903,20 @@ def cut(
             if lesson["status"] != "ok":
                 continue
             columns: list[Column] = lesson["columns"]
-            made: list[tuple[dict[str, Any], str, Column, student_clips.Box, bool]] = []
+            made: list[tuple[dict[str, Any], str, Column, student_clips.Box, bool, bool]] = []
             for item in lesson["examples"]:
-                parts = [
-                    (columns[part["column"]], box)
+                kept = [
+                    (part, columns[part["column"]], box)
                     for part in item["segments"]
                     if (box := ink.refine(columns[part["column"]], item, part)) is not None
                 ]
+                parts = [(column, box) for _, column, box in kept]
+                # أول مقطع هو جزء سطر «مثال» نفسه، لا تتمة بقيت بعد سقوط جزئه بلا حبر
+                labeled = (
+                    bool(kept)
+                    and kept[0][0] is item["segments"][0]
+                    and kept[0][0]["column"] == item["columns"][0]
+                )
                 names = [
                     clip_name(lesson_id, item["example"], column.printed, cont=j > 0)
                     for j, (column, _) in enumerate(parts)
@@ -712,21 +928,30 @@ def cut(
                 if any(NAME.match(name) is None for name in names):
                     lesson["reasons"].append("name")
                 made += [
-                    (item, name, column, box, j == len(parts) - 1)
+                    (item, name, column, box, j == len(parts) - 1, labeled and j == 0)
                     for j, (name, (column, box)) in enumerate(zip(names, parts, strict=True))
                 ]
             if lesson["reasons"]:
                 lesson["reasons"] = sorted(set(lesson["reasons"]))
                 lesson["status"] = "review"
                 continue
-            for item, name, column, box, last in made:
+            for item, name, column, box, last, labeled in made:
                 rendered = student_clips.render_box(doc, column.page, box, render_cfg)
                 (staging / name).write_bytes(rendered.pop("png"))
+                page = doc[column.page - 1]
+                label_top = None
+                if labeled:  # بُعد أعلى سطر «مثال» (صندوق OCR) تحت أعلى المقطع، بالنقاط
+                    scale = page.rect.width / column.width
+                    label_top = round(item["label"][1] * scale + page.rect.y0 - box[1], 1)
                 if asking is not None:
-                    page = doc[column.page - 1]
                     page.get_pixmap(dpi=cfg["vision_dpi"], clip=pymupdf.Rect(*box), alpha=False).save(
                         probes / name
                     )
+                    if not name.endswith("_cont.png"):
+                        strip = pymupdf.Rect(box[0], box[1], box[2], min(box[3], box[1] + cfg["title_strip"]))
+                        page.get_pixmap(dpi=cfg["title_dpi"], clip=strip, alpha=False).save(
+                            probes / f"{TOP}{name}"
+                        )
                 clips.append(
                     {
                         "file": name,
@@ -740,7 +965,9 @@ def cut(
                         "box": [round(v, 1) for v in box],
                         **rendered,
                         "end": item["end"],
+                        "label_top": label_top,
                         "vision": None,
+                        "top": None,
                         "problems": [],
                         "status": "ok",
                     }
@@ -749,9 +976,18 @@ def cut(
         with asking() as ask:
             for clip in clips:
                 answer = ask(probes / clip["file"], question, CHECK)
-                clip["vision"], clip["problems"] = verdict(
-                    answer, clip["example"], first=not clip["cont"], last=clip["last"]
-                )
+                place = {
+                    "first": not clip["cont"],
+                    "last": clip["last"],
+                    "anchored": anchored(clip["label_top"], cfg["title_top"], cfg["margin"]),
+                }
+                clip["vision"], clip["problems"] = verdict(answer, clip["example"], **place)
+                if place["first"] and {"title", "number"} & set(clip["problems"]):
+                    # حكم صورة المقطع كلها لا يكفي: يُعاد السؤال على شريطها العلوي بدقته
+                    clip["top"] = top_reading(ask(probes / f"{TOP}{clip['file']}", title_question, TITLE))
+                    clip["vision"], clip["problems"] = verdict(
+                        answer, clip["example"], **place, top=clip["top"]
+                    )
     approved = set(cfg["approved"])
     examples: dict[tuple[str, int], list[dict[str, Any]]] = {}
     for clip in clips:

@@ -196,3 +196,19 @@ def annotate(
         if key == anchor:
             out |= guide
     return out
+
+
+def with_exercise_pages(lesson: Mapping[str, Any], ranges: list[dict[str, int]] | None) -> dict[str, Any]:
+    """نسخة من ملف الدرس بـ `exercise_pages` (مديات `{first, last, page}`)؛ None يتركه كما كان. المفتاح الجديد قبل
+    `examples` (وإلا آخر الملف)، والموجود يبقى في موضعه فالتشغيل الثاني لا يحرّك مفتاحًا."""
+    if ranges is None or lesson.get("exercise_pages") == ranges:
+        return dict(lesson)
+    if "exercise_pages" in lesson:
+        return {k: (ranges if k == "exercise_pages" else v) for k, v in lesson.items()}
+    out: dict[str, Any] = {}
+    for key, value in lesson.items():
+        if key == "examples":
+            out["exercise_pages"] = ranges
+        out[key] = value
+    out.setdefault("exercise_pages", ranges)
+    return out

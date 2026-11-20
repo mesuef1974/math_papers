@@ -23,11 +23,27 @@ from apps.knowledge.domain.contract import (
     read_course_dir,
 )
 from apps.knowledge.domain.course_index import build_index
+from apps.knowledge.domain.exercise_pages import accepted_ranges
 from apps.knowledge.domain.schemas import lesson_sort_key
 
 META_OPTIONS = ("title", "grade", "semester", "academic_year", "track", "edition", "language")
 REQUIRED_FOR_NEW = ("title", "grade", "semester", "academic_year")
 PRINTED_PAGES = "printed_pages.json"
+EXERCISE_PAGES = "exercise_pages.json"
+
+
+def _exercise_pages(path: Path, accepted: tuple[str, ...], required: bool) -> dict[str, list[dict]]:
+    """درس → مديات صفحات تمارينه المقبولة من مخرج المرحلة؛ غياب الملف غير المطلوب صراحةً لا شيء."""
+    if not path.is_file():
+        if required:
+            raise CommandError(f"ملف صفحات التمارين غير موجود: {path}")
+        return {}
+    try:
+        lessons = json.loads(path.read_text(encoding="utf-8"))["lessons"]
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        raise CommandError(f"ملف صفحات التمارين غير صالح: {path}") from error
+    out = {code: accepted_ranges(record, accepted) for code, record in lessons.items()}
+    return {code: ranges for code, ranges in out.items() if ranges}
 
 
 def _printed_pages(path: Path) -> dict[int, int]:
@@ -61,6 +77,13 @@ class Command(BaseCommand):
             "--printed-pages",
             help="جدول صفحة ملف الدليل → صفحة الطالب المطبوعة (JSON)؛ الافتراضي printed_pages.json تحت المصدر إن وُجد",
         )
+        parser.add_argument(
+            "--exercise-pages",
+            help="صفحات التمارين المطبوعة (مخرج المرحلة)؛ الافتراضي exercise_pages.json تحت المصدر إن وُجد",
+        )
+        parser.add_argument(
+            "--include-review", action="store_true", help="يكتب صفحات التمارين التي حالتها review أيضًا"
+        )
         parser.add_argument("--courses-dir", default=str(COURSES_DIR), help="جذر مجلدات المقررات")
         parser.add_argument("--title", help="عنوان المقرر (لمقرر جديد)")
         parser.add_argument("--grade", type=int, help="الصف (لمقرر جديد)")
@@ -71,10 +94,24 @@ class Command(BaseCommand):
         parser.add_argument("--language", help="لغة الكتاب: ar أو en")
 
     def handle(
-        self, *args, course, source, lessons_dir=None, courses_dir=None, printed_pages=None, **options
+        self,
+        *args,
+        course,
+        source,
+        lessons_dir=None,
+        courses_dir=None,
+        printed_pages=None,
+        exercise_pages=None,
+        include_review=False,
+        **options,
     ):
         folder = Path(lessons_dir) if lessons_dir else Path(source) / "lessons"
         printed = _printed_pages(Path(printed_pages) if printed_pages else Path(source) / PRINTED_PAGES)
+        paged = _exercise_pages(
+            Path(exercise_pages) if exercise_pages else Path(source) / EXERCISE_PAGES,
+            ("ok", "review") if include_review else ("ok",),
+            required=bool(exercise_pages),
+        )
         files = sorted(folder.glob("lesson_*.json"))
         if not files:
             raise CommandError(f"لا ملفات lesson_*.json في {folder}")
@@ -92,7 +129,7 @@ class Command(BaseCommand):
         try:
             meta = CourseMeta(**manifest["course"])
             index = build_index(
-                [json.loads(f.read_text(encoding="utf-8")) for f in files], meta.grade, printed
+                [json.loads(f.read_text(encoding="utf-8")) for f in files], meta.grade, printed, paged
             )
         except ValidationError as error:
             raise CommandError(str(error)) from error

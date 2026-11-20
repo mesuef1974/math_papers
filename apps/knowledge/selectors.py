@@ -11,7 +11,7 @@ from apps.curriculum.courses import GRADE12_SLUG
 from .domain.contract import SCHEMA_VERSION, source_hash, source_slugs
 from .domain.course_index import CourseIndex, LessonIndex
 from .domain.schemas import lesson_sort_key
-from .models import ExerciseGroup, ExerciseTemplate, LessonProfile, Source, WorkedExample
+from .models import ExerciseGroup, ExerciseTemplate, LessonProfile, WorkedExample
 
 
 @dataclass(frozen=True)
@@ -50,12 +50,13 @@ def coverage(course: str = GRADE12_SLUG) -> list[CoverageRow]:
 
 
 def course_index(course: str) -> CourseIndex:
-    """الفهرس المشتق لمقرر من جداوله (ما حمّله المحمِّل الواحد من `index.json`)؛ الجداول مصدر القراءة الوحيد.
+    """فهرس المقرر من جداوله كما حمّلها المحمِّل الواحد، من فهرسه المشتق `index.json` (كالعاشر) أو من دروسه بصياغتنا
+    (كالثاني عشر، قرار المالك 2026-11-20)؛ الجداول مصدر القراءة الوحيد، وما لم تحمله الصياغة من أرقام الدليل فارغ.
 
-    `KeyError` لمقرر لم يُحمَّل أو بلا دروس مستخرجة (معرفته بصياغتنا).
+    `KeyError` لمقرر لم يُحمَّل أو بلا دروس.
     """
-    if not LessonProfile.objects.filter(lesson__course__slug=course, source=Source.EXTRACTED).exists():
-        raise KeyError(f"لا فهرس مشتق محمَّل للمقرر {course}")
+    if not LessonProfile.objects.filter(lesson__course__slug=course).exists():
+        raise KeyError(f"لا فهرس محمَّل للمقرر {course}")
     return course_index_from_tables(course)
 
 
@@ -133,6 +134,7 @@ def course_index_from_tables(course: str) -> CourseIndex:
                 ),
                 "quiz_depths": profile.quiz_depths,
                 "vocabulary": {"new": profile.vocab_new or 0, "review": profile.vocab_review or 0},
+                "exercise_pages": profile.exercise_pages,
             }
         )
     return CourseIndex(lessons=lessons)

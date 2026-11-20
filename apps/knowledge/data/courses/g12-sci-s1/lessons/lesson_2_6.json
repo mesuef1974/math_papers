@@ -277,6 +277,13 @@
  ],
  "exercise_groups": [
   {
+   "example": 1,
+   "dok": 1,
+   "exercises": [
+    1
+   ]
+  },
+  {
    "example": 2,
    "dok": 1,
    "exercises": [

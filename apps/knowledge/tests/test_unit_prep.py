@@ -34,8 +34,9 @@ def _raw() -> dict:
 def test_every_unit_file_matches_its_course_index(loaded_courses):
     courses = [p.name for p in COURSES_DIR.iterdir() if unit_files(p.name)]
     assert GRADE10_SLUG in courses
-    plan = json.loads((COURSES_DIR / GRADE10_SLUG / "term_plan.json").read_text(encoding="utf-8"))
     for course in courses:
+        plan_file = COURSES_DIR / course / "term_plan.json"
+        plan = json.loads(plan_file.read_text(encoding="utf-8")) if plan_file.is_file() else {}
         lessons = course_index(course).lessons
         for unit in unit_files(course):
             data = unit_prep(course, unit)

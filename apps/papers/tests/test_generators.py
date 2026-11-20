@@ -45,8 +45,9 @@ def assert_derivative(c):
 def assert_function(c):
     mpmath.mp.dps = 40
     points = (0.3, 0.7, 1.3) if c.get("positive") else (-0.4, 0.3, 0.7)
+    f = fn(c["f"])
     for point in points:
-        got = mpmath.diff(fn(c["f"]), mpmath.mpf(point), c["order"])
+        got = mpmath.diff(f, mpmath.mpf(point), c["order"])
         want = float(sp.N(c["d"].subs(x, sp.Float(point, 40))))
         assert float(got) == pytest.approx(want, rel=1e-6, abs=TOL)
 
@@ -855,6 +856,182 @@ def assert_transversals(c):
     assert parts == pytest.approx(c["second"]) and sum(c["second"]) == c["total"]
 
 
+def assert_table_limit(c):
+    """غير معرفة عند النقطة (المقام صفر)، وقيم الجهتين القريبة تقترب من النهاية."""
+    assert c["bottom"].subs(x, c["at"]) == 0
+    f = c["top"] / c["bottom"]
+    for h in (sp.Rational(1, 10**4), sp.Rational(-1, 10**4)):
+        assert number(f, c["at"] + h) == pytest.approx(float(c["value"]), abs=1e-3)
+
+
+def side_values(expr, at, side):
+    h = sp.Rational(1, 10**6)
+    return {
+        "-": [number(expr, at - h)],
+        "+": [number(expr, at + h)],
+        "both": [number(expr, at - h), number(expr, at + h)],
+    }[side]
+
+
+def assert_infinite_side(c):
+    """قيم قريبة جدًا من النقطة تكبر بلا حد، وإشاراتها تعيّن +∞ أو −∞ أو عدم الوجود."""
+    values = side_values(c["expr"], c["at"], c["side"])
+    assert all(abs(v) > 1e5 for v in values)
+    signs = {1 if v > 0 else -1 for v in values}
+    expected = NO_LIMIT if len(signs) == 2 else (r"$+\infty$" if signs == {1} else r"$-\infty$")
+    assert c["answer"] == expected
+
+
+def assert_removable(c):
+    """النهاية عند النقطة القابلة للإزالة تساوي القيمة، والقطب الآخر لانهائي."""
+    assert_limit({"expr": c["expr"], "at": c["at"], "value": c["value"]})
+    assert all(abs(v) > 1e5 for v in side_values(c["expr"], c["pole"], "both"))
+
+
+def assert_discontinuities(c):
+    """الأصفار الحقيقية للمقام عدديًا هي النقاط المذكورة، والبسط معرف ومتصل عندها."""
+    roots = sorted(float(r) for r in sp.Poly(c["bottom"], x).nroots() if abs(sp.im(r)) < 1e-12)
+    assert roots == pytest.approx(sorted(c["points"]))
+    assert all(math.isfinite(number(c["top"], p)) for p in c["points"])
+
+
+def assert_implicit_second(c):
+    """y عدديًا من العلاقة قرب النقطة ثم فرق مركزي ثانٍ، مستقل عن الاشتقاق الضمني."""
+    F = sp.lambdify((x, y), c["F"], "mpmath")
+    mpmath.mp.dps = 40
+    p, q = c["point"]
+    assert c["F"].subs({x: p, y: q}) == 0
+    h = mpmath.mpf(10) ** -6
+    near = [mpmath.findroot(lambda v, s=s: F(p + s, v), q) for s in (h, 0, -h)]
+    second = (near[0] - 2 * near[1] + near[2]) / h**2
+    assert float(second) == pytest.approx(float(c["value"]), abs=1e-4)
+
+
+def cell_slopes(graph):
+    """اتجاه المنحنى المرسوم في كل خلية [i, i+1] من −5 إلى 5: +1 أو −1 أو 0."""
+    result = []
+    for i in range(-5, 5):
+        a, b = one(graph, i + 0.3), one(graph, i + 0.7)
+        assert a is not None and b is not None
+        result.append(0 if abs(b - a) < 1e-6 else (1 if b > a else -1))
+    return result
+
+
+def assert_graph_runs(c):
+    """الفترات تُقرأ من الرسم: خلايا متتالية بالاتجاه المسؤول عنه تُدمج في فترة مفتوحة."""
+    want = {"up": 1, "down": -1, "flat": 0}[c["kind"]]
+    slopes, runs, start = cell_slopes(c["graph"]), [], None
+    for i, s in enumerate([*cell_slopes(c["graph"]), None]):
+        if s == want and start is None:
+            start = i - 5
+        elif s != want and start is not None:
+            runs.append((start, i - 5))
+            start = None
+    assert slopes
+    text = "$" + r"\cup".join(f"({a},{b})" for a, b in runs) + "$" if runs else "لا توجد"
+    assert c["answer"] == text
+
+
+def assert_graph_corners(c):
+    """القيم القصوى المحلية عند الرؤوس التي يتغير عندها اتجاه المنحنى المرسوم."""
+    slopes = cell_slopes(c["graph"])
+    found = [
+        i - 4
+        for i, (a, b) in enumerate(zip(slopes, slopes[1:], strict=False))
+        if (a > 0 > b if c["max"] else a < 0 < b)
+    ]
+    assert c["answer"] == (" و".join(f"$x={p}$" for p in found) if found else "لا توجد")
+
+
+def assert_critical_dne(c):
+    """الدالة معرفة عند النقطة، والمشتقة تكبر بلا حد قربها، ولا تنعدم في مكان آخر."""
+    at = c["at"]
+    assert math.isfinite(number(c["f"], at))
+    h, delta = sp.Rational(1, 10**12), sp.Rational(1, 10**9)
+    for side in (1, -1):
+        p = at + side * delta
+        slope = (number(c["f"], p + h) - number(c["f"], p - h)) / (2 * float(h))
+        assert abs(slope) > 300
+    mpmath.mp.dps = 30
+    f = fn(c["f"])
+    for v in samples(at - 6, at + 6, 121):
+        if abs(v - at) > 0.05:
+            assert abs(float(mpmath.diff(f, v))) > 1e-6
+
+
+def assert_monotone_pieces(c):
+    """إشارة المشتقة عدديًا واحدة على جهتي النقطة الخارجة عن المجال، فتُشتق منها الإجابة."""
+    pole = c["pole"]
+    mpmath.mp.dps = 30
+    f = fn(c["f"])
+    signs = {float(mpmath.diff(f, v)) > 0 for v in samples(pole - 8, pole + 8, 161) if abs(v - pole) > 0.05}
+    assert len(signs) == 1
+    assert abs(number(c["f"], pole + sp.Rational(1, 10**6))) > 1e4
+    both = rf"$(-\infty,{pole})$ و$({pole},\infty)$"
+    assert c["answer"] == (both if signs == {c["ask_up"]} else "لا توجد")
+
+
+def assert_extrema(c):
+    """قيم الدالة على شبكة: كل نقطة مصنفة كما يقول الجواب، ولا قيمة قصوى محلية خارج النقاط المذكورة."""
+    f = sp.lambdify(x, c["f"], "math")
+    xs = [p for p, _ in c["points"]]
+    grid = [min(xs) - 4 + 0.25 * i for i in range(int((max(xs) - min(xs) + 8) / 0.25) + 1)]
+    values = [f(v) for v in grid]
+    found = {}
+    for i in range(1, len(grid) - 1):
+        if values[i] > values[i - 1] and values[i] > values[i + 1]:
+            found[round(grid[i], 6)] = "max"
+        elif values[i] < values[i - 1] and values[i] < values[i + 1]:
+            found[round(grid[i], 6)] = "min"
+    for p, kind in c["points"]:
+        assert found.get(float(p), "none") == kind, (p, kind, found)
+    assert set(found) <= {float(p) for p in xs}
+
+
+def assert_absolute_line(c):
+    """قيم على مدى واسع: القيمة المطلوبة أقصى ما تبلغه الدالة، أو الدالة تتجاوز كل حد عند الطرفين."""
+    f = sp.lambdify(x, c["f"], "math")
+    values = [f(v) for v in samples(-6, 6, 12001)]
+    if c["value"] is None:
+        far = [f(-30), f(30)]
+        assert all((v > max(values)) if c["max"] else (v < min(values)) for v in far)
+        assert c["answer"] == "لا توجد"
+    else:
+        best = max(values) if c["max"] else min(values)
+        assert best == pytest.approx(float(c["value"]), abs=1e-6)
+        assert all((f(v) <= best + 1e-9) if c["max"] else (f(v) >= best - 1e-9) for v in (-30, 30, -100, 100))
+
+
+def assert_concave_set(c):
+    """إشارة f'' عدديًا داخل الفترات المذكورة توافق التقعر المطلوب، وخارجها تخالفه."""
+    mpmath.mp.dps = 30
+    low, high = (float(v) for v in c["domain"])
+    bounds = [(max(float(a), low), min(float(b), high)) for a, b in c["intervals"]]
+    edges = [e for pair in bounds for e in pair]
+    f = fn(c["f"])
+    for v in samples(low, high, 241)[1:-1]:
+        if any(abs(v - e) < 0.02 for e in edges):
+            continue
+        d2 = float(mpmath.diff(f, v, 2))
+        if abs(d2) < 1e-9:
+            continue
+        inside = any(a < v < b for a, b in bounds)
+        assert (d2 > 0) == (c["up"] if inside else not c["up"]), v
+
+
+def assert_inflections(c):
+    """f'' تغيّر إشارتها عند كل نقطة مذكورة وحدها، وقيمة الدالة هناك كما في الجواب."""
+    mpmath.mp.dps = 30
+    f = fn(c["f"])
+    d2 = lambda v: float(mpmath.diff(f, v, 2))  # noqa: E731
+    xs = samples(c["around"] - 8, c["around"] + 8, 641)
+    signs = [d2(v) > 0 for v in xs]
+    changes = [round((a + b) / 2) for a, b, s, t in zip(xs, xs[1:], signs, signs[1:], strict=False) if s != t]
+    assert changes == [p for p, _ in c["points"]]
+    for p, height in c["points"]:
+        assert number(c["f"], p) == pytest.approx(float(height))
+
+
 CHECKS = {
     "rational_equation": assert_rational_equation,
     "excluded_values": assert_excluded_values,
@@ -931,6 +1108,19 @@ CHECKS = {
     "one_sided": assert_one_sided,
     "continuity": assert_continuity,
     "average": assert_average,
+    "table_limit": assert_table_limit,
+    "infinite_side": assert_infinite_side,
+    "removable": assert_removable,
+    "discontinuities": assert_discontinuities,
+    "implicit_second": assert_implicit_second,
+    "graph_runs": assert_graph_runs,
+    "graph_corners": assert_graph_corners,
+    "critical_dne": assert_critical_dne,
+    "monotone_pieces": assert_monotone_pieces,
+    "extrema": assert_extrema,
+    "absolute_line": assert_absolute_line,
+    "concave_set": assert_concave_set,
+    "inflections": assert_inflections,
 }
 
 
