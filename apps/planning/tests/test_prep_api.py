@@ -63,8 +63,9 @@ def test_unknown_course_or_period_is_404(teacher_client):
 
 @pytest.mark.django_db
 def test_every_lesson_period_opens_and_downloads_in_the_ministry_template(teacher_client):
-    periods = teacher_client.get(f"{API}/{GRADE10_SLUG}").json()
-    assert len(periods) == 48
+    listed = teacher_client.get(f"{API}/{GRADE10_SLUG}").json()
+    periods = [p for p in listed if p["kind"] == "lesson"]
+    assert len(periods) == 48 and len(listed) - len(periods) == 15  # وحصص غير الدروس (`test_non_lesson.py`)
     assert {p["status"] for p in periods} <= {"pass", "pending", "fail"}
     for period in periods:
         base = f"{API}/{GRADE10_SLUG}/{period['lesson']}/{period['k']}"
@@ -138,7 +139,7 @@ def test_word_carries_teacher_year_and_is_audited(teacher_client):
 @pytest.mark.django_db
 def test_last_period_is_review_and_lesson_quiz(teacher_client):
     periods = teacher_client.get(f"{API}/{GRADE10_SLUG}").json()
-    last = next(p for p in periods if p["k"] == p["n"])
+    last = next(p for p in periods if p["kind"] == "lesson" and p["k"] == p["n"])
     sheet = teacher_client.get(f"{API}/{GRADE10_SLUG}/{last['lesson']}/{last['k']}").json()
     assert [o["example"] for o in sheet["objectives"]] == [None]
     assert "اختبار الدرس" in sheet["objectives"][0]["check_assessment"]
