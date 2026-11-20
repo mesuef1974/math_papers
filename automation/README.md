@@ -40,7 +40,8 @@ python automation/schedule.py remove
 - بلا بطاقة `ready` لا يُستدعى النموذج: التشغيل الدوري لا يستهلك توكنات. الاستهلاك يبدأ حين تضع بطاقة بـ `ledger.py ready`،
   وسقفه `--max-turns` (40)؛ والنموذج الأرخص يُحدَّد بـ `install --model <id>`.
 - الجلسة الآلية تعمل بقائمة صلاحيات صريحة (`ALLOWED_TOOLS`: تعديل الملفات و`python manage.py` و`python -m pytest|ruff`
-  و`python scripts/prepush_check.py` و`pytest` و`ruff` و`npm --prefix frontend` و`git add/commit/status/diff/log`؛ لا `python` مطلق
+  و`python scripts/prepush_check.py` و`pytest` و`ruff` و`npm --prefix frontend` و`git add/commit/status/diff/log`، وبايثون بيئة الاستخراج `GUIDE_EXTRACT_PYTHON` على
+  `-m tools.extraction` و`-m pytest` وحدهما؛ لا `python` مطلق
   ولا `gh`)، ومخرجاتها في `.worktrees/<card>.log`. القائمة تضيّق ولا تعزل (اختبار يكتبه النموذج يشغّل ما يشاء)، فبيئة
   الجلسة نفسها بلا نشر (`model_env`): عنوان الدفع معطَّل لـ git، ورمز `gh` غير صالح يسبق الرمز المخزَّن.
 - ما لا يُدفع يُسجَّل `blocked`: فرع بلا إيداع، أو بتعديلات غير مودَعة، أو يمسّ مسارًا من `merge_gate.ALWAYS_FORBIDDEN`

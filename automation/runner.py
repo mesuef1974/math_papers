@@ -39,6 +39,7 @@ PUSH_DISABLED = "push-disabled://runner-model"
 GH_NO_AUTH = "runner-model-no-auth"
 
 # الجلسة الآلية بلا من يوافق: ما لم يُسمح به هنا يُرفض، فبلا هذه القائمة لا اختبار يُشغَّل ولا إيداع يُكتب.
+GUIDE_EXTRACT_PYTHON = "C:/Users/mesue/.venvs/guide_extract/Scripts/python"  # بيئة OpenCV وpymupdf (`tools/extraction/README.md`)
 ALLOWED_TOOLS = [
     "Read",
     "Edit",
@@ -57,6 +58,9 @@ ALLOWED_TOOLS = [
     "Bash(git log*)",
     "Bash(git add *)",
     "Bash(git commit *)",
+    # خط الاستخراج (`tools/extraction`) ببيئته المحلية: مرحلة المقرر واختباراتها وحدهما، لا بايثون مطلق (قرار المالك 2026-11-20)
+    f"Bash({GUIDE_EXTRACT_PYTHON} -m tools.extraction *)",
+    f"Bash({GUIDE_EXTRACT_PYTHON} -m pytest *)",
 ]
 
 DISALLOWED_TOOLS = [

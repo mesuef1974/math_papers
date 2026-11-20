@@ -267,3 +267,12 @@ def test_scheduled_task_is_hidden_headless_and_single_instance():
     arguments = task.findtext("t:Actions/t:Exec/t:Arguments", namespaces=NS)
     assert arguments.startswith(f'--headless "{python}" "{root}')
     assert arguments.endswith('runner.py" --once --model sonnet')
+
+
+def test_guide_extract_python_is_allowed_only_for_the_pipeline_and_its_tests():
+    extract = [t for t in runner.ALLOWED_TOOLS if runner.GUIDE_EXTRACT_PYTHON in t]
+    assert extract == [
+        f"Bash({runner.GUIDE_EXTRACT_PYTHON} -m tools.extraction *)",
+        f"Bash({runner.GUIDE_EXTRACT_PYTHON} -m pytest *)",
+    ]
+    assert not any(t.startswith("Bash(python *") or t == "Bash(python*)" for t in runner.ALLOWED_TOOLS)
