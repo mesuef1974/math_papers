@@ -38,14 +38,21 @@ def release() -> None:
     gc.collect()
 
 
-def render(book: Book, pages: list[int] | None = None, dpi: int = 220) -> int:
-    """يصيّر الصفحات (الكل افتراضًا) إلى PNG في dirs.render؛ يعيد عدد ما صُيِّر الآن."""
+def render(
+    book: Book,
+    pages: list[int] | None = None,
+    dpi: int = 220,
+    pdf: Path | None = None,
+    out: Path | None = None,
+) -> int:
+    """يصيّر الصفحات (الكل افتراضًا) إلى PNG في dirs.render؛ يعيد عدد ما صُيِّر الآن. `pdf` و`out` لملف آخر ومجلده
+    (كتاب الطالب في `student_ocr`)."""
     import pymupdf
 
-    out = book.dir("render")
+    out = out or book.dir("render")
     out.mkdir(parents=True, exist_ok=True)
     done = 0
-    with pymupdf.open(book.pdf()) as doc:
+    with pymupdf.open(pdf or book.pdf()) as doc:
         for n in pages or range(1, len(doc) + 1):
             target = out / f"{n:04d}.png"
             if not target.exists():
@@ -107,14 +114,18 @@ def run(book: Book, pages: list[int] | None = None) -> int:
     return done
 
 
-def boxes(book: Book, page: int) -> list[tuple[str, list[int]]]:
-    """صناديق الكلمات (نص، [x0, y0, x1, y1]) لصفحة، مخزَّنة في dirs.boxes (افتراضًا opener_boxes)."""
-    folder = book.out / book.cfg["dirs"].get("boxes", "opener_boxes")
-    cache = folder / f"{page:04d}.json"
+def boxes_at(image: Path, cache: Path) -> list[tuple[str, list[int]]]:
+    """صناديق الكلمات (نص، [x0, y0, x1, y1]) لصورة صفحة، مخزَّنة في الملف `cache`: المقروء لا يُعاد."""
     if cache.exists():
         return [(t, b) for t, b in json.loads(cache.read_text(encoding="utf-8"))]
-    texts, bxs = read_page(book.dir("render") / f"{page:04d}.png")
+    texts, bxs = read_page(image)
     got = [(t.strip(), b) for t, b in zip(texts, bxs, strict=True)]
-    folder.mkdir(parents=True, exist_ok=True)
+    cache.parent.mkdir(parents=True, exist_ok=True)
     cache.write_text(json.dumps(got, ensure_ascii=False), encoding="utf-8")
     return got
+
+
+def boxes(book: Book, page: int) -> list[tuple[str, list[int]]]:
+    """صناديق الكلمات لصفحة من الدليل، مخزَّنة في dirs.boxes (افتراضًا opener_boxes)."""
+    folder = book.out / book.cfg["dirs"].get("boxes", "opener_boxes")
+    return boxes_at(book.dir("render") / f"{page:04d}.png", folder / f"{page:04d}.json")

@@ -258,7 +258,7 @@ def profile_from_index(lesson: LessonIndex) -> LessonData:
             for e in lesson.examples
         ],
         exercise_groups=[
-            ExerciseGroupData(example=a.example, dok=a.dok, exercises=list(a.exercises))
+            ExerciseGroupData(example=a.example, dok=a.dok, exercises=list(a.exercises), kind=a.kind)
             for a in lesson.analysis
         ],
         task_basic=lesson.task_guide.basic if lesson.task_guide else "",

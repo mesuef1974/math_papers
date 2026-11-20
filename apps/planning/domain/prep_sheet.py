@@ -15,7 +15,7 @@ from apps.papers.domain.book_source import number_list
 from .non_lesson import NonLessonPrep, PaperLink
 from .prep import PeriodPrep, PrepExample, Recall
 from .prep_checks import BLOCKING, NON_LESSON_BLOCKING, WARNING, CheckResult
-from .strategies import Strategy
+from .strategies import Strategy, with_roles
 
 STAGE_LABELS = {
     "warmup": "التهيئة والمراجعة",
@@ -169,11 +169,15 @@ def _assessment(prep: PeriodPrep, example: PrepExample) -> str:
     return f"فحص تكويني: سؤال مولَّد من مهارة المثال {example.n}"
 
 
-def _objective_rows(prep: PeriodPrep, titles: Mapping[str, str]) -> tuple[ObjectiveRow, ...]:
+def _activity(head: str, strategy: Strategy | None) -> str:
+    """نشاط تعليم وتعلم بدور المعلم ودور الطالب من استراتيجية مرحلته؛ المرحلة بلا استراتيجية نشاطها وصفه وحده."""
+    return with_roles(head, strategy.teacher_role, strategy.student_role) if strategy else head
+
+
+def _objective_rows(prep: PeriodPrep, library: Mapping[str, Strategy]) -> tuple[ObjectiveRow, ...]:
     stages = {s.name: s for s in prep.stages}
-    direct, guided, independent = (
-        titles.get(stages[name].strategy or "", "") for name in ("direct", "guided", "independent")
-    )
+    chosen = {name: library.get(stages[name].strategy or "") for name in ("direct", "guided", "independent")}
+    direct, guided, independent = (s.title if s else "" for s in chosen.values())
     teach_total = stages["direct"].minutes + stages["guided"].minutes
     check_total = stages["independent"].minutes
     if not prep.examples:  # الحصة الأخيرة: التمايز والتقويم واختبار الدرس على أمثلة الدرس كلها
@@ -182,10 +186,16 @@ def _objective_rows(prep: PeriodPrep, titles: Mapping[str, str]) -> tuple[Object
                 example=None,
                 text="مراجعة أمثلة الدرس وحل تدريباتها بمستويين، ثم اختبار الدرس",
                 pending=False,
-                teach_activity=f"مراجعة متمايزة ({direct}): أساسي {number_list(list(prep.basic))}",
-                teach_assessment=f"ممارسة موجهة ({guided}) ومتابعة الأداء في المجموعات",
+                teach_activity=_activity(
+                    f"مراجعة متمايزة ({direct}): أساسي {number_list(list(prep.basic))}", chosen["direct"]
+                ),
+                teach_assessment=_activity(
+                    f"ممارسة موجهة ({guided}) ومتابعة الأداء في المجموعات", chosen["guided"]
+                ),
                 teach_minutes=teach_total,
-                check_activity=f"متقدم {number_list(list(prep.advanced))} ({independent})",
+                check_activity=_activity(
+                    f"متقدم {number_list(list(prep.advanced))} ({independent})", chosen["independent"]
+                ),
                 check_assessment="اختبار الدرس بأعماق " + "، ".join(map(str, prep.quiz))
                 if prep.quiz
                 else "اختبار الدرس",
@@ -206,13 +216,14 @@ def _objective_rows(prep: PeriodPrep, titles: Mapping[str, str]) -> tuple[Object
                 example=example.n,
                 text=text,
                 pending=pending,
-                teach_activity=f"{_example_ref(example)}: {direct}",
-                teach_assessment=f"«جرّب» على المثال {example.n}: {guided}",
+                teach_activity=_activity(f"{_example_ref(example)}: {direct}", chosen["direct"]),
+                teach_assessment=_activity(f"«جرّب» على المثال {example.n}: {guided}", chosen["guided"]),
                 teach_minutes=teach[i],
-                check_activity=(
+                check_activity=_activity(
                     f"تدريب صفي {number_list(list(work.exercises))}: {independent}"
                     if work
-                    else "مناقشة الاشتقاق وتطبيقه"
+                    else "مناقشة الاشتقاق وتطبيقه",
+                    chosen["independent"],
                 ),
                 check_assessment=_assessment(prep, example),
                 check_minutes=check[i],
@@ -221,12 +232,15 @@ def _objective_rows(prep: PeriodPrep, titles: Mapping[str, str]) -> tuple[Object
     return tuple(rows)
 
 
-def _closing(prep: PeriodPrep, title: str) -> str:
+def _closing(prep: PeriodPrep, strategy: Strategy | None) -> str:
+    title = strategy.title if strategy else ""
     if prep.is_last and prep.quiz:
-        return f"{title}: اختبار الدرس وتلخيص أفكاره"
-    if prep.exit_ticket:
-        return f"{title}: بطاقة خروج من مهارة المثال {prep.exit_ticket.example}"
-    return f"{title}: تلخيص أفكار الحصة"
+        head = f"{title}: اختبار الدرس وتلخيص أفكاره"
+    elif prep.exit_ticket:
+        head = f"{title}: بطاقة خروج من مهارة المثال {prep.exit_ticket.example}"
+    else:
+        head = f"{title}: تلخيص أفكار الحصة"
+    return _activity(head, strategy)
 
 
 def _checks(results: Sequence[CheckResult]) -> tuple[CheckRow, ...]:
@@ -281,10 +295,13 @@ def prep_sheet(
         outcomes=_outcomes(prep.standards, standard_texts or {}),
         main_sources="كتاب الطالب: " + "، ".join(pages) if pages else "كتاب الطالب",
         support_sources=SUPPORT_SOURCES,
-        warmup=f"{titles.get(stages['warmup'].strategy or '', '')}: {recall_label(prep.recall)}",
+        warmup=_activity(
+            f"{titles.get(stages['warmup'].strategy or '', '')}: {recall_label(prep.recall)}",
+            library.get(stages["warmup"].strategy or ""),
+        ),
         warmup_minutes=stages["warmup"].minutes,
-        objectives=_objective_rows(prep, titles),
-        closing=_closing(prep, titles.get(stages["closing"].strategy or "", "")),
+        objectives=_objective_rows(prep, library),
+        closing=_closing(prep, library.get(stages["closing"].strategy or "")),
         closing_minutes=stages["closing"].minutes,
         homework=f"تمارين الكتاب {number_list(list(prep.homework))}" if prep.homework else "",
         basic=number_list(list(prep.basic)),

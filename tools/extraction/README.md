@@ -59,7 +59,10 @@ python -m tools.extraction <مجلد الكتاب> all          # layout ثم im
   (`stage: exercise_links`، `path: [lessons, "2.1"]`، والقيمة قائمة الصفوف) فيصير الغلاف `teacher/ok`. التجاور يعطي كل أمثلة
   الصفحة التدريبات نفسها؛ فالربط المقروء يغلبه بهذا الترتيب: درس في `exercise_try.json` له سطر «حاول أن تحل» مربوط تؤخذ صفوفه
   منه (`method: try`)، وإلا درس في `exercise_badges.json` له شارة مقروءة (`method: badges`)، وإلا `method: adjacency`. التصحيح
-  يغلب الثلاثة.
+  يغلب الثلاثة. الدرس المأخوذ من «حاول أن تحل» وله شارة مقروءة يحمل بجانب صفوفه غلافًا ثانيًا `practice` بالمخطط نفسه
+  (`method: badges`): صفوف الشارات بلا ما أخذته صفوف try، أي تمارين قسم «تمارين» لكل مثال، ومنها أمثلة بلا سطر مقروء. حالته
+  `review` (أو `missing`) ويُعتمد وحده بتصحيح مساره `[lessons, "2.1", practice]`؛ تصحيح صفوف الدرس يُبقيه كما هو.
+  `write_book_numbers` يكتب المعتمد منه صفوفًا بـ `kind: "practice"`.
 - `exercise_try` (`exercise_try.py`؛ بيئة guide_extract، وتُشغَّل بالاسم قبل `exercise_links`): للكتاب الذي يختم كل مثال فيه
   بسطر «حاول أن تحل التمرين N» (كالثاني عشر: الإحالة من المثال إلى التدريب، وصفحات التمارين بلا إحالة). تكتب `exercise_try.json`
   بمخطط `exercise_links.json`: في صفحات الدرس (`layout`) وبترتيب الأسطر من الأعلى في صناديق OCR تُعدّ الأمثلة من الأسطر نفسها:
@@ -139,6 +142,63 @@ idempotent ولا يمسّ حقلًا آخر؛ راجع `git diff` بعده ثم
 - `student_decks` شاهدها: قاعدة SQLite مؤقتة وتخزين محلي مؤقت، ثم `migrate` و`load_course --all` و`publish_assets <course>` و
   `build_period_decks <course>`، وتطبع سطره «ناجح N فاشل M» (فشل حصة رمز الخروج 5 بأسبابه). يلزمها `student_clips.course`، و
   `django.python` حين يختلف مفسّر المشروع عن مفسّر بيئة الاستخراج.
+
+## مقاطع الأمثلة من كتاب الطالب مباشرة (`student_ocr.py`، `student_examples.py`)
+
+للكتاب الذي لا مقاطع دليل له تنقلها `student_clips` (الثاني عشر): مرحلتان خارج `all` تُشغَّلان بالاسم ببيئة guide_extract،
+بعد `layout` و`printed_pages` (ومخرج `exercise_try` إن وُجد يُقارَن به). PaddleOCR ونموذج الرؤية لا يجتمعان على كرت 8 غ.ب:
+الأولى كلها PaddleOCR، والثانية تقرأ أرقام «حاول أن تحل» ثم تحرّر PaddleOCR قبل تشغيل خادم الرؤية.
+
+```bash
+python -m tools.extraction <مجلد الكتاب> student_ocr        # تصيير وصناديق وجدول الصفحات المطبوعة
+python -m tools.extraction <مجلد الكتاب> student_examples   # المقاطع وروابط «حاول أن تحل» وتحقق الرؤية
+python manage.py publish_assets <المقرر> --source <مجلد الكتاب>/<dirs.examples_student>
+```
+
+- `student_ocr`: تصيّر صفحات `student_pdf` إلى `dirs.student_render` بدقة `ocr_dpi` (300) وتكتب صناديق كل صفحة إلى
+  `dirs.student_ocr/NNNN.json` بدوالّ `ocr.py` (`render` و`boxes_at`)؛ ما صُيِّر أو قُرئ لا يُعاد (تغيير `ocr_dpi` يلزمه حذف
+  المجلدين). ثم `student_pages.json`: صفحة الملف → رقمها المطبوع بمنطق `printed_pages` نفسه (`tabulate` و`validate`، و`skip`
+  و`set` و`fill` من قسم `student_examples`). الشريط `band`، وبلا قيمة يُجرَّب التذييل (أسفل 12%) والترويسة (أعلى 12%) ويُؤخذ
+  ما يعطي جدولًا متزايدًا تمامًا لأكثر الصفحات (`band` في الملخص: `footer` أو `header` أو `config`). الجدول المرفوض لا يُكتب
+  ورمز الخروج 6. الملخص أعداد: `pages` و`rendered` و`read` و`numbered` و`filled` و`ambiguous` و`table`.
+- `student_examples`، لكل درس في `layout.json`:
+  - صفحاته: صفحات الدليل → المطبوع (`printed_pages.json`) → صفحة ملف الطالب (`student_pages.json`)؛ الغائبة بين جارتين
+    متتابعتين تُقدَّر، وما لا يُعرف يجعل الدرس `review` (`pages`، وأرقامه في `missing_pages`).
+  - ترتيب القراءة: أعمدة من اليمين ثم من الأعلى. العمودان لا يُعتمدان إلا بفاصل رأسي في وسط الصفحة (`gutter.band`) لا يعبره
+    أكثر من `gutter.max_cross` صندوقًا، وأسطر تغطي `gutter.min_fill` من ارتفاع الصفحة في كل جهة، وسطر «مثال» أو «حاول أن
+    تحل» في كل جهة ولا سطر منها يعبر الفاصل (عمودا الخطوات وشرحها داخل مثال واحد ليسا عمودَي صفحة). `columns` (`auto` أو 1
+    أو 2) و`column_pages` (صفحة ملف → 1 أو 2) يثبّتانه.
+  - الأمثلة بقاعدة `exercise_try.assign` نفسها (دالة واحدة للمرحلتين): سطر «مثال» وحده يفتح مثالًا، وينتهي عند أعلى السطر
+    التالي له في ترتيب القراءة، و`end` نوعه: `try` (سطر «حاول أن تحل» المنسوب إليه) أو `try_unread` (سطر لم يُقرأ رقمه) أو
+    `label` (سطر «مثال» التالي) أو `stop` (علامة التمارين: `end_patterns` أنماط تُطابَق على السطر بعد `text.norm`، والافتراضي
+    `markers.exercises` سطرًا وحده، وما بعدها لا يُقرأ) أو `lesson` (نهاية صفحات الدرس). عناوين «مثال» الزائدة عن العدد
+    المتوقع في آخر الدرس بلا سطر «حاول أن تحل» تُسقط (`dropped`).
+  - العدد المتوقع من `lessons/lesson_*.json` للمقرر `course` (كل أمثلته). الدرس الذي يخالفه (`count`)، أو فتح مثالًا فيه
+    سطر «حاول أن تحل» لأن سطر «مثال» فات (`unlabeled`)، أو ليس في المقرر (`expected`)، أو لا حبر في مثال منه (`empty`)، أو
+    تكرر فيه اسم مقطع (`collision`)، `review` ولا تُكتب مقاطعه؛ ومواضع أمثلته في التقرير للتشخيص.
+  - القصّ بعرض العمود من سطر «مثال» حتى ما قبل نهايته، وما في عمود أو صفحة تالية تتمة `_cont`، بين `body` (كسرا أعلى
+    المحتوى وأسفله من ارتفاع الصفحة: ما فوقهما ترويسة وما تحتهما تذييل). الحواف تُضبط على الحبر من تصيير رمادي بـ `probe_dpi`
+    (ما دون `white` حبر): الأعلى أول صف في كتلة حبر سطر «مثال» (شارته؛ يصعد حتى `rise` أضعاف ارتفاعه، وإلا يزيد `pad`)،
+    والأسفل ما قبل كتلة سطر النهاية، ثم يُقصّ البياض ويُترك `margin` نقطتان. الجزء بلا حبر أو الأقصر من `min_height` لا
+    يُكتب. التصيير من PDF نفسه بـ `clip_dpi` (600) بـ `student_clips.render_box` (الصفحة الممسوحة تُقصّ بكسلاتها)، لا من
+    صورة التصيير.
+  - تحقق الرؤية (`vision: true`؛ `llama.py` بالنموذج `model`، وصورة المقطع بـ `vision_dpi`): سؤال واحد لكل مقطع بمخطط
+    JSON (`number` و`title` و`cut_bottom` و`cut_side`). المخالفات: `title` و`number` للمقطع الأول (رقم مقروء يخالف رقم المثال؛
+    0 لم يُقرأ)، و`cut_bottom` للمقطع الأخير من المثال، و`cut_side` لكل مقطع، و`no_answer`. المثال الذي خالف مقطع منه لا
+    يُكتب منه شيء (`sibling` لبقية مقاطعه) وتبقى مقاطعه في `<target>_review` للمراجعة، حتى يُصلَح الإعداد أو يُدرج اسم المقطع
+    المخالف في `approved` بعد مراجعة المالك. `vision: false` يعطّله. تعذّر تشغيل الخادم رمز الخروج 4.
+  - `student_try.json` بمخطط `exercise_try.json` من صناديق الطالب (`exercise_try.read_events` و`link_slots` نفساهما بمواضع
+    الطالب، و`pages` الصفحة المطبوعة لسطر كل مثال)، حالته `review` دائمًا: لا يكتب `corrections.yaml` ولا يغيّر
+    `exercise_links`. ومقارنته بـ `exercise_try.json` الدليل في `try` بالتقرير: لكل درس `agree` و`differ` و`student_only`
+    و`guide_only`، والملخص يطبع لكل درس أعدادها الأربعة و`student_only_reads` (ما قرأه الطالب لأمثلة بلا تدريب في الدليل).
+  - المخرجات: المقاطع في `dirs.<target>` (`examples_student`) بأسماء `publish_assets`
+    (`<درس>_m<مثال>_p<الصفحة المطبوعة>[_cont].png`)، وما بقي فيه من تشغيل سابق لدروس المخطط يُزال. و`student_examples.json`
+    (أرقام وحدها): لكل مقطع `student_page` و`printed_page` و`column` و`box` (نقاط) و`dpi` و`width` و`height` و`end` و`status`
+    (`ok` أو `approved` أو `review`) و`vision` و`problems`؛ والملخص: `lessons` و`expected` و`found` و`clips` و`written`
+    و`review` و`review_lessons` و`review_clips`. ما بقي `review` رمز الخروج 7 بلا ختم.
+- الإعداد: `student_pdf: {dir, pattern}` و`dirs.student_render` و`dirs.student_ocr` و`dirs.examples_student`، وقسم
+  `student_examples`: `course` (مطلوب)، وما سبق اختياري. الاختبارات (`tests/test_student_examples.py`) بصناديق مختلقة وPDF
+  مولَّد ونموذج رؤية مزيَّف.
 
 ## سجل الدرس والمفردات والانحدار (`lesson.py`، `vocabulary.py`، `regression.py`)
 

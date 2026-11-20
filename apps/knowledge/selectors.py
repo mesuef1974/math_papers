@@ -90,9 +90,14 @@ def example_numbers(course: str) -> dict[str, list[int]]:
 
 
 def example_exercises(course: str, lesson: str, number: int) -> list[int]:
-    """أرقام تدريبات الكتاب التي تتدرّب على المثال (جدول «تحليل التمارين» كما حمّله المحمِّل)؛ فارغة إن لم تُعرف."""
+    """أرقام تدريبات الكتاب التي تتدرّب على المثال (جدول «تحليل التمارين» كما حمّله المحمِّل)؛ فارغة إن لم تُعرف.
+
+    صفوف `try` وحدها: تمارين قسم «تمارين» (`practice`) للتحضير، ولا تدخل مصدر الجزء في الأوراق."""
     groups = ExerciseGroup.objects.filter(
-        profile__lesson__course__slug=course, profile__lesson__code=lesson, example=number
+        profile__lesson__course__slug=course,
+        profile__lesson__code=lesson,
+        example=number,
+        kind=ExerciseGroup.Kind.TRY,
     ).values_list("exercises", flat=True)
     return sorted({n for group in groups for n in group})
 
@@ -118,7 +123,7 @@ def course_index_from_tables(course: str) -> CourseIndex:
                     for e in profile.examples.all()
                 ],
                 "analysis": [
-                    {"example": g.example, "dok": g.dok, "exercises": g.exercises}
+                    {"example": g.example, "dok": g.dok, "exercises": g.exercises, "kind": g.kind}
                     for g in profile.exercise_groups.all()
                 ],
                 "exercises_total": profile.exercises_total or 0,

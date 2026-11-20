@@ -13,7 +13,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from .schemas import BLOOMS, LESSON_CODE, MAX_UNIT, PRACTICE_CODE, REPRESENTATIONS, lesson_sort_key
+from .schemas import BLOOMS, LESSON_CODE, MAX_UNIT, PRACTICE_CODE, REPRESENTATIONS, GroupKind, lesson_sort_key
 
 BLOOM_VALUES = (*BLOOMS, "unclassified")
 _RANGE = r"^\d{1,2}(?:\s*[-–]\s*\d{1,2})?(?:\s*[,،]\s*\d{1,2}(?:\s*[-–]\s*\d{1,2})?)*$"
@@ -34,8 +34,8 @@ class ExampleIndex(_Strict):
     representations: list[Literal[*REPRESENTATIONS]] = Field(default_factory=list)  # type: ignore[valid-type]
 
 
-class AnalysisRow(_Strict):
-    """صف من جدول «تحليل التمارين»: مثال وعمق معرفي وأرقام التمارين المرتبطة بهما."""
+class AnalysisRow(GroupKind):
+    """صف من جدول «تحليل التمارين»: مثال وعمق معرفي وأرقام التمارين المرتبطة بهما (ونوعه `kind`، `schemas.GroupKind`)."""
 
     example: int = Field(ge=1, le=20)
     dok: int = Field(ge=1, le=4)

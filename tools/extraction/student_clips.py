@@ -871,7 +871,7 @@ def _crop_scan(doc: Any, info: dict[str, Any], box: Box) -> tuple[bytes, int, in
     return _png(np.ascontiguousarray(pixels)), right - left, bottom - top
 
 
-def _render(doc: Any, number: int, box: Box, cfg: dict[str, Any]) -> dict[str, Any]:
+def render_box(doc: Any, number: int, box: Box, cfg: dict[str, Any]) -> dict[str, Any]:
     """المقطع من صفحة كتاب الطالب بدقته الأصلية: بايتات PNG ونوع المصدر ودقته ومقاسه."""
     import pymupdf
 
@@ -1003,7 +1003,7 @@ def run(book: Book, table: dict[int, int]) -> dict[str, Any]:
             entry["status"] = status_of(score, clip.file, threshold, cfg["approved"], entry.get("evidence"))
             if entry["status"] == "review":
                 return
-            rendered = _render(student_doc, entry["student_page"], box, cfg)
+            rendered = render_box(student_doc, entry["student_page"], box, cfg)
             (target / clip.file).write_bytes(rendered.pop("png"))
             entry.update(rendered)
 

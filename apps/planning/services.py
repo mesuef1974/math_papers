@@ -255,7 +255,7 @@ def save_prep_override(
     )
     for item in mine:
         edit = parsed.periods.get(item.prep.k)
-        available = {x for e in item.prep.practice_examples for _, ex in e.rows for x in ex}
+        available = {x for e in item.prep.practice_examples for _, ex in (*e.rows, *e.practice) for x in ex}
         unknown = unknown_removed(edit.removed if edit else (), available)
         if unknown:
             raise OverrideError(

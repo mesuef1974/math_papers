@@ -30,6 +30,14 @@ RESOURCES = ("devices", "graph_paper", "calculators", "whiteboards", "printed_sh
 DEFAULT_PERIOD_MINUTES = 45  # افتراض غير مؤكد من الوزارة؛ يُمرَّر الزمن الحقيقي دائمًا من جدول المعلم
 
 
+TEACHER_ROLE, STUDENT_ROLE = "دور المعلم", "دور الطالب"
+
+
+def with_roles(activity: str, teacher: str, student: str) -> str:
+    """نشاط التعليم والتعلم في التحضير: وصفه، ثم دور المعلم ودور الطالب كلٌّ في سطر (قرار المالك 2026-11-20)."""
+    return f"{activity}\n{TEACHER_ROLE}: {teacher}\n{STUDENT_ROLE}: {student}"
+
+
 class FlowError(PlanningError):
     """لا سير ممكن لهذا الزمن بهذه القيود."""
 
@@ -46,6 +54,8 @@ class Strategy:
     grouping: str
     needs: tuple[str, ...]
     steps: tuple[str, ...]
+    teacher_role: str  # ما يفعله المعلم في الاستراتيجية، جملة بصياغتنا
+    student_role: str  # ما يفعله الطالب فيها
 
     def __post_init__(self) -> None:
         if self.phase not in PHASES:
@@ -62,6 +72,8 @@ class Strategy:
             raise PlanningError(f"مورد غير معروف في {self.slug}")
         if not self.steps:
             raise PlanningError(f"استراتيجية بلا خطوات: {self.slug}")
+        if not self.teacher_role.strip() or not self.student_role.strip():
+            raise PlanningError(f"استراتيجية بلا دور للمعلم أو للطالب: {self.slug}")
 
 
 @dataclass(frozen=True)
@@ -107,6 +119,8 @@ def load_library(path: Path | None = None) -> tuple[Strategy, ...]:
             grouping=r["grouping"],
             needs=tuple(r.get("needs", ())),
             steps=tuple(r["steps"]),
+            teacher_role=r["teacher_role"],
+            student_role=r["student_role"],
         )
         for r in raw
     )
