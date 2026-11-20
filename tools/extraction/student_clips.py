@@ -8,8 +8,9 @@
    ثم `page_offset` (صفحة ملف الطالب = المطبوع + الإزاحة؛ إن غابت تُقدَّر بأعلى متوسط مطابقة لعيّنة مقاطع على المدى `offsets`،
    وتثبت بقمة منفردة ولو بقيت دون العتبة).
 3. نقل الصندوق من لوحة صفحة الطالب في الدليل (مستطيلات صورها المضمَّنة `get_image_rects`، `panel`) إلى صفحة الطالب (`transfer_box`).
-4. تصحيح الإزاحة والمقياس بمطابقة قالب (OpenCV، `refine`): نافذة حول الموضع المنقول، ثم الصفحة كلها إن بقيت الدرجة دون العتبة،
-   ثم صفحات الجوار (`drift`)، ثم تدقيق بدقة أعلى، ثم مقياس كل محور وحده. تمثيل المطابقة (`modes`) يُعايَر على العيّنة
+4. تصحيح الإزاحة والمقياس بمطابقة قالب (OpenCV، `refine`): نافذة حول الموضع المنقول، ثم الصفحة كلها بمدى مقياس أوسع إن بقيت
+   الدرجة دون العتبة، ثم تدقيق بدقة أعلى، ثم مقياس كل محور وحده. صفحة الجوار (`drift`) لا تُقبل إلا ببلوغ العتبة وعلوّ صفحة
+   الإزاحة بهامش (`pick_shift`). تمثيل المطابقة (`modes`) يُعايَر على العيّنة
    (`pick_mode`): صورة الدليل نقطية مصغَّرة وصفحة الطالب تصيير متجهي، فالرمادي الخام قد لا يبلغ العتبة في الموضع الصحيح.
 5. التصيير من كتاب الطالب بدقته الأصلية: صفحة ممسوحة (صورة مضمَّنة تغطي الصفحة) تُقصّ بكسلاتها نفسها بلا استيفاء، وغيرها يُصيَّر
    بـ `vector_dpi`. لا رفع دقة فوق الأصل.
@@ -46,14 +47,17 @@ DEFAULTS: dict[str, Any] = {
     "offset_margin": 0.15,  # فرق أفضل إزاحة عن تاليتها الذي يثبتها ولو بقي متوسطها دون العتبة
     "samples": 5,
     "drift": 2,  # صفحات الجوار التي تُجرَّب حين تضعف المطابقة
+    "drift_margin": 0.15,  # ما تعلو به درجة صفحة جارة بلغت العتبة درجةَ صفحة الإزاحة لتُقبل
     "scan_cover": 0.85,  # حصة الصفحة التي تغطيها صورة مضمَّنة لتُعدّ ممسوحة
     "panel": {"min_width": 900, "max_x0": 100, "width": 315},
     # aspect: مدى تصحيح مقياس كل محور وحده حول المقياس الموحَّد (0 يعطّله)
+    # wide_scales: مدى المقياس في بحث الصفحة كلها (لوحة أصغر من المقدَّر تُخرج المقياس الحقيقي من `scales`)
     "search": {
         "dpi": 72,
         "fine_dpi": 144,
         "margin": 0.15,
         "scales": [0.85, 1.15],
+        "wide_scales": [0.6, 1.6],
         "step": 0.02,
         "pad": 6,
         "aspect": 0.06,
@@ -216,13 +220,20 @@ def steps(lo: float, hi: float, step: float) -> list[float]:
 
 
 def refine(
-    match: Matcher, predicted: Box, page: Size, search: dict[str, Any], threshold: float
+    match: Matcher,
+    predicted: Box,
+    page: Size,
+    search: dict[str, Any],
+    threshold: float,
+    trace: dict[str, Any] | None = None,
 ) -> tuple[Box, float, bool]:
     """يصحّح موضع الصندوق المنقول ومقياسه: (الصندوق في صفحة الطالب، الدرجة، هل وُسِّع البحث إلى الصفحة كلها).
 
     مسح خشن للمقاييس في نافذة حول الموضع المنقول (`margin` من مقاس الصفحة)؛ إن بقيت أفضل درجة دون العتبة يُعاد على الصفحة كلها
-    ويُؤخذ الأعلى. ثم تدقيق حول أفضل مقياس بربع الخطوة وبدقة `fine_dpi` في جوار `pad` نقاط، ثم مقياس كل محور وحده في المدى
-    `aspect` (اللوحة المقدَّرة في الدليل قد تخالف نسبة صفحة الطالب، والمقياس الموحَّد لا يصحّح ذلك)، ودرجته هي المعتمدة.
+    بالمدى الأوسع `wide_scales` (النقل من لوحة أصغر أو أكبر من المقدَّر يخطئ المقياس بأكثر من `scales`، والموضع عندها لا يُعتمد
+    أصلًا) ويُؤخذ الأعلى. ثم تدقيق حول أفضل مقياس بربع الخطوة وبدقة `fine_dpi` في جوار `pad` نقاط، ثم مقياس كل محور وحده في
+    المدى `aspect` (اللوحة المقدَّرة في الدليل قد تخالف نسبة صفحة الطالب، والمقياس الموحَّد لا يصحّح ذلك)، ودرجته هي المعتمدة.
+    `trace` (اختياري) يُملأ بأرقام التشخيص: `near_score` درجة النافذة قبل التوسيع و`scale` مقياسا المحورين المعتمدان.
     """
     width, height = predicted[2] - predicted[0], predicted[3] - predicted[1]
     cx, cy = (predicted[0] + predicted[2]) / 2, (predicted[1] + predicted[3]) / 2
@@ -248,9 +259,12 @@ def refine(
 
     scales = [(s, s) for s in steps(*search["scales"], search["step"])]
     coarse = sweep(search["dpi"], scales, near)
-    widened = coarse[0] < threshold
+    near_score = coarse[0]
+    widened = near_score < threshold
     if widened:
-        coarse = max(coarse, sweep(search["dpi"], scales, lambda size: None), key=lambda found: found[0])
+        wide = search.get("wide_scales")
+        full = [(s, s) for s in steps(*wide, search["step"])] if wide else scales
+        coarse = max(coarse, sweep(search["dpi"], full, lambda size: None), key=lambda found: found[0])
     _, box, (scale, _) = coarse
     pad, step = search["pad"], search["step"]
 
@@ -266,8 +280,42 @@ def refine(
             sx, sy = fine[2]
             pairs = [(sx + d, sy) if axis == 0 else (sx, sy + d) for d in span]
             fine = sweep(fine_dpi, pairs, around, start=fine)
-    score, box, _ = fine if fine[0] >= 0 else coarse
+    score, box, used = fine if fine[0] >= 0 else coarse
+    if trace is not None:
+        trace.update(near_score=round(near_score, 3), scale=[round(s, 3) for s in used])
     return clamp_box(box, page), score, widened
+
+
+def pick_shift(
+    score_at: Callable[[int], float | None], shifts: Iterable[int], threshold: float, margin: float
+) -> int | None:
+    """انزياح الصفحة المعتمد عن صفحة الإزاحة (0)، أو None إن خرجت كل الصفحات عن الملف.
+
+    صفحة الإزاحة هي الأصل: تُعتمد متى بلغت العتبة، وتبقى (للمراجعة) إن لم تبلغها ولم تثبت جارة. الجارة لا تُقبل بدرجتها
+    وحدها: يلزمها بلوغ العتبة وأن تعلو درجةَ صفحة الإزاحة بـ `margin` فأكثر (أعلى درجة بين درجات كلها دون العتبة ضجيج لا
+    صفحة)؛ وتُجرَّب الأقرب فالأقرب. `score_at` يعيد None لصفحة خارج الملف، وحينها تُؤخذ أعلى الجارات درجةً.
+    """
+    base = score_at(0)
+    if base is not None and base >= threshold:
+        return 0
+    fallback: tuple[float, int] | None = None
+    for shift in sorted((s for s in shifts if s), key=abs):
+        score = score_at(shift)
+        if score is None:
+            continue
+        if score >= threshold and (base is None or score - base >= margin):
+            return shift
+        if fallback is None or score > fallback[0]:
+            fallback = (score, shift)
+    if base is not None:
+        return 0
+    return None if fallback is None else fallback[1]
+
+
+def pinned_edges(box: Box, page: Size, tolerance: float = 0.25) -> list[str]:
+    """حواف الصفحة التي يلاصقها الصندوق: قالب يتجاوز الصفحة (مقطع فيه ما فوق صفحة الطالب أو تحتها في الدليل) يُحصر عند حافتها."""
+    edges = (("left", box[0]), ("top", box[1]), ("right", page[0] - box[2]), ("bottom", page[1] - box[3]))
+    return [name for name, gap in edges if gap <= tolerance]
 
 
 def estimate_offset(
@@ -557,6 +605,7 @@ def run(book: Book, table: dict[int, int]) -> dict[str, Any]:
         located: dict[str, tuple[Any, Box, Box | None]] = {}
         guide_scores: dict[str, float] = {}  # تبقى بعد إفراغ صور المقاطع من الذاكرة
         matched: dict[tuple[str, str, int], tuple[Box, float, bool]] = {}
+        traces: dict[tuple[str, str, int], dict[str, Any]] = {}  # أرقام تشخيص كل مطابقة (تُكتب في التقرير)
 
         def locate(clip: ClipName) -> tuple[Any, Box, Box | None]:
             """صورة المقطع الرمادية وصندوقه في صفحة الدليل ولوحة صفحة الطالب فيها؛ ودرجته في `guide_scores`."""
@@ -590,7 +639,14 @@ def run(book: Book, table: dict[int, int]) -> dict[str, Any]:
                 source_rect = panel or (0.0, 0.0, *guide.size(clip.page))
                 predicted = transfer_box(box, source_rect, whole)
                 match = cv_matcher(lambda dpi: student.gray(number, dpi), gray, mode)
-                matched[mode, clip.file, number] = refine(match, predicted, page, search, threshold)
+                trace: dict[str, Any] = {
+                    "guide_box": [round(v, 1) for v in box],
+                    "panel": None if panel is None else [round(v, 1) for v in panel],
+                    "predicted": [round(v, 1) for v in predicted],
+                }
+                found = refine(match, predicted, page, search, threshold, trace)
+                trace["pinned"] = pinned_edges(found[0], page)
+                matched[mode, clip.file, number], traces[mode, clip.file, number] = found, trace
             return matched[mode, clip.file, number]
 
         def score_on(mode: str, clip: ClipName, number: int) -> float | None:
@@ -648,19 +704,21 @@ def run(book: Book, table: dict[int, int]) -> dict[str, Any]:
             if clip.page in guessed:
                 entry["page_source"] = "neighbors"
             base = table[clip.page] + offset
-            best: tuple[int, tuple[Box, float, bool]] | None = None
-            for shift in sorted(drift, key=abs):
-                found = on_page(clip, base + shift, mode)
-                if found is not None and (best is None or found[1] > best[1][1]):
-                    best = (shift, found)
-                if best is not None and best[1][1] >= threshold:
-                    break
+            tried: dict[int, float] = {}  # درجة كل صفحة جُرِّبت، بانزياحها
+
+            def score_at(shift: int, clip: ClipName = clip, base: int = base) -> float | None:
+                score = score_on(mode, clip, base + shift)
+                if score is not None:
+                    tried[shift] = score
+                return score
+
+            shift = pick_shift(score_at, drift, threshold, cfg["drift_margin"])
             located.pop(clip.file, None)  # صورة المقطع لا تبقى في الذاكرة بعد مطابقته
             guide_score = guide_scores.get(clip.file, 0.0)
-            if best is None:
+            if shift is None:
                 entry["status"] = "missing"
                 continue
-            shift, (box, score, widened) = best
+            box, score, widened = matched[mode, clip.file, base + shift]
             entry.update(
                 student_page=base + shift,
                 page_shift=shift,
@@ -669,6 +727,8 @@ def run(book: Book, table: dict[int, int]) -> dict[str, Any]:
                 widened=widened,
                 box=[round(v, 1) for v in box],
                 status=status_of(score, clip.file, threshold, cfg["approved"]),
+                pages={str(s): round(v, 3) for s, v in sorted(tried.items())},
+                **traces[mode, clip.file, base + shift],
             )
             if entry["status"] == "review":
                 continue
