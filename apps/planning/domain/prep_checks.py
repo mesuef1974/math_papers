@@ -65,7 +65,7 @@ def _result(code: str, problems: Iterable[str], pending: Iterable[str] = ()) -> 
 
 def _exercises(prep: PeriodPrep) -> dict[int, int]:
     """تمرين → عمقه، من صفوف أمثلة الحصة (أو الدرس في الأخيرة)، ومنها صفوف `practice`."""
-    return {x: d for e in prep.practice_examples for d, ex in (*e.practice, *e.rows) for x in ex}
+    return {x: d for e in prep.practice_examples for d, ex in e.all_rows for x in ex}
 
 
 # ---- معايير الحصة ----
@@ -131,7 +131,8 @@ def t2c_approval(prep: PeriodPrep) -> CheckResult:
 
 
 def t4_classwork(prep: PeriodPrep) -> CheckResult:
-    """لكل مثال (غير مفاهيمي) تدريب صفي من صفوف تحليله، ولا تدريب في الحصة من مثال ليس فيها."""
+    """لكل مثال (غير مفاهيمي) تدريب صفي من صفوف تحليله (`rows` وحدها: تمرين من صف `practice` ليس تدريبًا صفيًا)، ولا
+    تدريب في الحصة من مثال ليس فيها."""
     problems = []
     own = {e.n: e for e in prep.examples}
     for e in prep.examples:
@@ -141,7 +142,8 @@ def t4_classwork(prep: PeriodPrep) -> CheckResult:
         if not work:
             problems.append(f"المثال {e.n}: بلا تدريب صفي")
         for c in work:
-            stray = [x for x in c.exercises if e.dok_of(x) is None]
+            tried = {x for _, ex in e.rows for x in ex}
+            stray = [x for x in c.exercises if x not in tried]
             if stray:
                 problems.append(f"المثال {e.n}: تدريب ليس من صفوفه {stray}")
     for c in prep.classwork:
@@ -196,7 +198,8 @@ def t6_time(prep: PeriodPrep, library: Mapping[str, Strategy]) -> CheckResult:
 
 
 def t7_assessment(prep: PeriodPrep) -> CheckResult:
-    """فحص تكويني يقيس مهارة مثال من الحصة بصيغته، وبطاقة خروج عمقها ضمن أعماق تدريبات الحصة (والأخيرة باختبار الدرس)."""
+    """فحص تكويني يقيس مهارة مثال من الحصة بصيغته، وبطاقة خروج عمقها ضمن أعماق تدريبات الحصة الصفية وصفوفها (`rows`
+    وحدها، لا صفوف `practice`)، والأخيرة باختبار الدرس."""
     problems = []
     practice = {e.n: e for e in prep.practice_examples}
     if not prep.formative:
@@ -207,7 +210,7 @@ def t7_assessment(prep: PeriodPrep) -> CheckResult:
             problems.append(f"فحص تكويني على مثال ليس في الحصة أو بلا صيغة: {n}")
     if not prep.is_last:
         ticket = prep.exit_ticket
-        depths = {c.dok for c in prep.classwork} | set(_exercises(prep).values())
+        depths = {c.dok for c in prep.classwork} | {d for e in practice.values() for d, _ in e.rows}
         if ticket is None:
             problems.append("لا بطاقة خروج")
         elif ticket.example not in practice or not practice[ticket.example].has_generator:

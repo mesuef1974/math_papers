@@ -274,14 +274,52 @@ def _set_practice(book, status):
 
 
 def test_practice_groups_take_the_example_depth_and_skip_try_exercises():
-    doks = {7: 3, 8: 1}
     tried = [{"example": 1, "dok": 1, "exercises": [1, 2]}, {"example": 1, "dok": 2, "exercises": [4]}]
     rows = [{"example": 1, "exercises": [5, 2, 7]}, {"example": 2, "exercises": [8, 7, 4, 30]}]
-    assert practice_groups(rows, doks, {1, 2}, tried) == [
+    assert practice_groups(rows, {1, 2}, tried) == [
         {"example": 1, "dok": 2, "exercises": [5, 7], "kind": "practice"},  # عمق المثال من صفوف try لا من 7
-        {"example": 2, "dok": 3, "exercises": [7, 8, 30], "kind": "practice"},  # بلا try: أعلى عمق لتمارينه
+        {
+            "example": 2,
+            "dok": 1,
+            "exercises": [7, 8, 30],
+            "kind": "practice",
+        },  # بلا try: عمقه في الفهرس، لا عمق 7
     ]
-    assert practice_groups([{"example": 1, "exercises": [1, 4]}], doks, {1}, tried) == []
+    assert practice_groups([{"example": 1, "exercises": [1, 4]}], {1}, tried) == []
+
+
+def test_practice_row_never_takes_its_depth_from_the_templates():
+    """مثال بلا صف try (كـ2.6/1 و2.9/5) وتمارينه في القوالب بعمق 3: صفه بعمق المثال في الفهرس، وإعادة الكتابة لا تغيّره."""
+    lesson = {
+        "lesson": "9.9",
+        "templates": [{"label": "1-2", "level": "K"}, {"label": "5-6", "level": "R"}],
+        "examples": [{"number": 1}, {"number": 2}],
+    }
+    tried, practice = [{"example": 1, "exercises": [1]}], [{"example": 2, "exercises": [6, 5]}]
+    once = annotate(lesson, {}, tried, None, practice)
+    assert once["exercise_groups"] == [
+        {"example": 1, "dok": 1, "exercises": [1]},
+        {"example": 2, "dok": 1, "exercises": [5, 6], "kind": "practice"},
+    ]
+    assert annotate(once, {}, tried, None, practice) == once
+    assert annotate(once, {}, tried) == once  # صفوف الملف تبقى بعمقها حين لا يأتي practice
+
+
+def test_approved_empty_practice_clears_the_written_rows_and_none_keeps_them():
+    lesson = _read(LESSONS / "lesson_2_1.json")
+    tried = [{"example": 1, "exercises": [1]}]
+    once = annotate(lesson, {}, tried, None, [{"example": 2, "exercises": [7]}])
+    kinds = [row.get("kind") for row in once["exercise_groups"]]
+    assert kinds.count("practice") == 1
+    assert annotate(once, {}, tried) == once  # None: الرجوع إلى صفوف الملف
+    assert annotate(once, {}, None) == once
+    for cleared in (annotate(once, {}, tried, None, []), annotate(once, {}, None, None, [])):
+        assert cleared["exercise_groups"] == [row for row in once["exercise_groups"] if "kind" not in row]
+        assert list(cleared) == list(once)
+    # بلا صفوف try أيضًا: المفتاح يُحذف ولا يبقى فيه صف
+    only = {**lesson, "exercise_groups": [{"example": 2, "dok": 1, "exercises": [7], "kind": "practice"}]}
+    assert "exercise_groups" not in annotate(only, {}, None, None, [])
+    assert annotate(only, {}, None)["exercise_groups"] == only["exercise_groups"]
 
 
 def test_writer_adds_only_approved_practice_rows_after_the_try_rows(workspace):
@@ -295,11 +333,10 @@ def test_writer_adds_only_approved_practice_rows_after_the_try_rows(workspace):
     changed = [name for name in first if first[name] != plain[name]]
     assert changed == ["lesson_2_1.json"]
     before, lesson = json.loads(plain["lesson_2_1.json"]), json.loads(first["lesson_2_1.json"])
-    depth = template_doks(lesson["templates"]).get(7, 2)
     assert lesson["exercise_groups"] == [
         *before["exercise_groups"],  # صفوف try كما هي، بلا `kind`
         {"example": 1, "dok": 1, "exercises": [5, 6], "kind": "practice"},
-        {"example": 2, "dok": depth, "exercises": [7], "kind": "practice"},
+        {"example": 2, "dok": 1, "exercises": [7], "kind": "practice"},  # بلا صف try: عمقه في الفهرس لا عمق 7
     ]
     assert _strip(lesson) == _strip(before) and list(lesson) == list(before)
     assert [e["page"] for e in lesson["examples"]] == [e["page"] for e in before["examples"]]

@@ -12,8 +12,8 @@ import hashlib
 import itertools
 import json
 import re
-from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import asdict, dataclass, field
+from collections.abc import Callable, Iterable, Mapping, Sequence
+from dataclasses import MISSING, Field, dataclass, field, fields, is_dataclass
 
 from apps.knowledge.domain.course_index import LessonIndex
 from apps.knowledge.domain.unit_prep import AuthoredObjective
@@ -60,6 +60,9 @@ CONCEPTUAL_EXAMPLES: dict[str, dict[str, frozenset[int]]] = {"g10-s1": {"2.6": f
 
 RECALL_KINDS = frozenset({"previous_lesson", "previous_period", "exit_review", "prior_knowledge"})
 
+# حقل أُضيف إلى التحضير بعد أن حُفظت بصمات (`prep_digest`): يُعلَّم بهذا فيخرج من البصمة ما دام بقيمته الافتراضية
+DIGEST_OMITS_DEFAULT: Mapping[str, bool] = {"digest_omits_default": True}
+
 
 class PrepError(PlanningError):
     """لا تحضير ممكن بهذه المدخلات."""
@@ -88,14 +91,19 @@ class PrepExample:
     continuations: int | None = None
     has_generator: bool = False
     # صفوف تمارين قسم «تمارين» للمثال (`kind: practice`): للتمايز والواجب في درس بلا دليل مهام، لا للتدريب الصفي ولا للوزن
-    practice: tuple[tuple[int, tuple[int, ...]], ...] = ()
+    practice: tuple[tuple[int, tuple[int, ...]], ...] = field(default=(), metadata=DIGEST_OMITS_DEFAULT)
+
+    @property
+    def all_rows(self) -> tuple[tuple[int, tuple[int, ...]], ...]:
+        """صفوف المثال كلها: `rows` (try) ثم `practice`. التدريب الصفي وبطاقة الخروج من `rows` وحدها."""
+        return (*self.rows, *self.practice)
 
     @property
     def max_dok(self) -> int:
-        return max((d for d, _ in (*self.rows, *self.practice)), default=0)
+        return max((d for d, _ in self.all_rows), default=0)
 
     def dok_of(self, exercise: int) -> int | None:
-        return next((d for d, ex in (*self.rows, *self.practice) if exercise in ex), None)
+        return next((d for d, ex in self.all_rows if exercise in ex), None)
 
 
 @dataclass(frozen=True)
@@ -184,19 +192,36 @@ class PeriodPrep:
 def prep_digest(prep: PeriodPrep) -> str:
     """تجزئة ثابتة لكل حقول التحضير (المجموعات مرتبة): تغيّر أي حقل يغيّرها فيُعلَّم عرضه قديمًا.
 
-    `practice` الفارغ في المثال خارج التجزئة: دخول الحقل لا يعلّم عروض مقرر بلا صفوف `practice` قديمةً."""
+    الحقل المعلَّم بـ `DIGEST_OMITS_DEFAULT` خارج التجزئة ما دام بقيمته الافتراضية (في أي صنف من أصناف التحضير): دخول حقل
+    جديد لا يغيّر البصمات المحفوظة قبله، فلا يُعلَّم عرض قديمًا بلا تغيّر في تحضيره."""
 
     def plain(value: object) -> object:
         if isinstance(value, (set, frozenset)):
             return sorted(value)
         raise TypeError(type(value).__name__)
 
-    payload = asdict(prep)
-    for example in (*payload["examples"], *payload["review"]):
-        if not example["practice"]:
-            del example["practice"]
+    payload = _digest_payload(prep)
     data = json.dumps(payload, default=plain, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(data.encode("utf-8")).hexdigest()
+
+
+def _digest_payload(value: object) -> object:
+    """كـ `dataclasses.asdict` بلا الحقول المعلَّمة بـ `DIGEST_OMITS_DEFAULT` التي تساوي قيمتها الافتراضية."""
+    if is_dataclass(value) and not isinstance(value, type):
+        return {
+            f.name: _digest_payload(getattr(value, f.name))
+            for f in fields(value)
+            if not (f.metadata.get("digest_omits_default") and getattr(value, f.name) == _default(f))
+        }
+    if isinstance(value, (list, tuple)):
+        return [_digest_payload(v) for v in value]
+    if isinstance(value, dict):
+        return {k: _digest_payload(v) for k, v in value.items()}
+    return value
+
+
+def _default(spec: Field) -> object:
+    return spec.default_factory() if spec.default_factory is not MISSING else spec.default
 
 
 def parse_ranges(text: str) -> frozenset[int]:
@@ -309,12 +334,7 @@ def _exercises_by_depth(
 ) -> list[tuple[int, int]]:
     """(العمق، التمرين) لكل تمرين في صفوف أمثلة الحصة (أو صفوف `practice` وحدها)، مرتبة بالعمق فالرقم."""
     return sorted(
-        {
-            (d, x)
-            for e in examples
-            for d, ex in (e.practice if practice_only else (*e.rows, *e.practice))
-            for x in ex
-        }
+        {(d, x) for e in examples for d, ex in (e.practice if practice_only else e.all_rows) for x in ex}
     )
 
 
@@ -337,6 +357,40 @@ def derived_paths(
     return (
         numbers([e for e in own if e.max_dok <= BASIC_MAX_DOK], lowest),
         numbers([e for e in own if e.max_dok == top], highest),
+    )
+
+
+@dataclass(frozen=True)
+class PracticeRules:
+    """قواعد التمايز والواجب لحصة: مسارا الأساسي والمتقدم، ومن أي صفوف تُؤخذ التمارين، وترتيب المتقدم، وما يبقى واجبًا."""
+
+    paths: tuple[frozenset[int], frozenset[int]]
+    practice_only: bool  # التمارين من صفوف `practice` وحدها
+    fresh_first: bool  # المتقدم يقدّم ما لم يأخذه الأساسي
+    homework: Callable[[int, Sequence[int], Sequence[int]], bool]  # (التمرين، الأساسي، المتقدم) → من الواجب؟
+
+
+def practice_rules(
+    lesson: LessonIndex, examples: Sequence[PrepExample], period: Sequence[PrepExample]
+) -> PracticeRules:
+    """مع دليل المهام: المساران منه، والتمارين من صفوف الأمثلة كلها، والواجب الباقي من مسار الطالب (الأساسي) بعد التدريب
+    الصفي وقائمة الدعم. وبلا دليل: المساران مشتقان من أعماق أمثلة الدرس (`derived_paths`)، والتمارين من صفوف `practice`
+    وحدها، والمساران يتقاطعان حين يكون أعلى عمق 2 فأقل أو للحصة مثال واحد فيقدّم المتقدم ما لم يأخذه الأساسي، والواجب ما
+    لم تأخذه القائمتان."""
+    guide = lesson.task_guide
+    if guide:
+        basic_path = parse_ranges(guide.basic)
+        return PracticeRules(
+            paths=(basic_path, parse_ranges(guide.advanced)),
+            practice_only=False,
+            fresh_first=False,
+            homework=lambda x, basic, advanced: x in basic_path and x not in basic,
+        )
+    return PracticeRules(
+        paths=derived_paths(examples, period),
+        practice_only=True,
+        fresh_first=True,
+        homework=lambda x, basic, advanced: x not in basic and x not in advanced,
     )
 
 
@@ -410,35 +464,25 @@ def build_prep(
     last = k == n
     review = tuple(examples) if last else ()
     practice = own or review
-    guide = lesson.task_guide
-    # بلا دليل مهام المساران مشتقان من أعماق أمثلة الدرس، والتمايز والواجب من صفوف `practice` وحدها
-    basic_path, advanced_path = (
-        (parse_ranges(guide.basic), parse_ranges(guide.advanced))
-        if guide
-        else derived_paths(examples, practice)
-    )
+    rules = practice_rules(lesson, examples, practice)
+    basic_path, advanced_path = rules.paths
 
     classwork = _classwork(own, edit.removed) if own else ()
     taken = {x for c in classwork for x in c.exercises}
     pool = [
         (d, x)
-        for d, x in _exercises_by_depth(practice, practice_only=guide is None)
+        for d, x in _exercises_by_depth(practice, practice_only=rules.practice_only)
         if x not in taken and x not in edit.removed
     ]
     basic = tuple(x for _, x in [p for p in pool if p[1] in basic_path][:DIFFERENTIATION_SIZE])
-    # المساران المشتقان يتقاطعان حين يكون أعلى عمق 2 فأقل أو للحصة مثال واحد: المتقدم يقدّم ما لم يأخذه الأساسي
     advanced = tuple(
         x
         for _, x in sorted(
             [p for p in pool if p[1] in advanced_path],
-            key=lambda p: (guide is None and p[1] in basic, -p[0], p[1]),
+            key=lambda p: (rules.fresh_first and p[1] in basic, -p[0], p[1]),
         )[:DIFFERENTIATION_SIZE]
     )
-    if guide:
-        # الواجب: الباقي من تمارين أمثلة الحصة في مسار الطالب (الأساسي) بعد التدريب الصفي وقائمة الدعم
-        rest = {x for _, x in pool if x in basic_path and x not in basic}
-    else:
-        rest = {x for _, x in pool if x not in basic and x not in advanced}
+    rest = {x for _, x in pool if rules.homework(x, basic, advanced)}
     homework = tuple(sorted(rest)[: HOMEWORK_RANGE[1]])
 
     measurable = tuple(e.n for e in practice if e.has_generator and not e.conceptual)
@@ -451,7 +495,7 @@ def build_prep(
 
     written = authored or {}
     objectives = tuple(_objective(e, written.get(e.n), audience) for e in own)
-    depths = frozenset(d for e in practice for d, _ in (*e.rows, *e.practice))
+    depths = frozenset(d for e in practice for d, _ in e.all_rows)
     return PeriodPrep(
         course=course,
         lesson=lesson.lesson,
