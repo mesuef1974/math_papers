@@ -894,6 +894,18 @@ def assert_discontinuities(c):
     assert all(math.isfinite(number(c["top"], p)) for p in c["points"])
 
 
+def assert_implicit_second(c):
+    """y عدديًا من العلاقة قرب النقطة ثم فرق مركزي ثانٍ، مستقل عن الاشتقاق الضمني."""
+    F = sp.lambdify((x, y), c["F"], "mpmath")
+    mpmath.mp.dps = 40
+    p, q = c["point"]
+    assert c["F"].subs({x: p, y: q}) == 0
+    h = mpmath.mpf(10) ** -6
+    near = [mpmath.findroot(lambda v, s=s: F(p + s, v), q) for s in (h, 0, -h)]
+    second = (near[0] - 2 * near[1] + near[2]) / h**2
+    assert float(second) == pytest.approx(float(c["value"]), abs=1e-4)
+
+
 CHECKS = {
     "rational_equation": assert_rational_equation,
     "excluded_values": assert_excluded_values,
@@ -974,6 +986,7 @@ CHECKS = {
     "infinite_side": assert_infinite_side,
     "removable": assert_removable,
     "discontinuities": assert_discontinuities,
+    "implicit_second": assert_implicit_second,
 }
 
 

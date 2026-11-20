@@ -1126,6 +1126,367 @@ def second_derivative_sine(rng: random.Random) -> Problem:
     )
 
 
+def tangent_line(f: sp.Expr, at: int) -> tuple[sp.Expr, sp.Expr, sp.Expr, tuple[str, ...]]:
+    """الميل وقيمة الدالة والمستقيم عند نقطة، وبدائل أخطائه الشائعة (الميل مكان القيمة، العمودي، الإشارة)."""
+    slope = sp.simplify(sp.diff(f, x).subs(x, at))
+    point = sp.simplify(f.subs(x, at))
+    line = sp.expand(slope * x + point - slope * at)
+    bad = [
+        sp.expand(slope * x + point),
+        sp.expand(point * x + slope - point * at),
+        sp.expand(-slope * x + point + slope * at),
+        sp.expand(slope * x - point + slope * at),
+        sp.expand(slope * x + point - slope * at + 1),
+    ]
+    if slope != 0:
+        bad.insert(2, sp.expand(-x / slope + point + at / slope))
+    return slope, point, line, wrongs(f"$y={tex(line)}$", *(f"$y={tex(b)}$" for b in bad))
+
+
+def tangent_problem(lesson: str, stem: str, f: sp.Expr, at: int, first: str, level: str) -> Problem:
+    slope, point, line, bad = tangent_line(f, at)
+    return Problem(
+        lesson,
+        stem,
+        f"$y={tex(line)}$",
+        bad,
+        (
+            first,
+            f"النقطة $({at},{tex(point)})$ والميل ${tex(slope)}$.",
+            f"$y-{tex(point) if point >= 0 else f'({tex(point)})'}={tex(slope)}({tex(x - at)})$ أي $y={tex(line)}$",
+        ),
+        level,
+        {"type": "tangent", "f": f, "at": at, "slope": slope, "intercept": line.subs(x, 0)},
+    )
+
+
+@variant("2.2", example=2)
+def derivative_rational_definition(rng: random.Random) -> Problem:
+    """مشتقة k/(x−c) بالتعريف: توحيد المقامين في نسبة الفارق ثم النهاية."""
+    c, k = rng.randint(-5, 5), nz(rng, -6, 6)
+    f, d = k / (x - c), -k / (x - c) ** 2
+    shifted = f"x+h{-c:+d}" if c else "x+h"
+    return Problem(
+        "2.2",
+        f"استعمل تعريف المشتقة لإيجاد $f'(x)$ إذا كانت $f(x)={tex(f)}$.",
+        m(d),
+        wrongs(d, -d, k / (x - c), sp.Integer(-k) / (x - c), -k / (x - c) ** 3),
+        (
+            rf"$f'(x)=\lim\limits_{{h \to 0}}\dfrac{{1}}{{h}}\left({frac(k, shifted)}-{tex(f)}\right)$",
+            rf"بتوحيد المقامين: $\dfrac{{{-k}h}}{{h({shifted})({tex(x - c)})}}$، ونختصر $h$.",
+            f"$f'(x)={tex(d)}$",
+        ),
+        "A",
+        {"type": "function", "f": f, "d": d, "order": 1},
+    )
+
+
+@variant("2.2", example=3)
+def tangent_from_known_derivative(rng: random.Random) -> Problem:
+    """معادلة المماس بصيغة النقطة والميل، والمشتقة معطاة."""
+    p, q, r = nz(rng, -3, 3), rng.randint(-5, 5), rng.randint(-6, 6)
+    at = rng.randint(-3, 3)
+    f = p * x**2 + q * x + r
+    return tangent_problem(
+        "2.2",
+        f"إذا كانت $f(x)={tex(f)}$ ومشتقتها $f'(x)={tex(sp.diff(f, x))}$، "
+        f"فأوجد معادلة المماس لمنحنى $f$ عند $x={at}$.",
+        f,
+        at,
+        f"$f({at})={tex(f.subs(x, at))}$ و$f'({at})={tex(sp.diff(f, x).subs(x, at))}$",
+        "K",
+    )
+
+
+@variant("2.2", example=4)
+def weight_growth_rate(rng: random.Random) -> Problem:
+    """معدل تغير لحظي لدالة جذرية بالتعريف والضرب في المرافق، في سياق نمو الوزن."""
+    a, t0 = rng.randint(2, 9), rng.randint(1, 8)
+    root = rng.randint(2, 6)
+    b = root**2 - t0
+    while b <= 0:
+        root += 1
+        b = root**2 - t0
+    t = sp.Symbol("t")
+    weight = a * sp.sqrt(t + b)
+    value = sp.Rational(a, 2 * root)
+    return Problem(
+        "2.2",
+        f"وزن طفل بالكيلوغرام بعد $t$ شهرًا يُعطى تقريبًا بـ $W(t)={tex(weight)}$. "
+        f"أوجد معدل تغير وزنه اللحظي عند $t={t0}$.",
+        m(value),
+        wrongs(value, sp.Rational(a, root), sp.Rational(1, 2 * root), a * root, sp.Rational(a * root, t0)),
+        (
+            rf"$W'({t0})=\lim\limits_{{h \to 0}}\dfrac{{{a}\sqrt{{{root**2}+h}}-{a * root}}}{{h}}$",
+            rf"نضرب في المرافق: $\dfrac{{{a}h}}{{h\left(\sqrt{{{root**2}+h}}+{root}\right)}}$، ثم $h\to 0$.",
+            f"$W'({t0})={frac(a, 2 * root)}={tex(value)}$ كغ/شهر",
+        ),
+        "A",
+        {"type": "derivative", "f": weight.subs(t, x), "at": t0, "value": value},
+    )
+
+
+@variant("2.3", example=1)
+def derivative_of_constant(rng: random.Random) -> Problem:
+    """مشتقة تعبير عددي ثابت (قوة π أو e، جذر، لوغاريتم، قوة عدد) صفر."""
+    n, k = rng.randint(2, 7), rng.choice([2, 3, 5, 6, 7, 10, 11, 13])
+    value, wrong = rng.choice(
+        [
+            (sp.pi**n, n * sp.pi ** (n - 1)),
+            (sp.sqrt(k), 1 / (2 * sp.sqrt(k))),
+            (sp.exp(n), n * sp.exp(n - 1)),
+            (sp.log(k), sp.Rational(1, k)),
+            (sp.Pow(-k, n, evaluate=False), n * (-k) ** (n - 1)),
+        ]
+    )
+    name, var = rng.choice([("y", "x"), ("f(x)", "x"), ("s(t)", "t"), ("g(u)", "u")])
+    symbol = rf"\dfrac{{d}}{{d{var}}}\left({name}\right)" if name != "y" else DYDX
+    return Problem(
+        "2.3",
+        f"إذا كانت ${name}={tex(value)}$ فأوجد ${symbol}$.",
+        "$0$",
+        wrongs("$0$", wrong, value, 1),
+        (f"${tex(value)}$ عدد ثابت لا يحوي ${var}$.", f"مشتقة الثابت صفر: ${symbol}=0$"),
+        "K",
+        {"type": "function", "f": value + 0 * x, "d": sp.Integer(0), "order": 1},
+    )
+
+
+@variant("2.4", example=2)
+def product_root_quadratic(rng: random.Random) -> Problem:
+    """قاعدة الضرب لجذر في كثير حدود تربيعي، والجذر بأس كسري."""
+    a, b, c = nz(rng, -3, 4), rng.randint(-5, 5), nz(rng, -6, 6)
+    x0 = rng.choice([1, 4, 9])
+    v = a * x**2 + b * x + c
+    f = sp.sqrt(x) * v
+    value = sp.diff(f, x).subs(x, x0)
+    return Problem(
+        "2.4",
+        rf"إذا كانت $y=\sqrt{{x}}\,({tex(v)})$ فأوجد قيمة ${DYDX}$ عند $x={x0}$.",
+        m(value),
+        wrongs(
+            value,
+            sp.diff(v, x).subs(x, x0) / (2 * sp.sqrt(x0)),
+            sp.sqrt(x0) * sp.diff(v, x).subs(x, x0),
+            f.subs(x, x0),
+        ),
+        (
+            rf"$u=x^{{1/2}},\ v={tex(v)},\ u'=\dfrac{{1}}{{2}}x^{{-1/2}},\ v'={tex(sp.diff(v, x))}$",
+            rf"${DYDX}=\dfrac{{{tex(v)}}}{{2\sqrt{{x}}}}+\sqrt{{x}}\,({tex(sp.diff(v, x))})$",
+            f"عند $x={x0}$ القيمة ${tex(value)}$",
+        ),
+        "A",
+        {"type": "derivative", "f": f, "at": x0, "value": value},
+    )
+
+
+@variant("2.4", example=5)
+def tangent_to_rational(rng: random.Random) -> Problem:
+    """معادلة المماس لدالة نسبية بقاعدة القسمة عند نقطة."""
+    a, c, at = nz(rng, -3, 3), rng.choice([1, -1]), rng.randint(-2, 3)
+    d = rng.choice([s - c * at for s in (-2, -1, 1, 2)])
+    b = rng.choice([n for n in range(-4, 5) if a * d - n * c != 0])
+    f = (a * x + b) / (c * x + d)
+    return tangent_problem(
+        "2.4",
+        f"أوجد معادلة المماس لمنحنى $y={frac(a * x + b, c * x + d)}$ عند $x={at}$.",
+        f,
+        at,
+        rf"قاعدة القسمة: ${DYDX}={frac(a * d - b * c, f'({tex(c * x + d)})^2')}$",
+        "A",
+    )
+
+
+@variant("2.5", example=3)
+def product_with_chain(rng: random.Random) -> Problem:
+    """جداء عامل خطي في قوة كثير حدود: قاعدة الضرب مع السلسلة."""
+    a, b = nz(rng, -3, 3), nz(rng, -4, 4)
+    n, x0 = rng.randint(2, 4), rng.choice([-1, 0, 1, 2])
+    inner = x**2 + b
+    f = (x + a) * inner**n
+    value = sp.diff(f, x).subs(x, x0)
+    return Problem(
+        "2.5",
+        f"إذا كانت $y=({tex(x + a)})({tex(inner)})^{n}$ فأوجد قيمة ${DYDX}$ عند $x={x0}$.",
+        m(value),
+        wrongs(
+            value,
+            inner.subs(x, x0) ** n,
+            n * inner.subs(x, x0) ** (n - 1) * 2 * x0,
+            (x0 + a) * n * inner.subs(x, x0) ** (n - 1),
+        ),
+        (
+            rf"${DYDX}=({tex(inner)})^{n}+({tex(x + a)})\cdot {n}({tex(inner)})^{{{n - 1}}}\cdot 2x$",
+            rf"$={tex(sp.factor(sp.diff(f, x)))}$",
+            f"عند $x={x0}$ القيمة ${tex(value)}$",
+        ),
+        "A",
+        {"type": "derivative", "f": f, "at": x0, "value": value},
+    )
+
+
+@variant("2.5", example=4)
+def velocity_root_position(rng: random.Random) -> Problem:
+    """السرعة اللحظية من موضع جذري √(at²+b) بقاعدة السلسلة."""
+    a, t0 = rng.randint(1, 4), rng.randint(1, 4)
+    root = rng.randint(a * t0 + 1, a * t0 + 6)
+    b = root**2 - a * t0**2
+    t = sp.Symbol("t")
+    position = sp.sqrt(a * t**2 + b)
+    value = sp.Rational(a * t0, root)
+    return Problem(
+        "2.5",
+        f"موضع جسم بالأمتار بعد $t$ ثانية هو $s(t)={tex(position)}$. أوجد سرعته اللحظية عند $t={t0}$.",
+        m(value),
+        wrongs(
+            value,
+            sp.Rational(1, 2 * root),
+            sp.Rational(2 * a * t0, root),
+            sp.Integer(root),
+            sp.Rational(a * t0, 2 * root),
+        ),
+        (
+            rf"$s(t)=({tex(a * t**2 + b)})^{{1/2}}$",
+            rf"$v(t)=\dfrac{{1}}{{2}}({tex(a * t**2 + b)})^{{-1/2}}\cdot {2 * a}t={frac(a * t, position)}$",
+            f"$v({t0})={frac(a * t0, root)}={tex(value)}$ م/ث",
+        ),
+        "A",
+        {"type": "derivative", "f": position.subs(t, x), "at": t0, "value": value},
+    )
+
+
+@variant("2.6", example=3)
+def exponential_decay_rate(rng: random.Random) -> Problem:
+    """معدل التغير اللحظي لنموذج أسي متناقص A·e^(−kt) عند زمن معطى."""
+    k = rng.choice([sp.Rational(1, 2), sp.Rational(1, 4), sp.Rational(1, 5), sp.Rational(1, 10)])
+    amount = rng.choice([40, 60, 80, 100, 200, 500])
+    t0 = int(rng.randint(1, 3) / k)
+    t = sp.Symbol("t")
+    model = amount * sp.exp(-k * t)
+    value = -k * amount * sp.exp(-k * t0)
+    return Problem(
+        "2.6",
+        f"كمية دواء في الدم (ملغم) بعد $t$ ساعة هي $Q(t)={tex(model)}$. أوجد معدل تغير الكمية عند $t={t0}$.",
+        m(value),
+        wrongs(value, -value, model.subs(t, t0), -amount * sp.exp(-k * t0), -k * amount),
+        (
+            f"$Q'(t)={tex(sp.diff(model, t))}$",
+            rf"$Q'({t0})={tex(value)}\approx {float(value):.2f}$ ملغم/ساعة، والإشارة السالبة تعني التناقص.",
+        ),
+        "A",
+        {"type": "derivative", "f": model.subs(t, x), "at": t0, "value": value},
+    )
+
+
+@variant("2.7", example=2)
+def derivative_cosine_forms(rng: random.Random) -> Problem:
+    """مشتقة cos لزاوية خطية أو قوة لـ cos بقاعدة السلسلة."""
+    a, b, k = nz(rng, -5, 5), rng.randint(-4, 4), nz(rng, -3, 3)
+    if rng.random() < 0.5:
+        f = k * sp.cos(a * x + b)
+        d = -k * a * sp.sin(a * x + b)
+        others = (k * a * sp.sin(a * x + b), -k * sp.sin(a * x + b), -k * a * sp.cos(a * x + b))
+        step = rf"$u={tex(a * x + b)}$ و$u'={a}$، و$\dfrac{{d}}{{dx}}\cos u=-u'\sin u$"
+    else:
+        n, a = rng.randint(2, 5), abs(a)
+        f = k * sp.cos(a * x) ** n
+        d = -k * n * a * sp.cos(a * x) ** (n - 1) * sp.sin(a * x)
+        others = (-d, -k * n * sp.cos(a * x) ** (n - 1) * sp.sin(a * x), k * n * a * sp.sin(a * x) ** (n - 1))
+        step = rf"قاعدة السلسلة للقوة: ${n}\cos^{{{n - 1}}}({tex(a * x)})\cdot(-{a}\sin({tex(a * x)}))$"
+    return Problem(
+        "2.7",
+        f"أوجد ${DYDX}$ إذا كانت $y={tex(f)}$.",
+        m(d),
+        wrongs(d, *others),
+        (step, f"${DYDX}={tex(d)}$"),
+        "A",
+        {"type": "function", "f": f, "d": d, "order": 1},
+    )
+
+
+@variant("2.7", example=3)
+def velocity_cosine_position(rng: random.Random) -> Problem:
+    """سرعة لحظية من موضع k·cos(t²+c) بالراديان عند زمن معطى."""
+    k, c, t0 = nz(rng, -4, 4), rng.randint(0, 4), rng.randint(1, 3)
+    t = sp.Symbol("t")
+    position = k * sp.cos(t**2 + c)
+    value = -2 * k * t0 * sp.sin(t0**2 + c)
+    return Problem(
+        "2.7",
+        f"موضع جسم بالسنتيمتر بعد $t$ ثانية هو $s(t)={tex(position)}$ (الزاوية بالراديان). "
+        f"أوجد سرعته اللحظية عند $t={t0}$.",
+        m(value),
+        wrongs(
+            value,
+            -value,
+            -k * sp.sin(t0**2 + c),
+            -2 * k * t0 * sp.cos(t0**2 + c),
+            position.subs(t, t0),
+        ),
+        (
+            f"$v(t)=s'(t)={tex(sp.diff(position, t))}$",
+            rf"$v({t0})={tex(value)}\approx {float(value):.2f}$ سم/ث",
+        ),
+        "A",
+        {"type": "derivative", "f": position.subs(t, x), "at": t0, "value": value},
+    )
+
+
+@variant("2.8", example=3)
+def implicit_with_roots(rng: random.Random) -> Problem:
+    """اشتقاق ضمني لعلاقة فيها √x وx√y وy² عند نقطة: الضرب والسلسلة والقوى الكسرية."""
+    while True:
+        p, q = rng.choice([1, 4, 9]), rng.choice([1, 4, 9])
+        a = nz(rng, -2, 2)
+        F_y = sp.Rational(p, 2 * sp.sqrt(q)) - 2 * a * q  # ∂F/∂y عند النقطة
+        if F_y != 0:
+            break
+    c = sp.sqrt(p) + p * sp.sqrt(q) - a * q**2
+    relation = sp.sqrt(x) + x * sp.sqrt(y) - a * y**2
+    F_x = sp.Rational(1, 2 * sp.sqrt(p)) + sp.sqrt(q)
+    value = -F_x / F_y
+    coefficient = f"{-a:+d}" if abs(a) != 1 else ("-" if a > 0 else "+")
+    shown = rf"\sqrt{{x}}+x\sqrt{{y}}{coefficient}y^2"
+    return Problem(
+        "2.8",
+        f"أوجد ${DYDX}$ عند النقطة $({p},{q})$ على المنحنى ${shown}={tex(c)}$.",
+        m(value),
+        wrongs(value, -value, -F_y / F_x, -F_x, F_x / (2 * a * q)),
+        (
+            rf"$\dfrac{{1}}{{2\sqrt{{x}}}}+\sqrt{{y}}+\dfrac{{x}}{{2\sqrt{{y}}}}y'{-2 * a:+d}y\,y'=0$",
+            rf"$y'=-\dfrac{{\frac{{1}}{{2\sqrt{{x}}}}+\sqrt{{y}}}}{{\frac{{x}}{{2\sqrt{{y}}}}{-2 * a:+d}y}}$",
+            f"عند $({p},{q})$: $y'={tex(value)}$",
+        ),
+        "R",
+        {"type": "implicit", "F": relation - c, "point": (p, q), "value": value},
+    )
+
+
+@variant("2.9", example=4)
+def implicit_second_derivative(rng: random.Random) -> Problem:
+    """y'' من علاقة ضمنية ax³+y²=c عند نقطة، بالتعويض عن y'."""
+    a, p, q = rng.randint(1, 3), rng.randint(-2, 3), nz(rng, -4, 4)
+    c = a * p**3 + q**2
+    F = a * x**3 + y**2 - c
+    first = sp.idiff(F, y, x)
+    second = sp.simplify(sp.idiff(F, y, x, 2))
+    at = {x: p, y: q}
+    value = sp.nsimplify(second.subs(at))
+    return Problem(
+        "2.9",
+        rf"إذا كانت ${tex(a * x**3 + y**2)}={c}$ فأوجد $\dfrac{{d^2y}}{{dx^2}}$ عند النقطة $({p},{q})$.",
+        m(value),
+        wrongs(value, first.subs(at), -value, sp.diff(-a * x**3, x, 2).subs(x, p) / (2 * q)),
+        (
+            f"$y'={tex(first)}$",
+            f"نشتق مرة ثانية بقاعدة القسمة ونعوّض عن $y'$: $y''={tex(second)}$",
+            f"عند $({p},{q})$: $y''={tex(value)}$",
+        ),
+        "R",
+        {"type": "implicit_second", "F": F, "point": (p, q), "value": value},
+    )
+
+
 # الوحدة الثالثة: تطبيقات الاشتقاق
 @variant("3.1", example=2)
 def monotonic_intervals(rng: random.Random) -> Problem:
