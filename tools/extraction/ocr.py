@@ -59,6 +59,16 @@ def read_page(image: Path) -> tuple[list[str], list[list[int]]]:
     return [], []
 
 
+def read_crop(image) -> str:
+    """نص مقطع صغير في الذاكرة (صورة Pillow)، كشارة مكبَّرة: ما قُرئ فيه بفراغ بين أجزائه."""
+    import numpy as np
+
+    for res in _engine().predict(np.asarray(image.convert("RGB"))):
+        data = res.json.get("res", res.json)
+        return " ".join(data.get("rec_texts", []))
+    return ""
+
+
 def run(book: Book, pages: list[int] | None = None) -> int:
     """نص كل صفحة مصيَّرة إلى dirs.ocr/NNNN.txt؛ يعيد عدد ما قُرئ الآن."""
     out = book.dir("ocr")
