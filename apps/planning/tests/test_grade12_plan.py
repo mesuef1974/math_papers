@@ -1,4 +1,4 @@
-"""خطة الثاني عشر الفصلية: تُحمَّل بالمحمِّل الواحد وتُقرأ من الجداول بلا فهرس مشتق (معرفة المقرر بصياغتنا)."""
+"""خطة الثاني عشر الفصلية: تُحمَّل بالمحمِّل الواحد وتُقرأ من الجداول، وفهرسه من دروسه بصياغتنا."""
 
 import pytest
 
@@ -8,8 +8,9 @@ from apps.knowledge.domain.contract import read_source, source_index
 from apps.knowledge.selectors import course_index, example_numbers
 from apps.knowledge.services import load_course
 from apps.planning.domain.calendar_engine import PlanningError
+from apps.planning.domain.prep_checks import PASS
 from apps.planning.domain.semester_plan import parse_slots
-from apps.planning.selectors import term1_schedule, term_plan
+from apps.planning.selectors import lesson_preps, term1_schedule, term_plan
 
 pytestmark = pytest.mark.usefixtures("loaded_courses")
 
@@ -33,9 +34,8 @@ def test_loader_writes_the_grade12_plan_and_reloading_changes_nothing():
     assert load_course(GRADE12_SLUG).total == 0
 
 
-def test_term_plan_reads_grade12_without_a_derived_index():
-    with pytest.raises(KeyError, match="لا فهرس مشتق"):
-        course_index(GRADE12_SLUG)
+def test_term_plan_reads_grade12_from_our_lessons():
+    assert len(course_index(GRADE12_SLUG).lessons) == 19  # فهرسه من دروسه بصياغتنا لا من فهرس مشتق
     plan = term_plan(GRADE12_SLUG)
     assert plan == read_source(GRADE12_SLUG).term_plan.to_domain(1)
     assert plan.sessions_per_week == 6
@@ -75,3 +75,53 @@ def test_grade12_schedule_places_every_planned_period():
     plan, items, placed = term1_schedule(six, course=GRADE12_SLUG)
     assert sum(item.periods for item in items) == plan.total_periods == 74
     assert not placed.unplaced
+
+
+APPROVED_UNITS_G12 = {1, 2, 3}  # وحدات الثاني عشر التي اعتمد المالك نصوصها (prep/unit-<n>.json)
+
+
+def test_grade12_approved_units_pass_objectives_and_approval():
+    """حصص الوحدة المعتمدة تجتاز T2 وT2c، وكل مثال أساسي في حصة واحدة؛ ما سواها معلَّق لا فاشل."""
+    preps = [row for row in lesson_preps(GRADE12_SLUG) if row.prep.unit in APPROVED_UNITS_G12]
+    assert len(preps) == 64  # 15 للوحدة 1 و30 للثانية و19 للثالثة
+    assert [row.prep.lesson for row in preps].count("1.3") == 3
+    for row in preps:
+        by = {r.code: r for r in row.checks}
+        assert by["T2"].status == PASS, (row.prep.lesson, row.prep.k, by["T2"])
+        assert by["T2c"].status == PASS, (row.prep.lesson, row.prep.k, by["T2c"])
+    placed: dict[str, list[int]] = {}
+    for row in preps:
+        placed.setdefault(row.prep.lesson, []).extend(e.n for e in row.prep.examples)
+    assert placed == {
+        "1.1": [1, 2, 3, 4, 5, 6],
+        "1.2": [1, 2, 3, 4, 5, 6],
+        "1.3": [1, 2, 3, 4],
+        "1.4": [1, 2, 3, 4, 5],
+        "2.1": [1, 2, 3, 4, 5],
+        "2.2": [1, 2, 3, 4, 5],  # 6 إثرائي
+        "2.3": [1, 2, 3, 4, 5],
+        "2.4": [1, 2, 3, 4, 5],
+        "2.5": [1, 2, 3, 4],
+        "2.6": [1, 2, 3, 4],  # 5 إثرائي
+        "2.7": [1, 2, 3, 4, 5],
+        "2.8": [1, 2, 3],  # 4 و5 إثرائيان
+        "2.9": [1, 2, 3, 4, 5],  # 6 إثرائي
+        "3.1": [1, 2, 3, 4],
+        "3.2": [1, 2, 3, 4, 5, 6],
+        "3.3": [1, 2, 3, 4],
+        "3.4": [1, 2, 3],
+        "3.5": [1, 2, 3],
+    }
+
+
+def test_grade12_lesson_quiz_depths_come_from_its_examples():
+    """دليل الثاني عشر بلا أعماق اختبار درس: تُشتق من أمثلته (أعلى عمق لكل مثال بترتيبه)، والعاشر يبقى على دليله."""
+    preps = {(row.prep.lesson, row.prep.k): row for row in lesson_preps(GRADE12_SLUG)}
+    last = max(k for lesson, k in preps if lesson == "1.1")
+    assert preps[("1.1", last)].prep.quiz == (1, 1, 2, 2, 2, 2)  # صفوف 1.1: المثالان 1 و2 بعمق 1 والباقي 2
+    assert all(row.prep.quiz == () for (lesson, k), row in preps.items() if lesson == "1.1" and k != last)
+    for row in preps.values():
+        assert {r.code: r.status for r in row.checks}["T12"] == PASS, (row.prep.lesson, row.prep.k)
+    depths = {lesson.lesson: tuple(lesson.quiz_depths) for lesson in course_index(GRADE10_SLUG).lessons}
+    g10 = [row for row in lesson_preps(GRADE10_SLUG) if row.prep.k == row.prep.n]
+    assert g10 and all(row.prep.quiz == depths[row.prep.lesson] for row in g10)

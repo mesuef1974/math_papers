@@ -390,6 +390,14 @@ def _stages(
     return tuple(Stage(name, split[name], chosen[name], bounds[name]) for name in STAGE_NAMES)
 
 
+def lesson_quiz_depths(lesson: LessonIndex, examples: Sequence[PrepExample]) -> tuple[int, ...]:
+    """أعماق اختبار الدرس: من دليله إن ذكرها، وإلا مشتقة من أمثلته (قرار المالك 2026-11-20 لكتاب بلا أعماق اختبار
+    كالثاني عشر): سؤال لكل مثال غير إثرائي له صفوف تحليل، بأعلى عمق في صفوفه، بترتيب الأمثلة."""
+    if lesson.quiz_depths:
+        return tuple(lesson.quiz_depths)
+    return tuple(e.max_dok for e in sorted(examples, key=lambda e: e.n) if e.rows and not e.extension)
+
+
 def build_prep(
     *,
     course: str,
@@ -476,7 +484,7 @@ def build_prep(
         homework=homework,
         formative=measurable,
         exit_ticket=exit_ticket,
-        quiz=tuple(lesson.quiz_depths) if last else (),
+        quiz=lesson_quiz_depths(lesson, examples) if last else (),
         recall=recall,
         stages=_stages(library, depths, max(depths, default=1), chosen_by_teacher=edit.strategies),
         task_guide=(basic_path, advanced_path),

@@ -13,7 +13,13 @@ from apps.curriculum.models import Course, Lesson
 from apps.knowledge import models as km
 from apps.knowledge.domain import contract
 from apps.knowledge.domain.contract import CourseKnowledge, read_source, source_slugs
-from apps.knowledge.selectors import course_index, course_index_from_tables, knowledge_state, lesson_index
+from apps.knowledge.selectors import (
+    course_index,
+    course_index_from_tables,
+    example_numbers,
+    knowledge_state,
+    lesson_index,
+)
 from apps.knowledge.services import load_all, load_course
 from apps.knowledge.tests.test_course_index import field, lesson_output
 from apps.planning import selectors as planning
@@ -115,7 +121,10 @@ def test_deck_never_borrows_another_course_lesson(third_course):
         width=4,
         height=3,
     )
-    with pytest.raises(PrepNotFoundError, match="فهرس مشتق"):
+    # فهرس الثاني عشر من دروسه بصياغتنا: أمثلة درسه 2.6 أمثلته هو لا أمثلة 2.6 في العاشر
+    own = [e.n for e in lesson_index(GRADE12_SLUG, "2.6").examples]
+    assert own == example_numbers(GRADE12_SLUG)["2.6"] != example_numbers(GRADE10_SLUG)["2.6"]
+    with pytest.raises(PrepNotFoundError, match="لا حصة 45"):
         planning_services.prepare_deck(GRADE12_SLUG, "2.6", 45)
 
 
