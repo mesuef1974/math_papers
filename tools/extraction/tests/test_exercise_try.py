@@ -78,53 +78,112 @@ def test_events_are_label_and_try_lines_from_the_top():
 
 def test_read_try_reads_the_left_end_of_the_line_box():
     image = _page({(300, 200): 33})
-    assert exercise_try.read_try(image, [300, 200, 620, 200 + H], TRY, fake_ocr, 60, CFG) == ([33], True)
+    assert exercise_try.read_try(image, [300, 200, 620, 200 + H], TRY, fake_ocr, 60, CFG) == ([[33]], True)
+
+
+def test_read_try_votes_across_crop_widths():
+    """القصّ الأضيق يبتر والأعرض يضيف خانة: القراءة ما تكرر، والبقية بدائل مرتبة."""
+    reads = iter([("4", 0.99), ("4", 0.8), ("49", 0.9)])
+    got = exercise_try.read_try(_page({}), [300, 200, 620, 236], TRY, lambda crop: next(reads), 60, CFG)
+    assert got == ([[4], [49]], True)
 
 
 def test_read_try_falls_back_to_the_box_text_on_low_confidence_or_no_image():
     image = _page({(300, 200): 33})
     low = {**CFG, "min_score": 1.5}
-    assert exercise_try.read_try(image, [300, 200, 620, 236], f"{TRY} 9", fake_ocr, 60, low) == ([9], False)
-    assert exercise_try.read_try(None, [300, 200, 620, 236], f"{TRY} 9", fake_ocr, 60, CFG) == ([9], False)
+    assert exercise_try.read_try(image, [300, 200, 620, 236], f"{TRY} 9", fake_ocr, 60, low) == ([[9]], False)
+    assert exercise_try.read_try(None, [300, 200, 620, 236], f"{TRY} 9", fake_ocr, 60, CFG) == ([[9]], False)
+    assert exercise_try.read_try(None, [300, 200, 620, 236], TRY, fake_ocr, 60, CFG) == ([], False)
 
 
 def _events(*items):
-    return [(kind, [0, i, 0, i], numbers) for i, (kind, numbers) in enumerate(items)]
+    """أحداث صفحة: ("label"، []) أو ("try"، [أرقام] أو [[قراءة]، [بديل]...])."""
+    out = []
+    for i, (kind, numbers) in enumerate(items):
+        reads = numbers if numbers and isinstance(numbers[0], list) else ([numbers] if numbers else [])
+        out.append((kind, [0, i, 0, i], reads))
+    return out
 
 
-def test_link_gives_each_example_the_try_line_after_its_label():
+def test_link_counts_examples_from_the_lines_themselves():
     pages = {
         3: _events(("label", []), ("try", [4]), ("label", []), ("try", [9])),
         4: _events(("label", []), ("try", [15])),
     }
-    got = exercise_try.link(pages, {1: 3, 2: 3, 3: 4})
+    got = exercise_try.link(pages)
     assert got["links"] == [
         {"example": 1, "exercises": [4], "pages": [3]},
         {"example": 2, "exercises": [9], "pages": [3]},
         {"example": 3, "exercises": [15], "pages": [4]},
     ]
-    assert (got["lines"], got["unread"], got["monotone"], got["crowded"]) == (3, 0, True, [])
+    assert (got["lines"], got["unread"], got["labels"], got["opened"], got["monotone"]) == (3, 0, 3, 0, True)
 
 
-def test_a_page_resets_to_the_last_example_started_before_it():
-    # فات OCR سطر «مثال» للمثال 2 في الصفحة 4: سطر الصفحة 5 للمثال 2 لا للمثال 1
-    pages = {3: _events(("label", []), ("try", [4])), 5: _events(("try", [9]))}
-    got = exercise_try.link(pages, {1: 3, 2: 4})
-    assert [row["exercises"] for row in got["links"]] == [[4], [9]]
+def test_a_try_line_after_a_taken_one_opens_the_next_example():
+    # فات OCR سطر «مثال» للمثال 2 (وفي أول الدرس للمثال 1): السطر الثاني للمثال 2 لا يُضم إلى المثال 1
+    pages = {3: _events(("try", [4])), 5: _events(("try", [9]), ("label", []), ("try", [12]))}
+    got = exercise_try.link(pages)
+    assert [row["exercises"] for row in got["links"]] == [[4], [9], [12]]
+    assert (got["labels"], got["opened"]) == (1, 2)
 
 
-def test_a_missed_label_crowds_one_example_and_a_backward_number_breaks_monotony():
-    pages = {3: _events(("label", []), ("try", [30]), ("try", [9]), ("try", []))}
-    got = exercise_try.link(pages, {1: 3, 2: 3})
-    assert got["links"][0]["exercises"] == [9, 30] and got["links"][1]["exercises"] == []
-    assert (got["crowded"], got["unread"], got["lines"]) == ([1], 1, 3)
-    pages = {3: _events(("label", []), ("try", [30]), ("label", []), ("try", [9]))}
-    assert exercise_try.link(pages, {1: 3, 2: 3})["monotone"] is False
+def test_an_unread_line_does_not_take_the_place_of_its_example_line():
+    pages = {
+        3: _events(("label", []), ("try", []), ("try", [9]), ("label", []), ("label", []), ("try", [20]))
+    }
+    got = exercise_try.link(pages)
+    assert [row["exercises"] for row in got["links"]] == [[9], [], [20]]
+    assert (got["unread"], got["lines"], got["opened"]) == (1, 3, 0)
 
 
-def test_try_lines_before_the_first_example_are_unlinked():
-    got = exercise_try.link({2: _events(("try", [4]))}, {1: 3})
-    assert got["unlinked"] == [4] and got["links"][0]["exercises"] == []
+def test_trailing_labels_without_a_line_are_dropped_and_backward_numbers_break_monotony():
+    pages = {3: _events(("label", []), ("try", [30]), ("label", []), ("try", [9])), 9: _events(("label", []))}
+    got = exercise_try.link(pages)
+    assert [row["example"] for row in got["links"]] == [1, 2]
+    assert got["monotone"] is False
+
+
+def test_a_number_against_its_neighbours_takes_an_alternative_read_that_fits():
+    pages = {
+        3: _events(
+            ("label", []),
+            ("try", [3]),
+            ("label", []),
+            ("try", [[59], [5]]),
+            ("label", []),
+            ("try", [[7], [70]]),
+        )
+    }
+    got = exercise_try.link(pages)
+    assert [row["exercises"] for row in got["links"]] == [[3], [5], [7]]
+    assert (got["repaired"], got["monotone"]) == (1, True)
+    # جار لاحق مخطئ (4 لا 46) يحجب بديل سابقه (30) حتى يُصلح هو: الإصلاح حتى الثبات
+    chain = exercise_try.link(
+        {
+            3: _events(
+                ("label", []),
+                ("try", [28]),
+                ("label", []),
+                ("try", [[3], [30]]),
+                ("label", []),
+                ("try", [37]),
+                ("label", []),
+                ("try", [[4], [46]]),
+            )
+        }
+    )
+    assert [row["exercises"] for row in chain["links"]] == [[28], [30], [37], [46]]
+    assert (chain["repaired"], chain["monotone"]) == (2, True)
+    # لا بديل بين جاريه (9 و12): يبقى المختار ويبقى التزايد مكسورًا للمراجعة
+    stuck = exercise_try.link(
+        {
+            3: _events(
+                ("label", []), ("try", [9]), ("label", []), ("try", [[2], [29]]), ("label", []), ("try", [12])
+            )
+        }
+    )
+    assert [row["exercises"] for row in stuck["links"]] == [[9], [2], [12]]
+    assert (stuck["repaired"], stuck["monotone"]) == (0, False)
 
 
 # ───── المرحلة وexercise_links ─────
@@ -162,11 +221,11 @@ def test_stage_writes_numbers_only_and_prints_counts(tmp_path, monkeypatch, caps
     out = capsys.readouterr().out
     assert '"linked_examples": 2' in out and '"lines": 2' in out and '"unread": 0' in out
     first, second = (_lessons(book, "exercise_try")[k] for k in ("1.1", "1.2"))
-    assert (first["source"], first["status"], first["monotone"], first["crowded"]) == (
+    assert (first["source"], first["status"], first["monotone"], first["opened"]) == (
         "derived",
         "review",
         True,
-        [],
+        0,
     )
     assert first["value"] == [
         {"example": 1, "exercises": [2], "pages": [3]},

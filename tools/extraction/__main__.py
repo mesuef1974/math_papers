@@ -160,9 +160,8 @@ def _page_image(book: Book) -> Callable[[int], Any]:
 def stage_exercise_try(book: Book) -> None:
     from . import ocr
 
-    known = json.loads(book.output("examples").read_text(encoding="utf-8"))
     result = exercise_try.build(
-        book, _layout(book), known, _page_image(book), _boxes_of(book), lambda crop: ocr.read_scored(crop)
+        book, _layout(book), _page_image(book), _boxes_of(book), lambda crop: ocr.read_scored(crop)
     )
     ocr.release()
     _write(book.output("exercise_try"), result)
@@ -299,7 +298,7 @@ def run_stage(book: Book, name: str, force: bool = False) -> bool:
     """يشغّل مرحلة ما لم يتغير مدخلها منذ آخر تشغيل ناجح (الختم والناتج معًا)؛ يعيد هل عملت."""
     if "layout" in stamps.INPUTS[name]["after"]:
         _layout(book)  # ناتجها مدخل الختم: يُبنى قبل حسابه لا بعده، وإلا بطل الختم عند أول تشغيل
-    if name in ("exercise_links", "exercise_badges", "exercise_try"):
+    if name in ("exercise_links", "exercise_badges"):
         run_stage(book, "examples")  # ناتجها مدخل المرحلة وختمها؛ تتخطى نفسها إن لم يتغير مدخلها
     current = stamps.digest(book, name, target=publish.target_token(name) if name in TARGETED else "")
     if not force and stamps.is_fresh(book, name, current):

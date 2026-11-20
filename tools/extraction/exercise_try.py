@@ -1,14 +1,19 @@
 """ربط الأمثلة بتدريباتها من سطر «حاول أن تحل التمرين N» الذي يختم كل مثال في صفحات الشرح (كالثاني عشر).
 
 الإحالة في هذا الكتاب من المثال إلى التدريب لا العكس: صفحات التمارين بلا إحالة، والمثال ينتهي بسطر أزرق رقمه كثيرًا ما يضيع
-من OCR الصفحة كلها. لكل درس، في صفحاته من أول مثال إلى نهايته وبترتيب الأسطر من الأعلى: سطر «مثال» وحده (`examples.LABEL_LINE`)
-يفتح المثال التالي المقبول في `examples.json` على صفحته، وسطر «حاول أن تحل» (`exercise_try.marker`) يُنسب إلى المثال المفتوح.
-عند أول كل صفحة يُعاد المثال المفتوح إلى آخر مثال بدأ قبلها (`start` في `examples.json`)، فكلمة فاتت OCR لا تزيح ما بعد صفحتها.
+من OCR الصفحة كلها. لكل درس، في صفحاته (`layout`) وبترتيب الأسطر من الأعلى صفحةً بعد صفحة، الأمثلة تُعدّ من الأسطر نفسها:
+سطر «مثال» وحده (`examples.LABEL_LINE`) يفتح المثال التالي، وسطر «حاول أن تحل» (`exercise_try.marker`) يُنسب إلى المثال المفتوح،
+فإن كان قد أخذ سطره (أو لا مثال مفتوح) فقد فات OCR سطر «مثال» قبله، فيفتح السطر نفسه المثال التالي: لكل مثال سطر واحد، والسطر الذي لا رقم فيه مقروءًا لا يأخذ مكان سطر مثاله (قد لا يكون سطره).
+لا يُؤخذ العدّ ولا الصفحات من `examples.json`: قياس الثاني عشر أن الدليل يعدّ فيه أمثلة ليست في كتاب الطالب (3.4: تسعة والكتاب
+ثلاثة) ويضع بداياتها في غير صفحاتها. والأمثلة المفتوحة بعد آخر سطر «حاول أن تحل» (عنوان «مثال» في صفحات التمارين) تُسقط.
 رقم التدريب في الطرف الأيسر من صندوق السطر نفسه، والتعرّف على السطر كله يُسقطه (قياس الثاني عشر: صندوق السطر 16 حرفًا عربيًا
-بلا رقم، ولا حبر يساره)؛ فيُقصّ الطرف بعرض `slice` من ارتفاع السطر من صورة الصفحة (`dirs.render`) ويُقرأ بالتعرّف وحده
-(`ocr.read_scored`)، ويُقبل ما ثقته `min_score` فأكثر، وإلا فمن نص الصندوق. الأرقام 1..`exercises.max`، و«12-14» مدى. المخرج بمخطط `exercise_links.json` (أرقام وحدها)، و`pages` صفحة
-السطر، ومع كل درس تشخيصه: `lines` و`unread` و`from_text` و`monotone` (أول تدريب لكل مثال يتزايد بترتيب الأمثلة) و`crowded`
-(مثال أخذ أكثر من سطر: فات OCR سطر «مثال» قبله)، وحالته `review` دائمًا (أو `missing` بلا رقم مقروء): الربط مقروء من صورة، ولا يصير `ok` إلا بتصحيح المالك.
+بلا رقم، ولا حبر يساره)؛ فيُقصّ الطرف من صورة الصفحة (`dirs.render`) بكل عرض في `slices` (أضعاف ارتفاع السطر) ويُقرأ
+بالتعرّف وحده (`ocr.read_scored`)، ويُقبل ما ثقته `min_score` فأكثر، والقراءة ما تكرر أكثر (ثم الأوثق)، وإلا فمن نص الصندوق.
+قياس الثاني عشر: القصّ الأضيق يبتر العدد ذا الخانتين (1 بدل 10) والأعرض يضيف خانة من حبر بعد الرقم (49 بدل 4). والمثال الذي
+يخالف رقمه تزايد جاريه يأخذ قراءة أخرى لسطره تلائمهما إن وُجدت (`repaired`). الأرقام 1..`exercises.max`، و«12-14» مدى. المخرج بمخطط `exercise_links.json` (أرقام وحدها)، و`pages` صفحة
+السطر، ومع كل درس تشخيصه: `lines` و`unread` و`from_text` و`labels` (أسطر «مثال») و`opened` (أمثلة فتحها سطر «حاول أن تحل»
+لأن سطر «مثال» قبله فات) و`monotone` (أول تدريب لكل مثال يتزايد بترتيب الأمثلة)، وحالته `review` دائمًا (أو `missing` بلا رقم
+مقروء): الربط مقروء من صورة، ولا يصير `ok` إلا بتصحيح المالك.
 """
 
 from __future__ import annotations
@@ -24,7 +29,7 @@ from .fusion import settings as fusion_settings
 from .printed_pages import Boxes
 from .text import norm, squash
 
-DEFAULTS: dict[str, Any] = {"marker": "حاول أن تحل", "slice": 1.2, "min_score": 0.6}
+DEFAULTS: dict[str, Any] = {"marker": "حاول أن تحل", "slices": [0.8, 1.0, 1.2], "min_score": 0.6}
 RANGE = 10  # أطول مدى مقبول «a-b»
 Ocr = Callable[[Any], tuple[str, float]]  # (نص، ثقة)
 
@@ -60,66 +65,84 @@ def events(boxes: Boxes, marker: str) -> list[tuple[str, list[int], str]]:
 
 def read_try(
     image: Any, box: list[int], text: str, ocr: Ocr, cap: int, cfg: dict[str, Any]
-) -> tuple[list[int], bool]:
-    """(أرقام سطر «حاول أن تحل»، هل قُرئت من الصورة): من طرف الصندوق الأيسر إن وُجدت الصورة ووثق القارئ، وإلا من نصه."""
+) -> tuple[list[list[int]], bool]:
+    """(قراءات سطر «حاول أن تحل» مرتبة، أولها المختارة؛ هل قُرئت من الصورة): من طرف الصندوق الأيسر بكل عرض في `slices`
+    إن وُجدت الصورة ووثق القارئ (الأكثر تكرارًا ثم الأوثق)، وإلا من نص الصندوق."""
     if image is not None:
         x0, y0, x1, y1 = box
         h = y1 - y0
         pad = max(2, h // 12)
-        crop = image.crop(
-            (max(0, x0 - pad), max(0, y0 - pad), min(x1, x0 + round(cfg["slice"] * h)), y1 + pad)
-        )
-        read, score = ocr(crop)
-        got = exercise_numbers(read or "", cap)
-        if got and score >= cfg["min_score"]:
-            return got, True
-    return exercise_numbers(text, cap), False
+        votes: dict[tuple[int, ...], list[float]] = {}
+        for width in cfg["slices"]:
+            crop = image.crop((max(0, x0 - pad), max(0, y0 - pad), min(x1, x0 + round(width * h)), y1 + pad))
+            read, score = ocr(crop)
+            got = exercise_numbers(read or "", cap)
+            if got and score >= cfg["min_score"]:
+                votes.setdefault(tuple(got), []).append(score)
+        if votes:
+            ranked = sorted(votes, key=lambda k: (-len(votes[k]), -max(votes[k])))
+            return [list(k) for k in ranked], True
+    got = exercise_numbers(text, cap)
+    return ([got] if got else []), False
 
 
-def link(pages: dict[int, list[tuple[str, list[int], list[int]]]], starts: dict[int, int]) -> dict[str, Any]:
-    """ربط درس واحد. `pages`: صفحة → أحداثها بالترتيب ("label"|"try"، صندوق، أرقام)، و`starts`: مثال مقبول → صفحة بدايته."""
-    order = sorted(starts, key=lambda x: (starts[x], x))
-    rows: dict[int, dict[str, set[int]]] = {x: {"exercises": set(), "pages": set()} for x in order}
-    taken: dict[int, int] = {}
-    unlinked: set[int] = set()
-    lines = unread = 0
+Event = tuple[str, list[int], list[list[int]]]  # ("label"|"try"، صندوق، قراءات السطر مرتبة)
+
+
+def link(pages: dict[int, list[Event]]) -> dict[str, Any]:
+    """ربط درس واحد. `pages`: صفحة → أحداثها من الأعلى؛ الأمثلة تُعدّ من الأحداث نفسها."""
+    rows: list[dict[str, Any]] = []
+    labels = opened = lines = unread = 0
     for page in sorted(pages):
-        before = [x for x in order if starts[x] < page]
-        fresh = [x for x in order if starts[x] == page]
-        current = before[-1] if before else None
-        for kind, _, numbers in pages[page]:
+        for kind, _, reads in pages[page]:
             if kind == "label":
-                if fresh:
-                    current = fresh.pop(0)
+                labels += 1
+                rows.append({"reads": [], "page": None})
                 continue
             lines += 1
-            if not numbers:
+            if not reads:
                 unread += 1
-            elif current is None:
-                unlinked |= set(numbers)
-            else:
-                rows[current]["exercises"] |= set(numbers)
-                taken[current] = taken.get(current, 0) + 1
-                rows[current]["pages"].add(page)
-    linked = {n for row in rows.values() for n in row["exercises"]}
-    tried = [min(rows[x]["exercises"]) for x in order if rows[x]["exercises"]]
+                continue
+            if not rows or rows[-1]["reads"]:
+                opened += 1
+                rows.append({"reads": [], "page": None})
+            rows[-1]["reads"], rows[-1]["page"] = reads, page
+    while rows and not rows[-1]["reads"]:  # «مثال» بلا سطر بعده في آخر الدرس: عنوان في صفحات التمارين
+        rows.pop()
+    chosen = [row["reads"][0] if row["reads"] else [] for row in rows]
+    for _ in rows:  # حتى الثبات: إصلاح جارٍ لاحق قد يفتح مكانًا لبديل سابق (حدّه عدد الأمثلة)
+        changed = False
+        for i, row in enumerate(rows):
+            if len(row["reads"]) < 2:
+                continue
+            lo = max((min(c) for c in chosen[:i] if c), default=0)
+            hi = min((min(c) for c in chosen[i + 1 :] if c), default=10**6)
+            if lo <= min(chosen[i]) <= hi:
+                continue
+            fit = next((c for c in row["reads"] if c != chosen[i] and lo <= min(c) <= hi), None)
+            if fit:
+                chosen[i], changed = fit, True
+        if not changed:
+            break
+    repaired = sum(bool(row["reads"]) and c != row["reads"][0] for row, c in zip(rows, chosen, strict=True))
+    firsts = [min(c) for c in chosen if c]
     return {
         "links": [
-            {"example": x, "exercises": sorted(rows[x]["exercises"]), "pages": sorted(rows[x]["pages"])}
-            for x in sorted(order)
+            {"example": i, "exercises": sorted(set(c)), "pages": [row["page"]] if c else []}
+            for i, (row, c) in enumerate(zip(rows, chosen, strict=True), start=1)
         ],
-        "unlinked": sorted(unlinked - linked),
         "lines": lines,
         "unread": unread,
-        "monotone": all(a <= b for a, b in zip(tried, tried[1:], strict=False)),
-        "crowded": sorted(x for x, n in taken.items() if n > 1),
+        "labels": labels,
+        "opened": opened,
+        "repaired": repaired,
+        "monotone": all(a <= b for a, b in zip(firsts, firsts[1:], strict=False)),
     }
 
 
 def build(
     book: Book,
     layout: dict[str, Any],
-    examples: dict[str, Any],
     image_of: Callable[[int], Any],
     boxes_of: Callable[[int], Boxes | None],
     ocr: Ocr,
@@ -129,36 +152,33 @@ def build(
     cap = fusion_settings(book)["max_exercise"]
     result: dict[str, Any] = {"book": book.id, "lessons": {}}
     for r in layout["lessons"]:
-        known = examples["lessons"].get(r["id"], {}).get("value") or []
-        starts = {e["n"]: e["start"] for e in known}
-        pages: dict[int, list[tuple[str, list[int], list[int]]]] = {}
+        pages: dict[int, list[Event]] = {}
         fallback = 0
-        if r["pages_pdf"] and starts:
-            last = r["pages_pdf"][1]
-            for page in range(min(starts.values()), last + 1):
-                boxes = boxes_of(page) or []
-                found = events(boxes, cfg["marker"])
+        if r["pages_pdf"]:
+            first, last = r["pages_pdf"]
+            for page in range(first, last + 1):
+                found = events(boxes_of(page) or [], cfg["marker"])
                 if not found:
                     continue
                 image = image_of(page) if any(kind == "try" for kind, _, _ in found) else None
                 pages[page] = []
                 for kind, box, text in found:
-                    numbers, seen = (
-                        read_try(image, box, text, ocr, cap, cfg) if kind == "try" else ([], False)
-                    )
-                    fallback += kind == "try" and bool(numbers) and not seen
-                    pages[page].append((kind, box, numbers))
-        got = link(pages, starts)
+                    reads, seen = read_try(image, box, text, ocr, cap, cfg) if kind == "try" else ([], False)
+                    fallback += kind == "try" and bool(reads) and not seen
+                    pages[page].append((kind, box, reads))
+        got = link(pages)
         result["lessons"][r["id"]] = field(
-            got["links"] if starts else [],
+            got["links"],
             "derived",
             "review" if any(row["exercises"] for row in got["links"]) else "missing",
-            unlinked=got["unlinked"],
+            unlinked=[],
             lines=got["lines"],
             unread=got["unread"],
             from_text=fallback,
+            labels=got["labels"],
+            opened=got["opened"],
+            repaired=got["repaired"],
             monotone=got["monotone"],
-            crowded=got["crowded"],
         )
     return result
 
@@ -179,6 +199,7 @@ def summarize(result: dict[str, Any]) -> dict[str, Any]:
         "unread": sum(v["unread"] for v in ls.values()),
         "from_text": sum(v["from_text"] for v in ls.values()),
         "not_monotone": [k for k, v in ls.items() if not v["monotone"]],
-        "crowded": [k for k, v in ls.items() if v["crowded"]],
+        "opened": [k for k, v in ls.items() if v["opened"]],
+        "repaired": sum(v["repaired"] for v in ls.values()),
         "missing": [k for k, v in ls.items() if v["status"] == "missing"],
     }
