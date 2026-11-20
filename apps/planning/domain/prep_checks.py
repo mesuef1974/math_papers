@@ -64,8 +64,8 @@ def _result(code: str, problems: Iterable[str], pending: Iterable[str] = ()) -> 
 
 
 def _exercises(prep: PeriodPrep) -> dict[int, int]:
-    """تمرين → عمقه، من صفوف أمثلة الحصة (أو الدرس في الأخيرة)."""
-    return {x: d for e in prep.practice_examples for d, ex in e.rows for x in ex}
+    """تمرين → عمقه، من صفوف أمثلة الحصة (أو الدرس في الأخيرة)، ومنها صفوف `practice`."""
+    return {x: d for e in prep.practice_examples for d, ex in (*e.practice, *e.rows) for x in ex}
 
 
 # ---- معايير الحصة ----
@@ -218,7 +218,10 @@ def t7_assessment(prep: PeriodPrep) -> CheckResult:
 
 
 def t8_differentiation(prep: PeriodPrep) -> CheckResult:
-    """قائمتا الأساسي والمتقدم غير فارغتين، ومن دليل المهام وتمارين أمثلة الحصة."""
+    """قائمتا الأساسي والمتقدم غير فارغتين، ومن مساريهما وتمارين أمثلة الحصة.
+
+    المساران (`prep.task_guide`) من دليل المهام، وللدرس بلا دليل مشتقان من أعماق أمثلته (`prep.derived_paths`): عندها كل
+    تمرين في القائمتين من صفوف `practice` لأمثلة الحصة، لا من صفوف تدريبها الصفي."""
     problems = []
     basic_path, advanced_path = prep.task_guide
     allowed = _exercises(prep)

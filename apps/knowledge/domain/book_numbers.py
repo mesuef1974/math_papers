@@ -21,6 +21,7 @@ from .schemas import RANGE
 DOK = {"K": 1, "A": 2, "R": 3}
 DEFAULT_DOK = 2
 MAX_EXAMPLE = 20  # حد `ExerciseGroupData.example`
+PRACTICE = "practice"  # من `schemas.GROUP_KINDS`؛ صف بلا `kind` نوعه `try`
 _LABEL_RANGE = re.compile(r"^\s*(\d{1,2})(?:\s*[-–]\s*(\d{1,2}))?(?!\d)")
 # بترتيب كتابتها في الملف
 GUIDE_FIELDS = ("task_basic", "task_advanced", "quiz_depths", "exercises_total", "vocab_new", "vocab_review")
@@ -105,6 +106,34 @@ def exercise_groups(
     return groups
 
 
+def practice_groups(
+    links: Iterable[Mapping[str, Any]],
+    doks: Mapping[int, int],
+    examples: set[int],
+    tried: Iterable[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    """صفوف `kind: "practice"` (تمارين قسم «تمارين» لكل مثال)، صف لكل مثال مرتبة بالمثال، بلا أي تمرين في صفوف `tried`.
+
+    عمق الصف عمق مثاله: أعلى عمق في صفوف `tried` للمثال (وهي من القوالب)، والمثال بلا صف فيها أعلى عمق لتمارينه هذه في
+    القوالب. فلا يغيّر الصف عمق مثال له «حاول أن تحل».
+    """
+    taken = {x for row in tried for x in row["exercises"]}
+    depth: dict[int, int] = {}
+    for row in tried:
+        depth[row["example"]] = max(depth.get(row["example"], 0), row["dok"])
+    merged: dict[int, set[int]] = {}
+    for row in links:
+        if row["example"] in examples and row["example"] <= MAX_EXAMPLE:
+            merged.setdefault(row["example"], set()).update(int(x) for x in row["exercises"])
+    groups = []
+    for example in sorted(merged):
+        numbers = sorted(merged[example] - taken)
+        if numbers:
+            dok = depth.get(example) or max(doks.get(x, DEFAULT_DOK) for x in numbers)
+            groups.append({"example": example, "dok": dok, "exercises": numbers, "kind": PRACTICE})
+    return groups
+
+
 def _with_page(example: dict[str, Any], page: int | None) -> dict[str, Any]:
     if page is None:
         return dict(example)
@@ -122,12 +151,16 @@ def annotate(
     pages: Mapping[int, int],
     links: Iterable[Mapping[str, Any]] | None,
     numbers: Mapping[str, Any] | None = None,
+    practice: Iterable[Mapping[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """نسخة من ملف الدرس بـ `page` لكل مثال عُرفت صفحته وبـ `exercise_groups` من الروابط وبأرقام الدليل `numbers`.
 
     `pages`: رقم المثال → صفحته المطبوعة (ما غاب يبقى كما كان). `links`: صفوف `{example, exercises}`، وNone أو ما لا ينتج
     مجموعة يترك `exercise_groups` كما كانت. المفتاح الجديد `exercise_groups` يوضع قبل `examples`. `numbers`: من `GUIDE_FIELDS`
     (ما غاب يبقى كما كان)، ومكانها بعد `standards` (أو `lesson`) بترتيب `GUIDE_FIELDS` دائمًا. لا يُمسّ حقل غير هذه.
+    `practice`: صفوف `{example, exercises}` لتمارين قسم «تمارين»، تُكتب بعد صفوف `links` صفوفًا بـ `kind: "practice"`
+    (`practice_groups`)؛ وNone أو ما لا ينتج صفًّا يُبقي صفوف `practice` التي في الملف (بعمق أمثلتها الحالي وبلا ما صار في
+    صفوف `links`)، كما تبقى صفوف `links` التي في الملف حين لا يأتي غير `practice`.
     """
     unknown = set(numbers or {}) - set(GUIDE_FIELDS)
     if unknown:
@@ -136,11 +169,21 @@ def annotate(
     guide = {k: given[k] for k in GUIDE_FIELDS if k in given}
     anchor = "standards" if "standards" in lesson else "lesson"
     examples = [_with_page(e, pages.get(e["number"])) for e in lesson.get("examples", [])]
-    groups = (
-        exercise_groups(links, template_doks(lesson.get("templates", [])), {e["number"] for e in examples})
-        if links is not None
-        else []
-    )
+    groups: list[dict[str, Any]] = []
+    if links is not None or practice is not None:
+        doks = template_doks(lesson.get("templates", []))
+        known = {e["number"] for e in examples}
+        old = [dict(row) for row in lesson.get("exercise_groups", [])]
+        kept = [row for row in old if row.get("kind") == PRACTICE]
+        tried = (exercise_groups(links, doks, known) if links is not None else []) or [
+            row for row in old if row.get("kind") != PRACTICE
+        ]
+        extra = (practice_groups(practice, doks, known, tried) if practice is not None else []) or (
+            practice_groups(kept, doks, known, tried)
+        )
+        groups = tried + extra
+        if groups == old:
+            groups = []  # لا جديد: المفتاح يبقى في موضعه
     out: dict[str, Any] = {}
     for key, value in lesson.items():
         if key in GUIDE_FIELDS:

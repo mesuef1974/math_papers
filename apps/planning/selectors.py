@@ -534,7 +534,9 @@ def prep_edit(item: PreparedPeriod, stored: object) -> dict:
             for stage in item.prep.stages
             if stage.strategy is not None
         ],
-        "exercises": sorted({x for e in item.prep.practice_examples for _, ex in e.rows for x in ex}),
+        "exercises": sorted(
+            {x for e in item.prep.practice_examples for _, ex in (*e.rows, *e.practice) for x in ex}
+        ),
         "removed": sorted(period.get("removed", [])),
     }
 

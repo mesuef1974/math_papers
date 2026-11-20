@@ -10,17 +10,20 @@ from pathlib import Path
 import pytest
 from django.core.management import call_command
 from django.core.management.base import CommandError
+from pydantic import ValidationError
 
 from apps.knowledge.domain.book_numbers import (
     GUIDE_FIELDS,
     annotate,
     exercise_groups,
     guide_numbers,
+    practice_groups,
     template_doks,
     template_max,
 )
 from apps.knowledge.domain.contract import COURSES_DIR
-from apps.knowledge.domain.schemas import LessonData
+from apps.knowledge.domain.course_index import AnalysisRow
+from apps.knowledge.domain.schemas import ExerciseGroupData, LessonData
 
 COURSE = "g12-sci-s1"
 LESSONS = COURSES_DIR / COURSE / "lessons"
@@ -246,6 +249,86 @@ def test_writer_writes_guide_numbers_and_touches_no_text_pages_or_groups(workspa
     assert all(first[name] == (LESSONS / name).read_bytes() for name in untouched)  # ومنها ما حالته review
     with pytest.raises(CommandError, match="سجلات الدروس"):
         _run(courses, book, guide_only=True, records=str(book / "none"))
+
+
+# ---- صفوف practice: تمارين قسم «تمارين» لكل مثال ----
+
+PRACTICE_ROWS = [
+    {"example": 2, "exercises": [9, 7], "pages": [142]},  # 9 تمرين «حاول أن تحل» للمثال 3: لا يتكرر
+    {"example": 1, "exercises": [6, 2, 5], "pages": [142]},
+    {"example": 3, "exercises": [35], "pages": [142]},  # كله في صفوف try: لا صف
+    {"example": 17, "exercises": [8], "pages": []},  # ليس من أمثلة الدرس
+]
+
+
+def _set_practice(book, status):
+    path = book / "exercise_links.json"
+    data = _read(path)
+    data["lessons"]["2.1"]["practice"] = {
+        "value": PRACTICE_ROWS,
+        "source": "derived" if status == "review" else "teacher",
+        "status": status,
+        "method": "badges",
+    }
+    path.write_text(json.dumps(data), encoding="utf-8")
+
+
+def test_practice_groups_take_the_example_depth_and_skip_try_exercises():
+    doks = {7: 3, 8: 1}
+    tried = [{"example": 1, "dok": 1, "exercises": [1, 2]}, {"example": 1, "dok": 2, "exercises": [4]}]
+    rows = [{"example": 1, "exercises": [5, 2, 7]}, {"example": 2, "exercises": [8, 7, 4, 30]}]
+    assert practice_groups(rows, doks, {1, 2}, tried) == [
+        {"example": 1, "dok": 2, "exercises": [5, 7], "kind": "practice"},  # عمق المثال من صفوف try لا من 7
+        {"example": 2, "dok": 3, "exercises": [7, 8, 30], "kind": "practice"},  # بلا try: أعلى عمق لتمارينه
+    ]
+    assert practice_groups([{"example": 1, "exercises": [1, 4]}], doks, {1}, tried) == []
+
+
+def test_writer_adds_only_approved_practice_rows_after_the_try_rows(workspace):
+    courses, book = workspace
+    plain = _run(courses, book)
+    _set_practice(book, "review")
+    assert _run(courses, book) == plain  # تنتظر اعتماد المالك: لا ملف يتغير
+    _set_practice(book, "ok")
+    first = _run(courses, book)
+    assert first == _run(courses, book)  # idempotent
+    changed = [name for name in first if first[name] != plain[name]]
+    assert changed == ["lesson_2_1.json"]
+    before, lesson = json.loads(plain["lesson_2_1.json"]), json.loads(first["lesson_2_1.json"])
+    depth = template_doks(lesson["templates"]).get(7, 2)
+    assert lesson["exercise_groups"] == [
+        *before["exercise_groups"],  # صفوف try كما هي، بلا `kind`
+        {"example": 1, "dok": 1, "exercises": [5, 6], "kind": "practice"},
+        {"example": 2, "dok": depth, "exercises": [7], "kind": "practice"},
+    ]
+    assert _strip(lesson) == _strip(before) and list(lesson) == list(before)
+    assert [e["page"] for e in lesson["examples"]] == [e["page"] for e in before["examples"]]
+    LessonData(**lesson)
+    # مصدر بلا practice بعدها (روابط try وحدها): الصفوف المكتوبة تبقى
+    data = _read(book / "exercise_links.json")
+    del data["lessons"]["2.1"]["practice"]
+    (book / "exercise_links.json").write_text(json.dumps(data), encoding="utf-8")
+    assert _run(courses, book) == first
+
+
+def test_include_review_writes_unreviewed_practice(workspace):
+    courses, book = workspace
+    _set_practice(book, "review")
+    groups = json.loads(_run(courses, book, include_review=True)["lesson_2_1.json"])["exercise_groups"]
+    assert [(g["example"], g["exercises"]) for g in groups if g.get("kind") == "practice"] == [
+        (1, [5, 6]),
+        (2, [7]),
+    ]
+
+
+def test_practice_kind_is_omitted_when_default_so_old_files_and_hashes_stay():
+    row = {"example": 1, "dok": 2, "exercises": [3]}
+    assert ExerciseGroupData(**row).model_dump() == row
+    assert ExerciseGroupData(**row, kind="try").model_dump() == row
+    assert ExerciseGroupData(**row, kind="practice").model_dump() == {"kind": "practice", **row}
+    assert AnalysisRow(**row).model_dump() == row and AnalysisRow(**row).kind == "try"
+    with pytest.raises(ValidationError):
+        ExerciseGroupData(**row, kind="homework")
 
 
 def test_no_book_folder_file_is_committed():

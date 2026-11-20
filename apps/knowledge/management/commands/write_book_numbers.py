@@ -3,6 +3,8 @@
 المصدر مجلد الكتاب خارج المستودع، ويُقرأ منه أرقام فقط: `examples.json` (صفحة بدء كل مثال في ملف الدليل) و`printed_pages.json`
 (صفحة الملف → الصفحة المطبوعة) و`exercise_links.json` (اختياري: تدريبات كل مثال). الربط مستنتج فحالة دروسه `review` حتى يعتمده
 المالك بتصحيح في `corrections.yaml` (فيصير `ok`)؛ الأمر يكتب المعتمد وحده، و`--include-review` يكتب ما لم يُراجَع أيضًا.
+غلاف `practice` بجانب صفوف الدرس (تمارين قسم «تمارين» لكل مثال، من الشارات) يُعتمد وحده بالقاعدة نفسها، ويُكتب في
+`exercise_groups` صفوفًا إضافية بـ `kind: "practice"` وعمق مثالها؛ الصفوف بلا `kind` نوعها `try`.
 أرقام الدليل (`book_numbers.GUIDE_FIELDS`: `task_basic` و`task_advanced` و`quiz_depths` و`exercises_total` و`vocab_new` و`vocab_review`)
 من سجلات مرحلة `lesson` (`lessons/lesson_X_Y.json` تحت المصدر، اختياري): الحقل الذي حالته `ok` وحده، والمفقود أو غير المقروء يبقى
 كما هو في الملف ولا يُخمَّن، وعدد التمارين الذي يخالف آخر رقم في قوالب الدرس لا يُكتب ويُذكر في الملخص. `--guide-only` يكتبها وحدها.
@@ -116,6 +118,11 @@ class Command(BaseCommand):
             if entry and entry["status"] == "review" and not include_review:
                 held.append(code)
             rows = entry["value"] if entry and entry["status"] in accepted else None
+            # تمارين قسم «تمارين» غلاف مستقل بجانب الصفوف: يُعتمد وحده
+            extra = entry.get("practice") if entry else None
+            if extra and extra["status"] == "review" and not include_review:
+                held.append(f"{code} (practice)")
+            practice = extra["value"] if extra and extra["status"] in accepted else None
             record_path = records_dir / "lesson_{}.json".format(re.sub(r"[^\w]+", "_", code))
             numbers = (
                 guide_numbers(_json(record_path, "سجل الدرس"), accepted) if record_path.is_file() else {}
@@ -124,7 +131,7 @@ class Command(BaseCommand):
             witness = template_max(lesson.get("templates", []))
             if witness and numbers.get("exercises_total", witness) != witness:
                 contradicted.append(f"{code} ({numbers.pop('exercises_total')}≠{witness})")
-            updated = annotate(lesson, known, rows, numbers)
+            updated = annotate(lesson, known, rows, numbers, practice)
             if _without_owned(updated) != _without_owned(lesson):  # حارس: لا حقل غير المملوكين يتغير
                 raise CommandError(f"تغيّر حقل غير {OWNED} في {path.name}")
             try:

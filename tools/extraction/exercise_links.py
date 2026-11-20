@@ -9,6 +9,9 @@
 الربط المقروء يغلب المستنتج، بهذا الترتيب: الدرس الذي في `exercise_try.json` له سطر «حاول أن تحل» مربوط تؤخذ صفوفه منه
 (`method: try`، كل مثال لتدريب سطره)، وإلا فالذي في `exercise_badges.json` له شارة مقروءة (`method: badges`: كل تدريب لمثال
 شارته لا لكل أمثلة الصفحة)، وإلا فالتجاور (`method: adjacency`).
+الدرس المأخوذ من «حاول أن تحل» وله شارة مقروءة يحمل بجانب صفوفه غلافًا ثانيًا `practice` بالمخطط نفسه من الشارات
+(`method: badges`، بلا ما أخذته صفوف try): تمارين قسم «تمارين» لكل مثال، ومنها أمثلة بلا سطر مقروء. حالته `review` وتُعتمد
+وحدها بتصحيح مساره `[lessons, <الدرس>, practice]`؛ تصحيح صفوف الدرس يُبقيه.
 """
 
 from __future__ import annotations
@@ -90,9 +93,16 @@ def stage_lessons(book: Book, name: str) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))["lessons"] if path.exists() else {}
 
 
+def practice(badges: list[dict[str, Any]], tried: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """صفوف الشارات بلا أي تدريب أخذه سطر «حاول أن تحل» في الدرس: تمارين قسم «تمارين» لكل مثال، بلا تكرار لما في `tried`."""
+    taken = {x for row in tried for x in row["exercises"]}
+    return [{**row, "exercises": [x for x in row["exercises"] if x not in taken]} for row in badges]
+
+
 def build(book: Book, layout: dict[str, Any], examples: dict[str, Any]) -> dict[str, Any]:
     cfg = fusion_settings(book)
     read = [(method, stage_lessons(book, name), ok) for method, name, ok in READ]
+    badge_lessons = next(lessons for method, lessons, _ in read if method == "badges")
     result: dict[str, Any] = {"book": book.id, "lessons": {}}
     for r in layout["lessons"]:
         known = examples["lessons"].get(r["id"], {}).get("value") or []
@@ -111,6 +121,15 @@ def build(book: Book, layout: dict[str, Any], examples: dict[str, Any]) -> dict[
                 shared_pages=[],
                 method=method,
             )
+            badges = badge_lessons.get(r["id"])
+            if method == "try" and exercise_badges.readable(badges):
+                rows = practice(badges["value"], seen["value"])
+                result["lessons"][r["id"]]["practice"] = field(
+                    rows,
+                    "derived",
+                    "review" if any(row["exercises"] for row in rows) else "missing",
+                    method="badges",
+                )
             continue
         if not r["pages_pdf"] or not accepted or not book.has_dir("vision"):
             result["lessons"][r["id"]] = field([], "derived", "missing", method="adjacency")
@@ -137,6 +156,9 @@ def summarize(result: dict[str, Any]) -> dict[str, Any]:
         "lessons": len(ls),
         "examples": len(rows),
         "linked_examples": sum(bool(row["exercises"]) for row in rows),
+        "practice_examples": sum(
+            bool(row["exercises"]) for v in ls.values() for row in v.get("practice", {}).get("value", [])
+        ),
         "review": [k for k, v in ls.items() if v["status"] == "review"],
         "missing": [k for k, v in ls.items() if v["status"] == "missing"],
     }
