@@ -3,8 +3,9 @@
 مراحل الرؤية (خادم llama محلي يُشغَّل ويُغلق آليًا؛ مستأنَفة، وخارج `all` وأختامها): vision_pages، vision_examples، vision_vocab، reps (انظر `vision.py` و`reps.py`)؛ وتقبل `--pages A Z` و`--lessons 1.1 ...`.
 المراحل: validate (فحص book.yaml)، ocr (تصيير وقراءة؛ ببيئة guide_extract)، tables (جدول تحليل التمارين)، layout، images، objectives، examples، fusion (دمج OCR والرؤية والجدول)، checks، lesson (سجل الدرس)، all
 (الأربع الأخيرة بعد layout؛ وtables قبل layout حين layout.anchor=analysis). وخارج `all`: printed_pages (جدول الصفحات المطبوعة من صناديق OCR؛ غير الرتيب يُرفض برمز الخروج 6)
-وexercise_badges (ربط التدريبات بأمثلتها من الشارات الملونة في صورة الصفحة؛ ببيئة guide_extract) وexercise_links (ربط
-التدريبات بالأمثلة من الشارات إن قُرئت وإلا من الرؤية وexamples.json، للمراجعة)، وstudent_clips (مقاطع الأمثلة من كتاب الطالب بدقته
+وexercise_try (ربط الأمثلة بتدريباتها من سطر «حاول أن تحل التمرين N»؛ ببيئة guide_extract) وexercise_badges (ربط التدريبات
+بأمثلتها من الشارات الملونة في صورة الصفحة) وexercise_links (ربط التدريبات بالأمثلة من سطر «حاول أن تحل» ثم الشارات إن قُرئت
+وإلا من الرؤية وexamples.json، للمراجعة)، وstudent_clips (مقاطع الأمثلة من كتاب الطالب بدقته
 الأصلية؛ مطابقة دون العتبة بلا مراجعة رمز الخروج 7) وstudent_decks (شاهدها: عروض حصص المقرر في قاعدة وتخزين مؤقتين). المخرجات في مجلد الكتاب خارج المستودع، ويطبع كل مرحلة ملخصها العددي.
 كل مرحلة تتخطى نفسها ما لم تتغير تجزئة مدخلها (`stamps.py`)، و`--force` يعيدها؛ وتصحيحات الكتاب اليدوية (`corrections.py`)
 تُطبَّق على مخرج مرحلتها بأسبابها.
@@ -24,6 +25,7 @@ from . import (
     examples,
     exercise_badges,
     exercise_links,
+    exercise_try,
     fusion,
     images,
     layout,
@@ -131,9 +133,19 @@ def stage_printed_pages(book: Book) -> None:
 
 
 def stage_exercise_badges(book: Book) -> None:
-    from PIL import Image
-
     from . import ocr
+
+    known = json.loads(book.output("examples").read_text(encoding="utf-8"))
+    result = exercise_badges.build(
+        book, _layout(book), known, _page_image(book), _boxes_of(book), lambda crop: ocr.read_crop(crop)
+    )
+    ocr.release()
+    _write(book.output("exercise_badges"), result)
+    print(json.dumps(exercise_badges.summarize(result), ensure_ascii=False))
+
+
+def _page_image(book: Book) -> Callable[[int], Any]:
+    from PIL import Image
 
     def image_of(page: int) -> Any:
         path = book.dir("render") / f"{page:04d}.png"
@@ -142,13 +154,19 @@ def stage_exercise_badges(book: Book) -> None:
         with Image.open(path) as image:
             return image.convert("RGB")
 
+    return image_of
+
+
+def stage_exercise_try(book: Book) -> None:
+    from . import ocr
+
     known = json.loads(book.output("examples").read_text(encoding="utf-8"))
-    result = exercise_badges.build(
-        book, _layout(book), known, image_of, _boxes_of(book), lambda crop: ocr.read_crop(crop)
+    result = exercise_try.build(
+        book, _layout(book), known, _page_image(book), _boxes_of(book), lambda crop: ocr.read_scored(crop)
     )
     ocr.release()
-    _write(book.output("exercise_badges"), result)
-    print(json.dumps(exercise_badges.summarize(result), ensure_ascii=False))
+    _write(book.output("exercise_try"), result)
+    print(json.dumps(exercise_try.summarize(result), ensure_ascii=False))
 
 
 def stage_exercise_links(book: Book) -> None:
@@ -269,6 +287,7 @@ STAGES: dict[str, Callable[[Book], Any]] = {
     "publish": stage_publish,
     "printed_pages": stage_printed_pages,
     "exercise_badges": stage_exercise_badges,
+    "exercise_try": stage_exercise_try,
     "exercise_links": stage_exercise_links,
     "student_clips": stage_student_clips,
     "student_decks": stage_student_decks,
@@ -280,7 +299,7 @@ def run_stage(book: Book, name: str, force: bool = False) -> bool:
     """يشغّل مرحلة ما لم يتغير مدخلها منذ آخر تشغيل ناجح (الختم والناتج معًا)؛ يعيد هل عملت."""
     if "layout" in stamps.INPUTS[name]["after"]:
         _layout(book)  # ناتجها مدخل الختم: يُبنى قبل حسابه لا بعده، وإلا بطل الختم عند أول تشغيل
-    if name in ("exercise_links", "exercise_badges"):
+    if name in ("exercise_links", "exercise_badges", "exercise_try"):
         run_stage(book, "examples")  # ناتجها مدخل المرحلة وختمها؛ تتخطى نفسها إن لم يتغير مدخلها
     current = stamps.digest(book, name, target=publish.target_token(name) if name in TARGETED else "")
     if not force and stamps.is_fresh(book, name, current):

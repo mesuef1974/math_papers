@@ -6,8 +6,9 @@
 `shared_pages` لأن تدريباتها نُسبت إليها كلها. أرقام التدريبات سلسلة من 1 بسقف `exercises.max` وقفزة `exercises.jump` (كالدمج)،
 وقائمة رؤية أطول من `fusion.degenerate` في صفحة تُسقَط كلها. حالة كل درس `review` دائمًا (أو `missing` بلا أمثلة أو بلا ربط):
 الربط مستنتج لا مقروء، ولا يصير `ok` إلا بتصحيح من المالك في `corrections.yaml`.
-الدرس الذي في `exercise_badges.json` له شارة مقروءة واحدة فأكثر تؤخذ صفوفه من الشارات (`method: badges`): كل تدريب لمثال شارته
-لا لكل أمثلة الصفحة؛ وغيره يبقى على التجاور (`method: adjacency`).
+الربط المقروء يغلب المستنتج، بهذا الترتيب: الدرس الذي في `exercise_try.json` له سطر «حاول أن تحل» مربوط تؤخذ صفوفه منه
+(`method: try`، كل مثال لتدريب سطره)، وإلا فالذي في `exercise_badges.json` له شارة مقروءة (`method: badges`: كل تدريب لمثال
+شارته لا لكل أمثلة الصفحة)، وإلا فالتجاور (`method: adjacency`).
 """
 
 from __future__ import annotations
@@ -15,8 +16,8 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from . import exercise_badges, exercise_try
 from .config import Book
-from .exercise_badges import readable
 from .fields import field
 from .fusion import settings as fusion_settings
 from .text import chain_max
@@ -77,29 +78,38 @@ def link(
     }
 
 
-def badge_lessons(book: Book) -> dict[str, Any]:
-    """دروس `exercise_badges.json` إن كُتب (مرحلة الشارات تُشغَّل قبل هذه بالاسم)؛ فارغة بلا ملف."""
-    path = book.output("exercise_badges")
+READ = (
+    ("try", "exercise_try", exercise_try.readable),
+    ("badges", "exercise_badges", exercise_badges.readable),
+)
+
+
+def stage_lessons(book: Book, name: str) -> dict[str, Any]:
+    """دروس مخرج مرحلة ربط مقروء إن كُتب (يُشغَّل قبل هذه بالاسم)؛ فارغة بلا ملف."""
+    path = book.output(name)
     return json.loads(path.read_text(encoding="utf-8"))["lessons"] if path.exists() else {}
 
 
 def build(book: Book, layout: dict[str, Any], examples: dict[str, Any]) -> dict[str, Any]:
     cfg = fusion_settings(book)
-    badges = badge_lessons(book)
+    read = [(method, stage_lessons(book, name), ok) for method, name, ok in READ]
     result: dict[str, Any] = {"book": book.id, "lessons": {}}
     for r in layout["lessons"]:
         known = examples["lessons"].get(r["id"], {}).get("value") or []
         accepted = {e["n"] for e in known}
-        seen = badges.get(r["id"])
-        if r["pages_pdf"] and accepted and readable(seen):
-            # شارة مقروءة واحدة تكفي: إحالة الصفحة نفسها تغلب تجاور الأرقام
+        found = next(
+            ((method, lessons[r["id"]]) for method, lessons, ok in read if ok(lessons.get(r["id"]))), None
+        )
+        if r["pages_pdf"] and accepted and found:
+            # إحالة مقروءة واحدة تكفي: الصفحة نفسها تغلب تجاور الأرقام
+            method, seen = found
             result["lessons"][r["id"]] = field(
                 seen["value"],
                 "derived",
                 "review" if any(row["exercises"] for row in seen["value"]) else "missing",
                 unlinked=seen["unlinked"],
                 shared_pages=[],
-                method="badges",
+                method=method,
             )
             continue
         if not r["pages_pdf"] or not accepted or not book.has_dir("vision"):

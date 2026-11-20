@@ -13,6 +13,8 @@ from pathlib import Path
 from .config import Book
 
 _ocr = None
+_rec = None
+REC_MODEL = "arabic_PP-OCRv5_mobile_rec"  # نموذج تعرّف lang="ar" في PaddleOCR
 
 
 def _engine():
@@ -31,8 +33,8 @@ def _engine():
 
 
 def release() -> None:
-    global _ocr
-    _ocr = None
+    global _ocr, _rec
+    _ocr = _rec = None
     gc.collect()
 
 
@@ -59,14 +61,32 @@ def read_page(image: Path) -> tuple[list[str], list[list[int]]]:
     return [], []
 
 
-def read_crop(image) -> str:
-    """نص مقطع صغير في الذاكرة (صورة Pillow)، كشارة مكبَّرة: ما قُرئ فيه بفراغ بين أجزائه."""
+def _recognizer():
+    global _rec
+    if _rec is None:
+        from paddleocr import TextRecognition
+
+        _rec = TextRecognition(model_name=REC_MODEL)
+    return _rec
+
+
+def read_scored(image) -> tuple[str, float]:
+    """(نص، ثقة) مقطع صغير في الذاكرة (صورة Pillow) بالتعرّف وحده بلا كشف: الكاشف لا يجد سطرًا في مقطع رقم أو كلمة
+    (قياس الثاني عشر: صفر من 37 مقطعًا بالكشف، وثقة 0.8 فأكثر بالتعرّف وحده). ما ارتفاعه دون 48 بكسلًا يُكبَّر إليها."""
     import numpy as np
 
-    for res in _engine().predict(np.asarray(image.convert("RGB"))):
+    if image.height < 48:
+        scale = 48 / image.height
+        image = image.resize((max(1, round(image.width * scale)), 48))
+    for res in _recognizer().predict(np.asarray(image.convert("RGB"))):
         data = res.json.get("res", res.json)
-        return " ".join(data.get("rec_texts", []))
-    return ""
+        return str(data.get("rec_text", "")), float(data.get("rec_score", 0.0))
+    return "", 0.0
+
+
+def read_crop(image) -> str:
+    """نص مقطع صغير (انظر `read_scored`)."""
+    return read_scored(image)[0]
 
 
 def run(book: Book, pages: list[int] | None = None) -> int:
