@@ -12,7 +12,13 @@
    الدرجة دون العتبة، ثم تدقيق بدقة أعلى، ثم مقياس كل محور وحده. صفحة الجوار (`drift`) لا تُقبل إلا ببلوغ العتبة وعلوّ صفحة
    الإزاحة بهامش (`pick_shift`). تمثيل المطابقة (`modes`) يُعايَر على العيّنة
    (`pick_mode`): صورة الدليل نقطية مصغَّرة وصفحة الطالب تصيير متجهي، فالرمادي الخام قد لا يبلغ العتبة في الموضع الصحيح.
-5. التصيير من كتاب الطالب بدقته الأصلية: صفحة ممسوحة (صورة مضمَّنة تغطي الصفحة) تُقصّ بكسلاتها نفسها بلا استيفاء، وغيرها يُصيَّر
+5. المقاطع التي بقيت دون العتبة تُعاد بإطار صفحة الطالب في الدليل (`FrameFit`، `refine_in_frames`): صورة اللوحة في الدليل
+   ليست صفحة الطالب نفسها (تزيد عليها هامشًا عند كل حافة، وتُقصّ من أعلاها في أول صفحة من الدرس، وتُضمّ إليها صور أخرى تحتها)،
+   فمقياس النقل الرأسي من ارتفاعها يخطئ، والمقطع الذي يبدأ فوق صفحة الطالب أو ينتهي تحتها فيه ما ليس فيها. المقاطع التي بلغت
+   العتبة تعاير الإطار (`fit_frame`: مقياس واحد للمحورين وهامش كل حافة وانحرافها)، ثم يُقصر القالب على تقاطع صندوقه مع الإطار
+   ويُنقل التقاطع وحده، بمرشّحَي التثبيت من أعلى ومن أسفل لكل صورة (`frame_candidates`). القبول ببلوغ العتبة، أو بدليل هندسي
+   مستقل (`geometric`): الموضع ضمن انحراف المعايرة والمقياس ضمن مداها ودرجة دنيا مقيسة (`score_floor`).
+6. التصيير من كتاب الطالب بدقته الأصلية: صفحة ممسوحة (صورة مضمَّنة تغطي الصفحة) تُقصّ بكسلاتها نفسها بلا استيفاء، وغيرها يُصيَّر
    بـ `vector_dpi`. لا رفع دقة فوق الأصل.
 
 المخرجات خارج المستودع: المقاطع في `dirs.<student_clips.target>` والتقرير `student_clips.json` (أرقام فقط: دقة كل مقطع ودرجة
@@ -28,6 +34,7 @@ from __future__ import annotations
 import json
 import math
 import re
+import statistics
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -62,12 +69,16 @@ DEFAULTS: dict[str, Any] = {
         "pad": 6,
         "aspect": 0.06,
     },
+    # إعادة المقاطع الضعيفة بإطار صفحة الطالب المعايَر: min_clips أقل عدد مقاطع ناجحة للمعايرة، scale وaspect مدى المقياس
+    # حول المقياس المعايَر، min_part أقل حصة من المقطع داخل الإطار ليُطابَق
+    "frame": {"min_clips": 8, "scale": 0.04, "aspect": 0.02, "min_part": 0.25},
     "modes": ["gray", "blur", "binary", "edges"],  # تمثيلات المطابقة بترتيب الأمانة؛ المعايرة تختار
     "mode_margin": 0.2,  # أقل فرق بين درجة الصفحة الصحيحة وأعلى جاراتها ليُعتدّ بالتمثيل
     "approved": [],
 }
 MODES = ("gray", "blur", "binary", "edges")
 MIN_TEMPLATE = 8  # بكسل: قالب أصغر منه لا يُطابَق
+MIN_TOLERANCE = 2.0  # نقاط: أدنى انحراف موضع يُقبل به الدليل الهندسي (دقة البحث نفسها)
 
 Box = tuple[float, float, float, float]  # x0, y0, x1, y1
 Size = tuple[float, float]
@@ -93,6 +104,7 @@ def settings(book: Book) -> dict[str, Any]:
     out = {**DEFAULTS, **cfg}
     out["panel"] = {**DEFAULTS["panel"], **cfg.get("panel", {})}
     out["search"] = {**DEFAULTS["search"], **cfg.get("search", {})}
+    out["frame"] = {**DEFAULTS["frame"], **cfg.get("frame", {})}
     return out
 
 
@@ -163,13 +175,28 @@ def clamp_box(box: Box, page: Size) -> Box:
     return (max(box[0], 0.0), max(box[1], 0.0), min(box[2], page[0]), min(box[3], page[1]))
 
 
+def intersect(a: Box, b: Box) -> Box | None:
+    box = (max(a[0], b[0]), max(a[1], b[1]), min(a[2], b[2]), min(a[3], b[3]))
+    return box if box[2] > box[0] and box[3] > box[1] else None
+
+
+def deviation(a: Box, b: Box) -> float:
+    """أبعد حافة بين صندوقين (نقاط)."""
+    return max(abs(p - q) for p, q in zip(a, b, strict=True))
+
+
+def panel_images(rects: Iterable[Sequence[float]], cfg: dict[str, Any]) -> list[Sequence[float]]:
+    """صور لوحة صفحة الطالب: العريضة (`min_width` بكسل فأكثر) التي تبدأ يسار `max_x0` نقطة."""
+    return [r for r in rects if r[4] >= cfg["min_width"] and r[0] < cfg["max_x0"]]
+
+
 def panel_rect(rects: Iterable[Sequence[float]], cfg: dict[str, Any]) -> Box | None:
     """لوحة صفحة الطالب في صفحة الدليل من مستطيلات صورها المضمَّنة: (x0, y0, x1, y1, عرض الصورة بالبكسل) لكل صورة.
 
     تُحسب الصور العريضة (`min_width` بكسل فأكثر) التي تبدأ يسار `max_x0` نقطة وحدها، واللوحة اتحادها؛ `width` (نقاط) يثبّت
     عرضها حين لا تغطي الصور عمود الهامش. None إن لم توجد صورة كهذه.
     """
-    kept = [r for r in rects if r[4] >= cfg["min_width"] and r[0] < cfg["max_x0"]]
+    kept = panel_images(rects, cfg)
     if not kept:
         return None
     x0 = min(r[0] for r in kept)
@@ -226,6 +253,7 @@ def refine(
     search: dict[str, Any],
     threshold: float,
     trace: dict[str, Any] | None = None,
+    widen: bool = True,
 ) -> tuple[Box, float, bool]:
     """يصحّح موضع الصندوق المنقول ومقياسه: (الصندوق في صفحة الطالب، الدرجة، هل وُسِّع البحث إلى الصفحة كلها).
 
@@ -234,6 +262,7 @@ def refine(
     أصلًا) ويُؤخذ الأعلى. ثم تدقيق حول أفضل مقياس بربع الخطوة وبدقة `fine_dpi` في جوار `pad` نقاط، ثم مقياس كل محور وحده في
     المدى `aspect` (اللوحة المقدَّرة في الدليل قد تخالف نسبة صفحة الطالب، والمقياس الموحَّد لا يصحّح ذلك)، ودرجته هي المعتمدة.
     `trace` (اختياري) يُملأ بأرقام التشخيص: `near_score` درجة النافذة قبل التوسيع و`scale` مقياسا المحورين المعتمدان.
+    `widen=False` يبقي البحث في النافذة: استقرارها على المنقول دليل مستقل (`geometric`)، وبحث الصفحة كلها ليس كذلك.
     """
     width, height = predicted[2] - predicted[0], predicted[3] - predicted[1]
     cx, cy = (predicted[0] + predicted[2]) / 2, (predicted[1] + predicted[3]) / 2
@@ -260,7 +289,7 @@ def refine(
     scales = [(s, s) for s in steps(*search["scales"], search["step"])]
     coarse = sweep(search["dpi"], scales, near)
     near_score = coarse[0]
-    widened = near_score < threshold
+    widened = widen and near_score < threshold
     if widened:
         wide = search.get("wide_scales")
         full = [(s, s) for s in steps(*wide, search["step"])] if wide else scales
@@ -284,6 +313,169 @@ def refine(
     if trace is not None:
         trace.update(near_score=round(near_score, 3), scale=[round(s, 3) for s in used])
     return clamp_box(box, page), score, widened
+
+
+# ───── إطار صفحة الطالب في الدليل (نقي) ─────
+@dataclass(frozen=True)
+class FrameFit:
+    """معايرة إطار صفحة الطالب في صفحة الدليل من المقاطع التي بلغت العتبة (نقاط الدليل، عدا `scale` و`tolerance`)."""
+
+    scale: float  # نقاط صفحة الطالب لكل نقطة في الدليل، واحد للمحورين: الصفحة مصغَّرة بنسبتها
+    left: float  # ما تزيده صورة اللوحة على صفحة الطالب عند حافتها اليسرى
+    top: float
+    bottom: float
+    tolerance: float  # انحراف صناديق المعايرة عن المتوقع من الإطار (نقاط صفحة الطالب)
+    stretch: float  # انحراف مقياسها النسبي عن 1
+    clips: int
+
+
+def _percentile(values: Sequence[float], share: float) -> float:
+    ordered = sorted(values)
+    return ordered[min(len(ordered) - 1, max(math.ceil(share * len(ordered)) - 1, 0))]
+
+
+def frame_candidates(rects: Iterable[Sequence[float]], panel: Box, page: Size, fit: FrameFit) -> list[Box]:
+    """مستطيلات صفحة الطالب المرشّحة في صفحة الدليل: مقاسها مقاس الصفحة على المقياس المعايَر، ولكل من اللوحة وصورها مرشّحان:
+    مثبَّت بحافتها العليا (صور أخرى تحت صفحة الطالب تطيل اللوحة) ومثبَّت بالسفلى (صفحة مقصوصة من أعلاها تقصّرها).
+    المتطابقة (ضمن نقطة) تُحسب مرة."""
+    width, height = page[0] / fit.scale, page[1] / fit.scale
+    out: list[Box] = []
+    for rect in [panel, *rects]:
+        x = rect[0] + fit.left
+        for y in (rect[1] + fit.top, rect[3] - fit.bottom - height):
+            frame = (x, y, x + width, y + height)
+            if all(deviation(frame, other) > 1.0 for other in out):
+                out.append(frame)
+    return out
+
+
+def frame_target(guide_box: Box, frame: Box, page: Size, min_part: float = 0.0) -> tuple[Box, Box] | None:
+    """(جزء المقطع الواقع داخل الإطار، موضعه في صفحة الطالب). ما خرج عن الإطار ليس في صفحة الطالب فلا يُطابَق ولا يُنقل.
+    None إن وقع من المقطع داخل الإطار أقل من `min_part` من مساحته."""
+    part = intersect(guide_box, frame)
+    if part is None:
+        return None
+    area = (guide_box[2] - guide_box[0]) * (guide_box[3] - guide_box[1])
+    if (part[2] - part[0]) * (part[3] - part[1]) < min_part * area:
+        return None
+    return part, clamp_box(transfer_box(part, frame, (0.0, 0.0, *page)), page)
+
+
+def fit_frame(samples: Sequence[tuple[Box, Box, Box, Size]], minimum: int, slack: float) -> FrameFit | None:
+    """يعاير الإطار من مقاطع بلغت العتبة: (صندوق الدليل، اللوحة، الصندوق في صفحة الطالب، مقاس صفحة الطالب) لكل مقطع.
+
+    المقياس وسيط نسب العرض والارتفاع، والهوامش وسيط ما بين حافة اللوحة وحافة صفحة الطالب المستنتَجة من كل مقطع (الوسيط
+    يسقط اللوحات الشاذة). `tolerance` و`stretch` المئين 90 لانحراف صناديق المعايرة نفسها عن المتوقع من الإطار وانحراف مقياسها،
+    بحدّ أدنى `MIN_TOLERANCE` و`slack` (خطوة البحث). None دون `minimum` مقطعًا.
+    """
+    if len(samples) < max(minimum, 1):
+        return None
+    ratios: list[float] = []
+    for guide, _, box, _ in samples:
+        ratios += [(box[2] - box[0]) / (guide[2] - guide[0]), (box[3] - box[1]) / (guide[3] - guide[1])]
+    scale = statistics.median(ratios)
+    draft = FrameFit(
+        scale=scale,
+        left=statistics.median(g[0] - b[0] / scale - p[0] for g, p, b, _ in samples),
+        top=statistics.median(g[1] - b[1] / scale - p[1] for g, p, b, _ in samples),
+        bottom=statistics.median(p[3] - g[3] - (page[1] - b[3]) / scale for g, p, b, page in samples),
+        tolerance=0.0,
+        stretch=0.0,
+        clips=len(samples),
+    )
+    residuals = []
+    for guide, panel, box, page in samples:
+        targets = [frame_target(guide, frame, page) for frame in frame_candidates([], panel, page, draft)]
+        residuals.append(min((deviation(box, t[1]) for t in targets if t is not None), default=math.inf))
+    return FrameFit(
+        scale=scale,
+        left=draft.left,
+        top=draft.top,
+        bottom=draft.bottom,
+        tolerance=max(MIN_TOLERANCE, _percentile(residuals, 0.9)),
+        stretch=max(slack, _percentile([abs(r / scale - 1) for r in ratios], 0.9)),
+        clips=len(samples),
+    )
+
+
+def score_floor(calibration: dict[str, dict[str, float]], mode: str, margin: float) -> float | None:
+    """الدرجة الدنيا المقيسة للدليل الهندسي: متوسط أعلى درجة في الصفحات الخاطئة (`miss` في معايرة التمثيل) زائد هامش الفصل
+    `mode_margin`. None بلا معايرة: لا قبول هندسي."""
+    row = calibration.get(mode)
+    return None if row is None else row["miss"] + margin
+
+
+def geometric(found: dict[str, Any], fit: FrameFit, floor: float | None) -> bool:
+    """دليل هندسي مستقل عن الدرجة: بحث النافذة (لا الصفحة كلها) استقر على الموضع المتوقع من الإطار ضمن انحراف المعايرة،
+    ومقياسا المحورين ضمن مداها، والدرجة فوق مستوى الصفحات الخاطئة."""
+    return (
+        floor is not None
+        and math.isfinite(fit.tolerance)
+        and not found["widened"]
+        and found["score"] >= floor
+        and found["deviation"] <= fit.tolerance
+        and all(abs(s - 1) <= fit.stretch + 1e-9 for s in found["scale"])
+    )
+
+
+def frame_search(search: dict[str, Any], frame: dict[str, Any]) -> dict[str, Any]:
+    """إعداد البحث بالإطار: المقياس معايَر فمداه ضيق حول 1 في النافذة وفي الصفحة كلها."""
+    return {
+        **search,
+        "scales": [1 - frame["scale"], 1 + frame["scale"]],
+        "wide_scales": None,
+        "aspect": frame["aspect"],
+    }
+
+
+def refine_in_frames(
+    matcher_for: Callable[[Box], Matcher],
+    guide_box: Box,
+    frames: Iterable[Box],
+    page: Size,
+    search: dict[str, Any],
+    threshold: float,
+    fit: FrameFit,
+    floor: float | None,
+    min_part: float = 0.0,
+) -> dict[str, Any] | None:
+    """أفضل مطابقة للمقطع على الإطارات المرشّحة، أو None إن لم يقع في أيٍّ منها.
+
+    لكل إطار: القالب جزء المقطع داخله (`matcher_for` يعيد مطابِق ذلك الجزء من صندوق الدليل)، والمنقول موضع الجزء وحده،
+    والبحث في النافذة ثم (إن لم يثبت) في الصفحة كلها. `evidence`: `score` ببلوغ العتبة، `geometry` بالدليل الهندسي
+    (`geometric`)، None لغيرهما. يُؤخذ الأقوى دليلًا ثم الأعلى درجةً، ويقف عند أول إطار يبلغ العتبة.
+    """
+    rank = {"score": 2, "geometry": 1, None: 0}
+    best: dict[str, Any] | None = None
+    for frame in frames:
+        target = frame_target(guide_box, frame, page, min_part)
+        if target is None:
+            continue
+        part, predicted = target
+        match = matcher_for(part)
+        for widen in (False, True):
+            trace: dict[str, Any] = {}
+            box, score, widened = refine(match, predicted, page, search, threshold, trace, widen=widen)
+            found = {
+                "frame": frame,
+                "template": part,
+                "predicted": predicted,
+                "box": box,
+                "score": score,
+                "widened": widened,
+                "deviation": deviation(box, predicted),
+                **trace,
+            }
+            found["evidence"] = (
+                "score" if score >= threshold else "geometry" if geometric(found, fit, floor) else None
+            )
+            if best is None or (rank[found["evidence"]], score) > (rank[best["evidence"]], best["score"]):
+                best = found
+            if found["evidence"]:
+                break
+        if best is not None and best["evidence"] == "score":
+            break
+    return best
 
 
 def pick_shift(
@@ -422,9 +614,12 @@ def pick_samples(clips: Sequence[ClipName], count: int) -> list[ClipName]:
     )
 
 
-def status_of(score: float, name: str, threshold: float, approved: Iterable[str]) -> str:
-    """ok بدرجة العتبة فأكثر؛ approved لمطابقة ضعيفة راجعها المالك؛ review لغيرها (لا يُكتب مقطعها)."""
-    if score >= threshold:
+def status_of(
+    score: float, name: str, threshold: float, approved: Iterable[str], evidence: str | None = None
+) -> str:
+    """ok بدرجة العتبة فأكثر أو بدليل هندسي (`geometric`)؛ approved لمطابقة ضعيفة راجعها المالك؛ review لغيرها (لا يُكتب
+    مقطعها)."""
+    if score >= threshold or evidence == "geometry":
         return "ok"
     return "approved" if name in set(approved) else "review"
 
@@ -447,6 +642,9 @@ def summarize(result: dict[str, Any]) -> dict[str, Any]:
         "review": [c["file"] for c in clips if c["status"] in ("review", "missing")],
         "min_score": round(min(scores), 3) if scores else None,
         "min_dpi": min((c["dpi"] for c in clips if c.get("dpi")), default=None),
+        "geometry": sum(
+            1 for c in clips if c.get("evidence") == "geometry"
+        ),  # المقبولة بالدليل الهندسي دون العتبة
         "kinds": kinds,
         "page_offset": result["page_offset"],
         "mode": result.get("mode"),
@@ -507,6 +705,19 @@ def cv_matcher(page_image: Callable[[int], Any], clip: Any, mode: str = "gray") 
         return (float(score), (where[0] + x0) / k, (where[1] + y0) / k)
 
     return match
+
+
+def part_matcher(
+    page_image: Callable[[int], Any], clip: Any, guide_box: Box, mode: str = "gray"
+) -> Callable[[Box], Matcher]:
+    """مطابِق لجزء من المقطع: `part` مستطيل داخل صندوق المقطع في صفحة الدليل، وقالبه بكسلات المقطع المقابلة له وحدها."""
+    import numpy as np
+
+    def matcher_for(part: Box) -> Matcher:
+        left, top, right, bottom = pixel_box(part, guide_box, (clip.shape[1], clip.shape[0]))
+        return cv_matcher(page_image, np.ascontiguousarray(clip[top:bottom, left:right]), mode)
+
+    return matcher_for
 
 
 class _Pages:
@@ -602,13 +813,13 @@ def run(book: Book, table: dict[int, int]) -> dict[str, Any]:
 
     with pymupdf.open(book.pdf()) as guide_doc, pymupdf.open(student_pdf(book)) as student_doc:
         guide, student = _Pages(guide_doc), _Pages(student_doc)
-        located: dict[str, tuple[Any, Box, Box | None]] = {}
+        located: dict[str, tuple[Any, Box, Box | None, list[Sequence[float]]]] = {}
         guide_scores: dict[str, float] = {}  # تبقى بعد إفراغ صور المقاطع من الذاكرة
         matched: dict[tuple[str, str, int], tuple[Box, float, bool]] = {}
         traces: dict[tuple[str, str, int], dict[str, Any]] = {}  # أرقام تشخيص كل مطابقة (تُكتب في التقرير)
 
-        def locate(clip: ClipName) -> tuple[Any, Box, Box | None]:
-            """صورة المقطع الرمادية وصندوقه في صفحة الدليل ولوحة صفحة الطالب فيها؛ ودرجته في `guide_scores`."""
+        def locate(clip: ClipName) -> tuple[Any, Box, Box | None, list[Sequence[float]]]:
+            """صورة المقطع الرمادية وصندوقه في صفحة الدليل ولوحة صفحة الطالب فيها وصورها؛ ودرجته في `guide_scores`."""
             if clip.file not in located:
                 data = np.frombuffer((source / clip.file).read_bytes(), dtype=np.uint8)
                 gray = cv2.imdecode(data, cv2.IMREAD_GRAYSCALE)
@@ -625,7 +836,8 @@ def run(book: Book, table: dict[int, int]) -> dict[str, Any]:
                 ]
                 box = (x, y, x + size[0], y + size[1])
                 guide_scores[clip.file] = score
-                located[clip.file] = (gray, box, panel_rect(rects, cfg["panel"]))
+                images = panel_images(rects, cfg["panel"])
+                located[clip.file] = (gray, box, panel_rect(rects, cfg["panel"]), images)
             return located[clip.file]
 
         def on_page(clip: ClipName, number: int, mode: str) -> tuple[Box, float, bool] | None:
@@ -633,7 +845,7 @@ def run(book: Book, table: dict[int, int]) -> dict[str, Any]:
             if not 1 <= number <= student_doc.page_count:
                 return None
             if (mode, clip.file, number) not in matched:
-                gray, box, panel = locate(clip)
+                gray, box, panel, _ = locate(clip)
                 page = student.size(number)
                 whole = (0.0, 0.0, *page)
                 source_rect = panel or (0.0, 0.0, *guide.size(clip.page))
@@ -686,7 +898,45 @@ def run(book: Book, table: dict[int, int]) -> dict[str, Any]:
             )
         located.clear()
 
+        def write(entry: dict[str, Any], clip: ClipName, box: Box, score: float) -> None:
+            """يحسم حالة المقطع ويكتبه من صفحة الطالب (المطابقة دون دليل بلا مراجعة لا تُكتب)."""
+            entry["status"] = status_of(score, clip.file, threshold, cfg["approved"], entry.get("evidence"))
+            if entry["status"] == "review":
+                return
+            rendered = _render(student_doc, entry["student_page"], box, cfg)
+            (target / clip.file).write_bytes(rendered.pop("png"))
+            entry.update(rendered)
+
+        def in_frames(
+            clip: ClipName, number: int, fit: FrameFit, floor: float | None
+        ) -> dict[str, Any] | None:
+            """إعادة مطابقة مقطع ضعيف بإطار صفحة الطالب المعايَر: القالب جزء المقطع داخل الإطار وحده."""
+            gray, box, panel, images = locate(clip)
+            if panel is None:
+                return None
+            page = student.size(number)
+            frames = frame_candidates(images, panel, page, fit)
+            found = refine_in_frames(
+                part_matcher(lambda dpi: student.gray(number, dpi), gray, box, mode),
+                box,
+                frames,
+                page,
+                frame_search(search, cfg["frame"]),
+                threshold,
+                fit,
+                floor,
+                cfg["frame"]["min_part"],
+            )
+            if found is not None:
+                found["candidates"] = len(frames)
+                found["pinned"] = pinned_edges(found["box"], page)
+            return found
+
         entries = []
+        weak: list[
+            tuple[ClipName, dict[str, Any], Box, float]
+        ] = []  # دون العتبة: تُعاد بالإطار بعد معايرته من الناجحة
+        samples_fit: list[tuple[Box, Box, Box, Size]] = []
         for clip in clips:
             entry: dict[str, Any] = {
                 "file": clip.file,
@@ -726,15 +976,51 @@ def run(book: Book, table: dict[int, int]) -> dict[str, Any]:
                 score=round(score, 3),
                 widened=widened,
                 box=[round(v, 1) for v in box],
-                status=status_of(score, clip.file, threshold, cfg["approved"]),
                 pages={str(s): round(v, 3) for s, v in sorted(tried.items())},
                 **traces[mode, clip.file, base + shift],
             )
-            if entry["status"] == "review":
+            if score < threshold:
+                weak.append((clip, entry, box, score))
                 continue
-            rendered = _render(student_doc, base + shift, box, cfg)
-            (target / clip.file).write_bytes(rendered.pop("png"))
-            entry.update(rendered)
+            write(entry, clip, box, score)
+            if entry["panel"] is not None and not entry["pinned"]:
+                samples_fit.append(
+                    (tuple(entry["guide_box"]), tuple(entry["panel"]), box, student.size(base + shift))
+                )
+
+        fit = fit_frame(samples_fit, cfg["frame"]["min_clips"], search["step"])
+        floor = score_floor(calibration, mode, cfg["mode_margin"])
+        for clip, entry, box, score in weak:
+            found = None if fit is None else in_frames(clip, entry["student_page"], fit, floor)
+            located.pop(clip.file, None)
+            if found is not None:
+                # أرقام تشخيص الإطار تبقى في التقرير ولو لم تُعتمد مطابقته
+                entry["frame"] = {
+                    "rect": [round(v, 1) for v in found["frame"]],
+                    "template": [round(v, 1) for v in found["template"]],
+                    "predicted": [round(v, 1) for v in found["predicted"]],
+                    "box": [round(v, 1) for v in found["box"]],
+                    "score": round(found["score"], 3),
+                    "near_score": found["near_score"],
+                    "scale": found["scale"],
+                    "deviation": round(found["deviation"], 1),
+                    "widened": found["widened"],
+                    "candidates": found["candidates"],
+                }
+                if found["evidence"]:
+                    box, score = found["box"], found["score"]
+                    entry.update(
+                        score=round(found["score"], 3),
+                        widened=found["widened"],
+                        box=[round(v, 1) for v in found["box"]],
+                        predicted=entry["frame"]["predicted"],
+                        near_score=found["near_score"],
+                        scale=found["scale"],
+                        pinned=found["pinned"],
+                        evidence=found["evidence"],
+                        source="frame",
+                    )
+            write(entry, clip, box, score)
 
     return {
         "page_offset": offset,
@@ -742,6 +1028,11 @@ def run(book: Book, table: dict[int, int]) -> dict[str, Any]:
         "threshold": threshold,
         "mode": mode,
         "calibration": calibration,
+        # معايرة إطار صفحة الطالب في الدليل والدرجة الدنيا للدليل الهندسي (None: لم تكفِ المقاطع الناجحة أو لا معايرة تمثيل)
+        "frame": None
+        if fit is None
+        else {k: v if k == "clips" else round(v, 3) for k, v in fit.__dict__.items()},
+        "floor": None if floor is None else round(floor, 3),
         "clips": entries,
         "unmatched": unmatched,
     }

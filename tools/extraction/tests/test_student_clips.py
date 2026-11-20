@@ -200,6 +200,203 @@ def test_pinned_edges_name_the_page_borders_a_box_touches():
     assert student_clips.pinned_edges((6.0, 49.5, 600.0, 800.0), PAGE) == ["right", "bottom"]
 
 
+# ───── إطار صفحة الطالب في الدليل ─────
+# أرقام من تقرير قصّ العاشر (2026-11-20): (صندوق الدليل، اللوحة، الصندوق في صفحة الطالب) لعشرة مقاطع بلغت العتبة
+STUDENT = (595.3, 783.1)
+MEASURED = [
+    ((37.4, 137.5, 246.6, 445.3), (30.1, 108.3, 345.1, 511.5), (2.0, 48.0, 417.9, 663.8)),
+    ((56.9, 136.8, 261.5, 278.3), (49.8, 107.5, 364.8, 510.7), (3.5, 48.0, 408.5, 331.0)),
+    ((56.9, 288.7, 261.5, 477.7), (49.8, 107.5, 364.8, 510.7), (1.0, 352.0, 409.9, 730.1)),
+    ((36.7, 137.5, 245.7, 458.1), (29.8, 108.3, 344.8, 511.5), (2.0, 48.0, 417.5, 689.3)),
+    ((36.7, 137.5, 241.4, 305.8), (30.1, 108.3, 345.1, 511.5), (1.0, 48.0, 409.9, 384.7)),
+    ((36.7, 313.2, 241.4, 455.8), (30.1, 108.3, 345.1, 511.5), (1.0, 399.5, 409.9, 684.7)),
+    ((37.4, 184.3, 246.6, 484.0), (30.1, 108.3, 345.1, 511.5), (4.0, 141.5, 417.9, 741.1)),
+    ((56.9, 136.8, 261.5, 438.7), (49.8, 107.5, 364.8, 510.7), (2.0, 48.0, 408.9, 651.9)),
+    ((55.4, 136.8, 259.2, 469.3), (48.5, 107.6, 363.5, 510.8), (5.0, 48.0, 408.2, 713.1)),
+    ((37.4, 172.8, 246.6, 423.0), (30.1, 108.3, 345.1, 511.5), (2.0, 118.5, 417.9, 619.0)),
+]
+
+
+def measured_fit():
+    return student_clips.fit_frame([(g, p, b, STUDENT) for g, p, b in MEASURED], 8, SEARCH["step"])
+
+
+def test_fit_frame_measures_one_scale_and_the_panel_margins():
+    fit = measured_fit()
+    # الصفحة مصغَّرة إلى النصف بنسبتها، وصورة اللوحة تزيد عليها هامشًا عند كل حافة: النقل من اللوحة كلها يخطئ بهما
+    assert fit.scale == pytest.approx(2.0, abs=0.01) and fit.clips == 10
+    assert (fit.left, fit.top, fit.bottom) == pytest.approx((6.1, 5.2, 6.5), abs=0.4)
+    assert 2.0 <= fit.tolerance <= 5.0 and fit.stretch == SEARCH["step"]
+    assert student_clips.fit_frame([(g, p, b, STUDENT) for g, p, b in MEASURED[:7]], 8, 0.02) is None
+    # لوحة شاذة (صور أخرى تحت صفحة الطالب) لا تزيح الوسيط
+    odd = ((37.4, 137.5, 246.6, 445.3), (30.1, 108.3, 345.1, 696.2), (2.0, 48.0, 417.9, 663.8), STUDENT)
+    skewed = student_clips.fit_frame([(g, p, b, STUDENT) for g, p, b in MEASURED] + [odd], 8, 0.02)
+    assert skewed.bottom == pytest.approx(fit.bottom, abs=0.1)
+
+
+def test_frame_candidates_anchor_the_page_to_the_top_and_to_the_bottom_of_the_panel():
+    fit = measured_fit()
+    height = STUDENT[1] / fit.scale
+    # لوحة بمقاس الصفحة وهامشيها: المرشّحان واحد
+    assert len(student_clips.frame_candidates([], (30.1, 108.3, 345.1, 511.5), STUDENT, fit)) == 1
+    # أول صفحة في الدرس: الصفحة مقصوصة من أعلاها فاللوحة أقصر، والإطار الصحيح المثبَّت بحافتها السفلى يبدأ فوقها
+    short = (47.4, 100.4, 362.4, 389.8)
+    top, bottom = student_clips.frame_candidates([], short, STUDENT, fit)
+    assert top[1] == pytest.approx(100.4 + fit.top) and bottom[3] == pytest.approx(389.8 - fit.bottom)
+    assert bottom[1] < 0 and bottom[3] - bottom[1] == pytest.approx(height)
+    _, predicted = student_clips.frame_target((54.0, 144.7, 258.1, 324.2), bottom, STUDENT)
+    assert (predicted[1], predicted[3]) == pytest.approx(
+        (304.5, 663.8), abs=3.0
+    )  # ما استقر عليه البحث الموسَّع رأسيًا
+    assert predicted[2] - predicted[0] == pytest.approx(2 * 204.1, abs=3.0)  # وعرضه ضعف عرض الدليل لا 0.8 منه
+    # صور اللوحة نفسها مرشّحات أيضًا: صورة أخرى تحت صفحة الطالب لا تُفسد التثبيت السفلي
+    images = [(30.1, 108.3, 331.0, 511.5, 1004), (20.9, 511.5, 335.9, 696.2, 1200)]
+    frames = student_clips.frame_candidates(images, (20.9, 108.3, 335.9, 696.2), STUDENT, fit)
+    assert len(frames) == 4  # أعلى اللوحة وأعلى صورتها الأولى مرشّح واحد
+    assert any(
+        f[0] == pytest.approx(30.1 + fit.left) and f[1] == pytest.approx(108.3 + fit.top) for f in frames
+    )
+
+
+def test_frame_target_keeps_only_the_part_of_the_clip_inside_the_student_page():
+    fit = measured_fit()
+    (frame,) = student_clips.frame_candidates([], (30.1, 108.3, 345.1, 512.5), STUDENT, fit)
+    # تتمة تبدأ فوق صفحة الطالب (هامش الصورة وحافة اللوحة): يُقطع ما فوقها والمنقول يبدأ عند حافة الصفحة العليا
+    cont = (36.7, 106.6, 246.4, 381.2)
+    part, predicted = student_clips.frame_target(cont, frame, STUDENT)
+    assert part[1] == pytest.approx(frame[1]) and part[1] - cont[1] == pytest.approx(6.9, abs=0.3)
+    assert predicted[1] == 0.0 and (part[0], part[2], part[3]) == (cont[0], cont[2], cont[3])
+    # مقطع ينتهي تحت صفحة الطالب: يُقطع ما تحتها والمنقول ينتهي عند حافتها السفلى، وأعلاه عند 48 كسائر الصفحات
+    (frame,) = student_clips.frame_candidates([], (29.8, 108.3, 344.8, 511.5), STUDENT, fit)
+    part, predicted = student_clips.frame_target((36.7, 137.5, 241.2, 509.8), frame, STUDENT)
+    assert part[3] == pytest.approx(frame[3]) and predicted[3] == pytest.approx(STUDENT[1])
+    assert predicted[1] == pytest.approx(48.0, abs=1.0)
+    # مقطع خارج الإطار كله أو جلّه لا يُطابَق
+    assert student_clips.frame_target((36.7, 600.0, 241.2, 700.0), frame, STUDENT) is None
+    assert student_clips.frame_target((36.7, 300.0, 241.2, 900.0), frame, STUDENT, min_part=0.5) is None
+    assert student_clips.intersect((0.0, 0.0, 5.0, 5.0), (5.0, 0.0, 9.0, 5.0)) is None
+    assert student_clips.deviation((0.0, 0.0, 5.0, 5.0), (1.0, -3.0, 5.0, 7.0)) == 3.0
+
+
+FIT = student_clips.FrameFit(scale=2.0, left=6.0, top=5.0, bottom=7.0, tolerance=3.0, stretch=0.02, clips=10)
+FRAME_SEARCH = student_clips.frame_search(SEARCH, student_clips.DEFAULTS["frame"])
+WHOLE = (0.0, 0.0, *PAGE)
+
+
+def stretched(true, ceiling=1.0):
+    """مطابِق مختلق بمقياس لكل محور: الدرجة تهبط بخطأ الموضع (محصورًا في الصفحة: القالب لا يخرج عنها) وخطأ كل مقياس."""
+
+    def match(dpi, size, window):
+        x0, y0, x1, y1 = window or WHOLE
+        if x1 - x0 < size[0] or y1 - y0 < size[1]:
+            return (-1.0, 0.0, 0.0)
+        x = min(max(true[0], x0), x1 - size[0])
+        y = min(max(true[1], y0), y1 - size[1])
+        miss = math.hypot(x - true[0], y - true[1]) / 50
+        stretch = abs(size[0] / (true[2] - true[0]) - 1) + abs(size[1] / (true[3] - true[1]) - 1)
+        return (ceiling - miss - stretch * 5, x, y)
+
+    return match
+
+
+def in_frames(guide_box, panel, true_frame, floor=None, ceiling=1.0, shift=0.0, images=()):
+    """مطابقة بالإطار بمطابِق مختلق: كل جزء من المقطع موضعه الحقيقي نقله من الإطار الحقيقي (مزاحًا أفقيًا بـ `shift`)."""
+
+    def matcher_for(part):
+        x0, y0, x1, y1 = student_clips.transfer_box(part, true_frame, WHOLE)
+        return stretched((x0 + shift, y0, x1 + shift, y1), ceiling)
+
+    frames = student_clips.frame_candidates(images, panel, PAGE, FIT)
+    return student_clips.refine_in_frames(
+        matcher_for, guide_box, frames, PAGE, FRAME_SEARCH, 0.8, FIT, floor, 0.25
+    )
+
+
+def whole_clip(guide_box, panel, true_frame):
+    """المطابقة السابقة: المقطع كله قالبًا، منقولًا من اللوحة كلها."""
+    true = student_clips.transfer_box(guide_box, true_frame, WHOLE)
+    predicted = student_clips.transfer_box(guide_box, panel, WHOLE)
+    return student_clips.refine(stretched(true), predicted, PAGE, SEARCH, 0.8)
+
+
+def test_clip_starting_above_the_student_page_is_matched_by_its_inner_part():
+    panel, frame = (30.0, 100.0, 345.0, 512.0), (36.0, 105.0, 336.0, 505.0)
+    cont = (40.0, 98.0, 250.0, 200.0)  # 7 نقاط منه فوق صفحة الطالب
+    _, before, _ = whole_clip(cont, panel, frame)
+    assert before < 0.8  # ما فوق الصفحة يمنع القالب من موضعه: المحتوى مزاح 14 نقطة
+    found = in_frames(cont, panel, frame)
+    assert found["evidence"] == "score" and found["score"] > 0.95 and not found["widened"]
+    assert found["template"] == (40.0, 105.0, 250.0, 200.0)
+    assert found["box"] == pytest.approx((8.0, 0.0, 428.0, 190.0), abs=1.0)
+    assert student_clips.pinned_edges(found["box"], PAGE) == ["top"]
+
+
+def test_clip_ending_below_the_student_page_is_matched_by_its_inner_part():
+    panel, frame = (30.0, 100.0, 345.0, 512.0), (36.0, 105.0, 336.0, 505.0)
+    clip_box = (40.0, 300.0, 250.0, 513.0)  # 8 نقاط منه تحت صفحة الطالب
+    _, before, _ = whole_clip(clip_box, panel, frame)
+    assert before < 0.8
+    found = in_frames(clip_box, panel, frame)
+    assert found["evidence"] == "score" and found["score"] > 0.95
+    assert found["template"] == (40.0, 300.0, 250.0, 505.0)
+    assert found["box"] == pytest.approx((8.0, 390.0, 428.0, 800.0), abs=1.0)
+    assert student_clips.pinned_edges(found["box"], PAGE) == ["bottom"]
+
+
+def test_predicted_inside_the_page_but_far_is_fixed_by_the_frame_anchor():
+    # لوحة أطول من الصفحة (صورة أخرى تحتها): مقياس النقل الرأسي من ارتفاعها يخطئ بأكثر مما يصحّحه البحث
+    tall, frame = (30.0, 100.0, 345.0, 640.0), (36.0, 105.0, 336.0, 505.0)
+    clip_box = (40.0, 300.0, 250.0, 460.0)
+    _, before, _ = whole_clip(clip_box, tall, frame)
+    assert before < 0.8
+    found = in_frames(clip_box, tall, frame)
+    assert found["evidence"] == "score" and found["frame"] == pytest.approx(frame)
+    assert found["box"] == pytest.approx((8.0, 390.0, 428.0, 710.0), abs=1.0) and not found["widened"]
+    # أول صفحة في الدرس: لوحة أقصر (الصفحة مقصوصة من أعلاها)، والإطار الصحيح مثبَّت بحافتها السفلى
+    short, frame = (47.0, 100.0, 362.0, 390.0), (53.0, -17.0, 353.0, 383.0)
+    clip_box = (54.0, 145.0, 258.0, 324.0)
+    _, before, _ = whole_clip(clip_box, short, frame)
+    assert before < 0.8
+    found = in_frames(clip_box, short, frame, floor=0.5, ceiling=0.7)
+    assert found["frame"] == pytest.approx(frame) and found["evidence"] == "geometry"
+    assert found["box"] == pytest.approx((2.0, 324.0, 410.0, 682.0), abs=1.0)
+
+
+def test_geometric_evidence_needs_position_scale_and_a_measured_floor():
+    panel, frame = (30.0, 100.0, 345.0, 512.0), (36.0, 105.0, 336.0, 505.0)
+    clip_box = (40.0, 150.0, 250.0, 300.0)
+    weak = in_frames(clip_box, panel, frame, floor=0.59, ceiling=0.7)
+    # الموضع الصحيح بدرجة دون العتبة: بحث النافذة استقر على المتوقع من الإطار والمقياس 1 والدرجة فوق مستوى الصفحات الخاطئة
+    assert weak["evidence"] == "geometry" and weak["score"] == pytest.approx(0.7)
+    assert weak["deviation"] <= FIT.tolerance and not weak["widened"]
+    assert student_clips.status_of(weak["score"], "1.1_m1_p28.png", 0.8, [], weak["evidence"]) == "ok"
+    assert student_clips.status_of(0.7, "1.1_m1_p28.png", 0.8, []) == "review"  # العتبة نفسها لم تُخفض
+    assert (
+        in_frames(clip_box, panel, frame, floor=None, ceiling=0.7)["evidence"] is None
+    )  # بلا درجة دنيا مقيسة
+    assert in_frames(clip_box, panel, frame, floor=0.75, ceiling=0.7)["evidence"] is None  # دون الدرجة الدنيا
+    # الموضع يبعد عن المتوقع بأكثر من انحراف المعايرة: لا دليل
+    assert in_frames(clip_box, panel, frame, floor=0.59, ceiling=0.7, shift=10.0)["evidence"] is None
+    # والمقياس خارج مداها كذلك
+    off = {**weak, "scale": [1.0, 1.035]}
+    assert not student_clips.geometric(off, FIT, 0.59) and student_clips.geometric(weak, FIT, 0.59)
+    assert not student_clips.geometric({**weak, "widened": True}, FIT, 0.59)  # الصفحة كلها ليست دليل موضع
+    assert student_clips.score_floor({"blur": {"hit": 0.68, "miss": 0.39}}, "blur", 0.2) == pytest.approx(
+        0.59
+    )
+    assert student_clips.score_floor({}, "blur", 0.2) is None
+
+
+def test_refine_without_widening_stays_in_the_window():
+    predicted = (50.0, 50.0, 250.0, 200.0)
+    true = (350.0, 600.0, 550.0, 750.0)
+    calls = []
+    _, score, widened = student_clips.refine(
+        analytic(true, (200.0, 150.0), calls), predicted, PAGE, SEARCH, 0.8, widen=False
+    )
+    assert not widened and score < 0.8 and all(c[2] is not None for c in calls)
+
+
 def test_steps_are_inclusive_and_exact():
     assert student_clips.steps(0.85, 1.15, 0.02)[:2] == [0.85, 0.87]
     assert student_clips.steps(0.85, 1.15, 0.02)[-1] == 1.15
@@ -319,19 +516,30 @@ def test_summary_counts_and_unreviewed():
                 "dpi": 300,
             },
             {"file": "c.png", "lesson": "2.3", "page_shift": -2, "status": "review", "score": 0.42},
+            {
+                "file": "e.png",
+                "lesson": "1.1",
+                "page_shift": 0,
+                "status": "ok",
+                "score": 0.66,
+                "evidence": "geometry",
+                "kind": "vector",
+                "dpi": 600,
+            },
             {"file": "d.png", "lesson": "3.1", "status": "missing"},
         ],
     }
     assert student_clips.summarize(result) == {
-        "clips": 4,
-        "written": 2,
+        "clips": 5,
+        "written": 3,
         "review": ["c.png", "d.png"],
         "min_score": 0.42,
         "min_dpi": 300,
-        "kinds": {"vector": 1, "scan": 1},
+        "geometry": 1,
+        "kinds": {"vector": 2, "scan": 1},
         "page_offset": 9,
         "mode": "edges",
-        "shifts": {"1": {"0": 1}, "2": {"1": 1}},  # المكتوب وحده: انزياح المطابقة الضعيفة لا يُعدّ
+        "shifts": {"1": {"0": 2}, "2": {"1": 1}},  # المكتوب وحده: انزياح المطابقة الضعيفة لا يُعدّ
         "unmatched_names": 1,
     }
     assert student_clips.unreviewed(result) == ["c.png", "d.png"]
@@ -381,6 +589,7 @@ def test_settings_merge_nested_defaults(tmp_path):
     cfg = student_clips.settings(book)
     assert cfg["search"]["margin"] == 0.3 and cfg["search"]["step"] == SEARCH["step"]
     assert cfg["panel"] == {"min_width": 900, "max_x0": 100, "width": None}
+    assert cfg["frame"] == student_clips.DEFAULTS["frame"]
     assert (cfg["page_offset"], cfg["threshold"], cfg["vector_dpi"]) == (9, 0.8, 600)
 
 
@@ -562,6 +771,35 @@ def test_cv_matcher_recovers_a_crop_stretched_on_one_axis():
     assert box == pytest.approx(true, abs=2.0)
     flat, _, _ = student_clips.refine(match, predicted, PAGE, {**SEARCH, "aspect": 0}, 0.8)
     assert abs((flat[3] - flat[1]) - 180.0) > 4.0  # المقياس الموحَّد يترك خطأ النسبة في الصندوق
+
+
+def test_part_matcher_matches_only_the_part_of_the_clip_inside_the_page():
+    np = pytest.importorskip("numpy")
+    cv2 = pytest.importorskip("cv2")
+    page_px = _texture(np, 1200, 1600, seed=9)  # 600×800 نقطة بدقة 144
+    page_image = _page_image(cv2, page_px)
+    panel, frame = (30.0, 100.0, 345.0, 512.0), (36.0, 105.0, 336.0, 505.0)
+    cont = (40.0, 98.0, 250.0, 200.0)  # 7 نقاط دليل فوق صفحة الطالب، ثم أعلى الصفحة (8, 0)-(428, 190)
+    above = _texture(np, 840, 28, seed=10)  # ما فوق الصفحة في الدليل: ليس في صفحة الطالب
+    clip_px = np.vstack([above, page_px[0:380, 16:856]])  # 4 بكسلات لكل نقطة دليل
+    frames = student_clips.frame_candidates([], panel, PAGE, FIT)
+    assert frames == [pytest.approx(frame)]
+    found = student_clips.refine_in_frames(
+        student_clips.part_matcher(page_image, clip_px, cont),
+        cont,
+        frames,
+        PAGE,
+        FRAME_SEARCH,
+        0.8,
+        FIT,
+        None,
+    )
+    assert found["evidence"] == "score" and found["score"] > 0.9
+    assert found["box"] == pytest.approx((8.0, 0.0, 428.0, 190.0), abs=3.0)
+    # المقطع كله قالبًا لا يبلغ درجة جزئه الداخلي: ما فوق الصفحة لا مقابل له فيها
+    predicted = student_clips.transfer_box(cont, panel, WHOLE)
+    whole = student_clips.refine(student_clips.cv_matcher(page_image, clip_px), predicted, PAGE, SEARCH, 0.8)
+    assert whole[1] < found["score"]
 
 
 def test_cv_matcher_representations_survive_tone_and_polarity_differences():
