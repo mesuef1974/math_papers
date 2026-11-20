@@ -95,6 +95,7 @@ def _load_lesson(data: LessonData, lessons: dict[str, Lesson], report: LoadRepor
         "exercises_total": data.exercises_total,
         "vocab_new": data.vocab_new,
         "vocab_review": data.vocab_review,
+        "exercise_pages": [r.model_dump() for r in data.exercise_pages],
     }
     profile, created = LessonProfile.objects.get_or_create(lesson=lesson, defaults=wanted)
     if created:

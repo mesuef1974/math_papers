@@ -37,6 +37,21 @@ def number_list(numbers: list[int]) -> str:
     return "، ".join(f"{run[0]}–{run[-1]}" if len(run) >= 3 else "، ".join(map(str, run)) for run in runs)
 
 
+def numbers_with_pages(numbers: list[int], pages: Mapping[int, int]) -> str:
+    """«14، 15 (ص 9)؛ 30 (ص 10)»: أرقام تمارين الكتاب مجموعة بصفحاتها المطبوعة بترتيب الأرقام؛ التمرين بلا صفحة معروفة رقمه
+    وحده في مجموعة بلا صفحة، وبلا أي صفحة معروفة النص `number_list` نفسه."""
+    groups: list[tuple[int | None, list[int]]] = []
+    for n in sorted(set(numbers)):
+        page = pages.get(n)
+        if groups and groups[-1][0] == page:
+            groups[-1][1].append(n)
+        else:
+            groups.append((page, [n]))
+    return "؛ ".join(
+        f"{number_list(nums)} (ص {page})" if page is not None else number_list(nums) for page, nums in groups
+    )
+
+
 def source_cells(source: Mapping[str, Any] | None) -> dict[str, str]:
     """خلايا المصدر في أعمدة المفتاح الثلاثة «الصفحة» و«المثال» و«التدريب» (قرار المالك 2026-11-19)، مشتقة من
     أرقام المصدر وحدها في الخادم وWord، فلا تغيب حين لا يصل نص مشتق مع الجزء. الخانة المجهولة فارغة لا مخترعة.

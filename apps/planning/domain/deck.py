@@ -14,7 +14,7 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, replace
 
 from apps.papers.domain.bidi import isolate_number_ranges
-from apps.papers.domain.book_source import number_list
+from apps.papers.domain.book_source import number_list, numbers_with_pages
 
 from .calendar_engine import PlanningError
 from .prep import PeriodPrep, PrepExample, prep_digest
@@ -279,7 +279,9 @@ def _draft_slides(prep: PeriodPrep, groups: dict[int, tuple[ExampleClip, ...]]) 
                 _slide(
                     "classwork",
                     _t("classwork_title", n=e.n),
-                    bullets=(_t("exercises", numbers=number_list(list(exercises))),),
+                    bullets=(
+                        _t("exercises", numbers=numbers_with_pages(list(exercises), prep.exercise_pages)),
+                    ),
                     refs=(e.n,),
                     notes=_exercise_notes(prep, exercises),
                 )
@@ -287,9 +289,9 @@ def _draft_slides(prep: PeriodPrep, groups: dict[int, tuple[ExampleClip, ...]]) 
     if prep.basic or prep.advanced:
         paths = []
         if prep.basic:
-            paths.append(_t("basic", numbers=number_list(list(prep.basic))))
+            paths.append(_t("basic", numbers=numbers_with_pages(list(prep.basic), prep.exercise_pages)))
         if prep.advanced:
-            paths.append(_t("advanced", numbers=number_list(list(prep.advanced))))
+            paths.append(_t("advanced", numbers=numbers_with_pages(list(prep.advanced), prep.exercise_pages)))
         notes = (_t("differentiation_note"), *_exercise_notes(prep, [*prep.basic, *prep.advanced]))
         slides.append(_slide("differentiation", _t("independent_title"), bullets=tuple(paths), notes=notes))
     if prep.formative:
@@ -317,7 +319,9 @@ def _draft_slides(prep: PeriodPrep, groups: dict[int, tuple[ExampleClip, ...]]) 
             _slide(
                 "homework",
                 _t("homework_title"),
-                bullets=(_t("exercises", numbers=number_list(list(prep.homework))),),
+                bullets=(
+                    _t("exercises", numbers=numbers_with_pages(list(prep.homework), prep.exercise_pages)),
+                ),
                 notes=_exercise_notes(prep, prep.homework),
             )
         )
