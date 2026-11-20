@@ -83,7 +83,8 @@ class PrepExample:
     weight: int
     conceptual: bool = False
     extension: bool = False  # مثال إثرائي أُدرج امتدادًا معلَّمًا
-    continuations: int | None = None  # عدد مقاطع المثال وتتماته؛ None: لم تُعرف الأصول بعد
+    # عدد شرائح مقاطع المثال: الأصل وتتماته، والتتمة القصيرة المضمومة إلى ما قبلها لا تُعدّ؛ None: لم تُعرف الأصول بعد
+    continuations: int | None = None
     has_generator: bool = False
 
     @property
@@ -242,8 +243,12 @@ def lesson_examples(
     enrichment: Iterable[int] = (),
     generators: Iterable[int] = (),
     clips: Mapping[int, int] | None = None,
+    slides: Mapping[int, int] | None = None,
 ) -> tuple[PrepExample, ...]:
-    """أمثلة الدرس الأساسية (بلا الإثرائي) بصفوف تحليلها وأوزانها."""
+    """أمثلة الدرس الأساسية (بلا الإثرائي) بصفوف تحليلها وأوزانها.
+
+    `clips` عدد مقاطع كل مثال في الكتاب (الأصل وتتماته) ومنه الوزن، و`slides` عدد شرائحها بعد ضمّ التتمات القصيرة (بلا
+    `slides` لكل مقطع شريحة): الضمّ يغيّر العرض لا حجم المثال، فلا يغيّر توزيع الأمثلة على الحصص."""
     skip, gens = set(enrichment), set(generators)
     conceptual = CONCEPTUAL_EXAMPLES.get(course, {}).get(lesson.lesson, frozenset())
     rows: dict[int, list[tuple[int, tuple[int, ...]]]] = {}
@@ -254,14 +259,15 @@ def lesson_examples(
         if e.n in skip:
             continue
         own = tuple(sorted(rows.get(e.n, ())))
-        continuations = None if clips is None else clips.get(e.n, 0)
+        parts = None if clips is None else clips.get(e.n, 0)
+        continuations = parts if parts is None or slides is None else slides.get(e.n, 0)
         out.append(
             PrepExample(
                 n=e.n,
                 page=e.page,
                 representations=tuple(e.representations),
                 rows=own,
-                weight=example_weight(own, continuations),
+                weight=example_weight(own, parts),
                 conceptual=e.n in conceptual,
                 continuations=continuations,
                 has_generator=e.n in gens,
