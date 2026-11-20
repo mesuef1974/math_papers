@@ -112,3 +112,16 @@ def test_grade12_approved_units_pass_objectives_and_approval():
         "3.4": [1, 2, 3],
         "3.5": [1, 2, 3],
     }
+
+
+def test_grade12_lesson_quiz_depths_come_from_its_examples():
+    """دليل الثاني عشر بلا أعماق اختبار درس: تُشتق من أمثلته (أعلى عمق لكل مثال بترتيبه)، والعاشر يبقى على دليله."""
+    preps = {(row.prep.lesson, row.prep.k): row for row in lesson_preps(GRADE12_SLUG)}
+    last = max(k for lesson, k in preps if lesson == "1.1")
+    assert preps[("1.1", last)].prep.quiz == (1, 1, 2, 2, 2, 2)  # صفوف 1.1: المثالان 1 و2 بعمق 1 والباقي 2
+    assert all(row.prep.quiz == () for (lesson, k), row in preps.items() if lesson == "1.1" and k != last)
+    for row in preps.values():
+        assert {r.code: r.status for r in row.checks}["T12"] == PASS, (row.prep.lesson, row.prep.k)
+    depths = {lesson.lesson: tuple(lesson.quiz_depths) for lesson in course_index(GRADE10_SLUG).lessons}
+    g10 = [row for row in lesson_preps(GRADE10_SLUG) if row.prep.k == row.prep.n]
+    assert g10 and all(row.prep.quiz == depths[row.prep.lesson] for row in g10)

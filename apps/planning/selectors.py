@@ -31,7 +31,14 @@ from .domain.objective_text import digest as text_digest
 from .domain.objective_text import shared_digest
 from .domain.plan_periods import PlanPeriod
 from .domain.plan_periods import plan_periods as derive_plan_periods
-from .domain.prep import PeriodPrep, build_prep, lesson_examples, recall_for, stage_options
+from .domain.prep import (
+    PeriodPrep,
+    build_prep,
+    lesson_examples,
+    lesson_quiz_depths,
+    recall_for,
+    stage_options,
+)
 from .domain.prep import allocate as allocate_examples
 from .domain.prep_checks import CheckResult, check_lesson, check_prep
 from .domain.prep_override import LessonOverride, OverrideError, parse_override
@@ -280,7 +287,7 @@ def lesson_preps(
                 by_slug,
                 previous_lesson=previous_lesson,
                 after_break=after_break,
-                quiz_depths=lesson.quiz_depths,
+                quiz_depths=lesson_quiz_depths(lesson, examples),
             )
             built.append((period, prep, checks))
         lesson_checks = check_lesson(
