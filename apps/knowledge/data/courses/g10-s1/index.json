@@ -154,7 +154,8 @@
    "vocabulary": {
     "new": 2,
     "review": 3
-   }
+   },
+   "exercise_pages": []
   },
   {
    "lesson": "1.2",
@@ -318,7 +319,8 @@
    "vocabulary": {
     "new": 1,
     "review": 3
-   }
+   },
+   "exercise_pages": []
   },
   {
    "lesson": "1.3",
@@ -483,7 +485,8 @@
    "vocabulary": {
     "new": 1,
     "review": 3
-   }
+   },
+   "exercise_pages": []
   },
   {
    "lesson": "1.4",
@@ -624,7 +627,8 @@
    "vocabulary": {
     "new": 2,
     "review": 2
-   }
+   },
+   "exercise_pages": []
   },
   {
    "lesson": "2.1",
@@ -747,7 +751,8 @@
    "vocabulary": {
     "new": 2,
     "review": 3
-   }
+   },
+   "exercise_pages": []
   },
   {
    "lesson": "2.2",
@@ -914,7 +919,8 @@
    "vocabulary": {
     "new": 2,
     "review": 3
-   }
+   },
+   "exercise_pages": []
   },
   {
    "lesson": "2.3",
@@ -1080,7 +1086,8 @@
    "vocabulary": {
     "new": 1,
     "review": 4
-   }
+   },
+   "exercise_pages": []
   },
   {
    "lesson": "2.4",
@@ -1233,7 +1240,8 @@
    "vocabulary": {
     "new": 0,
     "review": 4
-   }
+   },
+   "exercise_pages": []
   },
   {
    "lesson": "2.5",
@@ -1416,7 +1424,8 @@
    "vocabulary": {
     "new": 1,
     "review": 3
-   }
+   },
+   "exercise_pages": []
   },
   {
    "lesson": "2.6",
@@ -1537,7 +1546,8 @@
    "vocabulary": {
     "new": 3,
     "review": 0
-   }
+   },
+   "exercise_pages": []
   },
   {
    "lesson": "2.7",
@@ -1702,7 +1712,8 @@
    "vocabulary": {
     "new": 2,
     "review": 3
-   }
+   },
+   "exercise_pages": []
   },
   {
    "lesson": "2.8",
@@ -1861,7 +1872,8 @@
    "vocabulary": {
     "new": 1,
     "review": 2
-   }
+   },
+   "exercise_pages": []
   },
   {
    "lesson": "2.9",
@@ -1990,7 +2002,8 @@
    "vocabulary": {
     "new": 2,
     "review": 4
-   }
+   },
+   "exercise_pages": []
   },
   {
    "lesson": "2.10",
@@ -2150,7 +2163,8 @@
    "vocabulary": {
     "new": 1,
     "review": 2
-   }
+   },
+   "exercise_pages": []
   },
   {
    "lesson": "3.1",
@@ -2326,7 +2340,8 @@
    "vocabulary": {
     "new": 1,
     "review": 2
-   }
+   },
+   "exercise_pages": []
   },
   {
    "lesson": "3.2",
@@ -2471,7 +2486,8 @@
    "vocabulary": {
     "new": 1,
     "review": 4
-   }
+   },
+   "exercise_pages": []
   },
   {
    "lesson": "3.3",
@@ -2618,7 +2634,8 @@
    "vocabulary": {
     "new": 0,
     "review": 1
-   }
+   },
+   "exercise_pages": []
   },
   {
    "lesson": "3.4",
@@ -2781,7 +2798,8 @@
    "vocabulary": {
     "new": 1,
     "review": 3
-   }
+   },
+   "exercise_pages": []
   },
   {
    "lesson": "3.5",
@@ -2938,7 +2956,8 @@
    "vocabulary": {
     "new": 0,
     "review": 2
-   }
+   },
+   "exercise_pages": []
   }
  ]
 }

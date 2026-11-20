@@ -10,7 +10,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
-from apps.papers.domain.book_source import number_list
+from apps.papers.domain.book_source import numbers_with_pages
 
 from .non_lesson import NonLessonPrep, PaperLink
 from .prep import PeriodPrep, PrepExample, Recall
@@ -187,14 +187,16 @@ def _objective_rows(prep: PeriodPrep, library: Mapping[str, Strategy]) -> tuple[
                 text="مراجعة أمثلة الدرس وحل تدريباتها بمستويين، ثم اختبار الدرس",
                 pending=False,
                 teach_activity=_activity(
-                    f"مراجعة متمايزة ({direct}): أساسي {number_list(list(prep.basic))}", chosen["direct"]
+                    f"مراجعة متمايزة ({direct}): أساسي {numbers_with_pages(list(prep.basic), prep.exercise_pages)}",
+                    chosen["direct"],
                 ),
                 teach_assessment=_activity(
                     f"ممارسة موجهة ({guided}) ومتابعة الأداء في المجموعات", chosen["guided"]
                 ),
                 teach_minutes=teach_total,
                 check_activity=_activity(
-                    f"متقدم {number_list(list(prep.advanced))} ({independent})", chosen["independent"]
+                    f"متقدم {numbers_with_pages(list(prep.advanced), prep.exercise_pages)} ({independent})",
+                    chosen["independent"],
                 ),
                 check_assessment="اختبار الدرس بأعماق " + "، ".join(map(str, prep.quiz))
                 if prep.quiz
@@ -220,7 +222,7 @@ def _objective_rows(prep: PeriodPrep, library: Mapping[str, Strategy]) -> tuple[
                 teach_assessment=_activity(f"«جرّب» على المثال {example.n}: {guided}", chosen["guided"]),
                 teach_minutes=teach[i],
                 check_activity=_activity(
-                    f"تدريب صفي {number_list(list(work.exercises))}: {independent}"
+                    f"تدريب صفي {numbers_with_pages(list(work.exercises), prep.exercise_pages)}: {independent}"
                     if work
                     else "مناقشة الاشتقاق وتطبيقه",
                     chosen["independent"],
@@ -303,9 +305,11 @@ def prep_sheet(
         objectives=_objective_rows(prep, library),
         closing=_closing(prep, library.get(stages["closing"].strategy or "")),
         closing_minutes=stages["closing"].minutes,
-        homework=f"تمارين الكتاب {number_list(list(prep.homework))}" if prep.homework else "",
-        basic=number_list(list(prep.basic)),
-        advanced=number_list(list(prep.advanced)),
+        homework=f"تمارين الكتاب {numbers_with_pages(list(prep.homework), prep.exercise_pages)}"
+        if prep.homework
+        else "",
+        basic=numbers_with_pages(list(prep.basic), prep.exercise_pages),
+        advanced=numbers_with_pages(list(prep.advanced), prep.exercise_pages),
         quiz="، ".join(map(str, prep.quiz)),
         stages=tuple(
             StageRow(s.name, STAGE_LABELS[s.name], s.minutes, titles.get(s.strategy or "", ""))
