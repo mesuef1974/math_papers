@@ -11,6 +11,7 @@ import random
 from collections.abc import Callable, Collection, Mapping
 from dataclasses import dataclass, field, replace
 from functools import cache
+from itertools import product
 from typing import Any
 
 import sympy as sp
@@ -1635,6 +1636,331 @@ def full_concavity_study(rng: random.Random) -> Problem:
         "A",
         {"type": "inflection", "f": f, "at": t, "value": value},
         mcq_ok=False,
+    )
+
+
+NONE_FOUND = "لا توجد"
+EXTREMUM_WORDS = {"max": "عظمى محلية عند", "min": "صغرى محلية عند", "none": "لا قيمة قصوى عند"}
+
+
+def sign_change(left: float, right: float) -> str:
+    """نوع النقطة الحرجة من إشارة المشتقة قبلها وبعدها (اختبار المشتقة الأولى)."""
+    if left > 0 > right:
+        return "max"
+    if left < 0 < right:
+        return "min"
+    return "none"
+
+
+def extrema_text(points: list[tuple[int, str]]) -> str:
+    return "، و".join(f"{EXTREMUM_WORDS[kind]} $x={p}$" for p, kind in points)
+
+
+def extrema_problem(
+    lesson: str,
+    stem: str,
+    f: sp.Expr,
+    points: list[tuple[int, str]],
+    steps: tuple[str, ...],
+    rng: random.Random,
+) -> Problem:
+    """تصنيف النقاط الحرجة، وبدائله تصنيفات أخرى للنقاط نفسها: العكس أولًا ثم غيره."""
+    answer = extrema_text(points)
+    truth = tuple(kind for _, kind in points)
+    swapped = tuple({"max": "min", "min": "max", "none": "none"}[k] for k in truth)
+    others = [t for t in product(EXTREMUM_WORDS, repeat=len(points)) if t not in (truth, swapped)]
+    rng.shuffle(others)
+    texts = [extrema_text(list(zip([p for p, _ in points], t, strict=True))) for t in [swapped, *others]]
+    return Problem(
+        lesson,
+        stem,
+        answer,
+        wrongs(answer, *texts[:6]),
+        (*steps, f"إذن: {answer}."),
+        "R",
+        {"type": "extrema", "f": f, "points": points},
+    )
+
+
+def cube_root_text(inner: sp.Expr, power: int = 1) -> str:
+    body = tex(inner) if power == 1 else f"({tex(inner)})^{power}" if inner != x else f"x^{power}"
+    return rf"\sqrt[3]{{{body}}}"
+
+
+def coefficient(k: int) -> str:
+    return {1: "", -1: "-"}.get(k, str(k))
+
+
+@variant("3.1", example=3)
+def critical_where_derivative_undefined(rng: random.Random) -> Problem:
+    """قيمة حرجة لا تكون فيها المشتقة صفرًا بل غير موجودة: قوة كسرية 2/3."""
+    c, k, d = rng.randint(-3, 3), nz(rng, -3, 3), rng.randint(-4, 4)
+    f = k * sp.Abs(x - c) ** sp.Rational(2, 3) + d
+    shown = coefficient(k) + cube_root_text(x - c, 2) + (f"{d:+d}" if d else "")
+    falling, rising = rf"$(-\infty,{c})$", rf"$({c},\infty)$"
+    if k < 0:
+        falling, rising = rising, falling
+    return Problem(
+        "3.1",
+        f"أوجد القيم الحرجة للدالة $f(x)={shown}$.",
+        f"$x={c}$",
+        wrongs(f"$x={c}$", NONE_FOUND, f"$x={-c}$", "$x=0$", f"$x={c + 1}$", f"$x={d}$", f"$x={c - 1}$", f"$x={c + 2}$"),
+        (
+            rf"$f(x)={coefficient(k)}({tex(x - c)})^{{2/3}}{f'{d:+d}' if d else ''}$، "
+            rf"فـ $f'(x)={frac(2 * k, '3' + cube_root_text(x - c))}$",
+            f"البسط لا يساوي صفرًا فلا تنعدم المشتقة، لكنها غير موجودة عند $x={c}$ والدالة معرفة عندها.",
+            f"القيمة الحرجة $x={c}$، والدالة متناقصة على {falling} ومتزايدة على {rising}.",
+        ),
+        "A",
+        {"type": "critical_dne", "f": f, "at": c},
+    )
+
+
+@variant("3.1", example=4)
+def rational_without_critical_values(rng: random.Random) -> Problem:
+    """دالة كسرية بلا قيم حرجة: تتزايد (أو تتناقص) على فترتين منفصلتين تفصلهما نقطة خارج المجال."""
+    c, a = rng.randint(-3, 3), nz(rng, -3, 3)
+    b = rng.choice([n for n in range(-5, 6) if -a * c - n != 0])
+    f = (a * x + b) / (x - c)
+    top = -a * c - b
+    ask_up = rng.choice([True, False])
+    both = rf"$(-\infty,{c})$ و$({c},\infty)$"
+    answer = both if (top > 0) == ask_up else NONE_FOUND
+    word = "تزايد" if ask_up else "تناقص"
+    return Problem(
+        "3.1",
+        f"حدد فترات {word} الدالة $f(x)={frac(a * x + b, x - c)}$.",
+        answer,
+        wrongs(
+            answer, both, NONE_FOUND, r"$(-\infty,\infty)$", rf"$(-\infty,{c})$ فقط", rf"$({c},\infty)$ فقط"
+        ),
+        (
+            rf"قاعدة القسمة: $f'(x)={frac(top, f'({tex(x - c)})^2')}$",
+            f"البسط ثابت لا يساوي صفرًا فلا قيم حرجة، و$x={c}$ خارج المجال.",
+            f"إشارة $f'$ إشارة ${top}$ على المجال كله، فالدالة {'متزايدة' if top > 0 else 'متناقصة'} على كل من "
+            f"$(-\\infty,{c})$ و$({c},\\infty)$؛ فترات ال{word}: {answer}",
+        ),
+        "A",
+        {"type": "monotone_pieces", "f": f, "pole": c, "ask_up": ask_up, "answer": answer},
+    )
+
+
+@variant("3.2", example=3)
+def extrema_with_cusp(rng: random.Random) -> Problem:
+    """قيم قصوى محلية لدالة بقوة 2/3: نقطة حرجة تنعدم فيها المشتقة وأخرى (رأس حاد) لا توجد فيها."""
+    c, n, k = rng.randint(-2, 2), nz(rng, -2, 2), rng.choice([-2, -1, 1, 2])
+    t = x - c
+    f = k * sp.Abs(t) ** sp.Rational(2, 3) * (t - 5 * n)
+
+    def slope_sign(v: float) -> float:
+        return k * (5 * v - 10 * n) * (1 if v > 0 else -1)
+
+    points = sorted(
+        [
+            (c, sign_change(slope_sign(-0.5), slope_sign(0.5))),
+            (c + 2 * n, sign_change(slope_sign(2 * n - 0.5), slope_sign(2 * n + 0.5))),
+        ]
+    )
+    power = "x^{2/3}" if c == 0 else f"({tex(t)})^{{2/3}}"
+    return extrema_problem(
+        "3.2",
+        f"أوجد القيم القصوى المحلية للدالة $f(x)={coefficient(k)}{power}({tex(t - 5 * n)})$ وصنّفها.",
+        f,
+        points,
+        (
+            f"$f'(x)={frac(sp.expand(k * (5 * t - 10 * n)), '3' + cube_root_text(t))}$",
+            f"$f'=0$ عند $x={c + 2 * n}$، و$f'$ غير موجودة عند $x={c}$ والدالة معرفة عندها: قيمتان حرجتان.",
+            "اختبار المشتقة الأولى بنقاط اختبار على خط الأعداد.",
+        ),
+        rng,
+    )
+
+
+@variant("3.2", example=4)
+def extrema_power_exponential(rng: random.Random) -> Problem:
+    """قيم قصوى لـ k·xⁿ·e^(ax): إحدى القيمتين الحرجتين ليست قصوى حين يتكرر العامل x."""
+    n = rng.choice([2, 3])
+    a, k = rng.choice([-n, -1, 1, n]), rng.choice([-2, -1, 1, 2])
+    f = k * x**n * sp.exp(a * x)
+    other = sp.Integer(-n) / a
+
+    def slope_sign(v: float) -> float:
+        return k * v ** (n - 1) * (n + a * v)
+
+    points = sorted(
+        (int(p), sign_change(slope_sign(float(p) - 0.5), slope_sign(float(p) + 0.5))) for p in (0, other)
+    )
+    return extrema_problem(
+        "3.2",
+        f"أوجد القيم القصوى المحلية للدالة $f(x)={tex(f)}$ وصنّفها.",
+        f,
+        points,
+        (
+            f"$f'(x)={tex(sp.factor(sp.diff(f, x)))}$",
+            f"$e^{{{tex(a * x)}}}>0$، فالقيمتان الحرجتان $x=0$ و$x={tex(other)}$.",
+            "اختبار المشتقة الأولى: الإشارة لا تتغير عند عامل مكرر بقوة زوجية.",
+        ),
+        rng,
+    )
+
+
+@variant("3.2", example=6)
+def absolute_extrema_quartic(rng: random.Random) -> Problem:
+    """قيم قصوى مطلقة لكثيرة حدود رباعية على ℝ: توجد واحدة فقط بحسب إشارة المعامل الرئيس."""
+    p, q = rng.choice([(p, q) for p in range(-3, 4) for q in range(p + 1, 4) if p and q and (p + q) % 3 == 0])
+    s, d = rng.choice([1, -1]), rng.randint(-5, 5)
+    f = s * (x**4 - sp.Rational(4 * (p + q), 3) * x**3 + 2 * p * q * x**2) + d
+    values = {point: f.subs(x, point) for point in sorted((0, p, q))}
+    want_max = rng.choice([True, False])
+    exists = want_max == (s < 0)
+    best = (max if want_max else min)(values.values())
+    answer = m(best) if exists else NONE_FOUND
+    word = "العظمى" if want_max else "الصغرى"
+    table = "، ".join(f"$f({point})={tex(val)}$" for point, val in values.items())
+    ends = "+\\infty" if s > 0 else "-\\infty"
+    return Problem(
+        "3.2",
+        f"أوجد القيمة {word} المطلقة للدالة $f(x)={tex(f)}$ على مجموعة الأعداد الحقيقية إن وُجدت.",
+        answer,
+        wrongs(answer, NONE_FOUND, *(m(v) for v in values.values()), m(-best), m(best + 1), m(best - 1)),
+        (
+            f"$f'(x)={tex(sp.factor(sp.diff(f, x)))}$، والقيم الحرجة $x=0$ و$x={p}$ و$x={q}$.",
+            f"جدول القيم: {table}",
+            f"$f(x)\\to {ends}$ عند الطرفين، فالقيمة {word} المطلقة {answer if exists else 'غير موجودة'}.",
+        ),
+        "R",
+        {
+            "type": "absolute_line",
+            "f": f,
+            "max": want_max,
+            "answer": answer,
+            "value": best if exists else None,
+        },
+    )
+
+
+def intervals_tex(intervals: list[tuple[sp.Expr, sp.Expr]]) -> str:
+    if not intervals:
+        return NONE_FOUND
+    return "$" + r"\cup".join(rf"\left({tex(a)},{tex(b)}\right)" for a, b in intervals) + "$"
+
+
+@variant("3.3", example=1)
+def concavity_quadratic_or_trig(rng: random.Random) -> Problem:
+    """فترات التقعر: تربيعية مشتقتها الثانية ثابتة، أو دالة مثلثية على (0، 2π) بأصفار f''."""
+    up = rng.choice([True, False])
+    word = "لأعلى" if up else "لأسفل"
+    if rng.random() < 0.35:
+        a, b, c = nz(rng, -3, 3), rng.randint(-5, 5), rng.randint(-5, 5)
+        f = a * x**2 + b * x + c
+        domain, region = (-sp.oo, sp.oo), ""
+        chosen = [domain] if (a > 0) == up else []
+        other = [] if chosen else [domain]
+    else:
+        k, b = nz(rng, -3, 3), rng.randint(-2, 2)
+        trig = rng.choice([sp.sin, sp.cos])
+        f = k * trig(x) + b * x
+        domain, region = (sp.Integer(0), 2 * sp.pi), r" على الفترة $(0,2\pi)$"
+        pi = sp.pi
+        if trig is sp.sin:  # f''=−k·sin x
+            positive = [(pi, 2 * pi)] if k > 0 else [(sp.Integer(0), pi)]
+            negative = [(sp.Integer(0), pi)] if k > 0 else [(pi, 2 * pi)]
+        else:  # f''=−k·cos x
+            middle, outer = [(pi / 2, 3 * pi / 2)], [(sp.Integer(0), pi / 2), (3 * pi / 2, 2 * pi)]
+            positive, negative = (middle, outer) if k > 0 else (outer, middle)
+        chosen, other = (positive, negative) if up else (negative, positive)
+    answer = intervals_tex(chosen)
+    return Problem(
+        "3.3",
+        f"حدد الفترات التي يكون فيها منحنى $f(x)={tex(f)}$ مقعرًا {word}{region}.",
+        answer,
+        wrongs(
+            answer,
+            intervals_tex(other),
+            intervals_tex([domain]),
+            NONE_FOUND,
+            r"$\left(0,\pi\right)$",
+            intervals_tex([(sp.Integer(0), sp.oo)]),
+        ),
+        (
+            f"$f''(x)={tex(sp.diff(f, x, 2))}$",
+            "نحل $f''(x)=0$ ونختبر الإشارة على خط الأعداد بين أصفارها."
+            if region
+            else "المشتقة الثانية ثابتة فإشارتها واحدة على المجال كله.",
+            f"المنحنى مقعر {word} حيث $f''{'>' if up else '<'}0$: {answer}",
+        ),
+        "A",
+        {
+            "type": "concave_set",
+            "f": f,
+            "up": up,
+            "intervals": chosen,
+            "domain": (-10, 10) if region == "" else domain,
+        },
+    )
+
+
+@variant("3.3", example=2)
+def gaussian_inflection(rng: random.Random) -> Problem:
+    """نقطتا انعطاف دالة أسية غاوسية k·e^(−(x−c)²/(2r²)) عند c±r."""
+    r, c, k = rng.randint(1, 3), rng.randint(-2, 2), rng.randint(1, 5)
+    f = k * sp.exp(-((x - c) ** 2) / (2 * r**2))
+    height = k * sp.exp(sp.Rational(-1, 2))
+    answer = f"$({c - r},{tex(height)})$ و$({c + r},{tex(height)})$"
+    return Problem(
+        "3.3",
+        f"أوجد نقاط انعطاف منحنى الدالة $f(x)={tex(f)}$.",
+        answer,
+        wrongs(
+            answer,
+            f"$({c},{k})$",
+            f"$({c - r},{k})$ و$({c + r},{k})$",
+            f"$({c - 2 * r},{tex(k * sp.exp(-2))})$ و$({c + 2 * r},{tex(k * sp.exp(-2))})$",
+            f"$({c - r},{tex(height)})$ فقط",
+        ),
+        (
+            f"$f'(x)={tex(sp.factor(sp.diff(f, x)))}$",
+            f"$f''(x)={tex(sp.factor(sp.diff(f, x, 2)))}$",
+            f"الأسية موجبة، فـ $f''=0$ عند $({tex(x - c)})^2={r * r}$ أي $x={c - r}$ و$x={c + r}$، وتتغير الإشارة عندهما.",
+            f"نقطتا الانعطاف {answer}",
+        ),
+        "A",
+        {"type": "inflections", "f": f, "points": [(c - r, height), (c + r, height)], "around": c},
+    )
+
+
+@variant("3.3", example=4)
+def second_derivative_test(rng: random.Random) -> Problem:
+    """اختبار المشتقة الثانية: تكعيبية بنقطتين، أو خماسية يفشل فيها الاختبار عند 0 فنرجع للمشتقة الأولى."""
+    if rng.random() < 0.5:
+        f, p, q, _sign = cubic_with_critical_points(rng)
+        second = sp.diff(f, x, 2)
+        points = [
+            (p, "max" if second.subs(x, p) < 0 else "min"),
+            (q, "max" if second.subs(x, q) < 0 else "min"),
+        ]
+        steps = (
+            f"$f'(x)={tex(sp.factor(sp.diff(f, x)))}$، والقيم الحرجة $x={p}$ و$x={q}$.",
+            f"$f''(x)={tex(second)}$: $f''({p})={tex(second.subs(x, p))}$ و$f''({q})={tex(second.subs(x, q))}$.",
+            "المشتقة الثانية السالبة تعني قيمة عظمى محلية، والموجبة صغرى.",
+        )
+    else:
+        a, k = rng.choice([1, 2]), rng.choice([-2, -1, 1, 2])
+        f = k * (3 * x**5 - 5 * a**2 * x**3)
+        second = sp.diff(f, x, 2)
+        points = [(-a, "max" if k > 0 else "min"), (0, "none"), (a, "min" if k > 0 else "max")]
+        steps = (
+            f"$f'(x)={tex(sp.factor(sp.diff(f, x)))}$، والقيم الحرجة $x={-a}$ و$x=0$ و$x={a}$.",
+            f"$f''(x)={tex(second)}$: $f''({-a})={tex(second.subs(x, -a))}$ و$f''(0)=0$ و$f''({a})={tex(second.subs(x, a))}$.",
+            "عند $x=0$ يفشل اختبار المشتقة الثانية، فنستعمل الأولى: العامل $x^2$ لا يغيّر إشارتها هناك.",
+        )
+    return extrema_problem(
+        "3.3",
+        f"استعمل اختبار المشتقة الثانية لإيجاد القيم القصوى المحلية للدالة $f(x)={tex(f)}$.",
+        f,
+        points,
+        steps,
+        rng,
     )
 
 

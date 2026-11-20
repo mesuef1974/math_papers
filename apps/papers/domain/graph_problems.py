@@ -254,3 +254,114 @@ def function_from_derivative_graph(rng: random.Random) -> Problem:
         option_graphs=tuple(g.as_dict() for g in options),
         essay_ok=False,
     )
+
+
+SLOPE_KINDS = {"up": "تزايد", "down": "تناقص", "flat": "ثبات"}
+
+
+def zigzag(rng: random.Random, allow_flat: bool) -> tuple[list[int], list[sp.Rational], int]:
+    """دالة متعددة الأجزاء خطية على [−5, 5]: رؤوسها عند أعداد صحيحة، وكل جزء يخالف اتجاه ما قبله."""
+    kinds = list(SLOPE_KINDS) if allow_flat else ["up", "down"]
+    while True:
+        xs = [-5, *sorted(rng.sample(range(-3, 4), rng.choice([2, 3]))), 5]
+        slopes: list[sp.Rational] = []
+        for _ in range(len(xs) - 1):
+            kind = rng.choice([k for k in kinds if not slopes or k != kind_of(slopes[-1])])
+            size = rng.choice([sp.Rational(1, 2), sp.Integer(1)])
+            slopes.append({"up": size, "down": -size, "flat": sp.Integer(0)}[kind])
+        start = rng.randint(-3, 3)
+        ys = [sp.Integer(start)]
+        for (a, b), slope in zip(zip(xs, xs[1:], strict=False), slopes, strict=True):
+            ys.append(ys[-1] + slope * (b - a))
+        if all(abs(v) <= 4 for v in ys):
+            return xs, slopes, start
+
+
+def kind_of(slope: sp.Expr) -> str:
+    return "up" if slope > 0 else ("down" if slope < 0 else "flat")
+
+
+def zigzag_graph(xs: list[int], slopes: list[sp.Rational], start: int) -> Graph:
+    graph, height = Graph(WINDOW), sp.Integer(start)
+    for (a, b), slope in zip(zip(xs, xs[1:], strict=False), slopes, strict=True):
+        graph.add_curve(height + slope * (x - a), a, b)
+        height += slope * (b - a)
+    return graph
+
+
+def intervals_text(intervals: list[tuple[int, int]]) -> str:
+    if not intervals:
+        return NONE_FOUND
+    return "$" + r"\cup".join(f"({a},{b})" for a, b in intervals) + "$"
+
+
+def runs(xs: list[int], slopes: list[sp.Rational], kind: str) -> list[tuple[int, int]]:
+    return [
+        (a, b) for (a, b), s in zip(zip(xs, xs[1:], strict=False), slopes, strict=True) if kind_of(s) == kind
+    ]
+
+
+@variant("3.1", example=1)
+def monotonic_from_piecewise_graph(rng: random.Random) -> Problem:
+    """فترات التزايد أو التناقص أو الثبات من رسم دالة متعددة الأجزاء، بفترات مفتوحة."""
+    xs, slopes, start = zigzag(rng, allow_flat=True)
+    graph = zigzag_graph(xs, slopes, start)
+    present = sorted({kind_of(s) for s in slopes})
+    ask = rng.choice(present)
+    answer = intervals_text(runs(xs, slopes, ask))
+    pool = [intervals_text(runs(xs, slopes, k)) for k in SLOPE_KINDS if k != ask]
+    closed = answer.replace("(", "[").replace(")", "]")
+    word = SLOPE_KINDS[ask]
+    return Problem(
+        "3.1",
+        f"يبيّن الشكل التمثيل البياني للدالة $f$ على الفترة $[-5,5]$. حدد فترات {word} الدالة.",
+        answer,
+        wrongs(answer, *pool, closed, "$(-5,5)$", NONE_FOUND),
+        (
+            "نقرأ الرسم من اليسار إلى اليمين: يصعد المنحنى في فترات التزايد، ويهبط في فترات التناقص، ويكون أفقيًا في فترات الثبات.",
+            f"رؤوس الأجزاء عند $x={'،'.join(str(v) for v in xs[1:-1])}$، والفترات مفتوحة.",
+            f"فترات ال{word}: {answer}",
+        ),
+        "K",
+        {"type": "graph_runs", "graph": graph.as_dict(), "kind": ask, "answer": answer},
+        graph=graph.as_dict(),
+    )
+
+
+def positions_text(points: list[int]) -> str:
+    return " و".join(f"$x={p}$" for p in points) if points else NONE_FOUND
+
+
+@variant("3.2", example=1)
+def extrema_from_corner_graph(rng: random.Random) -> Problem:
+    """مواقع القيم القصوى المحلية من رسم فيه رؤوس حادة (غير قابلة للاشتقاق) وتصنيفها."""
+    xs, slopes, start = zigzag(rng, allow_flat=False)
+    graph = zigzag_graph(xs, slopes, start)
+    corners = list(zip(xs[1:-1], slopes, slopes[1:], strict=False))
+    maxima = [c for c, left, right in corners if left > 0 > right]
+    minima = [c for c, left, right in corners if left < 0 < right]
+    want_max = rng.choice([True, False])
+    found, other = (maxima, minima) if want_max else (minima, maxima)
+    answer = positions_text(found)
+    word = "عظمى" if want_max else "صغرى"
+    return Problem(
+        "3.2",
+        f"يبيّن الشكل التمثيل البياني للدالة $f$ على الفترة $[-5,5]$. عند أي قيم لـ $x$ يكون للدالة قيمة {word} محلية؟",
+        answer,
+        wrongs(
+            answer,
+            positions_text(other),
+            positions_text(xs[1:-1]),
+            positions_text(found[:1]),
+            positions_text([-5, 5]),
+            NONE_FOUND,
+        ),
+        (
+            "نرسم فترة مفتوحة صغيرة حول كل رأس ونقارن قيمة الدالة عنده بالقيم المجاورة.",
+            "القيمة العظمى المحلية عند رأس يصعد قبله المنحنى ويهبط بعده، والصغرى عكسها، ولو لم تكن الدالة قابلة للاشتقاق عنده.",
+            f"القيم ال{word} المحلية عند: {answer}",
+        ),
+        "K",
+        {"type": "graph_corners", "graph": graph.as_dict(), "max": want_max, "answer": answer},
+        graph=graph.as_dict(),
+    )
