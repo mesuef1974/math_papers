@@ -15,6 +15,7 @@ from apps.knowledge.domain.course_index import (
     build_index,
     build_lesson_index,
 )
+from apps.knowledge.domain.schemas import ExampleData, representations_in
 from apps.knowledge.selectors import course_index, lesson_index
 
 GRADE10_INDEX = COURSES_DIR / GRADE10_SLUG / INDEX
@@ -149,11 +150,11 @@ def test_committed_index_holds_no_arabic_prose():
 def test_selector_finds_a_lesson_in_its_own_course():
     assert lesson_index(GRADE10_SLUG, "3.5").unit == 3
     assert lesson_index(GRADE10_SLUG, "9.9") is None
-    # الرمز نفسه في مقرر بلا فهرس مشتق أو بلا مصدر ليس درس العاشر
-    assert lesson_index(GRADE12_SLUG, "3.5") is None
+    # الرمز نفسه في مقرر آخر درسه هو (الثاني عشر من دروسه بصياغتنا)، وفي مقرر بلا مصدر لا درس
+    assert lesson_index(GRADE12_SLUG, "3.5").examples != lesson_index(GRADE10_SLUG, "3.5").examples
     assert lesson_index("g7-s1", "3.5") is None
-    with pytest.raises(KeyError, match="لا فهرس مشتق"):
-        course_index(GRADE12_SLUG)
+    with pytest.raises(KeyError, match="لا فهرس محمَّل"):
+        course_index("g7-s1")
 
 
 def test_builder_keeps_only_the_standards_of_the_course_grade():
@@ -266,3 +267,21 @@ def test_index_command_reads_the_printed_pages_table(tmp_path):
     (tmp_path / "printed_pages.json").write_text(json.dumps({"28": "ص"}), encoding="utf-8")
     with pytest.raises(CommandError, match="غير صالح"):
         call_command("build_course_index", "g7-s2", source=str(tmp_path), courses_dir=str(courses))
+
+
+def test_our_lessons_count_their_representations_from_the_description():
+    assert representations_in("جبري وجدولي وبياني (الشكلان 3.2.10 و3.2.11)") == ["جدول", "بياني", "جبري"]
+    assert representations_in("تطبيقي/هندسي") == ["سياق"]
+    assert representations_in("جبري مع خط أعداد ورسم (الشكل 3.1.3)") == ["بياني", "جبري"]
+    assert representations_in("عددي") == []
+    kept = ExampleData(number=1, representation="جبري", representations=["جدول"])
+    assert kept.representations == ["جدول"]  # المعدود صراحة يُقدَّم على الوصف
+
+
+@pytest.mark.usefixtures("loaded_courses")
+def test_grade12_index_comes_from_our_lessons():
+    lessons = course_index(GRADE12_SLUG).lessons
+    examples = [e for lesson in lessons for e in lesson.examples]
+    assert len(lessons) == 19 and len(examples) == 93
+    assert all(e.page for e in examples)
+    assert sum(1 for e in examples if e.representations) == 65  # 28 مثالًا بلا وصف تمثيل في صياغتنا

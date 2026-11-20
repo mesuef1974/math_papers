@@ -1,4 +1,4 @@
-"""خطة الثاني عشر الفصلية: تُحمَّل بالمحمِّل الواحد وتُقرأ من الجداول بلا فهرس مشتق (معرفة المقرر بصياغتنا)."""
+"""خطة الثاني عشر الفصلية: تُحمَّل بالمحمِّل الواحد وتُقرأ من الجداول، وفهرسه من دروسه بصياغتنا."""
 
 import pytest
 
@@ -33,9 +33,8 @@ def test_loader_writes_the_grade12_plan_and_reloading_changes_nothing():
     assert load_course(GRADE12_SLUG).total == 0
 
 
-def test_term_plan_reads_grade12_without_a_derived_index():
-    with pytest.raises(KeyError, match="لا فهرس مشتق"):
-        course_index(GRADE12_SLUG)
+def test_term_plan_reads_grade12_from_our_lessons():
+    assert len(course_index(GRADE12_SLUG).lessons) == 19  # فهرسه من دروسه بصياغتنا لا من فهرس مشتق
     plan = term_plan(GRADE12_SLUG)
     assert plan == read_source(GRADE12_SLUG).term_plan.to_domain(1)
     assert plan.sessions_per_week == 6

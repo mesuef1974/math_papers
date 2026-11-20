@@ -306,7 +306,7 @@ def _plan_course(course: str) -> Course:
     try:
         course_index(course)  # التحضير يُشتق من فهرس المقرر نفسه، ولا يستعير فهرس مقرر آخر
     except KeyError as error:
-        raise PrepNotFoundError(f"لا فهرس مشتق للمقرر {course}") from error
+        raise PrepNotFoundError(f"لا فهرس للمقرر {course}") from error
     return found
 
 

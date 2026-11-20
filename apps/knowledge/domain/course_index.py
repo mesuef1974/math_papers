@@ -13,9 +13,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from .schemas import BLOOMS, LESSON_CODE, MAX_UNIT, PRACTICE_CODE, lesson_sort_key
+from .schemas import BLOOMS, LESSON_CODE, MAX_UNIT, PRACTICE_CODE, REPRESENTATIONS, lesson_sort_key
 
-REPRESENTATIONS = ("جدول", "بياني", "جبري", "سياق")
 BLOOM_VALUES = (*BLOOMS, "unclassified")
 _RANGE = r"^\d{1,2}(?:\s*[-–]\s*\d{1,2})?(?:\s*[,،]\s*\d{1,2}(?:\s*[-–]\s*\d{1,2})?)*$"
 _RANGE_RE = re.compile(_RANGE)
