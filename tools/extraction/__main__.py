@@ -6,7 +6,9 @@
 وexercise_try (ربط الأمثلة بتدريباتها من سطر «حاول أن تحل التمرين N»؛ ببيئة guide_extract) وexercise_badges (ربط التدريبات
 بأمثلتها من الشارات الملونة في صورة الصفحة) وexercise_links (ربط التدريبات بالأمثلة من سطر «حاول أن تحل» ثم الشارات إن قُرئت
 وإلا من الرؤية وexamples.json، للمراجعة)، وstudent_clips (مقاطع الأمثلة من كتاب الطالب بدقته
-الأصلية؛ مطابقة دون العتبة بلا مراجعة رمز الخروج 7) وstudent_decks (شاهدها: عروض حصص المقرر في قاعدة وتخزين مؤقتين). المخرجات في مجلد الكتاب خارج المستودع، ويطبع كل مرحلة ملخصها العددي.
+الأصلية؛ مطابقة دون العتبة بلا مراجعة رمز الخروج 7) وstudent_decks (شاهدها: عروض حصص المقرر في قاعدة وتخزين مؤقتين)، وstudent_ocr
+(تصيير كتاب الطالب وصناديق PaddleOCR وجدول صفحاته المطبوعة) ثم student_examples (مقاطع الأمثلة من كتاب الطالب مباشرة وروابط
+«حاول أن تحل» منه، بتحقق نموذج الرؤية؛ ما بقي للمراجعة رمز الخروج 7، وتعذّر تشغيل الرؤية 4). المخرجات في مجلد الكتاب خارج المستودع، ويطبع كل مرحلة ملخصها العددي.
 كل مرحلة تتخطى نفسها ما لم تتغير تجزئة مدخلها (`stamps.py`)، و`--force` يعيدها؛ وتصحيحات الكتاب اليدوية (`corrections.py`)
 تُطبَّق على مخرج مرحلتها بأسبابها.
 """
@@ -16,7 +18,8 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import ExitStack, contextmanager
 from typing import Any
 
 from . import (
@@ -36,6 +39,8 @@ from . import (
     reps,
     stamps,
     student_clips,
+    student_examples,
+    student_ocr,
     tables,
     vision,
 )
@@ -144,11 +149,11 @@ def stage_exercise_badges(book: Book) -> None:
     print(json.dumps(exercise_badges.summarize(result), ensure_ascii=False))
 
 
-def _page_image(book: Book) -> Callable[[int], Any]:
+def _page_image(book: Book, key: str = "render") -> Callable[[int], Any]:
     from PIL import Image
 
     def image_of(page: int) -> Any:
-        path = book.dir("render") / f"{page:04d}.png"
+        path = book.dir(key) / f"{page:04d}.png"
         if not path.exists():
             return None
         with Image.open(path) as image:
@@ -183,6 +188,59 @@ def stage_student_clips(book: Book) -> None:
     if pending:  # التقرير مكتوب ليُراجَع، والمرحلة لا تُختم حتى تُعتمد أو تُصلَح
         raise student_clips.StudentClipsError(
             f"{len(pending)} مقطعًا دون العتبة أو بلا صفحة، بلا مراجعة: {'، '.join(pending[:10])}"
+        )
+
+
+def stage_student_ocr(book: Book) -> None:
+    result = student_ocr.run(book)  # الجدول المرفوض يرفع قبل الكتابة، فلا يُكتب ولا تُختم مرحلته
+    _write(book.output("student_pages"), printed_pages.plain(result["table"]))
+    print(json.dumps(student_ocr.summarize(result), ensure_ascii=False))
+
+
+def stage_student_examples(book: Book) -> None:
+    from . import llama, ocr
+
+    student_examples.need_dirs(book, "student_render", "student_ocr")
+    cfg = student_examples.settings(book)
+    scanned = student_examples.scan(
+        book,
+        _layout(book),
+        student_clips.load_table(book),
+        student_examples.load_pages(book),
+        student_examples.boxes_of(book),
+        student_examples.size_of(book),
+        _page_image(book, "student_render"),
+        lambda crop: ocr.read_scored(crop),
+    )
+    ocr.release()  # قبل نموذج الرؤية: لا يجتمعان على الكرت
+    _write(book.output("student_try"), scanned["try"])
+
+    @contextmanager
+    def asking() -> Iterator[student_examples.Ask]:
+        with ExitStack() as stack:
+            try:
+                server = stack.enter_context(llama.serve(book, cfg["model"]))
+            except (OSError, RuntimeError, KeyError) as e:
+                raise student_examples.VisionError(str(e)) from e
+            ask = llama.asker(server)
+
+            def safe(image: Any, question: str, fmt: dict[str, Any]) -> dict[str, Any]:
+                try:
+                    return ask(image, question, fmt)
+                except OSError:  # طلب فشل: المقطع بلا جواب فيُراجَع
+                    return {}
+
+            yield safe
+
+    path = book.output("exercise_try")
+    guide_try = json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
+    result = student_examples.cut(book, scanned, asking if cfg["vision"] else None, guide_try)
+    _write(book.output("student_examples"), result)
+    print(json.dumps(student_examples.summarize(result), ensure_ascii=False))
+    pending = student_examples.unreviewed(result)
+    if pending:  # التقرير مكتوب ليُراجَع، والمرحلة لا تُختم حتى يُصلَح الإعداد أو يُعتمد المقطع
+        raise student_examples.StudentExamplesError(
+            f"{len(pending)} درسًا أو مقطعًا للمراجعة: {'، '.join(pending[:10])}"
         )
 
 
@@ -290,6 +348,8 @@ STAGES: dict[str, Callable[[Book], Any]] = {
     "exercise_links": stage_exercise_links,
     "student_clips": stage_student_clips,
     "student_decks": stage_student_decks,
+    "student_ocr": stage_student_ocr,
+    "student_examples": stage_student_examples,
 }
 TARGETED = ("load", "publish")  # مراحل لها وجهة خارج مجلد الكتاب: ختمها يشمل بصمة الوجهة
 
@@ -369,6 +429,9 @@ def main(argv: list[str] | None = None) -> int:
     except student_clips.StudentClipsError as e:
         print(f"مقاطع كتاب الطالب: {e}", file=sys.stderr)
         return 7
+    except student_examples.VisionError as e:
+        print(f"تعذّر تشغيل الرؤية: {e}", file=sys.stderr)
+        return 4
     return 0
 
 
