@@ -119,7 +119,10 @@ def test_writer_adds_pages_and_groups_and_touches_nothing_else(workspace):
         {"example": 3, "dok": 2, "exercises": [10, 50]},
         {"example": 3, "dok": 3, "exercises": [35]},
     ]
-    assert "exercise_groups" not in written["lesson_2_2.json"]  # حالته review: ينتظر اعتماد المالك
+    # حالته review: ينتظر اعتماد المالك، فتبقى مجموعاته كما كانت في الملف
+    assert written["lesson_2_2.json"].get("exercise_groups") == original["lesson_2_2.json"].get(
+        "exercise_groups"
+    )
 
 
 def test_writer_is_idempotent(workspace):

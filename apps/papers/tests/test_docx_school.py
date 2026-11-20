@@ -12,6 +12,7 @@ from lxml import etree
 
 from apps.knowledge.services import load_all
 from apps.papers import services as papers
+from apps.papers.domain.book_source import source_cells
 from apps.papers.word import school
 from apps.papers.word.builder import LOGO, build_docx
 
@@ -360,13 +361,13 @@ FORECAST = "g12-sci-s1-2026-27-forecast"
 
 
 def test_key_only_file_keeps_the_source_columns_for_every_course_even_without_sources():
-    """مفتاح قالب المدرسة بأعمدة «الصفحة» و«المثال» و«التدريب» لكل مقرر: صيغ الثاني عشر برقم مثالها وصفحته وبلا
-    تدريب بعد (الروابط تنتظر اعتماد المالك)، فتبقى الأعمدة بأرقامها وخانة التدريب «—» لا مخترعة (قرار المالك 2026-11-19)."""
+    """مفتاح قالب المدرسة بأعمدة «الصفحة» و«المثال» و«التدريب» لكل مقرر: صيغ الثاني عشر برقم مثالها وصفحته، وتدريبها
+    من روابط الدروس التي اعتمدها المالك وحدها، وخانة التدريب لغيرها «—» لا مخترعة (قرار المالك 2026-11-19)."""
     load_all()
     a = papers.build_exam(FORECAST, seed=7)
     sources = [p.get("source") for q in a["questions"] for p in q["parts"]]
     assert all(s and s["number"] and s.get("page") for s in sources)
-    assert not any(s.get("exercises") for s in sources)
+    labels = {source_cells(s)["exercises"] for s in sources if s.get("exercises")}
     doc = Document(
         io.BytesIO(build_docx({"papers": [a], "profile": PROFILE, "template": "school", "key_only": True}))
     )
@@ -374,7 +375,9 @@ def test_key_only_file_keeps_the_source_columns_for_every_course_even_without_so
     assert [c.text for c in table.rows[0].cells][3:7] == ["الدرس", "الصفحة", "المثال", "التدريب"]
     row = table.rows[1].cells
     assert row[4].text.isdigit() and row[5].text.isdigit()
-    assert row[6].text == "—"
+    exercises = {r.cells[6].text for r in table.rows[1:]}
+    assert exercises - {"", "—"} <= labels  # لا تدريب إلا من رابط معتمد
+    assert ("—" in exercises) == any(not s.get("exercises") for s in sources)
 
 
 def _has_keep(element) -> bool:
