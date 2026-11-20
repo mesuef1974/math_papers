@@ -45,8 +45,9 @@ def assert_derivative(c):
 def assert_function(c):
     mpmath.mp.dps = 40
     points = (0.3, 0.7, 1.3) if c.get("positive") else (-0.4, 0.3, 0.7)
+    f = fn(c["f"])
     for point in points:
-        got = mpmath.diff(fn(c["f"]), mpmath.mpf(point), c["order"])
+        got = mpmath.diff(f, mpmath.mpf(point), c["order"])
         want = float(sp.N(c["d"].subs(x, sp.Float(point, 40))))
         assert float(got) == pytest.approx(want, rel=1e-6, abs=TOL)
 
@@ -952,20 +953,18 @@ def assert_critical_dne(c):
         slope = (number(c["f"], p + h) - number(c["f"], p - h)) / (2 * float(h))
         assert abs(slope) > 300
     mpmath.mp.dps = 30
+    f = fn(c["f"])
     for v in samples(at - 6, at + 6, 121):
         if abs(v - at) > 0.05:
-            assert abs(float(mpmath.diff(fn(c["f"]), v))) > 1e-6
+            assert abs(float(mpmath.diff(f, v))) > 1e-6
 
 
 def assert_monotone_pieces(c):
     """إشارة المشتقة عدديًا واحدة على جهتي النقطة الخارجة عن المجال، فتُشتق منها الإجابة."""
     pole = c["pole"]
     mpmath.mp.dps = 30
-    signs = {
-        float(mpmath.diff(fn(c["f"]), v)) > 0
-        for v in samples(pole - 8, pole + 8, 161)
-        if abs(v - pole) > 0.05
-    }
+    f = fn(c["f"])
+    signs = {float(mpmath.diff(f, v)) > 0 for v in samples(pole - 8, pole + 8, 161) if abs(v - pole) > 0.05}
     assert len(signs) == 1
     assert abs(number(c["f"], pole + sp.Rational(1, 10**6))) > 1e4
     both = rf"$(-\infty,{pole})$ و$({pole},\infty)$"
@@ -1009,10 +1008,11 @@ def assert_concave_set(c):
     low, high = (float(v) for v in c["domain"])
     bounds = [(max(float(a), low), min(float(b), high)) for a, b in c["intervals"]]
     edges = [e for pair in bounds for e in pair]
+    f = fn(c["f"])
     for v in samples(low, high, 241)[1:-1]:
         if any(abs(v - e) < 0.02 for e in edges):
             continue
-        d2 = float(mpmath.diff(fn(c["f"]), v, 2))
+        d2 = float(mpmath.diff(f, v, 2))
         if abs(d2) < 1e-9:
             continue
         inside = any(a < v < b for a, b in bounds)
@@ -1022,7 +1022,8 @@ def assert_concave_set(c):
 def assert_inflections(c):
     """f'' تغيّر إشارتها عند كل نقطة مذكورة وحدها، وقيمة الدالة هناك كما في الجواب."""
     mpmath.mp.dps = 30
-    d2 = lambda v: float(mpmath.diff(fn(c["f"]), v, 2))  # noqa: E731
+    f = fn(c["f"])
+    d2 = lambda v: float(mpmath.diff(f, v, 2))  # noqa: E731
     xs = samples(c["around"] - 8, c["around"] + 8, 641)
     signs = [d2(v) > 0 for v in xs]
     changes = [round((a + b) / 2) for a, b, s, t in zip(xs, xs[1:], signs, signs[1:], strict=False) if s != t]
