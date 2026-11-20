@@ -19,7 +19,7 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from typing import Any
 
 from .config import Book
@@ -89,15 +89,20 @@ def read_try(
 Event = tuple[str, list[int], list[list[int]]]  # ("label"|"try"، صندوق، قراءات السطر مرتبة)
 
 
-def link(pages: dict[int, list[Event]]) -> dict[str, Any]:
-    """ربط درس واحد. `pages`: صفحة → أحداثها من الأعلى؛ الأمثلة تُعدّ من الأحداث نفسها."""
+Slot = tuple[Any, list[Event]]  # (مفتاح الموضع بترتيب القراءة: صفحة، أو عمود في صفحة؛ أحداثه من الأعلى)
+
+
+def assign(slots: Iterable[Slot]) -> dict[str, Any]:
+    """ينسب أسطر «حاول أن تحل» إلى الأمثلة بترتيب القراءة: `rows` صف لكل مثال فيه `reads` (قراءات سطره) و`page` (مفتاح موضع
+    السطر) و`label` و`line` ((مفتاح الموضع، الصندوق) لسطر «مثال» ولسطر «حاول أن تحل»، أو None)، ومعها أعداد التشخيص.
+    القاعدة واحدة لصفحات الدليل ولكتاب الطالب (`student_examples`)."""
     rows: list[dict[str, Any]] = []
     labels = opened = lines = unread = 0
-    for page in sorted(pages):
-        for kind, _, reads in pages[page]:
+    for key, found in slots:
+        for kind, box, reads in found:
             if kind == "label":
                 labels += 1
-                rows.append({"reads": [], "page": None})
+                rows.append({"reads": [], "page": None, "label": (key, box), "line": None})
                 continue
             lines += 1
             if not reads:
@@ -105,8 +110,20 @@ def link(pages: dict[int, list[Event]]) -> dict[str, Any]:
                 continue
             if not rows or rows[-1]["reads"]:
                 opened += 1
-                rows.append({"reads": [], "page": None})
-            rows[-1]["reads"], rows[-1]["page"] = reads, page
+                rows.append({"reads": [], "page": None, "label": None, "line": None})
+            rows[-1].update(reads=reads, page=key, line=(key, box))
+    return {"rows": rows, "labels": labels, "opened": opened, "lines": lines, "unread": unread}
+
+
+def link(pages: dict[int, list[Event]]) -> dict[str, Any]:
+    """ربط درس واحد. `pages`: صفحة → أحداثها من الأعلى؛ الأمثلة تُعدّ من الأحداث نفسها."""
+    return link_slots((page, pages[page]) for page in sorted(pages))
+
+
+def link_slots(slots: Iterable[Slot]) -> dict[str, Any]:
+    """ربط درس واحد من مواضعه بترتيب القراءة (`assign`)؛ `pages` في كل صف مفتاح موضع سطره."""
+    got = assign(slots)
+    rows, labels, opened, lines, unread = (got[k] for k in ("rows", "labels", "opened", "lines", "unread"))
     while rows and not rows[-1]["reads"]:  # «مثال» بلا سطر بعده في آخر الدرس: عنوان في صفحات التمارين
         rows.pop()
     chosen = [row["reads"][0] if row["reads"] else [] for row in rows]
@@ -152,35 +169,52 @@ def build(
     cap = fusion_settings(book)["max_exercise"]
     result: dict[str, Any] = {"book": book.id, "lessons": {}}
     for r in layout["lessons"]:
-        pages: dict[int, list[Event]] = {}
-        fallback = 0
-        if r["pages_pdf"]:
-            first, last = r["pages_pdf"]
-            for page in range(first, last + 1):
-                found = events(boxes_of(page) or [], cfg["marker"])
-                if not found:
-                    continue
-                image = image_of(page) if any(kind == "try" for kind, _, _ in found) else None
-                pages[page] = []
-                for kind, box, text in found:
-                    reads, seen = read_try(image, box, text, ocr, cap, cfg) if kind == "try" else ([], False)
-                    fallback += kind == "try" and bool(reads) and not seen
-                    pages[page].append((kind, box, reads))
-        got = link(pages)
-        result["lessons"][r["id"]] = field(
-            got["links"],
-            "derived",
-            "review" if any(row["exercises"] for row in got["links"]) else "missing",
-            unlinked=[],
-            lines=got["lines"],
-            unread=got["unread"],
-            from_text=fallback,
-            labels=got["labels"],
-            opened=got["opened"],
-            repaired=got["repaired"],
-            monotone=got["monotone"],
-        )
+        first, last = r["pages_pdf"] or (1, 0)
+        found = ((page, page, events(boxes_of(page) or [], cfg["marker"])) for page in range(first, last + 1))
+        read, fallback = read_events(found, image_of, ocr, cap, cfg)
+        result["lessons"][r["id"]] = entry(link_slots(read), fallback)
     return result
+
+
+def read_events(
+    slots: Iterable[tuple[Any, int, list[tuple[str, list[int], str]]]],
+    image_of: Callable[[int], Any],
+    ocr: Ocr,
+    cap: int,
+    cfg: dict[str, Any],
+) -> tuple[list[Slot], int]:
+    """يقرأ أرقام أسطر «حاول أن تحل» في مواضع درس: (مفتاح الموضع، صفحة صورته، أحداثه من `events`) لكل موضع.
+    يعيد (المواضع بقراءاتها، عدد الأسطر المقروءة من نص الصندوق لا من الصورة)."""
+    out: list[Slot] = []
+    fallback = 0
+    for key, page, found in slots:
+        if not found:
+            continue
+        image = image_of(page) if any(kind == "try" for kind, _, _ in found) else None
+        read: list[Event] = []
+        for kind, box, text in found:
+            reads, seen = read_try(image, box, text, ocr, cap, cfg) if kind == "try" else ([], False)
+            fallback += kind == "try" and bool(reads) and not seen
+            read.append((kind, box, reads))
+        out.append((key, read))
+    return out, fallback
+
+
+def entry(got: dict[str, Any], fallback: int) -> dict[str, Any]:
+    """حقل الدرس في المخرج من ربطه (`link_slots`) وتشخيصه."""
+    return field(
+        got["links"],
+        "derived",
+        "review" if any(row["exercises"] for row in got["links"]) else "missing",
+        unlinked=[],
+        lines=got["lines"],
+        unread=got["unread"],
+        from_text=fallback,
+        labels=got["labels"],
+        opened=got["opened"],
+        repaired=got["repaired"],
+        monotone=got["monotone"],
+    )
 
 
 def readable(entry: dict[str, Any] | None) -> bool:

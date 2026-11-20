@@ -12,7 +12,7 @@ from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import Any
 
-from . import corrections, student_clips
+from . import corrections, student_clips, student_examples
 from .config import Book
 from .lesson import lessons_dir
 
@@ -51,7 +51,15 @@ INPUTS: dict[str, dict[str, Any]] = {
     # ومجلد المقاطع الحالية (student_clips.source) وملف كتاب الطالب
     "student_clips": {"dirs": (), "after": ("printed_pages",), "pdf": True},
     "student_decks": {"dirs": (), "after": ("student_clips",), "pdf": False},  # ومجلد مقاطع كتاب الطالب
+    "student_ocr": {"dirs": (), "after": (), "pdf": False},  # وملف كتاب الطالب
+    # وملف كتاب الطالب ودروس المقرر (العدد المتوقع)
+    "student_examples": {
+        "dirs": ("student_ocr",),
+        "after": ("layout", "printed_pages", "student_ocr", "exercise_try"),
+        "pdf": False,
+    },
 }
+STUDENT_PDF = ("student_clips", "student_ocr", "student_examples")  # مراحل تقرأ ملف كتاب الطالب
 
 
 def _file_digest(path: Path) -> str:
@@ -74,6 +82,8 @@ def output_path(book: Book, stage: str) -> Path:
         return book.dir("student_pages") / "index.json"
     if stage == "checks":
         return book.out / "checks.json"
+    if stage == "student_ocr":
+        return book.output("student_pages")
     return book.output(stage)
 
 
@@ -111,7 +121,9 @@ def digest(book: Book, stage: str, pdf: Callable[[Book], Path] | None = None, ta
     if spec["pdf"]:
         path = (pdf or Book.pdf)(book)
         h.update(f"pdf:{_file_digest(path)}".encode())
-    if stage == "student_clips":
+    if stage == "student_examples":
+        h.update(json.dumps(student_examples.expected_counts(book), sort_keys=True).encode())
+    if stage in STUDENT_PDF:
         h.update(f"student_pdf:{_file_digest(student_clips.student_pdf(book))}".encode())
     return h.hexdigest()
 

@@ -33,7 +33,7 @@ def settings(book: Book) -> dict[str, Any]:
     return {**DEFAULTS, **book.get("printed_pages", {})}
 
 
-def _pairs(raw: Any) -> Boxes:
+def pairs(raw: Any) -> Boxes:
     """صناديق ملف واحد: قائمة أزواج [نص، صندوق] (صيغة `ocr.boxes`) أو مخرج PaddleOCR الخام (`rec_texts` و`rec_boxes`)."""
     if isinstance(raw, dict):
         raw = raw.get("res", raw)
@@ -50,7 +50,7 @@ def stored_boxes(book: Book, page: int) -> Boxes | None:
     for folder in folders:
         path = folder / f"{page:04d}.json"
         if path.exists():
-            return _pairs(json.loads(path.read_text(encoding="utf-8")))
+            return pairs(json.loads(path.read_text(encoding="utf-8")))
     return None
 
 
@@ -123,6 +123,14 @@ def build(book: Book, boxes_of: Callable[[int], Boxes | None]) -> dict[str, Any]
         boxes = None if page in skip else boxes_of(page)
         if boxes:
             read[page] = boxes
+    return tabulate(read, cfg)
+
+
+def tabulate(read: dict[int, Boxes], cfg: dict[str, Any]) -> dict[str, Any]:
+    """الجدول من صناديق الصفحات المقروءة (صفحة ملف → صناديقها) بإعداد كإعداد `settings`: منطق واحد لملف الدليل ولملف
+    كتاب الطالب (`student_ocr`). الناتج: `table` (غير مفحوص بعد) وأعداد ملخصه."""
+    skip = set(cfg["skip"])
+    read = {page: boxes for page, boxes in read.items() if boxes and page not in skip}
     size = tuple(cfg["size"]) if cfg["size"] else extent(read.values())
     found = {page: candidates(boxes, size, cfg["band"]) for page, boxes in read.items()}
     table, ambiguous = choose({page: nums for page, nums in found.items() if nums})
