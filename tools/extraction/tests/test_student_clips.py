@@ -362,6 +362,99 @@ def test_predicted_inside_the_page_but_far_is_fixed_by_the_frame_anchor():
     assert found["box"] == pytest.approx((2.0, 324.0, 410.0, 682.0), abs=1.0)
 
 
+def test_deviation_is_measured_from_the_candidate_the_search_settled_near():
+    # أول صفحة في الدرس بدرجة دون العتبة وبلا درجة دنيا: لا دليل، والتقرير يحمل المرشّح الذي استقر البحث قربه
+    short, frame = (47.0, 100.0, 362.0, 390.0), (53.0, -17.0, 353.0, 383.0)
+    found = in_frames((54.0, 145.0, 258.0, 324.0), short, frame, ceiling=0.7)
+    top, bottom = student_clips.frame_candidates([], short, PAGE, FIT)
+    assert found["evidence"] is None and found["score"] == pytest.approx(0.7)
+    # بحث الصفحة كلها من مرشّح الأعلى استقر عند مرشّح الأسفل: انحرافه عنه لا عن الأعلى (كان 234)
+    assert found["frame"] == pytest.approx(bottom) and found["deviation"] <= FIT.tolerance
+    assert not found["widened"]  # وعند تساوي الدرجة يُؤخذ بحث النافذة: هو وحده دليل موضع
+    wide = [t for t in found["tries"] if t["widened"]]
+    assert wide and all(t["deviation"] <= FIT.tolerance and t["predicted"][1] < 100 for t in wide[:1])
+    assert (
+        student_clips.deviation(found["box"], student_clips.frame_target(found["template"], top, PAGE)[1])
+        > 200
+    )
+
+
+def overhanging(true_frame, ceiling=1.0):
+    """مطابِق مختلق لقالب قد يتجاوز الصفحة: موضع كل جزء نقله من الإطار الحقيقي بلا حصر، والقالب نفسه لا يخرج عن الصفحة،
+    والدرجة تهبط بمجموع بُعد حوافه الأربع عن حواف المحتوى الحقيقي (فالقالب المتجاوز ينضغط نحو الحافة ولا يبلغ العتبة)."""
+
+    def matcher_for(part):
+        true = student_clips.transfer_box(part, true_frame, WHOLE)
+
+        def match(dpi, size, window):
+            x0, y0, x1, y1 = window or WHOLE
+            if x1 - x0 < size[0] or y1 - y0 < size[1]:
+                return (-1.0, 0.0, 0.0)
+            x = min(max(true[0], x0), x1 - size[0])
+            y = min(max(true[1], y0), y1 - size[1])
+            box = (x, y, x + size[0], y + size[1])
+            return (ceiling - sum(abs(p - q) for p, q in zip(box, true, strict=True)) / 30, x, y)
+
+        return match
+
+    return matcher_for
+
+
+def first_page(true_frame, trim=8.0, floor=0.59, ceiling=1.0):
+    """أول صفحة في الدرس (لوحة مقصوصة من أعلاها) ومقطعها قرب حافتها السفلى، بهامش لوحة حقيقي يخالف المعايَر."""
+    short = (47.0, 100.0, 362.0, 390.0)
+    frames = student_clips.frame_candidates([], short, PAGE, FIT)
+    found = student_clips.refine_in_frames(
+        overhanging(true_frame, ceiling),
+        (54.0, 150.0, 258.0, 340.0),
+        frames,
+        PAGE,
+        FRAME_SEARCH,
+        0.8,
+        FIT,
+        floor,
+        0.25,
+        trim,
+    )
+    return found, frames
+
+
+def test_first_page_clip_hanging_over_the_page_edge_is_trimmed_to_the_page():
+    # حالة 2.10_m1_p188 (أرقام مختلقة بنسبها): هامش اللوحة الأيسر في هذه الصفحة 10.5 لا 6 والسفلي 12.5 لا 7، فالإطار الحقيقي
+    # يبعد عن مرشّح الأسفل 4.5 نقاط يمينًا و5.5 إلى أعلى، و3.5 نقاط من يسار المقطع خارج صفحة الطالب
+    true_frame = (57.5, -22.5, 357.5, 377.5)
+    before, (top, bottom) = first_page(true_frame, trim=0.0)
+    # بلا قطع: القالب كله ينضغط أفقيًا عند الحافة اليسرى (408 نقطة في 401 من الصفحة)، ودرجته دون العتبة
+    assert before["evidence"] is None and 0.59 < before["score"] < 0.8
+    assert before["box"] == pytest.approx((0.0, 345.0, 401.9, 725.0), abs=1.0) and before["scale"][0] < 0.99
+    # والانحراف عن مرشّح الأسفل الذي استقر قربه (11 نقطة) لا عن مرشّح الأعلى (255): فوق انحراف المعايرة فلا دليل هندسي
+    assert before["frame"] == pytest.approx(bottom) and not before["widened"]
+    assert FIT.tolerance < before["deviation"] == pytest.approx(11.0, abs=0.5)
+    assert student_clips.pinned_edges(before["box"], PAGE) == ["left"]
+    found, _ = first_page(true_frame)
+    # بالقطع من جهة الحافة الملاصَقة: القالب ما داخل الصفحة وحده، بمقياسه وموضعه، وببلوغ العتبة نفسها
+    assert found["evidence"] == "score" and found["score"] > 0.95 and found["trim"] == {"left": 3.5}
+    assert found["template"] == pytest.approx((57.5, 150.0, 258.0, 340.0))
+    assert found["box"] == pytest.approx((0.0, 345.0, 401.0, 725.0), abs=0.5)
+    assert found["scale"] == pytest.approx([1.0, 1.0], abs=0.006)
+    assert student_clips.status_of(found["score"], "2.10_m1_p188.png", 0.8, [], found["evidence"]) == "ok"
+    assert len(found["tries"]) == 4  # أرقام كل مرشّح (نافذة وصفحة كلها) في التقرير
+
+
+def test_trim_changes_nothing_without_an_overhang_and_never_lowers_the_bar():
+    # مقطع داخل الصفحة غير ملاصق لحافة، ودرجته دون العتبة لسبب آخر: لا قطع ولا قبول
+    inside = (51.0, -17.0, 351.0, 383.0)
+    weak, _ = first_page(inside, floor=None, ceiling=0.7)
+    assert weak["evidence"] is None and weak["trim"] == {} and weak["score"] == pytest.approx(0.7)
+    # ملاصق للحافة ودرجته منخفضة أصلًا: القطع يزيل الانضغاط ولا يختلق درجة فوق ما في الصفحة
+    low, _ = first_page((57.5, -22.5, 357.5, 377.5), ceiling=0.75)
+    assert low["evidence"] is None and low["score"] == pytest.approx(0.75, abs=0.01)
+    assert low["trim"] == {"left": 3.5} and low["widened"] is False
+    # القطع الذي يُبعد الصندوق عن الحافة قطعٌ من محتوى الصفحة: لا يُعتدّ به ولو ساوت درجته
+    found, _ = first_page((57.5, -22.5, 357.5, 377.5))
+    assert found["box"][0] <= 0.5
+
+
 def test_geometric_evidence_needs_position_scale_and_a_measured_floor():
     panel, frame = (30.0, 100.0, 345.0, 512.0), (36.0, 105.0, 336.0, 505.0)
     clip_box = (40.0, 150.0, 250.0, 300.0)

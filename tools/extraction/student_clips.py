@@ -17,7 +17,9 @@
    فمقياس النقل الرأسي من ارتفاعها يخطئ، والمقطع الذي يبدأ فوق صفحة الطالب أو ينتهي تحتها فيه ما ليس فيها. المقاطع التي بلغت
    العتبة تعاير الإطار (`fit_frame`: مقياس واحد للمحورين وهامش كل حافة وانحرافها)، ثم يُقصر القالب على تقاطع صندوقه مع الإطار
    ويُنقل التقاطع وحده، بمرشّحَي التثبيت من أعلى ومن أسفل لكل صورة (`frame_candidates`). القبول ببلوغ العتبة، أو بدليل هندسي
-   مستقل (`geometric`): الموضع ضمن انحراف المعايرة والمقياس ضمن مداها ودرجة دنيا مقيسة (`score_floor`).
+   مستقل (`geometric`): الموضع ضمن انحراف المعايرة (عن المرشّح الذي استقر البحث قربه) والمقياس ضمن مداها ودرجة دنيا مقيسة
+   (`score_floor`). وما لم يثبت وصندوقه ملاصق لحافة الصفحة يُقطع قالبه من جهتها (`trim_pinned`): هامش اللوحة في صفحته يخالف
+   الوسيط المعايَر، فبقي في القالب ما هو خارج صفحة الطالب.
 6. التصيير من كتاب الطالب بدقته الأصلية: صفحة ممسوحة (صورة مضمَّنة تغطي الصفحة) تُقصّ بكسلاتها نفسها بلا استيفاء، وغيرها يُصيَّر
    بـ `vector_dpi`. لا رفع دقة فوق الأصل.
 
@@ -71,7 +73,8 @@ DEFAULTS: dict[str, Any] = {
     },
     # إعادة المقاطع الضعيفة بإطار صفحة الطالب المعايَر: min_clips أقل عدد مقاطع ناجحة للمعايرة، scale وaspect مدى المقياس
     # حول المقياس المعايَر، min_part أقل حصة من المقطع داخل الإطار ليُطابَق
-    "frame": {"min_clips": 8, "scale": 0.04, "aspect": 0.02, "min_part": 0.25},
+    # trim: أقصى ما يُقطع من القالب (نقاط الدليل) من جهة حافة الصفحة التي لاصقها صندوق لم يثبت (0 يعطّله)، بخطوة trim_step
+    "frame": {"min_clips": 8, "scale": 0.04, "aspect": 0.02, "min_part": 0.25, "trim": 8.0, "trim_step": 0.5},
     "modes": ["gray", "blur", "binary", "edges"],  # تمثيلات المطابقة بترتيب الأمانة؛ المعايرة تختار
     "mode_margin": 0.2,  # أقل فرق بين درجة الصفحة الصحيحة وأعلى جاراتها ليُعتدّ بالتمثيل
     "approved": [],
@@ -438,15 +441,50 @@ def refine_in_frames(
     fit: FrameFit,
     floor: float | None,
     min_part: float = 0.0,
+    trim: float = 0.0,
+    trim_step: float = 0.5,
 ) -> dict[str, Any] | None:
     """أفضل مطابقة للمقطع على الإطارات المرشّحة، أو None إن لم يقع في أيٍّ منها.
 
     لكل إطار: القالب جزء المقطع داخله (`matcher_for` يعيد مطابِق ذلك الجزء من صندوق الدليل)، والمنقول موضع الجزء وحده،
-    والبحث في النافذة ثم (إن لم يثبت) في الصفحة كلها. `evidence`: `score` ببلوغ العتبة، `geometry` بالدليل الهندسي
-    (`geometric`)، None لغيرهما. يُؤخذ الأقوى دليلًا ثم الأعلى درجةً، ويقف عند أول إطار يبلغ العتبة.
+    والبحث في النافذة ثم (إن لم يثبت) في الصفحة كلها. الانحراف يُقاس عن المرشّح الذي استقر البحث قربه (`settled`) لا عن
+    المرشّح الذي بدأ منه: بحث يبدأ من المثبَّت من أعلى ويستقر عند المثبَّت من أسفل انحرافه عن الثاني. `evidence`: `score`
+    ببلوغ العتبة، `geometry` بالدليل الهندسي (`geometric`)، None لغيرهما. يُؤخذ الأقوى دليلًا ثم الأعلى درجةً (وعند تساويها
+    بحث النافذة ثم الأقل انحرافًا)، ويقف عند أول إطار يبلغ العتبة. إن لم يثبت شيء والصندوق ملاصق لحافة الصفحة يُجرَّب قطع
+    القالب من جهتها (`trim` نقاط دليل على الأكثر بخطوة `trim_step`؛ `trim_pinned`). `tries` أرقام كل محاولة للتشخيص.
     """
     rank = {"score": 2, "geometry": 1, None: 0}
+    frames = list(frames)
+
+    def settled(part: Box, box: Box, score: float, widened: bool, trace: dict[str, Any]) -> dict[str, Any]:
+        """نتيجة بحث قالبه `part`: الإطار المرشّح الأقرب إلى ما استقر عليه (من المرشّحات التي تحوي القالب كله) وانحرافه عنه."""
+        anchors = [
+            (deviation(box, target[1]), i)
+            for i, frame in enumerate(frames)
+            if (target := frame_target(part, frame, page)) is not None and deviation(target[0], part) < 0.05
+        ]
+        away, index = min(anchors)
+        found = {
+            "frame": frames[index],
+            "template": part,
+            "predicted": frame_target(part, frames[index], page)[1],  # type: ignore[index]
+            "box": box,
+            "score": score,
+            "widened": widened,
+            "deviation": away,
+            "trim": {},
+            **trace,
+        }
+        found["evidence"] = (
+            "score" if score >= threshold else "geometry" if geometric(found, fit, floor) else None
+        )
+        return found
+
+    def key(found: dict[str, Any]) -> tuple[int, float, bool, float]:
+        return (rank[found["evidence"]], round(found["score"], 3), not found["widened"], -found["deviation"])
+
     best: dict[str, Any] | None = None
+    tries: list[dict[str, Any]] = []
     for frame in frames:
         target = frame_target(guide_box, frame, page, min_part)
         if target is None:
@@ -456,25 +494,87 @@ def refine_in_frames(
         for widen in (False, True):
             trace: dict[str, Any] = {}
             box, score, widened = refine(match, predicted, page, search, threshold, trace, widen=widen)
-            found = {
-                "frame": frame,
-                "template": part,
-                "predicted": predicted,
-                "box": box,
-                "score": score,
-                "widened": widened,
-                "deviation": deviation(box, predicted),
-                **trace,
-            }
-            found["evidence"] = (
-                "score" if score >= threshold else "geometry" if geometric(found, fit, floor) else None
+            found = settled(part, box, score, widened, trace)
+            tries.append(
+                {
+                    "predicted": [round(v, 1) for v in predicted],
+                    "box": [round(v, 1) for v in box],
+                    "score": round(score, 3),
+                    "deviation": round(found["deviation"], 1),
+                    "widened": widened,
+                }
             )
-            if best is None or (rank[found["evidence"]], score) > (rank[best["evidence"]], best["score"]):
+            if best is None or key(found) > key(best):
                 best = found
             if found["evidence"]:
                 break
         if best is not None and best["evidence"] == "score":
             break
+    if best is None:
+        return None
+    if best["evidence"] is None and trim > 0:
+        area = (guide_box[2] - guide_box[0]) * (guide_box[3] - guide_box[1])
+
+        def search_part(part: Box, predicted: Box, base: dict[str, Any]) -> dict[str, Any]:
+            trace: dict[str, Any] = {}
+            box, score, _ = refine(matcher_for(part), predicted, page, search, threshold, trace, widen=False)
+            return settled(part, box, score, base["widened"], trace)
+
+        best = trim_pinned(
+            best,
+            search_part,
+            page,
+            fit.scale,
+            steps(trim_step, trim, trim_step),
+            min_part * area,
+            key,
+        )
+    best["tries"] = tries
+    return best
+
+
+def trim_pinned(
+    found: dict[str, Any],
+    search_part: Callable[[Box, Box, dict[str, Any]], dict[str, Any]],
+    page: Size,
+    scale: float,
+    cuts: Sequence[float],
+    min_area: float,
+    key: Callable[[dict[str, Any]], Any],
+) -> dict[str, Any]:
+    """يقطع القالب من جهة حافة الصفحة التي لاصقها الصندوق، ويعيد أفضل النتائج (أو `found` نفسها إن لم يُفد القطع).
+
+    الإطار المعايَر وسيط الصفحات، وهامش صورة اللوحة يختلف في بعضها (أول صفحة في الدرس)، فيبقى في القالب المقصور على الإطار
+    شريط خارج صفحة الطالب: القالب لا يخرج عن الصفحة، فيلاصق حافتها مضغوطًا وتهبط درجته. لكل حافة ملاصَقة يُجرَّب قطع `cuts`
+    (نقاط الدليل) من جهتها، والبحث في نافذة حول ما استقر عليه البحث (الحافة المقابلة ثابتة)، ولا يُعتدّ إلا بقطع بقي صندوقه
+    عند الحافة (ضمن خطوة قطع: ما زاد عنها قطعٌ من محتوى الصفحة نفسه)؛ يُؤخذ الأعلى بـ `key` والأصغر قطعًا عند التساوي.
+    `search_part(القالب، المنقول، الأصل)` يعيد نتيجة البحث. الصفحة كلها ليست دليل موضع، فالنتيجة ترث `widened` من أصلها.
+    """
+    limit = (cuts[1] - cuts[0] if len(cuts) > 1 else cuts[0]) * scale + 1e-6 if cuts else 0.0
+    best = found
+    for edge in pinned_edges(found["box"], page):
+        side = ("left", "top", "right", "bottom").index(edge)
+        axis, base = side % 2, best
+        for cut in cuts:
+            part = list(base["template"])
+            part[side] += cut if side < 2 else -cut
+            width, height = part[2] - part[0], part[3] - part[1]
+            if width <= 0 or height <= 0 or width * height < min_area:
+                break
+            size = (width * scale, height * scale)
+            start = [base["box"][0], base["box"][1]]
+            if side < 2:  # الحافة المقابلة للملاصَقة ثابتة حيث استقر البحث
+                start[axis] = base["box"][axis + 2] - size[axis]
+            start = [min(max(start[i], 0.0), max(page[i] - size[i], 0.0)) for i in (0, 1)]
+            predicted = (start[0], start[1], start[0] + size[0], start[1] + size[1])
+            tried = search_part(tuple(part), predicted, base)  # type: ignore[arg-type]
+            box = tried["box"]
+            gap = box[side] if side < 2 else page[axis] - box[side]
+            if gap > limit:
+                continue
+            tried["trim"] = {**base["trim"], edge: cut}
+            if key(tried) > key(best):
+                best = tried
     return best
 
 
@@ -926,6 +1026,8 @@ def run(book: Book, table: dict[int, int]) -> dict[str, Any]:
                 fit,
                 floor,
                 cfg["frame"]["min_part"],
+                cfg["frame"]["trim"],
+                cfg["frame"]["trim_step"],
             )
             if found is not None:
                 found["candidates"] = len(frames)
@@ -1006,6 +1108,8 @@ def run(book: Book, table: dict[int, int]) -> dict[str, Any]:
                     "deviation": round(found["deviation"], 1),
                     "widened": found["widened"],
                     "candidates": found["candidates"],
+                    "trim": found["trim"],
+                    "tries": found["tries"],
                 }
                 if found["evidence"]:
                     box, score = found["box"], found["score"]
