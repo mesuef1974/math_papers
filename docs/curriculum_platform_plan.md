@@ -105,7 +105,9 @@
 - مغلقة (2026-11-18): الحاوية `arranged-cart` (Amsterdam، `https://t3.storageapi.dev`، نمط المضيف بلا `ASSETS_S3_PATH_STYLE`)، ومتغيرات
   `ASSETS_STORAGE=s3` و`ASSETS_S3_*` في خدمة web مراجع `${{arranged-cart.*}}`. الرفع من جهاز المالك: 120 جديد، ثم إعادة الرفع 120 بلا تغيير
   (يتيم 0)، وعيّنة عشوائية موجودة في الحاوية، و`GET /api/v1/assets/` بلا جلسة 401. القاعدة فُتحت للرفع بوكيل TCP مؤقت ثم حُذف هو و`DATABASE_PUBLIC_URL`.
-  للرفع القادم بلا كشف القاعدة: `railway connect Postgres --tunnel-only` من جهاز المالك (نفق مشفّر) بدل الوصول العام.
+  للرفع القادم بلا كشف القاعدة: `railway connect Postgres --tunnel-only` من جهاز المالك (نفق مشفّر) بدل الوصول العام، ثم
+  `railway run --service web -- pwsh -NoProfile -File scripts/publish_assets_tunnel.ps1 -Port <منفذ النفق> -Course <المقرر> -Source <مجلد المقاطع>`
+  (يبدّل مضيف `DATABASE_URL` المحقون بالنفق وحده). رفع 2026-11-20 بعد إعادة القص (#134 و#135): 120 محدَّث، ثم 120 بلا تغيير (يتيم 0).
 
 ### المرحلة 4: العروض في الإنتاج
 - من: بناء عرض محلي على فرع غير مدموج.
