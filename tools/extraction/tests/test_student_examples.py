@@ -178,6 +178,103 @@ def test_an_example_opened_by_a_try_line_has_no_start_and_a_lesson_without_pages
     assert got["lessons"]["1.1"]["missing_pages"] == [11, 12]
 
 
+def test_a_label_word_inside_a_text_line_is_not_an_example(tmp_path):
+    # «مثال 1» داخل سطر من المتن: صندوق بارتفاع خط المتن بين كلمات سطره، لا شارة عنوان
+    inline = [
+        ("مثال 1", [1316, 500, 1430, 536]),
+        ("في", [1435, 500, 1487, 534]),
+        ("في", [1264, 498, 1319, 540]),
+    ]
+    pages = {
+        12: [*inline, _label(900), _try(1500, 4), _label(1800), _try(2400, 7)],
+        13: [_label(300), _try(900, 9)],
+    }
+    lesson, tried = _scan(_book(tmp_path, examples=3), pages)
+    assert (lesson["status"], lesson["found"], lesson["labels"], lesson["inline"]) == ("ok", 3, 3, 1)
+    assert _spans(lesson)[0] == [(12, 900.0, 1500.0)]
+    assert [row["exercises"] for row in tried["value"]] == [[4], [7], [9]]
+    kept, _ = _scan(_book(tmp_path, examples=3, label_height=0), pages)  # معطّلًا: يعدّه مثالًا كما كان
+    assert (kept["status"], kept["reasons"], kept["found"], kept["inline"]) == ("review", ["count"], 4, 0)
+
+
+BADGE = [2100, 1200, 2300, 1266]  # شارة «مثال» مرسومة في موضع الشارات ولا صندوق لها
+
+
+def _recover(tmp_path, boxes, ink, reads="مثال", **over):
+    """مسح صفحة واحدة بصورة مرسوم فيها `ink` (مستطيلات حبر)، وقارئ يعيد `reads` لكل قصاصة ويسجّل مقاساتها."""
+    image_module = pytest.importorskip("PIL.Image")
+    draw_module = pytest.importorskip("PIL.ImageDraw")
+    image = image_module.new("RGB", (W, H), "white")
+    draw = draw_module.Draw(image)
+    for x0, y0, x1, y1 in ink:
+        draw.rectangle((x0, y0, x1 - 1, y1 - 1), fill=(120, 20, 40))
+    asked = []
+
+    def read(crop):
+        asked.append(crop.size)
+        return reads, 0.9
+
+    got = student_examples.scan(
+        _book(tmp_path, **over),
+        LAYOUT,
+        GUIDE,
+        STUDENT,
+        lambda p: boxes if p == 12 else [],
+        lambda p: (W, H),
+        lambda p: image if p == 12 else None,
+        read,
+    )
+    return got["lessons"]["1.1"], asked
+
+
+def test_a_label_badge_the_page_ocr_missed_is_recovered_from_its_ink(tmp_path):
+    boxes = [_label(300), _try(900, 4), _line(1400), _try(2000, 7)]  # فات سطر «مثال» الثاني
+    text_ink = [
+        [2100, 1400, 2300, 1440],
+        [2100, 1700, 2300, 1740],
+    ]  # سطر متن مقروء، وسطر لم يُكشف أقصر من الشارة
+    lesson, asked = _recover(tmp_path, boxes, [BADGE, *text_ink])
+    assert (lesson["status"], lesson["found"], lesson["labels"], lesson["opened"]) == ("ok", 2, 2, 0)
+    assert lesson["recovered"] == 1
+    assert lesson["examples"][1]["label"] == BADGE
+    assert _spans(lesson) == [[(12, 300.0, 900.0)], [(12, 1200.0, 2000.0)]]
+    assert asked.count((200 + 2 * 5, 66 + 2 * 5)) == 1  # الشارة وحدها قُرئت، بهامش القراءة
+
+
+def test_a_missing_first_label_is_recovered_before_the_first_try_line(tmp_path):
+    first = [2100, 300, 2300, 366]
+    lesson, _ = _recover(tmp_path, [_try(900), _label(1200), _try(2000, 7)], [first])
+    assert (lesson["status"], lesson["found"], lesson["recovered"]) == ("ok", 2, 1)
+    assert [item["label"] for item in lesson["examples"]] == [first, _label(1200)[1]]
+    assert [item["end"] for item in lesson["examples"]] == ["try_unread", "try"]
+
+
+def test_ink_is_a_label_only_where_one_is_missing_unboxed_and_read_as_a_label(tmp_path):
+    missing = [_label(300), _try(900, 4), _try(2000, 7)]
+    review = ("review", ["unlabeled"], 0)
+
+    def outcome(lesson):
+        return lesson["status"], lesson["reasons"], lesson["recovered"]
+
+    unread, asked = _recover(tmp_path, missing, [BADGE], reads="نص آخر")  # كتلة بارتفاع الشارة ليست «مثال»
+    assert outcome(unread) == review and (210, 76) in asked
+    boxed, _ = _recover(tmp_path, [*missing, ("عنوان", [2050, 1190, 2350, 1280])], [BADGE])  # لها صندوق مقروء
+    assert outcome(boxed) == review
+    tall, _ = _recover(tmp_path, missing, [[2100, 1200, 2300, 1400]])  # رسم لا شارة
+    assert outcome(tall) == review
+    aside, _ = _recover(tmp_path, missing, [[1000, 1200, 1200, 1266]])  # خارج موضع الشارات الأفقي
+    assert outcome(aside) == review
+    # لا فوات: سطر «مثال» بين كل سطرَي «حاول أن تحل»، فلا يُبحث ولو وُجد حبر بلا صندوق
+    whole, asked = _recover(tmp_path, [_label(300), _try(900, 4), _label(1500), _try(2000, 7)], [BADGE])
+    assert outcome(whole) == ("ok", [], 0) and (210, 76) not in asked
+
+
+def test_label_bands_group_read_labels_by_their_right_edge():
+    boxes = [[1398, 0, 1527, 60], [1475, 0, 1601, 60], [1394, 0, 1524, 60], [1473, 0, 1604, 60]]
+    assert student_examples.label_bands(boxes) == [(1394, 1527), (1473, 1604)]
+    assert student_examples.label_bands([]) == []
+
+
 def test_lesson_pages_fill_gaps_between_consecutive_neighbours():
     pages, printed, missing = student_examples.lesson_pages([3, 6], {3: 10, 6: 13}, {10: 12, 13: 15})
     assert pages == [(12, 10), (13, 11), (14, 12), (15, 13)]
