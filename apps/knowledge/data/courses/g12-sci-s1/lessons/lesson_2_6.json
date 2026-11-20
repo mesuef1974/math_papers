@@ -275,6 +275,36 @@
    "label": ""
   }
  ],
+ "exercise_groups": [
+  {
+   "example": 2,
+   "dok": 1,
+   "exercises": [
+    2
+   ]
+  },
+  {
+   "example": 3,
+   "dok": 2,
+   "exercises": [
+    18
+   ]
+  },
+  {
+   "example": 4,
+   "dok": 2,
+   "exercises": [
+    29
+   ]
+  },
+  {
+   "example": 5,
+   "dok": 3,
+   "exercises": [
+    34
+   ]
+  }
+ ],
  "examples": [
   {
    "number": 1,

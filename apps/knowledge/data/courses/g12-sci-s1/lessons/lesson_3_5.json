@@ -370,6 +370,36 @@
    "label": ""
   }
  ],
+ "exercise_groups": [
+  {
+   "example": 1,
+   "dok": 2,
+   "exercises": [
+    3
+   ]
+  },
+  {
+   "example": 2,
+   "dok": 2,
+   "exercises": [
+    5
+   ]
+  },
+  {
+   "example": 3,
+   "dok": 2,
+   "exercises": [
+    9
+   ]
+  },
+  {
+   "example": 4,
+   "dok": 3,
+   "exercises": [
+    11
+   ]
+  }
+ ],
  "examples": [
   {
    "number": 1,

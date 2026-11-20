@@ -279,6 +279,29 @@
    "label": ""
   }
  ],
+ "exercise_groups": [
+  {
+   "example": 1,
+   "dok": 2,
+   "exercises": [
+    4
+   ]
+  },
+  {
+   "example": 2,
+   "dok": 2,
+   "exercises": [
+    5
+   ]
+  },
+  {
+   "example": 3,
+   "dok": 2,
+   "exercises": [
+    10
+   ]
+  }
+ ],
  "examples": [
   {
    "number": 1,

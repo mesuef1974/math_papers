@@ -458,6 +458,50 @@
    "label": ""
   }
  ],
+ "exercise_groups": [
+  {
+   "example": 1,
+   "dok": 1,
+   "exercises": [
+    1
+   ]
+  },
+  {
+   "example": 2,
+   "dok": 2,
+   "exercises": [
+    6
+   ]
+  },
+  {
+   "example": 3,
+   "dok": 2,
+   "exercises": [
+    10
+   ]
+  },
+  {
+   "example": 4,
+   "dok": 2,
+   "exercises": [
+    18
+   ]
+  },
+  {
+   "example": 5,
+   "dok": 2,
+   "exercises": [
+    21
+   ]
+  },
+  {
+   "example": 6,
+   "dok": 2,
+   "exercises": [
+    31
+   ]
+  }
+ ],
  "examples": [
   {
    "number": 1,
