@@ -103,6 +103,36 @@
    "label": ""
   }
  ],
+ "exercise_groups": [
+  {
+   "example": 1,
+   "dok": 1,
+   "exercises": [
+    4
+   ]
+  },
+  {
+   "example": 2,
+   "dok": 2,
+   "exercises": [
+    12
+   ]
+  },
+  {
+   "example": 3,
+   "dok": 3,
+   "exercises": [
+    25
+   ]
+  },
+  {
+   "example": 4,
+   "dok": 3,
+   "exercises": [
+    29
+   ]
+  }
+ ],
  "examples": [
   {
    "number": 1,
