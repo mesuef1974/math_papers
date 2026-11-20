@@ -334,6 +334,30 @@ def test_verdict_judges_each_clip_by_its_place_in_the_example():
     assert student_examples.verdict({**fine, "number": "نص"}, 2, True, True) == (None, ["no_answer"])
 
 
+def test_a_missed_title_is_settled_by_the_read_number_at_the_ocr_label_or_by_the_top_strip():
+    missed = {"number": 2, "title": False, "cut_bottom": False, "cut_side": False}
+    verdict = student_examples.verdict
+    # الرقم المقروء المطابق وسطر «مثال» عند أعلى المقطع دليل كافٍ؛ وأحدهما وحده لا يكفي
+    assert verdict(missed, 2, True, True, anchored=True) == (missed, [])
+    assert verdict(missed, 2, True, True, anchored=False)[1] == ["title"]
+    assert verdict({**missed, "number": 0}, 2, True, True, anchored=True)[1] == ["title"]
+    assert verdict({**missed, "number": 3}, 2, True, True, anchored=True)[1] == ["title", "number"]
+    # جواب الشريط العلوي: عنوانه يثبت العنوان، ورقمه المقروء يتقدّم على رقم الصورة كلها
+    assert verdict({**missed, "number": 0}, 2, True, True, top={"number": 0, "title": True})[1] == []
+    assert verdict({**missed, "number": 3}, 2, True, True, top={"number": 2, "title": True})[1] == []
+    assert verdict({**missed, "number": 0}, 2, True, True, True, {"number": 2, "title": False})[1] == []
+    assert verdict(missed, 2, True, True, top={"number": 5, "title": True})[1] == ["number"]
+    assert verdict(missed, 2, True, True, top={"number": 0, "title": False})[1] == ["title"]
+    assert verdict(missed, 2, True, True, top=None)[1] == ["title"]
+    cut = {**missed, "cut_bottom": True, "cut_side": True}  # القطع لا يغيّره دليل العنوان
+    assert verdict(cut, 2, True, True, anchored=True)[1] == ["cut_bottom", "cut_side"]
+    assert student_examples.top_reading({"number": "4", "title": 1}) == {"number": 4, "title": True}
+    assert student_examples.top_reading({"title": True}) is None
+    assert student_examples.anchored(1.2, 12.0, 2.0) and student_examples.anchored(-2.0, 12.0, 2.0)
+    assert not student_examples.anchored(None, 12.0, 2.0)  # المقطع لا يبدأ بجزء سطر «مثال»
+    assert not student_examples.anchored(30.0, 12.0, 2.0) and not student_examples.anchored(-9.0, 12.0, 2.0)
+
+
 def test_compare_counts_agreement_per_lesson():
     def result(rows):
         return {"lessons": {"2.6": {"value": [{"example": n, "exercises": e} for n, e in rows]}}}
@@ -372,6 +396,8 @@ def test_settings_are_validated():
     bad = {"student_examples": {"ocr_dpi": 0, "columns": 3, "band": [0, 1], "vision": "no", "approved": "x"}}
     assert len(student_examples.errors(bad)) == 5
     assert student_examples.errors({"student_examples": {"end_patterns": ["("]}})
+    strip = {"student_examples": {"title_dpi": 12, "title_strip": 0, "title_top": "x"}}
+    assert len(student_examples.errors(strip)) == 3
 
 
 # ───── المرحلتان على PDF مولَّد ─────
@@ -550,6 +576,84 @@ def test_a_clip_the_vision_model_rejects_is_not_written_until_approved(tmp_path,
     assert {p.name for p in (tmp_path / "clips").iterdir()} == CLIPS
     assert not (tmp_path / "clips_review").exists()
     assert {clip["status"] for clip in _report(book)["clips"]} == {"ok", "approved"}
+
+
+def _titleless_vision(monkeypatch, numbers, strips):
+    """نموذج لا يرى العنوان في صورة المقطع كلها: `numbers` ما يقرؤه رقمًا فيها لكل مقطع (الافتراضي رقم المثال)،
+    و`strips` جوابه عن شريط كل مقطع. يعيد ما سُئل عنه: (اسم الصورة، مقاسها، هل السؤال سؤال الشريط)."""
+    asked = []
+
+    @contextmanager
+    def serve(book, size="small", ctx=None):
+        yield object()
+
+    def asker(server):
+        def ask(image, question, fmt):
+            name = Path(image).name
+            strip = name.startswith(student_examples.TOP)
+            assert fmt == (student_examples.TITLE if strip else student_examples.CHECK)
+            assert question == (student_examples.TITLE_QUESTION if strip else student_examples.QUESTION)
+            asked.append((name, student_examples.png_size(Path(image)), strip))
+            if strip:
+                return strips[name.removeprefix(student_examples.TOP)]
+            number = numbers.get(name, int(student_examples.NAME.match(name)["n"]))
+            return {"number": number, "title": False, "cut_bottom": False, "cut_side": False}
+
+        return ask
+
+    monkeypatch.setattr(llama, "serve", serve)
+    monkeypatch.setattr(llama, "asker", asker)
+    return asked
+
+
+def test_a_title_the_model_misses_is_settled_without_approval(tmp_path, monkeypatch, capsys):
+    unread, wrong = "1.1_m1_p10.png", "1.1_m3_p11.png"
+    strips = {unread: {"number": 1, "title": True}, wrong: {"number": 3, "title": False}}
+    asked = _titleless_vision(monkeypatch, {unread: 0, wrong: 8}, strips)
+    book = _stage_book(tmp_path, monkeypatch, vision=True)
+    assert main([str(tmp_path), "student_ocr"]) == 0
+    assert main([str(tmp_path), "student_examples"]) == 0
+    assert '"written": 4' in capsys.readouterr().out
+    assert {p.name for p in (tmp_path / "clips").iterdir()} == CLIPS
+    assert not (tmp_path / "clips_review").exists()  # ولا صور الرؤية وأشرطتها
+    clips = {clip["file"]: clip for clip in _report(book)["clips"]}
+    assert all(clip["status"] == "ok" and clip["problems"] == [] for clip in clips.values())
+    # سطر «مثال» من صناديق OCR عند أعلى كل مقطع أول، والتتمة بلا سطر
+    assert [clips[name]["label_top"] for name in sorted(CLIPS)] == [
+        pytest.approx(0, abs=1),
+        pytest.approx(0, abs=1),
+        None,
+        pytest.approx(0, abs=1),
+    ]
+    # الرقم المقروء المطابق مع السطر يكفي بلا سؤال ثانٍ؛ والشريط يُسأل عنه لما لم يُقرأ رقمه أو خالف وحده
+    assert sorted(name for name, _, strip in asked if strip) == sorted(
+        f"top_{name}" for name in (unread, wrong)
+    )
+    assert sorted(name for name, _, strip in asked if not strip) == sorted(CLIPS)
+    assert clips["1.1_m2_p10.png"]["top"] is None and clips["1.1_m2_p11_cont.png"]["top"] is None
+    assert clips[unread]["top"] == strips[unread] and clips[wrong]["top"] == strips[wrong]
+    assert clips[unread]["vision"]["title"] is False  # جواب الصورة كلها يبقى في التقرير كما هو
+    # الشريط أعلى المقطع بعرضه كله وبدقة `title_dpi`، لا صورته المصغّرة
+    sizes = {name: size for name, size, _ in asked}
+    box = clips[unread]["box"]
+    assert sizes[f"top_{unread}"] == pytest.approx(((box[2] - box[0]) * 300 / 72, 60 * 300 / 72), abs=2)
+    assert sizes[unread][0] == pytest.approx((box[2] - box[0]) * 200 / 72, abs=2)
+
+
+def test_a_title_neither_the_number_nor_the_strip_settles_stays_for_review(tmp_path, monkeypatch, capsys):
+    bad = "1.1_m2_p10.png"
+    strips = {bad: {"number": 0, "title": False}, "1.1_m3_p11.png": {}}
+    _titleless_vision(monkeypatch, {bad: 0, "1.1_m3_p11.png": 0}, strips)
+    book = _stage_book(tmp_path, monkeypatch, vision=True)
+    assert main([str(tmp_path), "student_ocr"]) == 0
+    assert main([str(tmp_path), "student_examples"]) == 7
+    assert {p.name for p in (tmp_path / "clips").iterdir()} == {"1.1_m1_p10.png"}
+    assert {p.name for p in (tmp_path / "clips_review").iterdir()} == CLIPS - {"1.1_m1_p10.png"}
+    clips = {clip["file"]: clip for clip in _report(book)["clips"]}
+    assert (clips[bad]["status"], clips[bad]["problems"]) == ("review", ["title"])
+    assert clips["1.1_m2_p11_cont.png"]["problems"] == ["sibling"]
+    assert clips["1.1_m3_p11.png"]["problems"] == ["title"] and clips["1.1_m3_p11.png"]["top"] is None
+    assert not re.search("[ء-ي]", book.output("student_examples").read_text(encoding="utf-8"))
 
 
 def test_a_vision_server_that_does_not_start_exits_4(tmp_path, monkeypatch):
