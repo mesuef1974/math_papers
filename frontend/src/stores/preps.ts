@@ -1,11 +1,15 @@
 import { defineStore } from "pinia";
 import { api, API_BASE, ApiError } from "@/api/client";
 import { accessMessage } from "@/stores/papers";
+import type { PaperLink } from "@/utils/paperLink";
 
 // تحضير الحصة: حصص الدروس بترتيب الخطة الفصلية، وتحضير الحصة المختارة بمعاييره، وتنزيله في Word بنموذج الوزارة.
 export const PREP_COURSE = "g10-s1";
 
 export type CheckStatus = "pass" | "fail" | "pending";
+
+// حصة الدرس أو نوع حصة غير الدرس (مفتاحها في `lesson`، مثل «quiz-u1»)
+export type PeriodKind = "lesson" | "orientation" | "quiz" | "review" | "exam" | "project" | "support";
 
 export interface PrepPeriod {
   lesson: string;
@@ -17,6 +21,7 @@ export interface PrepPeriod {
   status: CheckStatus;
   // للمعلم تعديل محفوظ على حصص هذا الدرس
   customized?: boolean;
+  kind?: PeriodKind;
 }
 
 // مراجعة المعلم لأهداف حصته: المعتمد من ملف الوحدة، ونسخته الشخصية (الشرط والمعيار)، وآخر اقتراح له.
@@ -135,7 +140,11 @@ export interface PrepSheet {
   checks: PrepCheck[];
   pending: boolean;
   review?: PrepReview | null;
-  edit?: PrepEdit;
+  // حصة غير الدرس مشتركة بلا تعديل
+  edit?: PrepEdit | null;
+  kind?: PeriodKind;
+  papers?: PaperLink[];
+  scope?: string[];
 }
 
 export function prepPath(lesson: string, k: number): string {

@@ -11,6 +11,7 @@ import { usePaperFit } from "@/composables/usePaperFit";
 import { useAuthStore } from "@/stores/auth";
 import { useCoursesStore } from "@/stores/courses";
 import { LEVEL_NAMES, PURPOSE_LEVEL, PURPOSE_NAMES, usePapersStore, type Level, type Purpose } from "@/stores/papers";
+import { paperPrefill, type PaperPrefill } from "@/utils/paperLink";
 import { usePdfStore, type PdfRequest } from "@/stores/pdf";
 import { usePrintStore } from "@/stores/print";
 import { useSavedStore } from "@/stores/saved";
@@ -90,6 +91,19 @@ async function loadCourseOptions(course: string) {
   blueprint.value = "";
   await store.loadOptions(course);
   if (!hasBlueprints.value && (mode.value === "exam" || mode.value === "bundle")) mode.value = "worksheet";
+  if (prefill && prefill.course === store.course) applyPrefill(prefill);
+}
+
+// رابط من تحضير حصة غير درس (صفحة التحضير): يملأ مدخلات التوليد ولا يولّد؛ المعلم يضغط «توليد».
+// /?course=&mode=quiz|worksheet|exam|bundle&lesson=&second=&level=&blueprint=
+const prefill = paperPrefill(route.query);
+function applyPrefill(link: PaperPrefill) {
+  mode.value = link.mode;
+  if (link.blueprint) blueprint.value = link.blueprint;
+  if (link.lesson) lesson.value = link.lesson;
+  secondLesson.value = link.second;
+  level.value = link.level;
+  void router.replace({ query: {} });
 }
 watch(
   () => courses.selected,
@@ -100,10 +114,14 @@ watch(
 
 onMounted(async () => {
   if (!auth.canGenerate) return;
-  if (courses.courses.length) void loadCourseOptions(courses.selected);
-  else {
+  const wanted = prefill?.course ?? "";
+  if (courses.courses.length) {
+    if (wanted && wanted !== courses.selected) courses.select(wanted); // المراقب يحمّل دروسه
+    else void loadCourseOptions(courses.selected);
+  } else {
     // المراقب يحمّل دروس المقرر الافتراضي حين يُختار؛ بلا مقرر (تعذر الطلب) تبقى دروس المقرر الحالي في الخادم
     await courses.load();
+    if (wanted) courses.select(wanted);
     if (!courses.selected) void loadCourseOptions("");
   }
   // رابط مباشر إلى ورقة محفوظة: /?saved=ID

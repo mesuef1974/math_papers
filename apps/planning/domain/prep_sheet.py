@@ -12,8 +12,9 @@ from dataclasses import dataclass
 
 from apps.papers.domain.book_source import number_list
 
+from .non_lesson import NonLessonPrep, PaperLink
 from .prep import PeriodPrep, PrepExample, Recall
-from .prep_checks import BLOCKING, WARNING, CheckResult
+from .prep_checks import BLOCKING, NON_LESSON_BLOCKING, WARNING, CheckResult
 from .strategies import Strategy
 
 STAGE_LABELS = {
@@ -43,6 +44,9 @@ CHECK_TITLES = {
     "T11": "حمل الحصص",
     "T12": "الحصة الأخيرة",
     "T13": "الحقول المغلقة",
+    "N1": "الزمن",
+    "N2": "نطاق الدروس",
+    "N3": "الورقة المولَّدة",
 }
 
 
@@ -108,6 +112,9 @@ class PrepSheet:
     quiz: str
     stages: tuple[StageRow, ...]
     checks: tuple[CheckRow, ...]
+    kind: str = "lesson"  # أو نوع حصة غير الدرس (`non_lesson.KINDS`)
+    papers: tuple[PaperLink, ...] = ()  # أوراق «أوراق» المرتبطة بحصة غير الدرس
+    scope: tuple[str, ...] = ()  # دروس نطاق حصة غير الدرس
 
     @property
     def pending(self) -> bool:
@@ -228,7 +235,11 @@ def _checks(results: Sequence[CheckResult]) -> tuple[CheckRow, ...]:
             code=r.code,
             title=CHECK_TITLES.get(r.code, r.code),
             status=r.status,
-            kind="blocking" if r.code in BLOCKING else "warning" if r.code in WARNING else "manual",
+            kind="blocking"
+            if r.code in BLOCKING | NON_LESSON_BLOCKING
+            else "warning"
+            if r.code in WARNING
+            else "manual",
             details=r.details,
         )
         for r in results
@@ -284,4 +295,68 @@ def prep_sheet(
             for s in prep.stages
         ),
         checks=_checks(checks),
+    )
+
+
+def non_lesson_sheet(
+    prep: NonLessonPrep,
+    checks: Sequence[CheckResult],
+    *,
+    week: int,
+    number: int,
+    year: str,
+    semester: int,
+    grade: str,
+) -> PrepSheet:
+    """ورقة حصة غير درس بالقالب نفسه: صفوف النشاط مكان صفوف الأهداف، والمراحل التهيئة والنشاط والغلق."""
+    body = sum(r.teach_minutes + r.check_minutes for r in prep.rows)
+    return PrepSheet(
+        course=prep.course,
+        lesson=prep.slug,
+        lesson_title=prep.title,
+        unit=prep.unit,
+        k=prep.k,
+        n=prep.n,
+        week=week,
+        number=number,
+        minutes=prep.minutes,
+        year=year,
+        semester=SEMESTERS.get(semester, str(semester)),
+        grade=grade,
+        unit_label=f"الوحدة {prep.unit}" if prep.unit else "",
+        day_date=f"الأسبوع {week}، الحصة {prep.k} من {prep.n}",
+        outcomes="",
+        main_sources="كتاب الطالب: الدروس " + "، ".join(prep.scope) if prep.scope else "كتاب الطالب",
+        support_sources="، ".join(p.label for p in prep.papers) or "يكملها المعلم",
+        warmup=prep.warmup,
+        warmup_minutes=prep.warmup_minutes,
+        objectives=tuple(
+            ObjectiveRow(
+                example=None,
+                text=r.text,
+                pending=False,
+                teach_activity=r.teach_activity,
+                teach_assessment=r.teach_assessment,
+                teach_minutes=r.teach_minutes,
+                check_activity=r.check_activity,
+                check_assessment=r.check_assessment,
+                check_minutes=r.check_minutes,
+            )
+            for r in prep.rows
+        ),
+        closing=prep.closing,
+        closing_minutes=prep.closing_minutes,
+        homework=prep.homework,
+        basic="",
+        advanced="",
+        quiz="",
+        stages=(
+            StageRow("warmup", "التهيئة", prep.warmup_minutes, ""),
+            StageRow("activity", "النشاط", body, ""),
+            StageRow("closing", "الغلق", prep.closing_minutes, ""),
+        ),
+        checks=_checks(checks),
+        kind=prep.kind,
+        papers=prep.papers,
+        scope=prep.scope,
     )

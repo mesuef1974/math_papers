@@ -21,9 +21,11 @@ import {
   type SuggestionStatus,
 } from "@/stores/preps";
 import { isolateNumberRanges } from "@/utils/bidi";
+import { paperRoute } from "@/utils/paperLink";
 
-// تحضير الحصة: المعلم يختار حصة من حصص الدروس بترتيب الخطة، فيرى تحضيرها بمراحله ومعاييره، وينزّله Word بنموذج الوزارة.
-// الهدف الذي لم تُعتمد نصوص وحدته يظهر «معلَّقًا» بوصف مختصر يكمله المعلم.
+// تحضير الحصة: المعلم يختار حصة من حصص الخطة بترتيبها، فيرى تحضيرها بمراحله ومعاييره، وينزّله Word بنموذج الوزارة.
+// الهدف الذي لم تُعتمد نصوص وحدته يظهر «معلَّقًا» بوصف مختصر يكمله المعلم. حصة غير الدرس (تهيئة، اختبار قصير، مراجعة،
+// اختبار، مشروع، دعم) تحضيرها مشترك بأنشطتها وروابط أوراقها في «أوراق»، بلا أهداف ولا تعديل.
 const preps = usePrepsStore();
 const auth = useAuthStore();
 const route = useRoute();
@@ -74,14 +76,20 @@ const lessons = computed(() => {
     list.push(period);
     groups.set(period.lesson, list);
   }
-  return [...groups.entries()].map(([lesson, periods]) => ({
-    lesson,
-    title: periods[0].title,
-    periods,
-  }));
+  return [...groups.entries()].map(([lesson, periods]) => {
+    const isLesson = (periods[0].kind ?? "lesson") === "lesson";
+    return {
+      lesson,
+      title: periods[0].title,
+      label: isLesson ? `${lesson} ${periods[0].title}` : periods[0].title,
+      short: isLesson ? lesson : periods[0].title,
+      periods,
+    };
+  });
 });
 
 const sheet = computed(() => preps.sheet);
+const isLesson = computed(() => (sheet.value?.kind ?? "lesson") === "lesson");
 const stageLabels = computed(() =>
   Object.fromEntries((sheet.value?.stages ?? []).map((s) => [s.name, s.label])),
 );
@@ -130,8 +138,8 @@ watch(selected, (value, previous) => {
     <span class="eyebrow">تحضير الحصة</span>
     <h1>تحضير الحصص</h1>
     <p class="lead">
-      اختر حصة من حصص الدروس بترتيب الخطة الفصلية، فترى تحضيرها بمراحله الست
-      وأزمنتها ومعاييره، وتنزّله ملف Word بنموذج الوزارة.
+      اختر حصة من حصص الخطة الفصلية بترتيبها، فترى تحضيرها بمراحله وأزمنتها
+      ومعاييره، وتنزّله ملف Word بنموذج الوزارة.
     </p>
   </header>
 
@@ -143,7 +151,7 @@ watch(selected, (value, previous) => {
       {{ preps.error }}
     </p>
     <EmptyState v-if="preps.loaded && !preps.periods.length"
-      >لا حصص دروس في الخطة الفصلية بعد.</EmptyState
+      >لا حصص في الخطة الفصلية بعد.</EmptyState
     >
     <form v-else-if="preps.periods.length" class="form" @submit.prevent>
       <label class="field">
@@ -152,14 +160,14 @@ watch(selected, (value, previous) => {
           <optgroup
             v-for="group in lessons"
             :key="group.lesson"
-            :label="`${group.lesson} ${group.title}`"
+            :label="group.label"
           >
             <option
               v-for="period in group.periods"
               :key="periodKey(period)"
               :value="periodKey(period)"
             >
-              {{ group.lesson }} — الحصة {{ period.k }} من
+              {{ group.short }} — الحصة {{ period.k }} من
               {{ period.n }} (الأسبوع {{ period.week
               }}{{ period.customized ? "، معدَّل" : "" }})
             </option>
@@ -175,10 +183,14 @@ watch(selected, (value, previous) => {
   <article v-if="sheet" class="panel prep" aria-live="polite">
     <header class="prep-head">
       <h2>
-        <bdi dir="ltr">{{ sheet.lesson }}</bdi> {{ sheet.lesson_title }}
+        <template v-if="isLesson"
+          ><bdi dir="ltr">{{ sheet.lesson }}</bdi>
+        </template>{{ sheet.lesson_title }}
       </h2>
       <p>
-        {{ sheet.grade }}، الوحدة {{ sheet.unit }}، {{ sheet.day_date }}،
+        {{ sheet.grade }}<template v-if="sheet.unit"
+          >، الوحدة {{ sheet.unit }}</template
+        >، {{ sheet.day_date }}،
         {{ sheet.minutes }} دقيقة، الفصل {{ sheet.semester }}
         {{ isolateNumberRanges(sheet.year) }}
       </p>
@@ -190,9 +202,20 @@ watch(selected, (value, previous) => {
     </p>
 
     <dl class="facts">
-      <div>
+      <div v-if="isLesson">
         <dt>نتاجات التعلم</dt>
         <dd>{{ sheet.outcomes || "—" }}</dd>
+      </div>
+      <div v-else>
+        <dt>نطاق الدروس</dt>
+        <dd>
+          <template v-if="sheet.scope?.length">
+            <bdi v-for="(code, i) in sheet.scope" :key="code" dir="ltr"
+              >{{ code }}{{ i < sheet.scope.length - 1 ? "، " : "" }}</bdi
+            >
+          </template>
+          <template v-else>—</template>
+        </dd>
       </div>
       <div>
         <dt>مصادر التعلم</dt>
@@ -204,9 +227,25 @@ watch(selected, (value, previous) => {
       </div>
     </dl>
 
+    <section v-if="!isLesson" class="papers" aria-labelledby="papers-title">
+      <h3 id="papers-title">أوراق الحصة</h3>
+      <ul v-if="sheet.papers?.length" class="paper-links">
+        <li v-for="paper in sheet.papers" :key="paper.label">
+          <RouterLink
+            class="btn btn-secondary btn-small"
+            :to="paperRoute(sheet.course, paper)"
+            >{{ paper.label }}</RouterLink
+          >
+        </li>
+      </ul>
+      <p v-else class="muted">
+        لا ورقة مولَّدة لهذه الحصة؛ يكمل المعلم أدواتها.
+      </p>
+    </section>
+
     <div class="objectives-head">
-      <h3>أهداف التعلم</h3>
-      <template v-if="!sheet.pending">
+      <h3>{{ isLesson ? "أهداف التعلم" : "أنشطة الحصة" }}</h3>
+      <template v-if="isLesson && !sheet.pending">
         <p v-if="sheet.review && !sheet.review.stale" class="reviewed">
           راجعتَها في {{ reviewedOn(sheet.review.reviewed_at) }}
         </p>
@@ -232,7 +271,7 @@ watch(selected, (value, previous) => {
       <table class="grid">
         <thead>
           <tr>
-            <th scope="col">الهدف</th>
+            <th scope="col">{{ isLesson ? "الهدف" : "النشاط" }}</th>
             <th scope="col">التعليم والتعلم</th>
             <th scope="col">التقويم البنائي</th>
             <th scope="col">الزمن</th>
@@ -325,7 +364,7 @@ watch(selected, (value, previous) => {
         <dt>الغلق الختامي ({{ sheet.closing_minutes }} د)</dt>
         <dd>{{ sheet.closing }}</dd>
       </div>
-      <div>
+      <div v-if="isLesson">
         <dt>التمايز</dt>
         <dd>
           أساسي {{ sheet.basic || "—" }}، متقدم {{ sheet.advanced || "—" }}
@@ -486,6 +525,22 @@ watch(selected, (value, previous) => {
   color: var(--color-ink);
   background: var(--color-brand-soft);
   border-color: transparent;
+}
+.papers {
+  display: grid;
+  gap: var(--space-2);
+}
+.paper-links {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.muted {
+  margin: 0;
+  color: var(--color-ink-soft);
 }
 .checks {
   list-style: none;
