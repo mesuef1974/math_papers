@@ -160,6 +160,46 @@ def test_refine_corrects_each_axis_scale_when_the_panel_aspect_is_off():
     assert flat < score - 0.08
 
 
+def test_refine_finds_a_scale_outside_the_window_range_on_the_whole_page():
+    # لوحة صفحة الطالب في الدليل أصغر من المقدَّر (أول صفحة في الدرس): المقياس الحقيقي 1.4 خارج scales [0.85, 1.15]
+    predicted = (40.0, 300.0, 240.0, 450.0)  # 200×150
+    true = (2.0, 420.0, 2.0 + 200 * 1.4, 420.0 + 150 * 1.4)
+    trace = {}
+    box, score, widened = student_clips.refine(
+        analytic(true, (200.0, 150.0)), predicted, PAGE, SEARCH, 0.8, trace
+    )
+    assert widened and score > 0.95
+    assert box == pytest.approx(true, abs=0.01 * 200 + 0.01)
+    # أرقام التشخيص: درجة النافذة قبل التوسيع والمقياس المعتمد
+    assert trace["near_score"] < 0.8 and trace["scale"] == pytest.approx([1.4, 1.4], abs=0.011)
+    # بمدى النافذة وحده يقف المقياس عند حدّه الأعلى وتبقى الدرجة دون العتبة
+    narrow_box, narrow, _ = student_clips.refine(
+        analytic(true, (200.0, 150.0)), predicted, PAGE, {**SEARCH, "wide_scales": None}, 0.8
+    )
+    assert narrow < 0.8 and narrow_box[2] - narrow_box[0] < 200 * 1.25
+
+
+def test_pick_shift_keeps_the_offset_page_unless_a_neighbor_is_proven():
+    def pick(scores, margin=0.15):
+        return student_clips.pick_shift(scores.get, range(-2, 3), 0.8, margin)
+
+    assert pick({0: 0.9, 1: 0.99}) == 0  # صفحة الإزاحة بلغت العتبة: لا تُجرَّب جارة
+    # أعلى درجة بين درجات كلها دون العتبة ضجيج: لا تُختار به صفحة جارة
+    assert pick({-2: 0.28, -1: 0.25, 0: 0.2, 1: 0.31, 2: 0.3}) == 0
+    assert pick({0: 0.3, 2: 0.92}) == 2  # جارة بلغت العتبة وعلت صفحة الإزاحة بالهامش
+    assert pick({0: 0.72, 1: 0.82}) == 0  # بلغت العتبة ولم تتميّز عن صفحة الإزاحة
+    assert pick({0: 0.3, -1: 0.9, 1: 0.95, 2: 0.99}) == -1  # الأقرب فالأقرب، والسالب أولًا عند التساوي
+    assert pick({1: 0.4, 2: 0.6}) == 2  # صفحة الإزاحة خارج الملف: أعلى الجارات (تبقى للمراجعة)
+    assert pick({1: 0.85}) == 1
+    assert pick({}) is None
+
+
+def test_pinned_edges_name_the_page_borders_a_box_touches():
+    assert student_clips.pinned_edges((1.0, 48.0, 410.0, 130.0), PAGE) == []
+    assert student_clips.pinned_edges((0.0, 0.0, 304.3, 140.9), PAGE) == ["left", "top"]
+    assert student_clips.pinned_edges((6.0, 49.5, 600.0, 800.0), PAGE) == ["right", "bottom"]
+
+
 def test_steps_are_inclusive_and_exact():
     assert student_clips.steps(0.85, 1.15, 0.02)[:2] == [0.85, 0.87]
     assert student_clips.steps(0.85, 1.15, 0.02)[-1] == 1.15
@@ -614,6 +654,10 @@ def test_stage_end_to_end_on_synthetic_pdfs(tmp_path):
     assert (first["kind"], first["dpi"], first["student_page"]) == ("scan", 150, 3)
     assert (second["kind"], second["dpi"], second["student_page"]) == ("vector", 600, 4)
     assert min(first["score"], second["score"]) >= 0.8 and first["guide_score"] > 0.95
+    # أرقام التشخيص: صفحة الإزاحة وحدها جُرِّبت، والمقياس واللوحة والمنقول في التقرير
+    assert first["page_shift"] == 0 and first["pages"] == {"0": first["score"]}
+    assert first["panel"] == pytest.approx(list(panel), abs=0.1) and first["pinned"] == []
+    assert first["scale"] == pytest.approx([1.0, 1.0], abs=0.07) and len(first["predicted"]) == 4
     # الصندوق في صفحة الطالب ضعف صندوق الدليل بعد طرح أصل اللوحة
     for entry, (_, rect) in zip(report["clips"], boxes.values(), strict=True):
         expected = student_clips.transfer_box(tuple(map(float, rect)), tuple(panel), (0.0, 0.0, 600.0, 800.0))
