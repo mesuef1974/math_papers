@@ -39,8 +39,17 @@ from .domain.objective_text import (
 )
 from .domain.prep import Objective
 from .domain.prep_checks import CheckResult, blocking_failures
+from .domain.prep_override import OverrideError, dump_override, parse_override, unknown_removed
 from .domain.suggestion_apply import AcceptedSuggestion, ApplyResult, apply_accepted
-from .models import ClassOutcomeRecord, LessonRunRecord, ObjectiveOverride, ObjectiveSuggestion, PrepReview
+from .models import (
+    ClassOutcomeRecord,
+    DeckBuild,
+    LessonRunRecord,
+    ObjectiveOverride,
+    ObjectiveSuggestion,
+    PeriodPrepOverride,
+    PrepReview,
+)
 from .pptx_checks import check_pptx
 from .pptx_export import build_period_pptx
 
@@ -124,9 +133,12 @@ def _deck_failure(results: Iterable[CheckResult]) -> str:
     return "؛ ".join(f"{r.code}: {r.details[0]}" if r.details else r.code for r in blocking_failures(results))
 
 
-def _prepared(course: str, lesson: str, k: int) -> tuple[selectors.PreparedPeriod, list[Asset], str]:
-    """الحصة وأصولها ومفتاح ملفها؛ `PrepNotFoundError` لحصة مجهولة و`DeckError` برسالة عربية لما يمنع البناء. لا يكتب شيئًا."""
-    item = selectors.period_item(course, lesson, k)
+def _prepared(
+    course: str, lesson: str, k: int, owner: AbstractBaseUser | None = None
+) -> tuple[selectors.PreparedPeriod, list[Asset], str]:
+    """الحصة (بتحضير المعلم إن أُعطي) وأصولها ومفتاح ملفها؛ `PrepNotFoundError` لحصة مجهولة و`DeckError` برسالة عربية لما
+    يمنع البناء. لا يكتب شيئًا."""
+    item = selectors.period_item(course, lesson, k, owner)
     if blocking_failures(item.checks):
         raise DeckError(f"تحضير الحصة لم يجتز معاييره الحاجبة: {_deck_failure(item.checks)}")
     numbers = [e.n for e in item.prep.examples]
@@ -137,9 +149,15 @@ def _prepared(course: str, lesson: str, k: int) -> tuple[selectors.PreparedPerio
     return item, assets, selectors.deck_key(item.prep, assets)
 
 
-def prepare_deck(course: str, lesson: str, k: int) -> str:
+def prepare_deck(course: str, lesson: str, k: int, owner: AbstractBaseUser | None = None) -> str:
     """يتحقق من طلب عرض الحصة ويعيد مفتاح ملفه في التخزين."""
-    return _prepared(course, lesson, k)[2]
+    return _prepared(course, lesson, k, owner)[2]
+
+
+def record_deck_build(owner: AbstractBaseUser, course: str, lesson: str, k: int, key: str) -> None:
+    """يسجّل مفتاح آخر عرض طلبه المعلم للحصة (idempotent): مخالفته مفتاحَ تحضيره بعدُ تعني أن العرض قديم."""
+    record = Lesson.objects.get(course__slug=course, code=lesson)
+    DeckBuild.objects.update_or_create(owner=owner, lesson=record, k=k, defaults={"key": key})
 
 
 def deck_state(key: str, storage: Storage | None = None) -> tuple[str, str]:
@@ -152,13 +170,15 @@ def deck_state(key: str, storage: Storage | None = None) -> tuple[str, str]:
     return "pending", ""
 
 
-def build_period_deck_file(course: str, lesson: str, k: int, storage: Storage | None = None) -> str:
+def build_period_deck_file(
+    course: str, lesson: str, k: int, storage: Storage | None = None, owner: AbstractBaseUser | None = None
+) -> str:
     """يبني ملف PPTX للحصة ويضعه في التخزين تحت مفتاحه المشتق؛ idempotent: الملف الموجود لا يُعاد بناؤه.
 
-    المدخل تحضير الحصة المشترك ومقاطع أمثلتها من طبقة الأصول. معايير النموذج (S1 إلى S13) ثم معايير الملف (S7 وS8 وS12)
+    المدخل تحضير الحصة (المشترك، أو تحضير المعلم بتعديله) ومقاطع أمثلتها من طبقة الأصول. معايير النموذج (S1 إلى S13) ثم معايير الملف (S7 وS8 وS12)
     تُفحص قبل الكتابة، والحاجب الفاشل يُسجَّل سببًا في التخزين فتقرؤه الحالة ولا يُكتب ملف."""
     storage = storage or get_storage()
-    item, assets, key = _prepared(course, lesson, k)
+    item, assets, key = _prepared(course, lesson, k, owner)
     if storage.exists(key):
         return key
     try:
@@ -203,6 +223,94 @@ def clear_deck_failure(key: str, storage: Storage | None = None) -> None:
     storage = storage or get_storage()
     if storage.exists(_error_key(key)):
         storage.delete(_error_key(key))
+
+
+# ───── تعديل المعلم لتحضير حصص درس (docs/lesson_prep_plan.md، المرحلة 6) ─────
+
+
+def _lesson_items(items: Iterable[selectors.PreparedPeriod], lesson: str) -> list[selectors.PreparedPeriod]:
+    return [i for i in items if i.prep.lesson == lesson]
+
+
+@transaction.atomic
+def save_prep_override(
+    owner: AbstractBaseUser, course: str, lesson: str, data: object, *, request_id: str = ""
+) -> dict:
+    """يحفظ تعديل المعلم لحصص الدرس بشكله القانوني ويعيده؛ idempotent، والتعديل الذي لا يغيّر شيئًا يحذف السجل.
+
+    يُرفض (`OverrideError` برسالة عربية) ما لا يطابق المخطط أو قواعد التوزيع والمكتبة، وحذف تمرين ليس من تمارين الحصة، وما
+    يُفشل معيارًا حاجبًا لم يكن فاشلًا في التحضير المشترك: التعديل لا يتجاوز معيارًا حاجبًا."""
+    record = Lesson.objects.filter(course__slug=course, code=lesson).first()
+    shared = _lesson_items(selectors.lesson_preps(course), lesson)
+    if record is None or not shared:
+        raise selectors.PrepNotFoundError(f"لا حصص للدرس {lesson} في خطة {course}")
+    mine = _lesson_items(selectors.lesson_preps(course, {lesson: data}, strict=True), lesson)
+    default = shared[0].default_allocation
+    parsed = parse_override(
+        data, examples=[x for g in default for x in g], n=len(default), library=selectors.load_library()
+    )
+    for item in mine:
+        edit = parsed.periods.get(item.prep.k)
+        available = {x for e in item.prep.practice_examples for _, ex in e.rows for x in ex}
+        unknown = unknown_removed(edit.removed if edit else (), available)
+        if unknown:
+            raise OverrideError(
+                f"الحصة {item.prep.k}: التمارين {number_list(list(unknown))} ليست من تمارين أمثلتها"
+            )
+    before = {(i.prep.k, r.code) for i in shared for r in blocking_failures(i.checks)}
+    new = [
+        (i.prep.k, r) for i in mine for r in blocking_failures(i.checks) if (i.prep.k, r.code) not in before
+    ]
+    if new:
+        reasons = "؛ ".join(f"الحصة {k}: {_deck_failure([r])}" for k, r in new)
+        raise OverrideError(f"التعديل يُفشل معيارًا حاجبًا فلم يُحفظ: {reasons}")
+    canonical = dump_override(parsed, default)
+    existing = PeriodPrepOverride.objects.filter(owner=owner, lesson=record).first()
+    previous = existing.data if existing else {}
+    if canonical == previous:
+        return canonical
+    if canonical:
+        PeriodPrepOverride.objects.update_or_create(owner=owner, lesson=record, defaults={"data": canonical})
+    elif existing:
+        existing.delete()
+    record_audit(
+        action="prep.override.save" if canonical else "prep.override.reset",
+        actor=owner,
+        target=_target(course, lesson),
+        payload={"before": previous, "after": canonical},
+        request_id=request_id,
+    )
+    return canonical
+
+
+def save_period_override(
+    owner: AbstractBaseUser,
+    course: str,
+    lesson: str,
+    k: int,
+    *,
+    allocation: list[list[int]] | None = None,
+    strategies: dict[str, str] | None = None,
+    removed: list[int] | None = None,
+    request_id: str = "",
+) -> dict:
+    """تعديل حصة واحدة يُدمج في المحفوظ للدرس: اختيارات الحصة `k` تحل محل المحفوظ لها، والتوزيع (إن أُعطي) محل المحفوظ،
+    وباقي الحصص كما هي؛ ثم الحفظ بقواعد `save_prep_override` كلها."""
+    record = PeriodPrepOverride.objects.filter(
+        owner=owner, lesson__course__slug=course, lesson__code=lesson
+    ).first()
+    data = dict(record.data) if record else {}
+    periods = dict(data.get("periods", {}))
+    periods[str(k)] = {"strategies": dict(strategies or {}), "removed": list(removed or [])}
+    data["periods"] = periods
+    if allocation is not None:
+        data["allocation"] = allocation
+    return save_prep_override(owner, course, lesson, data, request_id=request_id)
+
+
+def reset_prep_override(owner: AbstractBaseUser, course: str, lesson: str, *, request_id: str = "") -> None:
+    """يعيد حصص الدرس إلى التحضير المشترك (idempotent)."""
+    save_prep_override(owner, course, lesson, {}, request_id=request_id)
 
 
 # ───── مراجعة المعلم لأهداف حصته (docs/teacher_objective_review_plan.md) ─────

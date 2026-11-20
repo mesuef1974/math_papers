@@ -10,6 +10,8 @@
 - PUT  /preps/<مقرر>/<درس>/<k>/objectives/<مثال>  نسخة المعلم من شرط الهدف ومعياره، واقتراحها اختياريًا
 - DELETE /preps/<مقرر>/<درس>/<k>/objectives/<مثال>  استرجاع النص المعتمد
 - POST /preps/<مقرر>/<درس>/<k>/review  علامة «راجعتُ أهداف الحصة»
+- PUT  /preps/<مقرر>/<درس>/<k>/override  تعديل المعلم لحصص الدرس (التوزيع والاستراتيجيات والتمارين المحذوفة)، له وحده
+- DELETE /preps/<مقرر>/<درس>/<k>/override  استرجاع التحضير المشترك للدرس
 """
 
 from __future__ import annotations
@@ -32,6 +34,7 @@ from apps.papers.access import TeacherAuth
 from . import selectors, services
 from .domain.deck import DeckError
 from .domain.objective_text import ObjectiveLockedError, ObjectiveNotFoundError, ObjectiveTextError
+from .domain.prep_override import OverrideError
 from .prep_word import DOCX_CONTENT_TYPE, prep_docx, prep_filename
 from .tasks import build_period_deck_task
 
@@ -47,11 +50,13 @@ class PrepPeriodOut(Schema):
     n: int
     week: int
     status: str
+    customized: bool = False
 
 
 class DeckPeriodOut(PrepPeriodOut):
     examples: int
     clips: bool
+    stale: bool
 
 
 class DeckRequest(Schema):
@@ -66,9 +71,9 @@ class DeckOut(Schema):
     filename: str
 
 
-def _prepare(course: str, lesson: str, k: int) -> str:
+def _prepare(request: HttpRequest, course: str, lesson: str, k: int) -> str:
     try:
-        return services.prepare_deck(course, lesson, k)
+        return services.prepare_deck(course, lesson, k, request.user)
     except selectors.PrepNotFoundError as error:
         raise HttpError(404, str(error)) from error
     except DeckError as error:
@@ -84,20 +89,21 @@ def _filename(course: str, lesson: str, key: str) -> str:
 @router.get("decks/periods", response=list[DeckPeriodOut])
 def deck_periods(request: HttpRequest, course: str):
     try:
-        return selectors.deck_periods(course)
+        return selectors.deck_periods(course, request.user)
     except selectors.PrepNotFoundError as error:
         raise HttpError(404, str(error)) from error
 
 
 @router.post("decks/", response=DeckOut)
 def request_deck(request: HttpRequest, payload: DeckRequest):
-    key = _prepare(payload.course, payload.lesson, payload.k)
+    key = _prepare(request, payload.course, payload.lesson, payload.k)
+    services.record_deck_build(request.user, payload.course, payload.lesson, payload.k, key)
     state, detail = services.deck_state(key)
     if state != "ready":
         if state == "failed":
             services.clear_deck_failure(key)
         try:
-            build_period_deck_task.delay(payload.course, payload.lesson, payload.k)
+            build_period_deck_task.delay(payload.course, payload.lesson, payload.k, request.user.pk)
         except Exception:  # الوضع الفوري يرفع هنا؛ الفشل مسجَّل في التخزين فيقرؤه الرد
             logger.exception("فشل بناء عرض %s", key)
         state, detail = services.deck_state(key)  # الوضع الفوري (تطوير واختبار) ينتهي هنا جاهزًا
@@ -113,14 +119,14 @@ def request_deck(request: HttpRequest, payload: DeckRequest):
 
 @router.get("decks/status", response=DeckOut)
 def deck_status(request: HttpRequest, filters: Query[DeckRequest]):
-    key = _prepare(filters.course, filters.lesson, filters.k)
+    key = _prepare(request, filters.course, filters.lesson, filters.k)
     state, detail = services.deck_state(key)
     return {"status": state, "detail": detail, "filename": _filename(filters.course, filters.lesson, key)}
 
 
 @router.get("decks/download")
 def download(request: HttpRequest, filters: Query[DeckRequest]):
-    key = _prepare(filters.course, filters.lesson, filters.k)
+    key = _prepare(request, filters.course, filters.lesson, filters.k)
     try:
         data = get_storage().get(key)
     except StorageError as error:
@@ -196,6 +202,29 @@ class ReviewOut(Schema):
     stale: bool
 
 
+class StrategyOptionOut(Schema):
+    slug: str
+    title: str
+
+
+class StageEditOut(Schema):
+    name: str
+    current: str
+    chosen: str | None
+    options: list[StrategyOptionOut]
+
+
+class PrepEditOut(Schema):
+    """ما تعرضه واجهة تعديل الحصة (`selectors.prep_edit`)."""
+
+    state: str
+    allocation: list[list[int]]
+    default_allocation: list[list[int]]
+    stages: list[StageEditOut]
+    exercises: list[int]
+    removed: list[int]
+
+
 class PrepOut(Schema):
     course: str
     lesson: str
@@ -225,6 +254,16 @@ class PrepOut(Schema):
     checks: list[CheckOut]
     pending: bool
     review: ReviewOut | None = None
+    edit: PrepEditOut
+
+
+class PrepOverrideIn(Schema):
+    """تعديل المعلم للحصة `k`: استراتيجيات مراحلها وتمارينها المحذوفة تحل محل المحفوظ لها، والتوزيع (إن أُرسل) لحصص الدرس كلها.
+    المخطط القانوني وقواعده في `domain/prep_override.py`."""
+
+    allocation: list[list[int]] | None = Field(default=None, max_length=8)
+    strategies: dict[str, str] = Field(default_factory=dict, max_length=6)
+    removed: list[int] = Field(default_factory=list, max_length=40)
 
 
 class ObjectiveIn(Schema):
@@ -250,6 +289,7 @@ def _prep_out(view: selectors.TeacherSheet) -> dict:
         if state is not None:
             row.update(asdict(state))
     data["review"] = view.review
+    data["edit"] = view.edit
     return data
 
 
@@ -261,14 +301,14 @@ def _objective_errors():
         raise HttpError(404, str(error)) from error
     except ObjectiveLockedError as error:
         raise HttpError(409, str(error)) from error
-    except ObjectiveTextError as error:
+    except (ObjectiveTextError, OverrideError) as error:
         raise HttpError(422, str(error)) from error
 
 
 @router.get("preps/{course}", response=list[PrepPeriodOut])
 def prep_periods(request: HttpRequest, course: str):
     try:
-        return selectors.prep_periods(course)
+        return selectors.prep_periods(course, request.user)
     except selectors.PrepNotFoundError as error:
         raise HttpError(404, str(error)) from error
 
@@ -302,6 +342,30 @@ def save_objective(
 def reset_objective(request: HttpRequest, course: str, lesson: str, k: int, example: int):
     with _objective_errors():
         services.reset_objective(request.user, course, lesson, k, example, request_id=request_id_of(request))
+    return _prep_out(_teacher_sheet(request, course, lesson, k))
+
+
+@router.put("preps/{course}/{lesson}/{k}/override", response=PrepOut)
+def save_override(request: HttpRequest, course: str, lesson: str, k: int, payload: PrepOverrideIn):
+    """يحفظ تعديل المعلم للحصة `k` (وتوزيع أمثلة الدرس إن أُرسل) ويعيد ورقة الحصة بعده."""
+    with _objective_errors():
+        services.save_period_override(
+            request.user,
+            course,
+            lesson,
+            k,
+            allocation=payload.allocation,
+            strategies=payload.strategies,
+            removed=payload.removed,
+            request_id=request_id_of(request),
+        )
+    return _prep_out(_teacher_sheet(request, course, lesson, k))
+
+
+@router.delete("preps/{course}/{lesson}/{k}/override", response=PrepOut)
+def reset_override(request: HttpRequest, course: str, lesson: str, k: int):
+    with _objective_errors():
+        services.reset_prep_override(request.user, course, lesson, request_id=request_id_of(request))
     return _prep_out(_teacher_sheet(request, course, lesson, k))
 
 

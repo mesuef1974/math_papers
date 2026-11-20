@@ -4,13 +4,18 @@ import { useRoute, useRouter } from "vue-router";
 import AppIcon from "@/components/AppIcon.vue";
 import EmptyState from "@/components/EmptyState.vue";
 import ObjectiveEditor from "@/components/ObjectiveEditor.vue";
-import { usePrepObjectives, type ObjectiveDraft } from "@/composables/usePrepObjectives";
+import PrepOverridePanel from "@/components/PrepOverridePanel.vue";
+import {
+  usePrepObjectives,
+  type ObjectiveDraft,
+} from "@/composables/usePrepObjectives";
 import { useAuthStore } from "@/stores/auth";
 import {
   periodKey,
   usePrepsStore,
   type CheckStatus,
   type PrepObjective,
+  type PeriodOverride,
   type PrepPeriod,
   type SharedObjective,
   type SuggestionStatus,
@@ -25,7 +30,11 @@ const route = useRoute();
 const router = useRouter();
 const selected = ref("");
 
-const STATUS_LABELS: Record<CheckStatus, string> = { pass: "ناجح", fail: "فاشل", pending: "معلَّق" };
+const STATUS_LABELS: Record<CheckStatus, string> = {
+  pass: "ناجح",
+  fail: "فاشل",
+  pending: "معلَّق",
+};
 const SUGGESTION_LABELS: Record<SuggestionStatus, string> = {
   pending: "اقتراحك قيد المراجعة",
   accepted: "قُبل اقتراحك وسيصل النسخة المعتمدة",
@@ -37,15 +46,25 @@ const SUGGESTION_LABELS: Record<SuggestionStatus, string> = {
 const review = usePrepObjectives();
 const editing = ref<number | null>(null);
 const reviewedOn = (iso: string) =>
-  new Date(iso).toLocaleDateString("ar-u-nu-latn", { day: "numeric", month: "long", year: "numeric" });
-const sharedText = (s: SharedObjective) => [s.behavior, s.condition, s.criterion].filter(Boolean).join(" ");
+  new Date(iso).toLocaleDateString("ar-u-nu-latn", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+const sharedText = (s: SharedObjective) =>
+  [s.behavior, s.condition, s.criterion].filter(Boolean).join(" ");
 
 async function saveObjective(objective: PrepObjective, draft: ObjectiveDraft) {
-  if (objective.example !== null && (await review.save(objective.example, draft))) editing.value = null;
+  if (
+    objective.example !== null &&
+    (await review.save(objective.example, draft))
+  )
+    editing.value = null;
 }
 
 async function resetObjective(objective: PrepObjective) {
-  if (objective.example !== null && (await review.reset(objective.example))) editing.value = null;
+  if (objective.example !== null && (await review.reset(objective.example)))
+    editing.value = null;
 }
 
 const lessons = computed(() => {
@@ -55,18 +74,34 @@ const lessons = computed(() => {
     list.push(period);
     groups.set(period.lesson, list);
   }
-  return [...groups.entries()].map(([lesson, periods]) => ({ lesson, title: periods[0].title, periods }));
+  return [...groups.entries()].map(([lesson, periods]) => ({
+    lesson,
+    title: periods[0].title,
+    periods,
+  }));
 });
 
 const sheet = computed(() => preps.sheet);
-const blocking = computed(() => sheet.value?.checks.filter((c) => c.kind === "blocking") ?? []);
-const others = computed(() => sheet.value?.checks.filter((c) => c.kind !== "blocking") ?? []);
+const stageLabels = computed(() =>
+  Object.fromEntries((sheet.value?.stages ?? []).map((s) => [s.name, s.label])),
+);
+
+// تعديل المعلم لتحضير حصته: الحفظ يعيد الورقة بعد إعادة الاشتقاق والفحص، والاسترجاع يعيد التحضير المشترك للدرس.
+const saveOverride = (change: PeriodOverride) => preps.saveOverride(change);
+const resetOverride = () => preps.saveOverride(null);
+const blocking = computed(
+  () => sheet.value?.checks.filter((c) => c.kind === "blocking") ?? [],
+);
+const others = computed(
+  () => sheet.value?.checks.filter((c) => c.kind !== "blocking") ?? [],
+);
 
 async function openSelected() {
   const [lesson, k] = selected.value.split("/");
   if (!lesson || !k) return;
   editing.value = null;
   review.error.value = "";
+  preps.editError = "";
   await router.replace({ query: { lesson, k } });
   await preps.open(lesson, Number(k));
 }
@@ -76,7 +111,9 @@ onMounted(async () => {
   await preps.load();
   const lesson = String(route.query.lesson ?? "");
   const k = Number(route.query.k);
-  const found = preps.periods.find((p) => p.lesson === lesson && p.k === k) ?? preps.periods[0];
+  const found =
+    preps.periods.find((p) => p.lesson === lesson && p.k === k) ??
+    preps.periods[0];
   if (found) {
     selected.value = periodKey(found);
     await openSelected();
@@ -93,22 +130,38 @@ watch(selected, (value, previous) => {
     <span class="eyebrow">تحضير الحصة</span>
     <h1>تحضير الحصص</h1>
     <p class="lead">
-      اختر حصة من حصص الدروس بترتيب الخطة الفصلية، فترى تحضيرها بمراحله الست وأزمنتها ومعاييره، وتنزّله ملف Word بنموذج
-      الوزارة.
+      اختر حصة من حصص الدروس بترتيب الخطة الفصلية، فترى تحضيرها بمراحله الست
+      وأزمنتها ومعاييره، وتنزّله ملف Word بنموذج الوزارة.
     </p>
   </header>
 
-  <p v-if="!auth.canGenerate" class="alert alert-error" role="alert">حسابك لا يملك صلاحية توليد الأوراق.</p>
+  <p v-if="!auth.canGenerate" class="alert alert-error" role="alert">
+    حسابك لا يملك صلاحية توليد الأوراق.
+  </p>
   <div v-else class="panel" :aria-busy="preps.loading || preps.opening">
-    <p v-if="preps.error" class="alert alert-error" role="alert">{{ preps.error }}</p>
-    <EmptyState v-if="preps.loaded && !preps.periods.length">لا حصص دروس في الخطة الفصلية بعد.</EmptyState>
+    <p v-if="preps.error" class="alert alert-error" role="alert">
+      {{ preps.error }}
+    </p>
+    <EmptyState v-if="preps.loaded && !preps.periods.length"
+      >لا حصص دروس في الخطة الفصلية بعد.</EmptyState
+    >
     <form v-else-if="preps.periods.length" class="form" @submit.prevent>
       <label class="field">
         <span>الحصة</span>
         <select v-model="selected" class="input" required>
-          <optgroup v-for="group in lessons" :key="group.lesson" :label="`${group.lesson} ${group.title}`">
-            <option v-for="period in group.periods" :key="periodKey(period)" :value="periodKey(period)">
-              {{ group.lesson }} — الحصة {{ period.k }} من {{ period.n }} (الأسبوع {{ period.week }})
+          <optgroup
+            v-for="group in lessons"
+            :key="group.lesson"
+            :label="`${group.lesson} ${group.title}`"
+          >
+            <option
+              v-for="period in group.periods"
+              :key="periodKey(period)"
+              :value="periodKey(period)"
+            >
+              {{ group.lesson }} — الحصة {{ period.k }} من
+              {{ period.n }} (الأسبوع {{ period.week
+              }}{{ period.customized ? "، معدَّل" : "" }})
             </option>
           </optgroup>
         </select>
@@ -125,13 +178,15 @@ watch(selected, (value, previous) => {
         <bdi dir="ltr">{{ sheet.lesson }}</bdi> {{ sheet.lesson_title }}
       </h2>
       <p>
-        {{ sheet.grade }}، الوحدة {{ sheet.unit }}، {{ sheet.day_date }}، {{ sheet.minutes }} دقيقة،
-        الفصل {{ sheet.semester }} {{ isolateNumberRanges(sheet.year) }}
+        {{ sheet.grade }}، الوحدة {{ sheet.unit }}، {{ sheet.day_date }}،
+        {{ sheet.minutes }} دقيقة، الفصل {{ sheet.semester }}
+        {{ isolateNumberRanges(sheet.year) }}
       </p>
     </header>
 
     <p v-if="sheet.pending" class="alert alert-info">
-      نصوص أهداف هذه الوحدة لم تُعتمد بعد: يظهر كل هدف وصفًا مختصرًا «معلَّقًا» تكمله في ملف Word حتى تُعتمد.
+      نصوص أهداف هذه الوحدة لم تُعتمد بعد: يظهر كل هدف وصفًا مختصرًا «معلَّقًا» تكمله
+      في ملف Word حتى تُعتمد.
     </p>
 
     <dl class="facts">
@@ -156,7 +211,9 @@ watch(selected, (value, previous) => {
           راجعتَها في {{ reviewedOn(sheet.review.reviewed_at) }}
         </p>
         <template v-else>
-          <span v-if="sheet.review?.stale" class="badge status-fail">تحتاج مراجعة</span>
+          <span v-if="sheet.review?.stale" class="badge status-fail"
+            >تحتاج مراجعة</span
+          >
           <button
             type="button"
             class="btn btn-secondary btn-small review-btn"
@@ -168,7 +225,9 @@ watch(selected, (value, previous) => {
         </template>
       </template>
     </div>
-    <p v-if="review.error.value" class="alert alert-error" role="alert">{{ review.error.value }}</p>
+    <p v-if="review.error.value" class="alert alert-error" role="alert">
+      {{ review.error.value }}
+    </p>
     <div class="table-scroll">
       <table class="grid">
         <thead>
@@ -183,10 +242,17 @@ watch(selected, (value, previous) => {
           <template v-for="(objective, i) in sheet.objectives" :key="i">
             <tr>
               <td rowspan="2" class="objective">
-                <span v-if="objective.pending" class="badge status-pending">معلَّق</span>
-                <span v-if="objective.mine" class="badge status-mine">نسختي</span>
+                <span v-if="objective.pending" class="badge status-pending"
+                  >معلَّق</span
+                >
+                <span v-if="objective.mine" class="badge status-mine"
+                  >نسختي</span
+                >
                 {{ objective.text }}
-                <div v-if="objective.stale && objective.mine && objective.shared" class="alert alert-info stale">
+                <div
+                  v-if="objective.stale && objective.mine && objective.shared"
+                  class="alert alert-info stale"
+                >
                   <p>تغيّر النص المعتمد بعد تعديلك:</p>
                   <p>المعتمد الآن: {{ sharedText(objective.shared) }}</p>
                   <p>نسختك: {{ objective.text }}</p>
@@ -210,8 +276,10 @@ watch(selected, (value, previous) => {
                   </div>
                 </div>
                 <p v-if="objective.suggestion" class="suggestion">
-                  {{ SUGGESTION_LABELS[objective.suggestion.status] }}<template v-if="objective.suggestion.note">:
-                    {{ objective.suggestion.note }}</template>
+                  {{ SUGGESTION_LABELS[objective.suggestion.status]
+                  }}<template v-if="objective.suggestion.note"
+                    >: {{ objective.suggestion.note }}</template
+                  >
                 </p>
                 <button
                   v-if="objective.editable && editing !== objective.example"
@@ -225,13 +293,18 @@ watch(selected, (value, previous) => {
               </td>
               <td>{{ objective.teach_activity }}</td>
               <td>{{ objective.teach_assessment }}</td>
-              <td rowspan="2">{{ objective.teach_minutes + objective.check_minutes }} د</td>
+              <td rowspan="2">
+                {{ objective.teach_minutes + objective.check_minutes }} د
+              </td>
             </tr>
             <tr>
               <td>{{ objective.check_activity }}</td>
               <td>{{ objective.check_assessment }}</td>
             </tr>
-            <tr v-if="editing !== null && editing === objective.example" class="editing">
+            <tr
+              v-if="editing !== null && editing === objective.example"
+              class="editing"
+            >
               <td colspan="4">
                 <ObjectiveEditor
                   :objective="objective"
@@ -254,7 +327,9 @@ watch(selected, (value, previous) => {
       </div>
       <div>
         <dt>التمايز</dt>
-        <dd>أساسي {{ sheet.basic || "—" }}، متقدم {{ sheet.advanced || "—" }}</dd>
+        <dd>
+          أساسي {{ sheet.basic || "—" }}، متقدم {{ sheet.advanced || "—" }}
+        </dd>
       </div>
       <div>
         <dt>الواجب</dt>
@@ -282,12 +357,27 @@ watch(selected, (value, previous) => {
       </table>
     </div>
 
+    <PrepOverridePanel
+      v-if="sheet.edit"
+      :edit="sheet.edit"
+      :k="sheet.k"
+      :n="sheet.n"
+      :labels="stageLabels"
+      :saving="preps.saving"
+      :error="preps.editError"
+      @save="saveOverride"
+      @reset="resetOverride"
+    />
+
     <h3>معايير التحضير</h3>
     <ul class="checks">
       <li v-for="check in [...blocking, ...others]" :key="check.code">
-        <span class="badge" :class="`status-${check.status}`">{{ STATUS_LABELS[check.status] }}</span>
+        <span class="badge" :class="`status-${check.status}`">{{
+          STATUS_LABELS[check.status]
+        }}</span>
         <bdi dir="ltr" class="code">{{ check.code }}</bdi>
-        {{ check.title }}<template v-if="check.kind === 'warning'"> (تنبيه)</template>
+        {{ check.title
+        }}<template v-if="check.kind === 'warning'"> (تنبيه)</template>
         <ul v-if="check.details.length" class="details">
           <li v-for="detail in check.details" :key="detail">{{ detail }}</li>
         </ul>

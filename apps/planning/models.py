@@ -156,3 +156,44 @@ class PrepReview(TimeStampedModel):
 
     def __str__(self) -> str:
         return f"{self.owner_id} · {self.lesson.code} الحصة {self.k}"
+
+
+class PeriodPrepOverride(TimeStampedModel):
+    """تعديل المعلم لتحضير حصص درس، له وحده (`domain/prep_override.py`): توزيع الأمثلة على الحصص، واستراتيجية مرحلة، وحذف
+    تمارين. سجل واحد للدرس لأن نقل مثال يمسّ حصتين؛ و`data` بالشكل القانوني (`dump_override`) لا يُحفظ فارغًا."""
+
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="prep_overrides"
+    )
+    lesson = models.ForeignKey("curriculum.Lesson", on_delete=models.PROTECT, related_name="prep_overrides")
+    data = models.JSONField()
+
+    class Meta:
+        ordering = ["lesson_id", "owner_id"]
+        constraints = [
+            models.UniqueConstraint(fields=["owner", "lesson"], name="planning_prep_override_one_per_lesson"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.owner_id} · {self.lesson.code}"
+
+
+class DeckBuild(TimeStampedModel):
+    """آخر عرض طلبه المعلم لحصة: مفتاحه حين طُلب. مخالفته مفتاحَ تحضيره الحالي تعني أن العرض قديم."""
+
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="deck_builds")
+    lesson = models.ForeignKey("curriculum.Lesson", on_delete=models.PROTECT, related_name="deck_builds")
+    k = models.PositiveSmallIntegerField()
+    key = models.CharField(max_length=200)
+
+    class Meta:
+        ordering = ["-updated_at", "-id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["owner", "lesson", "k"], name="planning_deck_build_one_per_period"
+            ),
+            models.CheckConstraint(condition=Q(k__gte=1), name="planning_deck_build_period_positive"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.owner_id} · {self.lesson.code} الحصة {self.k}"
