@@ -12,11 +12,12 @@
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from .plan_periods import PlanPeriod
 from .prep import PERIOD_MINUTES
 from .prep_checks import FAIL, NON_LESSON_BLOCKING, PASS, PENDING, CheckResult
+from .strategies import with_roles
 
 KINDS = ("orientation", "quiz", "review", "exam", "project", "support")
 KIND_LABELS = {
@@ -43,6 +44,47 @@ class PaperLink:
     lessons: tuple[str, ...] = ()
     level: str = ""
     blueprint: str = ""
+
+
+# دور المعلم ودور الطالب في أنشطة كل نوع (التهيئة، والتعليم، والتحقق، والغلق)، بصياغتنا (قرار المالك 2026-11-20)
+ROLES: dict[str, dict[str, tuple[str, str]]] = {
+    "orientation": {
+        "warmup": ("يعرّف بنفسه ويوضح قواعد الحصة", "يعرّف بنفسه ويذكر توقعاته من المقرر"),
+        "teach": ("يعرض خريطة الفصل ونظام التقويم", "يتابع ويسأل عن الوحدات ومواعيد الاختبارات"),
+        "check": ("يوزّع النشاط التشخيصي ويرصد نتائجه", "يحل النشاط التشخيصي وحده"),
+        "closing": ("يلخص التوقعات ويعرّف بأدوات المقرر", "يدوّن أدوات المقرر ومواعيد الاختبارات"),
+    },
+    "quiz": {
+        "warmup": ("يطرح أسئلة سريعة على أفكار الوحدة", "يجيب شفهيًا ويستدعي القواعد"),
+        "teach": ("يقرأ التعليمات ويوزّع الأوراق", "يكتب بياناته ويستوضح التعليمات"),
+        "check": ("يراقب ولا يجيب إلا عن استيضاح الصياغة", "يحل الاختبار وحده"),
+        "closing": ("يناقش الحل ويحدد الأخطاء الشائعة", "يقارن إجابته بالحل ويصحّح أخطاءه"),
+    },
+    "review": {
+        "warmup": ("يطرح أسئلة استدعاء على الأمثلة الأساسية", "يستدعي القواعد والأمثلة ويجيب"),
+        "teach": ("يراجع الأمثلة الأساسية بأسئلة موجهة", "يجيب ويشارك في حل الأمثلة"),
+        "check": ("يتابع الحل ويدير التصحيح الثنائي", "يحل ورقة العمل ويصحّح مع زميله"),
+        "closing": ("يلخص أفكار الدروس ويجيب عن الأسئلة", "يطرح أسئلته ويلخص ما راجعه"),
+    },
+    "support": {
+        "warmup": ("يشخّص الأخطاء الشائعة بأسئلة قصيرة", "يجيب فيظهر موضع صعوبته"),
+        "teach": ("يعيد شرح المهارة بالتمثيل الأبسط", "يتابع ويجرّب الخطوة بعد كل شرح"),
+        "check": ("يتابع الطلبة المحتاجين فرديًا", "يحل الورقة العلاجية ويطلب المساعدة عند الحاجة"),
+        "closing": ("يلخص ما عولج ويحدد من يحتاج متابعة", "يذكر ما تعلّمه وما بقي صعبًا عليه"),
+    },
+    "exam": {
+        "warmup": ("يقرأ التعليمات ويوزّع الكراسات", "يكتب بياناته ويستمع للتعليمات"),
+        "teach": ("يتحقق من بيانات الطلبة وفهمهم التعليمات", "يراجع بياناته ويستوضح التعليمات"),
+        "check": ("يراقب الاختبار", "يجيب عن الاختبار وحده"),
+        "closing": ("يجمع الكراسات ويتحقق من عددها", "يسلّم كراسته"),
+    },
+    "project": {
+        "warmup": ("يعرض فكرة المشروع ومعايير تقديره", "يستوضح المطلوب ومعايير التقدير"),
+        "teach": ("يقسّم المجموعات ويوزّع المهام", "يتسلّم دوره في مجموعته"),
+        "check": ("يتابع المجموعات ويوجّهها", "يؤدي مهمته مع مجموعته"),
+        "closing": ("يستمع لتقدم المجموعات ويحدد الخطوة التالية", "يعرض تقدم مجموعته"),
+    },
+}
 
 
 @dataclass(frozen=True)
@@ -291,6 +333,15 @@ def build_non_lesson(
             ),
         )
         closing, closing_minutes = "عرض تقدم المجموعات والخطوة التالية", 5
+    roles = ROLES[kind]
+    rows = tuple(
+        replace(
+            r,
+            teach_activity=with_roles(r.teach_activity, *roles["teach"]),
+            check_activity=with_roles(r.check_activity, *roles["check"]),
+        )
+        for r in rows
+    )
     return NonLessonPrep(
         course=course,
         slug=period_slug(period),
@@ -300,10 +351,10 @@ def build_non_lesson(
         k=period.k,
         n=period.n,
         scope=scope,
-        warmup=warmup,
+        warmup=with_roles(warmup, *roles["warmup"]),
         warmup_minutes=warmup_minutes,
         rows=rows,
-        closing=closing,
+        closing=with_roles(closing, *roles["closing"]),
         closing_minutes=closing_minutes,
         homework=homework,
         papers=tuple(papers),

@@ -41,6 +41,8 @@ def test_library_text_has_no_book_references():
     raw = (DATA_DIR / "strategies.json").read_text(encoding="utf-8")
     assert not RAW_BOOK_REFS.search(raw)
     assert max(len(step) for r in json.loads(raw) for step in r["steps"]) < 200  # خطوات قصيرة بصياغتنا
+    roles = [r[k] for r in json.loads(raw) for k in ("teacher_role", "student_role")]
+    assert all(0 < len(role) < 120 for role in roles)  # دور كل طرف جملة قصيرة
 
 
 def test_invalid_strategy_is_rejected(library):
@@ -52,6 +54,8 @@ def test_invalid_strategy_is_rejected(library):
         {"dok": (7,)},
         {"needs": ("jet",)},
         {"steps": ()},
+        {"teacher_role": " "},
+        {"student_role": ""},
     ):
         with pytest.raises(PlanningError):
             Strategy(**{**dataclasses.asdict(base), **change})

@@ -55,7 +55,7 @@ class ExampleClip:
 # ---- عرض الحصة من تحضيرها ----
 
 # الإعداد: أرقام التصميم في مكان واحد (افتراضات تُراجع بعد أول تجربة في الصف)
-PERIOD_DECK_FORMAT = 1
+PERIOD_DECK_FORMAT = 2
 MINUTES_PER_SLIDE = 2
 TITLE_PT, BODY_PT = 36, 28
 MIN_TITLE_PT, MIN_BODY_PT = 32, 24
@@ -85,6 +85,7 @@ PERIOD_TEXT = {
     "title": "الدرس {lesson}",
     "period": "الحصة {k} من {n}",
     "standards": "المعايير: {codes}",
+    "book_pages": "كتاب الطالب: ص {pages}",
     "recall_title": "تذكّر",
     "objectives_title": "أهداف الحصة",
     "objective_pending": "مثال {n}: نص الهدف معلَّق",
@@ -92,6 +93,9 @@ PERIOD_TEXT = {
     "example_title": "مثال {n}",
     "continued_title": "تابع المثال {n}",
     "reveal_title": "حل المثال {n}",
+    "example_title_page": "مثال {n}، ص {page}",
+    "continued_title_page": "تابع المثال {n} (من ص {page})",
+    "reveal_title_page": "حل المثال {n} (من ص {page})",
     "try_title": "حاول أن تحل: مثال {n}",
     "alt": "مثال {n} من كتاب الطالب",
     "alt_page": "مثال {n} من كتاب الطالب، ص {page}",
@@ -175,6 +179,14 @@ def objective_bullet(prep: PeriodPrep, index: int) -> str:
     return _t("objective_pending", n=objective.example)
 
 
+def example_title(kind: str, example: PrepExample) -> str:
+    """عنوان شريحة المثال برقم صفحته في كتاب الطالب حين تُعرف (قرار المالك 2026-11-20)؛ التتمة والحل «من ص» صفحة بدء
+    المثال، فقد تقع تتمته في الصفحة التالية."""
+    if example.page:
+        return _t(f"{kind}_title_page", n=example.n, page=example.page)
+    return _t(f"{kind}_title", n=example.n)
+
+
 def example_alt(example: PrepExample) -> str:
     return _t("alt_page", n=example.n, page=example.page) if example.page else _t("alt", n=example.n)
 
@@ -229,6 +241,9 @@ def _draft_slides(prep: PeriodPrep, groups: dict[int, tuple[ExampleClip, ...]]) 
     bullets = [_t("period", k=prep.k, n=prep.n)]
     if prep.standards:
         bullets.append(_t("standards", codes="، ".join(prep.standards)))
+    pages = sorted({e.page for e in prep.examples if e.page})
+    if pages:
+        bullets.append(_t("book_pages", pages=number_list(pages)))
     slides = [
         _slide("title", _t("title", lesson=prep.lesson), bullets=tuple(bullets)),
         _slide("recall", _t("recall_title"), bullets=(isolate_number_ranges(recall_label(prep.recall)),)),
@@ -252,11 +267,11 @@ def _draft_slides(prep: PeriodPrep, groups: dict[int, tuple[ExampleClip, ...]]) 
     for e in prep.examples:
         clips = groups[e.n]
         for clip in clips:
-            title = _t("example_title" if clip.part == 1 else "continued_title", n=e.n)
+            title = example_title("example" if clip.part == 1 else "continued", e)
             notes = _period_example_notes(e) if clip.part == 1 else ()
             slides.append(_slide("example", title, refs=(e.n,), clip=clip, alt=example_alt(e), notes=notes))
         slides.append(
-            _slide("reveal", _t("reveal_title", n=e.n), refs=(e.n,), clip=clips[-1], alt=example_alt(e))
+            _slide("reveal", example_title("reveal", e), refs=(e.n,), clip=clips[-1], alt=example_alt(e))
         )
         if e.n in classwork:
             exercises = classwork[e.n].exercises

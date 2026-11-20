@@ -223,7 +223,7 @@ watch(selected, (value, previous) => {
       </div>
       <div>
         <dt>التهيئة ({{ sheet.warmup_minutes }} د)</dt>
-        <dd>{{ sheet.warmup }}</dd>
+        <dd class="activity">{{ sheet.warmup }}</dd>
       </div>
     </dl>
 
@@ -330,14 +330,14 @@ watch(selected, (value, previous) => {
                   تعديل
                 </button>
               </td>
-              <td>{{ objective.teach_activity }}</td>
-              <td>{{ objective.teach_assessment }}</td>
+              <td class="activity">{{ objective.teach_activity }}</td>
+              <td class="activity">{{ objective.teach_assessment }}</td>
               <td rowspan="2">
                 {{ objective.teach_minutes + objective.check_minutes }} د
               </td>
             </tr>
             <tr>
-              <td>{{ objective.check_activity }}</td>
+              <td class="activity">{{ objective.check_activity }}</td>
               <td>{{ objective.check_assessment }}</td>
             </tr>
             <tr
@@ -362,7 +362,7 @@ watch(selected, (value, previous) => {
     <dl class="facts">
       <div>
         <dt>الغلق الختامي ({{ sheet.closing_minutes }} د)</dt>
-        <dd>{{ sheet.closing }}</dd>
+        <dd class="activity">{{ sheet.closing }}</dd>
       </div>
       <div v-if="isLesson">
         <dt>التمايز</dt>
@@ -426,6 +426,11 @@ watch(selected, (value, previous) => {
 </template>
 
 <style scoped>
+/* النشاط ودور المعلم ودور الطالب كلٌّ في سطر */
+.activity {
+  white-space: pre-line;
+}
+
 .form {
   display: flex;
   flex-wrap: wrap;

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
 
+from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 
 P, T = qn("w:p"), qn("w:t")
@@ -20,7 +21,8 @@ def leaf_paragraphs(elements: Iterable) -> list:
 
 
 def fill(elements: Iterable, mapping: Mapping[str, str]) -> int:
-    """يستبدل كل مفتاح بقيمته في نص الفقرة المجمّع، فيبقى تنسيق أول شوط. يعيد عدد الفقرات المعدّلة."""
+    """يستبدل كل مفتاح بقيمته في نص الفقرة المجمّع، فيبقى تنسيق أول شوط، وفاصل السطر في القيمة
+    فاصل سطر في الشوط. يعيد عدد الفقرات المعدّلة."""
     changed = 0
     for paragraph in leaf_paragraphs(elements):
         texts = list(paragraph.iter(T))
@@ -32,9 +34,19 @@ def fill(elements: Iterable, mapping: Mapping[str, str]) -> int:
             new = new.replace(key, value)
         if new == whole:
             continue
-        texts[0].text = new
+        first, *rest = new.split("\n")
+        texts[0].text = first
         texts[0].set(qn("xml:space"), "preserve")
         for t in texts[1:]:
             t.text = ""
+        anchor = texts[0]
+        for line in rest:  # سطر جديد في القيمة فاصل سطر في الشوط نفسه فيبقى تنسيقه
+            br = OxmlElement("w:br")
+            t = OxmlElement("w:t")
+            t.text = line
+            t.set(qn("xml:space"), "preserve")
+            anchor.addnext(br)
+            br.addnext(t)
+            anchor = t
         changed += 1
     return changed

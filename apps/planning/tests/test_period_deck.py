@@ -92,6 +92,23 @@ def test_example_slides_equal_examples_and_continuations(built):
 
 
 @pytest.mark.django_db
+def test_example_titles_and_title_slide_carry_book_pages(built):
+    """رقم صفحة المثال في كتاب الطالب ظاهر على شريحته وتتمته وحله، وصفحات أمثلة الحصة على شريحة العنوان."""
+    paged = 0
+    for prep, _, _, deck in built:
+        pages = {e.n: e.page for e in prep.examples}
+        for s in deck.slides:
+            if s.kind in ("example", "reveal") and pages[s.refs[0]]:
+                paged += 1
+                assert f"ص {pages[s.refs[0]]}" in s.title, s.title
+        known = sorted({p for p in pages.values() if p})
+        if known:
+            assert any(b.startswith("كتاب الطالب: ص ") for b in deck.slides[0].bullets)
+            assert str(known[0]) in " ".join(deck.slides[0].bullets)
+    assert paged  # صفحات العاشر معروفة في فهرسه المشتق
+
+
+@pytest.mark.django_db
 def test_last_period_has_no_example_and_carries_quiz(built):
     for prep, _, _, deck in built:
         kinds = [s.kind for s in deck.slides]

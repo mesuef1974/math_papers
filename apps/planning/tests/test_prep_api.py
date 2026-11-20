@@ -61,6 +61,23 @@ def test_unknown_course_or_period_is_404(teacher_client):
     assert teacher_client.get(f"{API}/{GRADE10_SLUG}/9.9/1/word").status_code == 404
 
 
+def assert_roles(sheet: dict, docx: bytes, assessment: bool = False) -> None:
+    """كل نشاط تعليم وتعلم (التهيئة والتعليم والتحقق والغلق، و«جرّب» في الدرس) يحمل دور المعلم ودور الطالب كلًّا في سطر،
+    ويصل إلى Word فاصلَ سطر في الخانة نفسها."""
+    cells = [sheet["warmup"], sheet["closing"]]
+    for o in sheet["objectives"]:
+        cells += [o["teach_activity"], o["check_activity"], *([o["teach_assessment"]] if assessment else [])]
+    for cell in cells:
+        lines = cell.split("\n")
+        assert (
+            len(lines) == 3 and lines[1].startswith("دور المعلم: ") and lines[2].startswith("دور الطالب: ")
+        ), cell
+    with zipfile.ZipFile(BytesIO(docx)) as archive:
+        xml = archive.read("word/document.xml").decode()
+    assert xml.count("دور المعلم: ") == xml.count("دور الطالب: ") == len(cells)
+    assert "<w:br/>" in xml and "\n" not in "".join(re.findall(r"<w:t[^>]*>([^<]*)</w:t>", xml))
+
+
 @pytest.mark.django_db
 def test_every_lesson_period_opens_and_downloads_in_the_ministry_template(teacher_client):
     listed = teacher_client.get(f"{API}/{GRADE10_SLUG}").json()
@@ -94,6 +111,7 @@ def test_every_lesson_period_opens_and_downloads_in_the_ministry_template(teache
         assert rows == 17 + 2 * (len(sheet["objectives"]) - 1)
         for objective in sheet["objectives"]:
             assert objective["text"] in text
+        assert_roles(sheet, response.content, assessment=True)
 
 
 @pytest.mark.django_db
