@@ -855,6 +855,45 @@ def assert_transversals(c):
     assert parts == pytest.approx(c["second"]) and sum(c["second"]) == c["total"]
 
 
+def assert_table_limit(c):
+    """غير معرفة عند النقطة (المقام صفر)، وقيم الجهتين القريبة تقترب من النهاية."""
+    assert c["bottom"].subs(x, c["at"]) == 0
+    f = c["top"] / c["bottom"]
+    for h in (sp.Rational(1, 10**4), sp.Rational(-1, 10**4)):
+        assert number(f, c["at"] + h) == pytest.approx(float(c["value"]), abs=1e-3)
+
+
+def side_values(expr, at, side):
+    h = sp.Rational(1, 10**6)
+    return {
+        "-": [number(expr, at - h)],
+        "+": [number(expr, at + h)],
+        "both": [number(expr, at - h), number(expr, at + h)],
+    }[side]
+
+
+def assert_infinite_side(c):
+    """قيم قريبة جدًا من النقطة تكبر بلا حد، وإشاراتها تعيّن +∞ أو −∞ أو عدم الوجود."""
+    values = side_values(c["expr"], c["at"], c["side"])
+    assert all(abs(v) > 1e5 for v in values)
+    signs = {1 if v > 0 else -1 for v in values}
+    expected = NO_LIMIT if len(signs) == 2 else (r"$+\infty$" if signs == {1} else r"$-\infty$")
+    assert c["answer"] == expected
+
+
+def assert_removable(c):
+    """النهاية عند النقطة القابلة للإزالة تساوي القيمة، والقطب الآخر لانهائي."""
+    assert_limit({"expr": c["expr"], "at": c["at"], "value": c["value"]})
+    assert all(abs(v) > 1e5 for v in side_values(c["expr"], c["pole"], "both"))
+
+
+def assert_discontinuities(c):
+    """الأصفار الحقيقية للمقام عدديًا هي النقاط المذكورة، والبسط معرف ومتصل عندها."""
+    roots = sorted(float(r) for r in sp.Poly(c["bottom"], x).nroots() if abs(sp.im(r)) < 1e-12)
+    assert roots == pytest.approx(sorted(c["points"]))
+    assert all(math.isfinite(number(c["top"], p)) for p in c["points"])
+
+
 CHECKS = {
     "rational_equation": assert_rational_equation,
     "excluded_values": assert_excluded_values,
@@ -931,6 +970,10 @@ CHECKS = {
     "one_sided": assert_one_sided,
     "continuity": assert_continuity,
     "average": assert_average,
+    "table_limit": assert_table_limit,
+    "infinite_side": assert_infinite_side,
+    "removable": assert_removable,
+    "discontinuities": assert_discontinuities,
 }
 
 

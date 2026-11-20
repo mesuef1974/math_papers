@@ -522,6 +522,226 @@ def continuity_constant(rng: random.Random) -> Problem:
     )
 
 
+POS_INF, NEG_INF = r"$+\infty$", r"$-\infty$"
+
+
+def infinity(sign: int) -> str:
+    return POS_INF if sign > 0 else NEG_INF
+
+
+@variant("1.1", example=1)
+def limit_from_table(rng: random.Random) -> Problem:
+    """نهاية كسر غير معرف عند نقطة (صيغة 0/0) من قيم قريبة من الجهتين."""
+    a = nz(rng, -4, 5)
+    b = rng.choice([n for n in range(-5, 6) if n != -a])
+    top = sp.expand((x - a) * (x + b))
+    value = a + b
+    near = (sp.Rational(a * 100 - 1, 100), sp.Rational(a * 100 + 1, 100))
+    rows = "، ".join(f"$f({float(p):.2f})={float(p + b):.2f}$" for p in near)
+    return Problem(
+        "1.1",
+        f"الدالة $f(x)={frac(top, x - a)}$ غير معرفة عند $x={a}$. "
+        f"قدّر ${lim(a, 'f(x)')}$ من جدول قيم قريبة من ${a}$ من الجهتين.",
+        m(value),
+        wrongs(sp.Integer(value), NO_LIMIT, 0, a, b),
+        (
+            rf"التعويض المباشر يعطي $\frac{{0}}{{0}}$، فنحسب قيمًا قريبة من ${a}$: {rows}.",
+            f"قيم الجهتين تقترب من ${value}$ كلما اقتربت $x$ من ${a}$.",
+            f"${lim(a, 'f(x)')}={value}$",
+        ),
+        "K",
+        {"type": "table_limit", "top": top, "bottom": x - a, "at": a, "value": value},
+    )
+
+
+@variant("1.1", example=4)
+def infinite_limit_sides(rng: random.Random) -> Problem:
+    """نهايتا الجهتين لدالة نسبية عند صفر مقامها: +∞ أو −∞، والنهاية من الجهتين غير موجودة."""
+    c, k = rng.randint(-4, 4), nz(rng, -6, 6)
+    side = rng.choice(["-", "+", "both"])
+    answer = NO_LIMIT if side == "both" else infinity(k if side == "+" else -k)
+    at = c if side == "both" else f"{c}^{side}"
+    return Problem(
+        "1.1",
+        f"إذا كانت $f(x)={frac(k, x - c)}$ فأوجد ${lim(at, 'f(x)')}$.",
+        answer,
+        wrongs(answer, POS_INF, NEG_INF, NO_LIMIT, "$0$", m(k)),
+        (
+            f"المقام ${tex(x - c)}$ يؤول إلى $0$ والبسط ${k}$ ثابت، فالقيم تكبر بلا حد.",
+            f"من اليسار المقام سالب فالكسر يؤول إلى {infinity(-k)}، ومن اليمين موجب فيؤول إلى {infinity(k)}.",
+            "النهايتان مختلفتان فالنهاية غير موجودة." if side == "both" else f"فالنهاية {answer}.",
+        ),
+        "A",
+        {"type": "infinite_side", "expr": k / (x - c), "at": c, "side": side, "answer": answer},
+    )
+
+
+@variant("1.1", example=5)
+def infinite_limit_square(rng: random.Random) -> Problem:
+    """مقام مربع: الجهتان تتفقان على +∞ أو −∞ بإشارة البسط."""
+    c, k, d = rng.randint(-4, 4), nz(rng, -6, 6), rng.randint(-3, 3)
+    shift = f"+{d}" if d > 0 else (f"{d}" if d < 0 else "")
+    shown = frac(k, f"({tex(x - c)})^2") + shift
+    answer = infinity(k)
+    return Problem(
+        "1.1",
+        f"إذا كانت $f(x)={shown}$ فأوجد ${lim(c, 'f(x)')}$.",
+        answer,
+        wrongs(answer, POS_INF, NEG_INF, NO_LIMIT, m(d), "$0$"),
+        (
+            f"المقام $({tex(x - c)})^2$ موجب من الجهتين ويؤول إلى $0$.",
+            f"إشارة الكسر إشارة البسط ${k}$ من الجهتين، فالجهتان تتفقان.",
+            f"${lim(c, 'f(x)')}=$ {answer}",
+        ),
+        "A",
+        {"type": "infinite_side", "expr": k / (x - c) ** 2 + d, "at": c, "side": "both", "answer": answer},
+    )
+
+
+@variant("1.1", example=6)
+def concentration_at_infinity(rng: random.Random) -> Problem:
+    """نهاية عند المالانهاية لدالة نسبية في سياق تركيز مادة مع الزمن."""
+    a, b, p = rng.randint(2, 12), rng.randint(1, 9), rng.randint(0, 5)
+    t = sp.Symbol("t")
+    concentration = (a * t + p) / (t + b)
+    return Problem(
+        "1.1",
+        f"تركيز مادة في محلول بعد $t$ دقيقة يُعطى بالدالة $C(t)={frac(a * t + p, t + b)}$ (ملغم/لتر). "
+        r"أوجد $\lim\limits_{t \to \infty} C(t)$ وفسّر الناتج.",
+        m(a),
+        wrongs(sp.Integer(a), sp.Rational(p, b), 0, NO_LIMIT, a + b),
+        (
+            "نقسم البسط والمقام على $t$.",
+            rf"الحدّان $\frac{{{p}}}{{t}}$ و$\frac{{{b}}}{{t}}$ يؤولان إلى $0$، فالنهاية $\frac{{{a}}}{{1}}={a}$.",
+            f"يقترب التركيز من ${a}$ ملغم/لتر مع مرور الزمن.",
+        ),
+        "A",
+        {"type": "limit", "expr": concentration.subs(t, x), "at": sp.oo, "value": a},
+    )
+
+
+@variant("1.2", example=2)
+def limit_rules_radical(rng: random.Random) -> Problem:
+    """قواعد النهايات على كسر في مقامه جذر، ونهاية المقام لا تساوي صفرًا."""
+    root = rng.randint(1, 5)
+    a = rng.randint(-3, 6)
+    r = root * root - a
+    p, q = nz(rng, -5, 6), rng.randint(-6, 6)
+    value = sp.Rational(p * a + q, root)
+    radical = rf"\sqrt{{{tex(x + r)}}}"
+    return Problem(
+        "1.2",
+        f"أوجد ${lim(a, frac(p * x + q, radical))}$.",
+        m(value),
+        wrongs(value, p * a + q, sp.Rational(p * a + q, root * root), NO_LIMIT, 0),
+        (
+            rf"نهاية المقام $\sqrt{{{a + r}}}={root}\ne 0$، فنطبّق قاعدة القسمة وقاعدة الجذر.",
+            f"نهاية البسط ${tex(p * a + q)}$.",
+            f"$L={frac(p * a + q, root)}={tex(value)}$",
+        ),
+        "K",
+        {"type": "limit", "expr": (p * x + q) / sp.sqrt(x + r), "at": a, "value": value},
+    )
+
+
+@variant("1.2", example=5)
+def limit_dne_after_cancel(rng: random.Random) -> Problem:
+    """كسر يؤول بعد الاختزال إلى k/(x−c): نهايتا الجهتين لانهائيتان مختلفتان فالنهاية غير موجودة."""
+    c = rng.randint(-3, 4)
+    b = rng.choice([n for n in range(-4, 5) if n != c])
+    k = nz(rng, -4, 4)
+    top, bottom = sp.expand(k * (x - b)), sp.expand((x - c) * (x - b))
+    side = rng.choice(["-", "+", "both", "both"])
+    answer = NO_LIMIT if side == "both" else infinity(k if side == "+" else -k)
+    at = c if side == "both" else f"{c}^{side}"
+    return Problem(
+        "1.2",
+        f"أوجد ${lim(at, frac(top, bottom))}$.",
+        answer,
+        wrongs(answer, POS_INF, NEG_INF, NO_LIMIT, "$0$", m(sp.Rational(k, c - b))),
+        (
+            rf"${frac(top, bottom)}={frac(k, x - c)}$ حيث $x\ne {b}$.",
+            f"عند ${c}$ يؤول المقام إلى $0$: من اليسار {infinity(-k)} ومن اليمين {infinity(k)}.",
+            "النهايتان مختلفتان فالنهاية غير موجودة." if side == "both" else f"فالنهاية {answer}.",
+        ),
+        "A",
+        {"type": "infinite_side", "expr": top / bottom, "at": c, "side": side, "answer": answer},
+    )
+
+
+@variant("1.3", example=1)
+def trig_exp_substitution(rng: random.Random) -> Problem:
+    """تعويض مباشر في كسر مثلثي أو أسي بعد التحقق من أن المقام لا يساوي صفرًا."""
+    if rng.random() < 0.6:
+        at = rng.choice([sp.pi / 6, sp.pi / 4, sp.pi / 3, sp.pi / 2, sp.pi])
+        p, q = rng.randint(1, 4), rng.randint(2, 5)
+        expr = (p + sp.sin(x)) / (q + sp.cos(x))
+        denominator = q + sp.cos(x)
+    else:
+        at = sp.Integer(rng.choice([0, 0, 1]))
+        p, q = rng.randint(1, 5), rng.randint(1, 4)
+        expr = (sp.exp(x) + p) / (x + q)
+        denominator = x + q
+    value = sp.radsimp(sp.simplify(expr.subs(x, at)))
+    return Problem(
+        "1.3",
+        f"أوجد ${lim(at, tex(expr))}$.",
+        m(value),
+        wrongs(value, NO_LIMIT, 0, 1, sp.Rational(p, q), p),
+        (
+            rf"المقام عند $x={tex(at)}$ يساوي ${tex(sp.simplify(denominator.subs(x, at)))}\ne 0$ والدالة متصلة عندها.",
+            f"بالتعويض المباشر: $L={tex(value)}$",
+        ),
+        "K",
+        {"type": "limit", "expr": expr, "at": at, "value": value},
+    )
+
+
+@variant("1.4", example=3)
+def removable_discontinuity(rng: random.Random) -> Problem:
+    """صفرا المقام: أحدهما قابل للإزالة يُعاد تعريف الدالة عنده، والآخر غير قابل."""
+    a, c = rng.sample(range(-4, 5), 2)
+    b = rng.choice([n for n in range(-4, 5) if n not in (a, c)])
+    top, bottom = sp.expand((x - a) * (x - b)), sp.expand((x - a) * (x - c))
+    value = sp.Rational(a - b, a - c)
+    return Problem(
+        "1.4",
+        f"الدالة $f(x)={frac(top, bottom)}$ غير متصلة عند $x={a}$ و$x={c}$. "
+        f"ما القيمة التي تُعطى للدالة عند $x={a}$ لتصبح متصلة عندها؟",
+        m(value),
+        wrongs(value, NO_LIMIT, 0, sp.Rational(a - c, a - b), 1),
+        (
+            rf"${frac(top, bottom)}={frac(x - b, x - c)}$ حيث $x\ne {a}$.",
+            f"عند $x={a}$ عدم اتصال قابل للإزالة: ${lim(a, 'f(x)')}={tex(value)}$، فنعرّف $f({a})={tex(value)}$.",
+            f"عند $x={c}$ المقام بعد الاختزال صفر والبسط لا، فعدم الاتصال غير قابل للإزالة.",
+        ),
+        "A",
+        {"type": "removable", "expr": top / bottom, "at": a, "pole": c, "value": value},
+    )
+
+
+@variant("1.4", example=4)
+def discontinuity_points(rng: random.Random) -> Problem:
+    """نقاط عدم اتصال دالة من مجالها: أصفار المقام، والبسط متصل على الأعداد الحقيقية."""
+    r1, r2 = sorted(rng.sample(range(-5, 6), 2))
+    bottom = sp.expand((x - r1) * (x - r2))
+    top = rng.choice([sp.exp(x), x**2 + 1, sp.sqrt(x**2 + 4)])
+    answer = f"$x={r1}$ و$x={r2}$"
+    return Problem(
+        "1.4",
+        f"حدّد نقاط عدم اتصال الدالة $f(x)={frac(top, bottom)}$.",
+        answer,
+        wrongs(answer, f"$x={-r2}$ و$x={-r1}$", f"$x={r1}$ فقط", "لا توجد", f"$x={r2}$ فقط"),
+        (
+            r"البسط متصل على $\mathbb{R}$، فعدم الاتصال عند أصفار المقام وحدها.",
+            f"${tex(bottom)}={tex(sp.factor(bottom))}$",
+            rf"فالدالة غير متصلة عند $x={r1}$ و$x={r2}$ ومتصلة على باقي $\mathbb{{R}}$.",
+        ),
+        "A",
+        {"type": "discontinuities", "top": top, "bottom": bottom, "points": [r1, r2]},
+    )
+
+
 # الوحدة الثانية: الاشتقاق
 @variant("2.1", example=1)
 def average_rate(rng: random.Random) -> Problem:
