@@ -18,7 +18,7 @@ from apps.planning.domain.non_lesson import (
 from apps.planning.domain.plan_periods import plan_periods
 from apps.planning.domain.semester_plan import PlanEntry, PlanWeek, TermPlan
 
-from .test_prep_api import TOKEN, document_text
+from .test_prep_api import TOKEN, assert_roles, document_text
 
 API = "/api/v1/preps"
 
@@ -143,6 +143,7 @@ def test_every_non_lesson_prep_opens_and_downloads_word(teacher_client):
         text = document_text(response.content)
         assert not TOKEN.search(text), path
         assert item.prep.title in text
+        assert_roles(data, response.content)
 
 
 @pytest.mark.django_db
