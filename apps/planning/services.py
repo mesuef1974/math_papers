@@ -209,6 +209,8 @@ def build_course_decks(course: str, storage: Storage | None = None) -> tuple[int
     شاهد المقاطع المنشورة على معايير العروض كلها؛ المقرر بلا خطة يرفع `PrepNotFoundError`."""
     built, failures = 0, []
     for row in selectors.prep_periods(course):
+        if row["kind"] != "lesson":  # عروض حصص غير الدروس لاحقًا بقرار مستقل (`domain/non_lesson.py`)
+            continue
         try:
             build_period_deck_file(course, row["lesson"], row["k"], storage)
         except PlanningError as error:

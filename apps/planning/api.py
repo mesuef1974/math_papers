@@ -51,6 +51,7 @@ class PrepPeriodOut(Schema):
     week: int
     status: str
     customized: bool = False
+    kind: str = "lesson"  # أو نوع حصة غير الدرس: orientation | quiz | review | exam | project | support
 
 
 class DeckPeriodOut(PrepPeriodOut):
@@ -225,6 +226,16 @@ class PrepEditOut(Schema):
     removed: list[int]
 
 
+class PaperLinkOut(Schema):
+    """ورقة يولّدها «أوراق» لحصة غير درس (`non_lesson.PaperLink`): تفتح صفحة التوليد بمدخلاتها."""
+
+    kind: str
+    label: str
+    lessons: list[str]
+    level: str
+    blueprint: str
+
+
 class PrepOut(Schema):
     course: str
     lesson: str
@@ -254,7 +265,10 @@ class PrepOut(Schema):
     checks: list[CheckOut]
     pending: bool
     review: ReviewOut | None = None
-    edit: PrepEditOut
+    edit: PrepEditOut | None = None  # حصة غير الدرس مشتركة بلا تعديل
+    kind: str = "lesson"
+    papers: list[PaperLinkOut] = []
+    scope: list[str] = []
 
 
 class PrepOverrideIn(Schema):
@@ -289,7 +303,7 @@ def _prep_out(view: selectors.TeacherSheet) -> dict:
         if state is not None:
             row.update(asdict(state))
     data["review"] = view.review
-    data["edit"] = view.edit
+    data["edit"] = view.edit or None
     return data
 
 

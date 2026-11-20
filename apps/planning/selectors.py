@@ -25,6 +25,8 @@ from apps.knowledge.selectors import course_index, example_numbers, lesson_index
 from .domain.calendar_engine import Closure, Plan, Slot, Term, allocate, parse_terms, sessions
 from .domain.deck import ExampleClip, deck_key_of
 from .domain.feedback import ClassOutcome, Decision, decide
+from .domain.non_lesson import KINDS as NON_LESSON_KINDS
+from .domain.non_lesson import NonLessonPrep, build_non_lesson, check_non_lesson
 from .domain.objective_text import digest as text_digest
 from .domain.objective_text import shared_digest
 from .domain.plan_periods import PlanPeriod
@@ -33,7 +35,7 @@ from .domain.prep import PeriodPrep, build_prep, lesson_examples, recall_for, st
 from .domain.prep import allocate as allocate_examples
 from .domain.prep_checks import CheckResult, check_lesson, check_prep
 from .domain.prep_override import LessonOverride, OverrideError, parse_override
-from .domain.prep_sheet import PrepSheet, prep_sheet
+from .domain.prep_sheet import PrepSheet, non_lesson_sheet, prep_sheet
 from .domain.semester_plan import (
     TermPlan,
     check_catalog,
@@ -334,14 +336,79 @@ def _period_rows(course: str, owner: AbstractBaseUser | None = None) -> list[tup
             "week": item.period.week,
             "status": "fail" if "fail" in statuses else "pending" if "pending" in statuses else "pass",
             "customized": item.override == "active",
+            "kind": "lesson",
         }
         out.append((item, row))
     return out
 
 
+def _status(checks: Sequence[CheckResult]) -> str:
+    statuses = {c.status for c in checks if c.blocking}
+    return "fail" if "fail" in statuses else "pending" if "pending" in statuses else "pass"
+
+
+@dataclass(frozen=True)
+class NonLessonPeriod:
+    """حصة غير درس من الخطة بتحضيرها ومعاييرها N1 إلى N3."""
+
+    period: PlanPeriod
+    prep: NonLessonPrep
+    checks: tuple[CheckResult, ...]
+
+
+def _exam_blueprints(found: Course) -> dict[str, tuple[str, str, tuple[str, ...]]]:
+    """جدول مواصفات جاهز لكل نوع اختبار في سنة المقرر وفصله (للفصل كاملًا): النوع → (المعرّف، العنوان، دروسه)."""
+    from apps.papers.services import ready_blueprints
+
+    out: dict[str, tuple[str, str, tuple[str, ...]]] = {}
+    for row in ready_blueprints():
+        if (
+            row.course_id == found.pk
+            and row.academic_year == found.academic_year
+            and row.semester == found.semester
+            and row.scope == "full"
+        ):
+            codes = tuple(dict.fromkeys(item.lesson.code for item in row.items.all()))
+            out.setdefault(row.assessment, (row.slug, row.title, codes))
+    return out
+
+
+def non_lesson_preps(course: str = PLAN_COURSE) -> tuple[NonLessonPeriod, ...]:
+    """تحضير كل حصة غير درس في الخطة بترتيبها (`domain/non_lesson.py`): مشترك للمقرر، بلا تعديل معلم."""
+    found = _plan_course(course)
+    periods = plan_periods(course)
+    unit_of = {lesson.lesson: lesson.unit for lesson in course_index(course).lessons}
+    blueprints = _exam_blueprints(found)
+    out = []
+    for period in periods:
+        if period.kind not in NON_LESSON_KINDS:
+            continue
+        prep = build_non_lesson(course, period, periods, unit_of=unit_of, blueprints=blueprints)
+        out.append(NonLessonPeriod(period, prep, check_non_lesson(prep)))
+    return tuple(out)
+
+
 def prep_periods(course: str, owner: AbstractBaseUser | None = None) -> list[dict]:
-    """حصص الدروس بترتيب الخطة مع حالة معاييرها بتحضير المعلم: للتنقل في صفحة التحضير."""
-    return [row for _, row in _period_rows(course, owner)]
+    """حصص الخطة كلها بترتيبها مع حالة معاييرها: حصص الدروس بتحضير المعلم، وحصص غير الدروس بتحضيرها المشترك."""
+    rows = [(item.period.number, row) for item, row in _period_rows(course, owner)]
+    for item in non_lesson_preps(course):
+        rows.append(
+            (
+                item.period.number,
+                {
+                    "lesson": item.prep.slug,
+                    "title": item.prep.title,
+                    "unit": item.prep.unit,
+                    "k": item.prep.k,
+                    "n": item.prep.n,
+                    "week": item.period.week,
+                    "status": _status(item.checks),
+                    "customized": False,
+                    "kind": item.prep.kind,
+                },
+            )
+        )
+    return [row for _, row in sorted(rows, key=lambda pair: pair[0])]
 
 
 def deck_periods(course: str, owner: AbstractBaseUser | None = None) -> list[dict]:
@@ -401,6 +468,25 @@ def period_sheet(course: str, lesson: str, k: int) -> PrepSheet:
     """ورقة تحضير حصة واحدة بنصوصها المعتمدة ومعاييرها (بلا نسخة معلم)."""
     item = period_item(course, lesson, k)
     return _render(course, item, item.prep)
+
+
+def non_lesson_sheet_of(course: str, slug: str, k: int) -> PrepSheet | None:
+    """ورقة حصة غير درس بمفتاح بندها («quiz-u1») ورقمها فيه؛ None إن لم يكن المفتاح بند غير درس."""
+    if slug.split("-", 1)[0] not in NON_LESSON_KINDS:
+        return None
+    found = _plan_course(course)
+    item = next((p for p in non_lesson_preps(course) if p.prep.slug == slug and p.prep.k == k), None)
+    if item is None:
+        raise PrepNotFoundError(f"لا حصة {k} للبند {slug} في خطة {course}")
+    return non_lesson_sheet(
+        item.prep,
+        item.checks,
+        week=item.period.week,
+        number=item.period.number,
+        year=found.academic_year,
+        semester=found.semester,
+        grade=grade_label(found.grade, found.track),
+    )
 
 
 # ───── مراجعة المعلم لأهداف حصته (docs/teacher_objective_review_plan.md) ─────
@@ -469,7 +555,10 @@ def _suggestion_view(row: ObjectiveSuggestion, shared: tuple[str | None, str | N
 
 def teacher_sheet(course: str, lesson: str, k: int, owner: AbstractBaseUser) -> TeacherSheet:
     """ورقة الحصة بنسخة المعلم: الشرط والمعيار من نسخته حين تختلف عن المعتمد، والمعايير T1 إلى T13 كما هي
-    (السلوك وفعله وعمقه لا تتغير). الوحدة غير المعتمدة لا تُعدَّل فتظهر كما هي."""
+    (السلوك وفعله وعمقه لا تتغير). الوحدة غير المعتمدة لا تُعدَّل فتظهر كما هي. حصة غير الدرس مشتركة بلا تعديل."""
+    other = non_lesson_sheet_of(course, lesson, k)
+    if other is not None:
+        return TeacherSheet(other, {}, None)
     stored = prep_overrides(course, owner)
     _plan_course(course)
     item = next((p for p in lesson_preps(course, stored) if p.prep.lesson == lesson and p.prep.k == k), None)
