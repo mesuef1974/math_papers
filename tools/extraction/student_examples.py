@@ -17,7 +17,9 @@
    يُقصّ البياض حوله. المقطع يُصيَّر من PDF نفسه بـ `clip_dpi` (`student_clips.render_box`) لا من صورة التصيير.
 6. تحقق الرؤية (`vision: true`): لكل مقطع سؤال واحد بمخطط JSON (`CHECK`) عن رقم المثال في أعلاه، وهل يبدأ بعنوانه، وهل
    يُقطع نص أو رسم عند حافته السفلى أو الجانبية (`verdict`). المثال الذي خالف مقطع منه `review` ولا يُكتب ما لم يُدرج اسم
-   المقطع في `approved` بعد مراجعة المالك.
+   المقطع في `approved` بعد مراجعة المالك. حكم «بلا عنوان» على صورة المقطع كلها لا يكفي وحده (سطر العنوان يضيع في
+   صورة المقطع الطويل): يثبت العنوان أيضًا برقم المثال المقروء مطابقًا وسطر «مثال» من صناديق OCR عند أعلى المقطع
+   (`label_top` ضمن `title_top`)، وإلا يُعاد السؤال (`TITLE`) على شريط أعلى المقطع وحده (`title_strip` نقطة بـ `title_dpi`).
 
 المخرجات خارج المستودع: المقاطع في `dirs.<target>` بأسماء `publish_assets` (`NAME`)، وما لم يُعتمد يبقى في `<target>_review`
 للمراجعة، و`student_examples.json` (أرقام وحدها) و`student_try.json` بمخطط `exercise_try.json` (حالته `review` دائمًا، ولا
@@ -76,6 +78,10 @@ DEFAULTS: dict[str, Any] = {
     "model": "small",
     "vision_dpi": 200,
     "question": None,
+    "title_strip": 60.0,  # نقاط: ارتفاع شريط أعلى المقطع الأول الذي يُعاد عليه سؤال العنوان
+    "title_dpi": 300,
+    "title_top": 12.0,  # نقاط: أقصى بعد لأعلى سطر «مثال» (صندوق OCR) تحت أعلى المقطع ليُعدّ عنوانه
+    "title_question": None,
     "approved": [],
 }
 COLUMNS = ("auto", 1, 2)
@@ -93,6 +99,12 @@ CHECK = schema(
         "cut_side": {"type": "boolean"},
     },
 )
+TITLE_QUESTION = (
+    "هذه صورة الشريط العلوي من مقطع مقصوص من صفحة كتاب رياضيات. title: هل يظهر فيها عنوان «مثال»؟ "
+    "number: الرقم المكتوب بجوار كلمة «مثال» (0 إن لم يوجد)."
+)
+TITLE = schema("clip_title", {"number": {"type": "integer"}, "title": {"type": "boolean"}})
+TOP = "top_"  # بادئة صورة الشريط العلوي في مجلد صور الرؤية
 PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
 
 Ask = Callable[[Path, str, dict[str, Any]], dict[str, Any]]
@@ -138,7 +150,7 @@ def errors(cfg: dict[str, Any]) -> list[str]:
     if not isinstance(node, dict):
         return ["student_examples يجب أن يكون خريطة"]
     errs: list[str] = []
-    for key in ("ocr_dpi", "clip_dpi", "vision_dpi", "probe_dpi"):
+    for key in ("ocr_dpi", "clip_dpi", "vision_dpi", "probe_dpi", "title_dpi"):
         value = node.get(key, DEFAULTS[key])
         if not isinstance(value, int) or isinstance(value, bool) or value < 36:
             errs.append(f"student_examples.{key} عدد صحيح 36 فأكثر")
@@ -154,6 +166,10 @@ def errors(cfg: dict[str, Any]) -> list[str]:
             isinstance(value, list) and len(value) == size and all(isinstance(v, int | float) for v in value)
         ):
             errs.append(f"student_examples.{key} قائمة من {size} كسور")
+    for key in ("title_strip", "title_top"):
+        value = node.get(key, DEFAULTS[key])
+        if not isinstance(value, int | float) or isinstance(value, bool) or value <= 0:
+            errs.append(f"student_examples.{key} عدد موجب من النقاط")
     if not isinstance(node.get("approved", []), list):
         errs.append("student_examples.approved قائمة أسماء مقاطع")
     if not isinstance(node.get("vision", True), bool):
@@ -496,11 +512,32 @@ def scan(
 
 
 # ───── تحقق الرؤية والمقارنة (نقي) ─────
+def top_reading(answer: dict[str, Any]) -> dict[str, Any] | None:
+    """جواب سؤال الشريط العلوي (`TITLE`) رقمًا ومنطقيًا وحدهما، أو None لجواب غير صالح."""
+    try:
+        return {"number": int(answer["number"]), "title": bool(answer["title"])}
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def anchored(gap: float | None, limit: float, margin: float) -> bool:
+    """هل سطر «مثال» من صناديق OCR عند أعلى المقطع؟ `gap` بُعد أعلى صندوقه تحت أعلى المقطع بالنقاط (None: المقطع لا
+    يبدأ بجزء سطر «مثال»)؛ والسطر الذي فوق أعلى المقطع بأكثر من هامشه ليس فيه."""
+    return gap is not None and -margin <= gap <= limit
+
+
 def verdict(
-    answer: dict[str, Any], example: int, first: bool, last: bool
+    answer: dict[str, Any],
+    example: int,
+    first: bool,
+    last: bool,
+    anchored: bool = False,
+    top: dict[str, Any] | None = None,
 ) -> tuple[dict[str, Any] | None, list[str]]:
     """(جواب النموذج أرقامًا ومنطقيات وحدها، مخالفاته). المقطع الأول يلزمه عنوان المثال ورقمه إن قُرئ (0: لم يُقرأ)،
-    والأخير ألّا يُقطع أسفله (ما قبله ينتهي بنهاية العمود قصدًا)، وكلها ألّا تُقطع جانبًا. جواب غير صالح `no_answer`."""
+    والأخير ألّا يُقطع أسفله (ما قبله ينتهي بنهاية العمود قصدًا)، وكلها ألّا تُقطع جانبًا. جواب غير صالح `no_answer`.
+    العنوان يثبت بجواب الصورة كلها، أو بجواب شريطها العلوي `top` (`top_reading`)، أو برقم المثال المقروء مطابقًا وسطر
+    «مثال» من صناديق OCR عند أعلى المقطع (`anchored`). والرقم المقروء من الشريط، إن قُرئ، يتقدّم على رقم الصورة كلها."""
     try:
         seen = {
             "number": int(answer["number"]),
@@ -510,10 +547,12 @@ def verdict(
         }
     except (KeyError, TypeError, ValueError):
         return None, ["no_answer"]
+    number = top["number"] if top and top["number"] else seen["number"]
+    titled = seen["title"] or bool(top and top["title"]) or (anchored and number == example)
     problems = []
-    if first and not seen["title"]:
+    if first and not titled:
         problems.append("title")
-    if first and seen["number"] not in (0, example):
+    if first and number not in (0, example):
         problems.append("number")
     if last and seen["cut_bottom"]:
         problems.append("cut_bottom")
@@ -686,6 +725,7 @@ def cut(
     for old in (*staging.glob("*.png"), *probes.glob("*.png")):
         old.unlink()
     question = cfg["question"] or QUESTION
+    title_question = cfg["title_question"] or TITLE_QUESTION
     render_cfg = {"scan_cover": cfg["scan_cover"], "vector_dpi": cfg["clip_dpi"]}
     clips: list[dict[str, Any]] = []
     with pymupdf.open(student_clips.student_pdf(book)) as doc:
@@ -694,13 +734,20 @@ def cut(
             if lesson["status"] != "ok":
                 continue
             columns: list[Column] = lesson["columns"]
-            made: list[tuple[dict[str, Any], str, Column, student_clips.Box, bool]] = []
+            made: list[tuple[dict[str, Any], str, Column, student_clips.Box, bool, bool]] = []
             for item in lesson["examples"]:
-                parts = [
-                    (columns[part["column"]], box)
+                kept = [
+                    (part, columns[part["column"]], box)
                     for part in item["segments"]
                     if (box := ink.refine(columns[part["column"]], item, part)) is not None
                 ]
+                parts = [(column, box) for _, column, box in kept]
+                # أول مقطع هو جزء سطر «مثال» نفسه، لا تتمة بقيت بعد سقوط جزئه بلا حبر
+                labeled = (
+                    bool(kept)
+                    and kept[0][0] is item["segments"][0]
+                    and kept[0][0]["column"] == item["columns"][0]
+                )
                 names = [
                     clip_name(lesson_id, item["example"], column.printed, cont=j > 0)
                     for j, (column, _) in enumerate(parts)
@@ -712,21 +759,30 @@ def cut(
                 if any(NAME.match(name) is None for name in names):
                     lesson["reasons"].append("name")
                 made += [
-                    (item, name, column, box, j == len(parts) - 1)
+                    (item, name, column, box, j == len(parts) - 1, labeled and j == 0)
                     for j, (name, (column, box)) in enumerate(zip(names, parts, strict=True))
                 ]
             if lesson["reasons"]:
                 lesson["reasons"] = sorted(set(lesson["reasons"]))
                 lesson["status"] = "review"
                 continue
-            for item, name, column, box, last in made:
+            for item, name, column, box, last, labeled in made:
                 rendered = student_clips.render_box(doc, column.page, box, render_cfg)
                 (staging / name).write_bytes(rendered.pop("png"))
+                page = doc[column.page - 1]
+                label_top = None
+                if labeled:  # بُعد أعلى سطر «مثال» (صندوق OCR) تحت أعلى المقطع، بالنقاط
+                    scale = page.rect.width / column.width
+                    label_top = round(item["label"][1] * scale + page.rect.y0 - box[1], 1)
                 if asking is not None:
-                    page = doc[column.page - 1]
                     page.get_pixmap(dpi=cfg["vision_dpi"], clip=pymupdf.Rect(*box), alpha=False).save(
                         probes / name
                     )
+                    if not name.endswith("_cont.png"):
+                        strip = pymupdf.Rect(box[0], box[1], box[2], min(box[3], box[1] + cfg["title_strip"]))
+                        page.get_pixmap(dpi=cfg["title_dpi"], clip=strip, alpha=False).save(
+                            probes / f"{TOP}{name}"
+                        )
                 clips.append(
                     {
                         "file": name,
@@ -740,7 +796,9 @@ def cut(
                         "box": [round(v, 1) for v in box],
                         **rendered,
                         "end": item["end"],
+                        "label_top": label_top,
                         "vision": None,
+                        "top": None,
                         "problems": [],
                         "status": "ok",
                     }
@@ -749,9 +807,18 @@ def cut(
         with asking() as ask:
             for clip in clips:
                 answer = ask(probes / clip["file"], question, CHECK)
-                clip["vision"], clip["problems"] = verdict(
-                    answer, clip["example"], first=not clip["cont"], last=clip["last"]
-                )
+                place = {
+                    "first": not clip["cont"],
+                    "last": clip["last"],
+                    "anchored": anchored(clip["label_top"], cfg["title_top"], cfg["margin"]),
+                }
+                clip["vision"], clip["problems"] = verdict(answer, clip["example"], **place)
+                if place["first"] and {"title", "number"} & set(clip["problems"]):
+                    # حكم صورة المقطع كلها لا يكفي: يُعاد السؤال على شريطها العلوي بدقته
+                    clip["top"] = top_reading(ask(probes / f"{TOP}{clip['file']}", title_question, TITLE))
+                    clip["vision"], clip["problems"] = verdict(
+                        answer, clip["example"], **place, top=clip["top"]
+                    )
     approved = set(cfg["approved"])
     examples: dict[tuple[str, int], list[dict[str, Any]]] = {}
     for clip in clips:
