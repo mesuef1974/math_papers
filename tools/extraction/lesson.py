@@ -208,7 +208,20 @@ def build(book: Book, rec: dict[str, Any], objectives: dict[str, Any]) -> dict[s
         "practices": field(sorted(fused["practices"]), "guide", "ok" if fused["practices"] else "missing"),
         "objectives": _objectives(objectives, rec["id"]),
         "examples": examples,
-        "exercises": field(exercises, "guide", "ok" if exercises else "missing", total=len(exercises)),
+        # أقصى رقم بلا شاهد (جدول التحليل، أو سلسلة OCR المستقلة، أو «دليل المهام») قراءة واحدة: يُراجَع ولا يُعتمد عددًا للدرس
+        "exercises": field(
+            exercises,
+            "guide",
+            "missing"
+            if not exercises
+            else (
+                "ok"
+                if ex_checks["exercises_max_matches_table"]
+                or ex_checks["exercises_max_corroborated_independently"]
+                else "review"
+            ),
+            total=len(exercises),
+        ),
         "exercise_analysis": field(
             rows,
             "guide",
