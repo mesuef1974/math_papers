@@ -41,7 +41,7 @@ INPUTS: dict[str, dict[str, Any]] = {
     },  # ومجلد سجلات الدروس ووجهة التحميل (انظر digest)
     "printed_pages": {"dirs": ("ocr", "boxes"), "after": (), "pdf": False},
     "exercise_badges": {"dirs": ("ocr", "render", "boxes"), "after": ("layout", "examples"), "pdf": False},
-    "exercise_try": {"dirs": ("ocr", "render", "boxes"), "after": ("layout", "examples"), "pdf": False},
+    "exercise_try": {"dirs": ("ocr", "render", "boxes"), "after": ("layout",), "pdf": False},
     "exercise_links": {
         "dirs": ("vision",),
         "after": ("layout", "examples", "exercise_badges", "exercise_try"),
