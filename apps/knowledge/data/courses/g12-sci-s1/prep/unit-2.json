@@ -2,8 +2,8 @@
  "schema_version": 1,
  "course": "g12-sci-s1",
  "unit": 2,
- "status": "draft",
- "approval": null,
+ "status": "approved",
+ "approval": "اعتُمد من المالك — 2026-11-20",
  "audience": "طالب الصف الثاني عشر العلمي والتكنولوجي",
  "lessons": [
   {
