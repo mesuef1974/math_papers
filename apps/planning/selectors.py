@@ -51,6 +51,7 @@ from .domain.strategies import (
     build_flow,
     load_library,
 )
+from .example_clips import merge_groups
 from .models import (
     ClassOutcomeRecord,
     DeckBuild,
@@ -195,15 +196,14 @@ class PreparedPeriod:
     override: str = "none"  # none | active | invalid (تعديل محفوظ لم يعد يطابق الدرس فأُهمل)
 
 
-def _example_clips(course: str) -> dict[str, dict[int, int]] | None:
-    """عدد مقاطع كل مثال (الأصل وتتماته) من فهرس الأصول؛ None إن لم يُنشر للمقرر أصل بعد (فالمقطع معلَّق لا مفقود)."""
-    rows = Asset.objects.filter(course__slug=course, kind=Asset.Kind.EXAMPLE)
+def _example_clips(course: str) -> dict[str, dict[int, list[tuple[int, int]]]] | None:
+    """أبعاد مقاطع كل مثال (الأصل فتتماته بترتيبها) من فهرس الأصول؛ None إن لم يُنشر للمقرر أصل بعد (فالمقطع معلَّق لا مفقود)."""
+    rows = Asset.objects.filter(course__slug=course, kind=Asset.Kind.EXAMPLE).order_by("part")
     if not rows.exists():
         return None
-    clips: dict[str, dict[int, int]] = {}
-    for code, number in rows.values_list("lesson__code", "number"):
-        clips.setdefault(code, {})
-        clips[code][number] = clips[code].get(number, 0) + 1
+    clips: dict[str, dict[int, list[tuple[int, int]]]] = {}
+    for code, number, width, height in rows.values_list("lesson__code", "number", "width", "height"):
+        clips.setdefault(code, {}).setdefault(number, []).append((width, height))
     return clips
 
 
@@ -233,12 +233,14 @@ def lesson_preps(
         lesson = index[code]
         rows = [p for p in periods if p.lesson == code]
         enrichment = plan.enrichment_examples.get(code, ())
+        sizes = None if clips is None else clips.get(code, {})
         examples = lesson_examples(
             lesson,
             course,
             enrichment=enrichment,
             generators=generators.get(code, ()),
-            clips=None if clips is None else clips.get(code, {}),
+            clips=None if sizes is None else {n: len(parts) for n, parts in sizes.items()},
+            slides=None if sizes is None else {n: len(merge_groups(parts)) for n, parts in sizes.items()},
         )
         default_groups = allocate_examples([(e.n, e.weight) for e in examples], len(rows))
         edit, state = LessonOverride(), "none"

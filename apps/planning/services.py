@@ -41,6 +41,7 @@ from .domain.prep import Objective
 from .domain.prep_checks import CheckResult, blocking_failures
 from .domain.prep_override import OverrideError, dump_override, parse_override, unknown_removed
 from .domain.suggestion_apply import AcceptedSuggestion, ApplyResult, apply_accepted
+from .example_clips import merge_short_continuations
 from .models import (
     ClassOutcomeRecord,
     DeckBuild,
@@ -175,7 +176,8 @@ def build_period_deck_file(
 ) -> str:
     """يبني ملف PPTX للحصة ويضعه في التخزين تحت مفتاحه المشتق؛ idempotent: الملف الموجود لا يُعاد بناؤه.
 
-    المدخل تحضير الحصة (المشترك، أو تحضير المعلم بتعديله) ومقاطع أمثلتها من طبقة الأصول. معايير النموذج (S1 إلى S13) ثم معايير الملف (S7 وS8 وS12)
+    المدخل تحضير الحصة (المشترك، أو تحضير المعلم بتعديله) ومقاطع أمثلتها من طبقة الأصول، والتتمة القصيرة تُضمّ إلى ما قبلها
+    (`merge_short_continuations`) فتُرسم معه في شريحة واحدة. معايير النموذج (S1 إلى S13) ثم معايير الملف (S7 وS8 وS12)
     تُفحص قبل الكتابة، والحاجب الفاشل يُسجَّل سببًا في التخزين فتقرؤه الحالة ولا يُكتب ملف."""
     storage = storage or get_storage()
     item, assets, key = _prepared(course, lesson, k, owner)
@@ -183,7 +185,7 @@ def build_period_deck_file(
         return key
     try:
         clips = selectors.clips_of(assets, storage)
-        deck = build_period_deck(item.prep, clips)
+        deck = build_period_deck(item.prep, clips, merge_short_continuations(clips))
         if deck.key != key:
             raise DeckError("مقطع في التخزين لا يطابق تجزئته في فهرس الأصول")
         data = build_period_pptx(deck)

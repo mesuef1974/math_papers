@@ -325,9 +325,17 @@ def _timed(prep: PeriodPrep, slides: Sequence[PeriodSlide]) -> tuple[PeriodSlide
     return tuple(out)
 
 
-def build_period_deck(prep: PeriodPrep, clips: Sequence[ExampleClip]) -> PeriodDeck:
-    """عرض الحصة من تحضيرها ومقاطع أمثلتها. مقطع لمثال خارج الحصة، أو مثال بلا مقطع، أو أجزاء غير متصلة: خطأ لا تخمين."""
-    slides = _timed(prep, _draft_slides(prep, _clip_groups(prep, clips)))
+def build_period_deck(
+    prep: PeriodPrep, clips: Sequence[ExampleClip], shown: Sequence[ExampleClip] | None = None
+) -> PeriodDeck:
+    """عرض الحصة من تحضيرها ومقاطع أمثلتها. مقطع لمثال خارج الحصة، أو مثال بلا مقطع، أو أجزاء غير متصلة: خطأ لا تخمين.
+
+    `shown` المقاطع كما تُرسم حين تخالف المصدر (تتمة قصيرة ضُمّت إلى ما قبلها في طبقة المقاطع): الشرائح منها، والمفتاح
+    من `clips` المصدر دائمًا فيبقى محسوبًا من فهرس الأصول وحده."""
+    groups = _clip_groups(prep, clips)
+    if shown is not None:
+        groups = _clip_groups(prep, shown)
+    slides = _timed(prep, _draft_slides(prep, groups))
     return PeriodDeck(
         key=period_deck_key(prep, clips),
         course=prep.course,
