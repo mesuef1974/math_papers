@@ -10,7 +10,9 @@ from apps.papers.domain.generators import ERROR_KINDS, REGISTRY, Problem, tagged
 
 TAGGED_LESSONS = ("1.1", "1.2", "1.3")
 SEEDS = range(40)
-G12_TAGGED_LESSONS = ("1.1", "1.2", "1.3", "1.4")
+G12_TAGGED_LESSONS = tuple(
+    f"{unit}.{n}" for unit, last in ((1, 4), (2, 9), (3, 5)) for n in range(1, last + 1)
+)
 TAGGED = [
     pytest.param(fn, id=f"{lesson}-{fn.__name__}")
     for lesson in TAGGED_LESSONS
@@ -18,19 +20,22 @@ TAGGED = [
 ] + [
     pytest.param(fn, id=f"g12-{lesson}-{fn.__name__}")
     for lesson in G12_TAGGED_LESSONS
-    for fn in REGISTRY[(DEFAULT_COURSE, lesson)]
+    for fn in REGISTRY.get((DEFAULT_COURSE, lesson), [])
     if fn.__module__ == generators.__name__  # صيغ الرسوم والمستويات في وحداتها لم تُوسَم بعد
 ]
 
 
 def test_every_tagged_lesson_has_variants():
-    assert len(TAGGED) >= 19 + 18
+    assert len(TAGGED) >= 19 + 18 + 48
 
 
 @pytest.mark.parametrize("fn", TAGGED)
 def test_variant_tags_every_distractor(fn):
     for seed in SEEDS:
         problem = fn(random.Random(seed))
+        if not problem.wrong:  # صيغة مقالية فقط (mcq_ok=False): لا مشتتات تُوسم
+            assert problem.wrong_kinds == ()
+            continue
         assert len(problem.wrong_kinds) == len(problem.wrong) == 3, (seed, problem.wrong, problem.wrong_kinds)
         assert set(problem.wrong_kinds) <= ERROR_KINDS.keys(), (seed, problem.wrong_kinds)
 
