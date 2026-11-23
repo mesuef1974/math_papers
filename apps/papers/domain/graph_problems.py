@@ -10,7 +10,7 @@ import random
 
 import sympy as sp
 
-from .generators import Problem, m, variant, wrongs, x
+from .generators import Problem, m, tagged_wrongs, variant, x
 from .graphs import Graph, Window
 
 WINDOW = Window(-5, 5, -5, 5)
@@ -67,15 +67,21 @@ def discontinuity_type_from_graph(rng: random.Random) -> Problem:
         reason = f"النهاية موجودة وتساوي ${value}$، لكن قيمة الدالة عند ${c}$ لا تساويها أو غير معرفة."
         check = {"left": value, "right": value}
     answer = TYPES[kind]
+    wrong, kinds = tagged_wrongs(
+        answer,
+        *(("concept", t) for t in TYPES.values() if t != answer),
+        ("concept", CONTINUOUS),
+    )
     return Problem(
         "1.4",
         f"يبيّن الشكل التمثيل البياني للدالة $f$. ما نوع عدم الاتصال عند $x={c}$؟",
         answer,
-        wrongs(answer, *[t for t in TYPES.values() if t != answer], CONTINUOUS),
+        wrong,
         (reason, f"إذن عدم الاتصال {answer}."),
         "A",
         {"type": "graph_discontinuity", "graph": graph.as_dict(), "at": c, "kind": kind, **check},
         graph=graph.as_dict(),
+        wrong_kinds=kinds,
     )
 
 
@@ -86,14 +92,21 @@ def tangent_slope_from_graph(rng: random.Random) -> Problem:
     bend = rng.choice([-1, 1]) * sp.Rational(rng.choice([1, 2]), 2)
     f = bend * (x - a) ** 2 + slope * (x - a) + b
     graph = Graph(WINDOW).add_curve(f, -5, 5).add_line(slope, (a, b)).add_dot(a, b, closed=True)
-    pool = [m(b), m(-slope), m(slope + 1), m(slope - 1), m(a)]
+    pool = [
+        ("concept", m(b)),
+        ("sign", m(-slope)),
+        ("nearby", m(slope + 1)),
+        ("nearby", m(slope - 1)),
+        ("concept", m(a)),
+    ]
     if abs(slope) > 1:
-        pool.insert(0, m(sp.Rational(1, slope)))
+        pool.insert(0, ("swap", m(sp.Rational(1, slope))))
+    wrong, kinds = tagged_wrongs(m(slope), *pool)
     return Problem(
         "2.1",
         f"يبيّن الشكل منحنى الدالة $f$ والمماس المتقطع له عند النقطة $({a},{b})$. أوجد $f'({a})$.",
         m(slope),
-        wrongs(m(slope), *pool),
+        wrong,
         (
             f"المماس يمر بالنقطتين $({a},{b})$ و$({a + 1},{b + slope})$.",
             f"ميله $\\dfrac{{{b + slope}-({b})}}{{{a + 1}-({a})}}={slope}$، وميل المماس هو $f'({a})$.",
@@ -101,6 +114,7 @@ def tangent_slope_from_graph(rng: random.Random) -> Problem:
         "A",
         {"type": "graph_tangent", "graph": graph.as_dict(), "at": a, "y": b, "value": slope},
         graph=graph.as_dict(),
+        wrong_kinds=kinds,
     )
 
 
@@ -125,11 +139,19 @@ def monotonic_from_derivative_graph(rng: random.Random) -> Problem:
     answer = middle if ask_increasing == inner_positive else outer
     word = "تزايد" if ask_increasing else "تناقص"
     sign_word = "موجبة (فوق المحور x)" if ask_increasing else "سالبة (تحت المحور x)"
+    wrong, kinds = tagged_wrongs(
+        answer,
+        ("direction", middle),
+        ("direction", outer),
+        ("partial", interval_text(None, q)),
+        ("partial", interval_text(p, None)),
+        ("partial", interval_text(None, p)),
+    )
     return Problem(
         "3.1",
         f"يبيّن الشكل التمثيل البياني للمشتقة $f'$. حدد فترات {word} الدالة $f$.",
         answer,
-        wrongs(answer, middle, outer, interval_text(None, q), interval_text(p, None), interval_text(None, p)),
+        wrong,
         (
             f"$f'$ تقطع المحور x عند $x={p}$ و$x={q}$.",
             f"$f$ {'متزايدة' if ask_increasing else 'متناقصة'} حيث تكون $f'$ {sign_word}: {answer}",
@@ -144,6 +166,7 @@ def monotonic_from_derivative_graph(rng: random.Random) -> Problem:
             "answer_inner": answer == middle,
         },
         graph=graph.as_dict(),
+        wrong_kinds=kinds,
     )
 
 
@@ -160,7 +183,14 @@ def extremum_from_derivative_graph(rng: random.Random) -> Problem:
     found = [r for r, kind in changes.items() if kind == ("max" if want_max else "min")]
     answer = f"$x={found[0]}$" if found else NONE_FOUND
     word = "عظمى" if want_max else "صغرى"
-    pool = [f"$x={p}$", f"$x={q}$", NONE_FOUND, f"$x={p - 1}$", f"$x={q + 1}$"]
+    pool = [
+        ("direction", f"$x={p}$"),
+        ("direction", f"$x={q}$"),
+        ("concept", NONE_FOUND),
+        ("nearby", f"$x={p - 1}$"),
+        ("nearby", f"$x={q + 1}$"),
+    ]
+    wrong, kinds = tagged_wrongs(answer, *pool)
     steps = [f"$f'$ تساوي صفرًا عند $x={p}$ و$x={q}$."]
     if double:
         steps.append(f"عند $x={p}$ تمس $f'$ المحور دون أن تغيّر إشارتها، فلا قيمة قصوى هناك.")
@@ -171,11 +201,12 @@ def extremum_from_derivative_graph(rng: random.Random) -> Problem:
         "3.2",
         f"يبيّن الشكل التمثيل البياني للمشتقة $f'$. عند أي قيمة لـ $x$ يكون للدالة $f$ قيمة {word} محلية؟",
         answer,
-        wrongs(answer, *pool),
+        wrong,
         tuple(steps),
         "R",
         {"type": "graph_extremum", "graph": graph.as_dict(), "max": want_max, "answer": answer},
         graph=graph.as_dict(),
+        wrong_kinds=kinds,
     )
 
 
@@ -192,22 +223,28 @@ def concavity_from_derivative_graph(rng: random.Random) -> Problem:
     if ask == "inflection":
         answer = f"$x={h}$"
         question = "ما الإحداثي x لنقطة انعطاف منحنى الدالة $f$؟"
-        pool = [f"$x={h - r}$", f"$x={h + r}$", f"$x={h + 1}$", NONE_FOUND]
+        pool = [
+            ("concept", f"$x={h - r}$"),
+            ("concept", f"$x={h + r}$"),
+            ("nearby", f"$x={h + 1}$"),
+            ("concept", NONE_FOUND),
+        ]
     else:
         up = ask == "up"
         answer = interval_text(h, None) if up == increasing_right else interval_text(None, h)
         question = f"حدد الفترة التي يكون فيها منحنى الدالة $f$ مقعرًا إلى {'أعلى' if up else 'أسفل'}."
         pool = [
-            interval_text(h, None),
-            interval_text(None, h),
-            interval_text(h - r, h + r),
-            union_outside(h - r, h + r),
+            ("direction", interval_text(h, None)),
+            ("direction", interval_text(None, h)),
+            ("concept", interval_text(h - r, h + r)),
+            ("concept", union_outside(h - r, h + r)),
         ]
+    wrong, kinds = tagged_wrongs(answer, *pool)
     return Problem(
         "3.3",
         f"يبيّن الشكل التمثيل البياني للمشتقة $f'$. {question}",
         answer,
-        wrongs(answer, *pool),
+        wrong,
         (
             "منحنى $f$ مقعر إلى أعلى حيث $f'$ متزايدة، وإلى أسفل حيث $f'$ متناقصة.",
             f"$f'$ تغيّر اتجاهها عند رأسها $x={h}$، فهناك نقطة الانعطاف.",
@@ -216,6 +253,7 @@ def concavity_from_derivative_graph(rng: random.Random) -> Problem:
         "R",
         {"type": "graph_concavity", "graph": graph.as_dict(), "h": h, "ask": ask, "answer": answer},
         graph=graph.as_dict(),
+        wrong_kinds=kinds,
     )
 
 
@@ -252,6 +290,7 @@ def function_from_derivative_graph(rng: random.Random) -> Problem:
         },
         graph=graph.as_dict(),
         option_graphs=tuple(g.as_dict() for g in options),
+        wrong_kinds=("sign", "direction", "concept"),
         essay_ok=False,
     )
 
@@ -309,14 +348,17 @@ def monotonic_from_piecewise_graph(rng: random.Random) -> Problem:
     present = sorted({kind_of(s) for s in slopes})
     ask = rng.choice(present)
     answer = intervals_text(runs(xs, slopes, ask))
-    pool = [intervals_text(runs(xs, slopes, k)) for k in SLOPE_KINDS if k != ask]
+    pool = [("concept", intervals_text(runs(xs, slopes, k))) for k in SLOPE_KINDS if k != ask]
     closed = answer.replace("(", "[").replace(")", "]")
     word = SLOPE_KINDS[ask]
+    wrong, kinds = tagged_wrongs(
+        answer, *pool, ("partial", closed), ("concept", "$(-5,5)$"), ("concept", NONE_FOUND)
+    )
     return Problem(
         "3.1",
         f"يبيّن الشكل التمثيل البياني للدالة $f$ على الفترة $[-5,5]$. حدد فترات {word} الدالة.",
         answer,
-        wrongs(answer, *pool, closed, "$(-5,5)$", NONE_FOUND),
+        wrong,
         (
             "نقرأ الرسم من اليسار إلى اليمين: يصعد المنحنى في فترات التزايد، ويهبط في فترات التناقص، ويكون أفقيًا في فترات الثبات.",
             f"رؤوس الأجزاء عند $x={'،'.join(str(v) for v in xs[1:-1])}$، والفترات مفتوحة.",
@@ -325,6 +367,7 @@ def monotonic_from_piecewise_graph(rng: random.Random) -> Problem:
         "K",
         {"type": "graph_runs", "graph": graph.as_dict(), "kind": ask, "answer": answer},
         graph=graph.as_dict(),
+        wrong_kinds=kinds,
     )
 
 
@@ -344,18 +387,19 @@ def extrema_from_corner_graph(rng: random.Random) -> Problem:
     found, other = (maxima, minima) if want_max else (minima, maxima)
     answer = positions_text(found)
     word = "عظمى" if want_max else "صغرى"
+    wrong, kinds = tagged_wrongs(
+        answer,
+        ("direction", positions_text(other)),
+        ("partial", positions_text(xs[1:-1])),
+        ("partial", positions_text(found[:1])),
+        ("concept", positions_text([-5, 5])),
+        ("concept", NONE_FOUND),
+    )
     return Problem(
         "3.2",
         f"يبيّن الشكل التمثيل البياني للدالة $f$ على الفترة $[-5,5]$. عند أي قيم لـ $x$ يكون للدالة قيمة {word} محلية؟",
         answer,
-        wrongs(
-            answer,
-            positions_text(other),
-            positions_text(xs[1:-1]),
-            positions_text(found[:1]),
-            positions_text([-5, 5]),
-            NONE_FOUND,
-        ),
+        wrong,
         (
             "نرسم فترة مفتوحة صغيرة حول كل رأس ونقارن قيمة الدالة عنده بالقيم المجاورة.",
             "القيمة العظمى المحلية عند رأس يصعد قبله المنحنى ويهبط بعده، والصغرى عكسها، ولو لم تكن الدالة قابلة للاشتقاق عنده.",
@@ -364,4 +408,5 @@ def extrema_from_corner_graph(rng: random.Random) -> Problem:
         "K",
         {"type": "graph_corners", "graph": graph.as_dict(), "max": want_max, "answer": answer},
         graph=graph.as_dict(),
+        wrong_kinds=kinds,
     )
