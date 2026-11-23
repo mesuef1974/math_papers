@@ -10,7 +10,7 @@ import random
 
 import sympy as sp
 
-from .generators import Problem, cubic_with_critical_points, m, tex, variant, wrongs, x
+from .generators import Problem, cubic_with_critical_points, m, tagged_wrongs, tex, variant, x
 from .graph_problems import DERIV, derivative_graph, interval_text
 
 SHAPES = {
@@ -38,12 +38,13 @@ def shape_from_signs(rng: random.Random) -> Problem:
     witness = bulge * (x - a) ** 2 + slope * (x - a)
     answer = SHAPES[(increasing, up)]
     others = [text for key, text in SHAPES.items() if key != (increasing, up)]
+    wrong, kinds = tagged_wrongs(answer, *(("concept", text) for text in others))
     return Problem(
         "3.4",
         f"إذا كان $f'(x){sign_text(increasing)}$ و$f''(x){sign_text(up)}$ لكل $x$ في الفترة $({a},{b})$، "
         "فما شكل منحنى الدالة $f$ على هذه الفترة؟",
         answer,
-        wrongs(answer, *others),
+        wrong,
         (
             f"إشارة $f'$ {'موجبة فالدالة متزايدة' if increasing else 'سالبة فالدالة متناقصة'}.",
             f"إشارة $f''$ {'موجبة فالمنحنى مقعر لأعلى' if up else 'سالبة فالمنحنى مقعر لأسفل'}.",
@@ -51,6 +52,7 @@ def shape_from_signs(rng: random.Random) -> Problem:
         ),
         "K",
         {"type": "shape_signs", "f": witness, "low": a, "high": b, "increasing": increasing, "up": up},
+        wrong_kinds=kinds,
     )
 
 
@@ -62,11 +64,17 @@ def extremum_type_from_second_derivative(rng: random.Random) -> Problem:
     d = rng.randint(-5, 5)
     witness = sp.Rational(k, 2) * (x - c) ** 2 + d
     answer = MIN if k > 0 else MAX
+    wrong, kinds = tagged_wrongs(
+        answer,
+        ("direction", MAX if k > 0 else MIN),
+        ("concept", "نقطة انعطاف"),
+        ("concept", "لا يمكن الاستنتاج"),
+    )
     return Problem(
         "3.4",
         f"دالة $f$ قابلة للاشتقاق مرتين، و$f'({c})=0$ و$f''({c})={k}$. ماذا تستنتج عن الدالة عند $x={c}$؟",
         answer,
-        wrongs(answer, MAX if k > 0 else MIN, "نقطة انعطاف", "لا يمكن الاستنتاج"),
+        wrong,
         (
             f"$f'({c})=0$ فالنقطة حرجة.",
             f"$f''({c})={k}{'>' if k > 0 else '<'}0$ فالمنحنى مقعر {'لأعلى' if k > 0 else 'لأسفل'} عندها.",
@@ -74,6 +82,7 @@ def extremum_type_from_second_derivative(rng: random.Random) -> Problem:
         ),
         "K",
         {"type": "second_derivative_test", "f": witness, "at": c, "max": k < 0},
+        wrong_kinds=kinds,
     )
 
 
@@ -119,17 +128,18 @@ def shape_interval_from_derivative_graph(rng: random.Random) -> Problem:
     shape = SHAPES[(True, True)] if up_and_increasing else SHAPES[(False, False)]
     sign_word = "موجبة" if up_and_increasing else "سالبة"
     slope_word = "متزايدة" if up_and_increasing else "متناقصة"
+    wrong, kinds = tagged_wrongs(
+        answer,
+        ("direction", middle if answer == right else right),
+        ("concept", interval_text(None, p)),
+        ("partial", f"$({tex(v)},{q})$"),
+        ("partial", interval_text(p, q)),
+    )
     return Problem(
         "3.4",
         f"يبيّن الشكل التمثيل البياني للمشتقة $f'$. حدد الفترة التي يكون فيها منحنى الدالة $f$ {shape}.",
         answer,
-        wrongs(
-            answer,
-            middle if answer == right else right,
-            interval_text(None, p),
-            f"$({tex(v)},{q})$",
-            interval_text(p, q),
-        ),
+        wrong,
         (
             f"{shape.split(' و')[0]}: حيث $f'$ {sign_word}.",
             f"{'مقعر لأعلى' if up_and_increasing else 'مقعر لأسفل'}: حيث $f'$ {slope_word}.",
@@ -145,6 +155,7 @@ def shape_interval_from_derivative_graph(rng: random.Random) -> Problem:
             "up": up_and_increasing,
         },
         graph=graph.as_dict(),
+        wrong_kinds=kinds,
     )
 
 
