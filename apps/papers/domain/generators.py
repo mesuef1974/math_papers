@@ -908,14 +908,21 @@ def average_rate(rng: random.Random) -> Problem:
     f = p * x**2 + q * x + r
     change = f.subs(x, b) - f.subs(x, a)
     value = sp.Rational(change, b - a)
+    wrong, kinds = tagged_wrongs(
+        value,
+        ("formula", change),
+        ("concept", sp.diff(f, x).subs(x, a)),
+        ("formula", f.subs(x, a)),
+    )
     return Problem(
         "2.1",
         f"أوجد متوسط معدل تغير الدالة $f(x)={tex(f)}$ على الفترة $[{a},{b}]$.",
         m(value),
-        wrongs(value, change, sp.diff(f, x).subs(x, a), f.subs(x, a)),
+        wrong,
         (f"${frac(f'f({b})-f({a})', minus(b, a))}={frac(change, b - a)}={tex(value)}$",),
         "A",
         {"type": "average", "f": f, "a": a, "b": b, "value": value},
+        wrong_kinds=kinds,
     )
 
 
@@ -926,14 +933,21 @@ def instantaneous_velocity(rng: random.Random) -> Problem:
     d = sp.diff(f, x)
     value = d.subs(x, t0)
     shown = tex(f).replace("x", "t")
+    wrong, kinds = tagged_wrongs(
+        value,
+        ("concept", f.subs(x, t0)),
+        ("concept", sp.Rational(f.subs(x, t0), t0)),
+        ("formula", 2 * p),
+    )
     return Problem(
         "2.1",
         f"يتحرك جسم بحيث موقعه بالأمتار بعد $t$ ثانية هو $s(t)={shown}$. أوجد سرعته اللحظية عند $t={t0}$.",
         m(value),
-        wrongs(value, f.subs(x, t0), sp.Rational(f.subs(x, t0), t0), 2 * p),
+        wrong,
         (f"$v(t)=s'(t)={tex(d).replace('x', 't')}$", f"$v({t0})={tex(value)}$"),
         "A",
         {"type": "derivative", "f": f, "at": t0, "value": value},
+        wrong_kinds=kinds,
     )
 
 
@@ -943,14 +957,21 @@ def derivative_as_limit_h(rng: random.Random) -> Problem:
     f = p * x**2 + q * x
     d = sp.diff(f, x)
     value = d.subs(x, a)
+    wrong, kinds = tagged_wrongs(
+        value,
+        ("concept", f.subs(x, a)),
+        ("formula", 2 * p * a),
+        ("concept", 0),
+    )
     return Problem(
         "2.2",
         rf"إذا كانت $f(x)={tex(f)}$ فما قيمة $\lim\limits_{{h \to 0}}\dfrac{{f({a}+h)-f({a})}}{{h}}$؟",
         m(value),
-        wrongs(value, f.subs(x, a), 2 * p * a, 0),
+        wrong,
         (f"هذه النهاية هي تعريف $f'({a})$.", f"$f'(x)={tex(d)}$", f"$f'({a})={tex(value)}$"),
         "K",
         {"type": "derivative", "f": f, "at": a, "value": value},
+        wrong_kinds=kinds,
     )
 
 
@@ -960,14 +981,21 @@ def derivative_as_limit_x(rng: random.Random) -> Problem:
     f = p * x**3
     d = sp.diff(f, x)
     value = d.subs(x, a)
+    wrong, kinds = tagged_wrongs(
+        value,
+        ("concept", f.subs(x, a)),
+        ("square", 3 * p * a),
+        ("concept", 0),
+    )
     return Problem(
         "2.2",
         rf"إذا كانت $f(x)={tex(f)}$ فما قيمة $\lim\limits_{{x \to {a}}}\dfrac{{f(x)-f({a})}}{{{tex(x - a)}}}$؟",
         m(value),
-        wrongs(value, f.subs(x, a), 3 * p * a, 0),
+        wrong,
         (f"هذه النهاية هي $f'({a})$.", f"$f'(x)={tex(d)}$", f"$f'({a})={tex(value)}$"),
         "K",
         {"type": "derivative", "f": f, "at": a, "value": value},
+        wrong_kinds=kinds,
     )
 
 
@@ -979,11 +1007,16 @@ def power_rule_with_root(rng: random.Random) -> Problem:
     f = a * x**3 + b / x + c * sp.sqrt(x)
     d = sp.diff(f, x)
     value = d.subs(x, x0)
+    wrong, kinds = tagged_wrongs(
+        value,
+        ("concept", f.subs(x, x0)),
+        ("partial", sp.diff(a * x**3 + c * sp.sqrt(x), x).subs(x, x0)),
+    )
     return Problem(
         "2.3",
         f"إذا كانت $y={tex(f)}$ فأوجد ${DYDX}$ ثم احسب قيمتها عند $x={x0}$.",
         m(value),
-        wrongs(value, f.subs(x, x0), sp.diff(a * x**3 + c * sp.sqrt(x), x).subs(x, x0)),
+        wrong,
         (
             f"نكتب $y={a}x^3{b:+d}x^{{-1}}{c:+d}x^{{1/2}}$",
             f"${DYDX}={tex(d)}$",
@@ -991,6 +1024,7 @@ def power_rule_with_root(rng: random.Random) -> Problem:
         ),
         "A",
         {"type": "derivative", "f": f, "at": x0, "value": value},
+        wrong_kinds=kinds,
     )
 
 
@@ -1001,14 +1035,20 @@ def power_rule_negative_exponent(rng: random.Random) -> Problem:
     f = a * x**4 + b / x**2 + c
     d = sp.diff(f, x)
     value = d.subs(x, x0)
+    wrong, kinds = tagged_wrongs(
+        value,
+        ("concept", f.subs(x, x0)),
+        ("partial", 4 * a * x0**3),
+    )
     return Problem(
         "2.3",
         f"إذا كانت $y={tex(f)}$ فأوجد ${DYDX}$ ثم احسب قيمتها عند $x={x0}$.",
         m(value),
-        wrongs(value, f.subs(x, x0), 4 * a * x0**3),
+        wrong,
         (f"نكتب الحد الكسري بالصورة ${b}x^{{-2}}$", f"${DYDX}={tex(d)}$", f"القيمة ${tex(value)}$"),
         "A",
         {"type": "derivative", "f": f, "at": x0, "value": value},
+        wrong_kinds=kinds,
     )
 
 
@@ -1018,11 +1058,17 @@ def product_rule(rng: random.Random) -> Problem:
     x0 = rng.randint(-2, 3)
     u, v = a * x + b, x**2 + c
     value = sp.diff(u * v, x).subs(x, x0)
+    wrong, kinds = tagged_wrongs(
+        value,
+        ("formula", a * 2 * x0),
+        ("concept", (u * v).subs(x, x0)),
+        ("partial", a * v.subs(x, x0)),
+    )
     return Problem(
         "2.4",
         f"إذا كانت $y=({tex(u)})({tex(v)})$ فأوجد قيمة ${DYDX}$ عند $x={x0}$.",
         m(value),
-        wrongs(value, a * 2 * x0, (u * v).subs(x, x0), a * v.subs(x, x0)),
+        wrong,
         (
             rf"$u={tex(u)},\ v={tex(v)},\ u'={a},\ v'=2x$",
             f"${DYDX}=u'v+uv'=({a})({tex(v)})+({tex(u)})(2x)$",
@@ -1030,6 +1076,7 @@ def product_rule(rng: random.Random) -> Problem:
         ),
         "A",
         {"type": "derivative", "f": u * v, "at": x0, "value": value},
+        wrong_kinds=kinds,
     )
 
 
@@ -1042,11 +1089,17 @@ def quotient_rule(rng: random.Random) -> Problem:
     u, v = a * x + b, c * x + d
     value = sp.Rational(a * d - b * c, (c * x0 + d) ** 2)
     square = f"({tex(v)})^2"
+    wrong, kinds = tagged_wrongs(
+        value,
+        ("sign", -value),
+        ("formula", sp.Rational(a, c)),
+        ("concept", (u / v).subs(x, x0)),
+    )
     return Problem(
         "2.4",
         f"إذا كانت $y={frac(u, v)}$ فأوجد قيمة ${DYDX}$ عند $x={x0}$.",
         m(value),
-        wrongs(value, -value, sp.Rational(a, c), (u / v).subs(x, x0)),
+        wrong,
         (
             rf"${DYDX}=\dfrac{{u'v-uv'}}{{v^2}}={frac(f'({a})({tex(v)})-({tex(u)})({c})', square)}$",
             f"${DYDX}={frac(a * d - b * c, square)}$",
@@ -1054,6 +1107,7 @@ def quotient_rule(rng: random.Random) -> Problem:
         ),
         "A",
         {"type": "derivative", "f": u / v, "at": x0, "value": value},
+        wrong_kinds=kinds,
     )
 
 
@@ -1064,17 +1118,24 @@ def chain_power(rng: random.Random) -> Problem:
     inner = a * x**2 + b
     f = inner**n
     value = sp.diff(f, x).subs(x, x0)
+    wrong, kinds = tagged_wrongs(
+        value,
+        ("partial", n * inner.subs(x, x0) ** (n - 1)),
+        ("concept", f.subs(x, x0)),
+        ("partial", 2 * a * x0),
+    )
     return Problem(
         "2.5",
         f"إذا كانت $y=({tex(inner)})^{n}$ فأوجد قيمة ${DYDX}$ عند $x={x0}$.",
         m(value),
-        wrongs(value, n * inner.subs(x, x0) ** (n - 1), f.subs(x, x0), 2 * a * x0),
+        wrong,
         (
             rf"${DYDX}={n}({tex(inner)})^{{{n - 1}}}\cdot({tex(sp.diff(inner, x))})$",
             f"عند $x={x0}$ القيمة ${tex(value)}$",
         ),
         "A",
         {"type": "derivative", "f": f, "at": x0, "value": value},
+        wrong_kinds=kinds,
     )
 
 
@@ -1085,14 +1146,21 @@ def chain_root(rng: random.Random) -> Problem:
     b = root**2 - a * x0
     f = sp.sqrt(a * x + b)
     value = sp.Rational(a, 2 * root)
+    wrong, kinds = tagged_wrongs(
+        value,
+        ("partial", sp.Rational(1, 2 * root)),
+        ("concept", sp.Integer(root)),
+        ("formula", sp.Rational(a, root)),
+    )
     return Problem(
         "2.5",
         f"إذا كانت $y={tex(f)}$ فأوجد قيمة ${DYDX}$ عند $x={x0}$.",
         m(value),
-        wrongs(value, sp.Rational(1, 2 * root), sp.Integer(root), sp.Rational(a, root)),
+        wrong,
         (f"${DYDX}={frac(a, 2 * f)}$", f"عند $x={x0}$ القيمة ${tex(value)}$"),
         "A",
         {"type": "derivative", "f": f, "at": x0, "value": value},
+        wrong_kinds=kinds,
     )
 
 
@@ -1101,14 +1169,21 @@ def derivative_log_quadratic(rng: random.Random) -> Problem:
     a, b = rng.randint(1, 6), rng.randint(1, 9)
     inner = a * x**2 + b
     f, d = sp.log(inner), 2 * a * x / inner
+    wrong, kinds = tagged_wrongs(
+        d,
+        ("partial", 1 / inner),
+        ("partial", 2 * a * x),
+        ("formula", a * x / inner),
+    )
     return Problem(
         "2.6",
         f"أوجد ${DYDX}$ إذا كانت $y={tex(f)}$.",
         m(d),
-        wrongs(d, 1 / inner, 2 * a * x, a * x / inner),
+        wrong,
         (rf"${DYDX}=\dfrac{{u'}}{{u}}$ حيث $u={tex(inner)}$", f"${DYDX}={tex(d)}$"),
         "A",
         {"type": "function", "f": f, "d": d, "order": 1},
+        wrong_kinds=kinds,
     )
 
 
@@ -1117,17 +1192,25 @@ def derivative_x_exponential(rng: random.Random) -> Problem:
     a, k = nz(rng, -4, 5), nz(rng, -3, 3)
     e = sp.exp(a * x)
     f, d = k * x * e, k * (1 + a * x) * e
+    wrong, kinds = tagged_wrongs(
+        d,
+        ("partial", k * a * e),
+        ("partial", k * e),
+        ("formula", k * (x + a) * e),
+        ("partial", (1 + a * x) * e),
+    )
     return Problem(
         "2.6",
         f"أوجد ${DYDX}$ إذا كانت $y={tex(f)}$.",
         m(d),
-        wrongs(d, k * a * e, k * e, k * (x + a) * e, (1 + a * x) * e),
+        wrong,
         (
             rf"قاعدة الضرب: $u={tex(k * x)},\ v={tex(e)}$",
             rf"${DYDX}={tex(k * e)}+{tex(k * x)}\cdot {tex(a * e)}={tex(d)}$",
         ),
         "A",
         {"type": "function", "f": f, "d": d, "order": 1},
+        wrong_kinds=kinds,
     )
 
 
@@ -1136,14 +1219,21 @@ def derivative_power_log(rng: random.Random) -> Problem:
     n, k = rng.randint(2, 5), nz(rng, -3, 3)
     f = k * x**n * sp.log(x)
     d = k * n * x ** (n - 1) * sp.log(x) + k * x ** (n - 1)
+    wrong, kinds = tagged_wrongs(
+        d,
+        ("formula", k * n * x ** (n - 1) / x),
+        ("partial", k * n * x ** (n - 1) * sp.log(x)),
+        ("partial", k * x ** (n - 1)),
+    )
     return Problem(
         "2.6",
         f"أوجد ${DYDX}$ إذا كانت $y={tex(f)}$ حيث $x>0$.",
         m(d),
-        wrongs(d, k * n * x ** (n - 1) / x, k * n * x ** (n - 1) * sp.log(x), k * x ** (n - 1)),
+        wrong,
         (rf"قاعدة الضرب: $u={tex(k * x**n)},\ v=\ln x$", f"${DYDX}={tex(d)}$"),
         "A",
         {"type": "function", "f": f, "d": d, "order": 1, "positive": True},
+        wrong_kinds=kinds,
     )
 
 
@@ -1152,14 +1242,21 @@ def derivative_sine_cosine(rng: random.Random) -> Problem:
     a, b, n = nz(rng, -4, 5), nz(rng, -4, 5), rng.randint(2, 5)
     s, c = sp.sin(n * x), sp.cos(n * x)
     f, d = a * s + b * c, a * n * c - b * n * s
+    wrong, kinds = tagged_wrongs(
+        d,
+        ("partial", a * c - b * s),
+        ("sign", a * n * c + b * n * s),
+        ("sign", -d),
+    )
     return Problem(
         "2.7",
         f"أوجد ${DYDX}$ إذا كانت $y={tex(f)}$.",
         m(d),
-        wrongs(d, a * c - b * s, a * n * c + b * n * s, -d),
+        wrong,
         (f"نشتق كل حد بقاعدة السلسلة، والمشتقة الداخلية ${n}$.", f"${DYDX}={tex(d)}$"),
         "A",
         {"type": "function", "f": f, "d": d, "order": 1},
+        wrong_kinds=kinds,
     )
 
 
@@ -1167,14 +1264,21 @@ def derivative_sine_cosine(rng: random.Random) -> Problem:
 def derivative_tangent(rng: random.Random) -> Problem:
     n, k = rng.randint(2, 6), nz(rng, -4, 4)
     f, d = k * sp.tan(n * x), k * n * sp.sec(n * x) ** 2
+    wrong, kinds = tagged_wrongs(
+        d,
+        ("partial", k * sp.sec(n * x) ** 2),
+        ("formula", k * n * sp.sec(n * x)),
+        ("concept", -k * n * sp.csc(n * x) ** 2),
+    )
     return Problem(
         "2.7",
         f"أوجد ${DYDX}$ إذا كانت $y={tex(f)}$.",
         m(d),
-        wrongs(d, k * sp.sec(n * x) ** 2, k * n * sp.sec(n * x), -k * n * sp.csc(n * x) ** 2),
+        wrong,
         (r"$\dfrac{d}{dx}\tan u=u'\sec^2 u$", f"${DYDX}={tex(d)}$"),
         "A",
         {"type": "function", "f": f, "d": d, "order": 1},
+        wrong_kinds=kinds,
     )
 
 
@@ -1183,14 +1287,21 @@ def derivative_x_sine(rng: random.Random) -> Problem:
     n, k = rng.randint(2, 5), nz(rng, -3, 3)
     s, c = sp.sin(n * x), sp.cos(n * x)
     f, d = k * x * s, k * s + k * n * x * c
+    wrong, kinds = tagged_wrongs(
+        d,
+        ("partial", k * n * c),
+        ("partial", k * s + k * x * c),
+        ("sign", k * s - k * n * x * c),
+    )
     return Problem(
         "2.7",
         f"أوجد ${DYDX}$ إذا كانت $y={tex(f)}$.",
         m(d),
-        wrongs(d, k * n * c, k * s + k * x * c, k * s - k * n * x * c),
+        wrong,
         (rf"قاعدة الضرب: $u={tex(k * x)},\ v={tex(s)}$", f"${DYDX}={tex(d)}$"),
         "A",
         {"type": "function", "f": f, "d": d, "order": 1},
+        wrong_kinds=kinds,
     )
 
 
@@ -1199,14 +1310,21 @@ def implicit_circle(rng: random.Random) -> Problem:
     p, q, r = rng.choice([(3, 4, 5), (4, 3, 5), (6, 8, 10), (8, 6, 10), (5, 12, 13), (12, 5, 13)])
     p, q = p * rng.choice([1, -1]), q * rng.choice([1, -1])
     value = sp.Rational(-p, q)
+    wrong, kinds = tagged_wrongs(
+        value,
+        ("sign", -value),
+        ("swap", sp.Rational(q, p)),
+        ("swap", sp.Rational(-q, p)),
+    )
     return Problem(
         "2.8",
         f"أوجد ${DYDX}$ عند النقطة $({p},{q})$ على المنحنى $x^2+y^2={r * r}$.",
         m(value),
-        wrongs(value, -value, sp.Rational(q, p), sp.Rational(-q, p)),
+        wrong,
         (f"$2x+2y{DYDX}=0$", f"${DYDX}=-\\dfrac{{x}}{{y}}$", f"عند النقطة القيمة ${tex(value)}$"),
         "A",
         {"type": "implicit", "F": x**2 + y**2 - r * r, "point": (p, q), "value": value},
+        wrong_kinds=kinds,
     )
 
 
@@ -1218,11 +1336,17 @@ def implicit_mixed_term(rng: random.Random) -> Problem:
     c = p * p + a * p * q + q * q
     value = sp.Rational(-(2 * p + a * q), a * p + 2 * q)
     curve = tex(x**2 + a * x * y + y**2)
+    wrong, kinds = tagged_wrongs(
+        value,
+        ("sign", -value),
+        ("partial", sp.Rational(-p, q)),
+        ("swap", sp.Rational(-q, p)),
+    )
     return Problem(
         "2.8",
         f"أوجد ${DYDX}$ عند النقطة $({p},{q})$ على المنحنى ${curve}={c}$.",
         m(value),
-        wrongs(value, -value, sp.Rational(-p, q), sp.Rational(-q, p)),
+        wrong,
         (
             rf"$2x+{a}\left(y+x{DYDX}\right)+2y{DYDX}=0$",
             f"${DYDX}={frac(-(2 * x + a * y), a * x + 2 * y)}$",
@@ -1230,6 +1354,7 @@ def implicit_mixed_term(rng: random.Random) -> Problem:
         ),
         "R",
         {"type": "implicit", "F": x**2 + a * x * y + y**2 - c, "point": (p, q), "value": value},
+        wrong_kinds=kinds,
     )
 
 
@@ -1240,14 +1365,21 @@ def second_derivative_polynomial(rng: random.Random) -> Problem:
     f = a * x**4 + b * x**3 + c * x
     first, second = sp.diff(f, x), sp.diff(f, x, 2)
     value = second.subs(x, x0)
+    wrong, kinds = tagged_wrongs(
+        value,
+        ("concept", first.subs(x, x0)),
+        ("concept", f.subs(x, x0)),
+        ("formula", sp.diff(f, x, 3).subs(x, x0)),
+    )
     return Problem(
         "2.9",
         f"إذا كانت $f(x)={tex(f)}$ فأوجد $f''({x0})$.",
         m(value),
-        wrongs(value, first.subs(x, x0), f.subs(x, x0), sp.diff(f, x, 3).subs(x, x0)),
+        wrong,
         (f"$f'(x)={tex(first)}$", f"$f''(x)={tex(second)}$", f"$f''({x0})={tex(value)}$"),
         "A",
         {"type": "derivative", "f": f, "at": x0, "value": value, "order": 2},
+        wrong_kinds=kinds,
     )
 
 
@@ -1256,14 +1388,21 @@ def third_derivative_exponential(rng: random.Random) -> Problem:
     a, k = rng.choice([-3, -2, 2, 3, 4]), nz(rng, -3, 3)
     f = k * sp.exp(a * x)
     d = a**3 * f
+    wrong, kinds = tagged_wrongs(
+        d,
+        ("formula", a**2 * f),
+        ("formula", 3 * a * f),
+        ("formula", a * f),
+    )
     return Problem(
         "2.9",
         rf"أوجد $\dfrac{{d^3y}}{{dx^3}}$ إذا كانت $y={tex(f)}$.",
         m(d),
-        wrongs(d, a**2 * f, 3 * a * f, a * f),
+        wrong,
         (f"كل اشتقاق يضرب الدالة في ${a}$.", rf"$\dfrac{{d^3y}}{{dx^3}}={tex(d)}$"),
         "A",
         {"type": "function", "f": f, "d": d, "order": 3},
+        wrong_kinds=kinds,
     )
 
 
@@ -1272,41 +1411,49 @@ def second_derivative_sine(rng: random.Random) -> Problem:
     n, k = rng.randint(2, 6), nz(rng, -4, 4)
     f = k * sp.sin(n * x)
     d = -(n**2) * f
+    wrong, kinds = tagged_wrongs(
+        d,
+        ("sign", -d),
+        ("concept", k * n * sp.cos(n * x)),
+        ("formula", -n * f),
+    )
     return Problem(
         "2.9",
         rf"أوجد $\dfrac{{d^2y}}{{dx^2}}$ إذا كانت $y={tex(f)}$.",
         m(d),
-        wrongs(d, -d, k * n * sp.cos(n * x), -n * f),
+        wrong,
         (f"${DYDX}={tex(k * n * sp.cos(n * x))}$", rf"$\dfrac{{d^2y}}{{dx^2}}={tex(d)}$"),
         "A",
         {"type": "function", "f": f, "d": d, "order": 2},
+        wrong_kinds=kinds,
     )
 
 
-def tangent_line(f: sp.Expr, at: int) -> tuple[sp.Expr, sp.Expr, sp.Expr, tuple[str, ...]]:
+def tangent_line(f: sp.Expr, at: int) -> tuple[sp.Expr, sp.Expr, sp.Expr, tuple[str, ...], tuple[str, ...]]:
     """الميل وقيمة الدالة والمستقيم عند نقطة، وبدائل أخطائه الشائعة (الميل مكان القيمة، العمودي، الإشارة)."""
     slope = sp.simplify(sp.diff(f, x).subs(x, at))
     point = sp.simplify(f.subs(x, at))
     line = sp.expand(slope * x + point - slope * at)
     bad = [
-        sp.expand(slope * x + point),
-        sp.expand(point * x + slope - point * at),
-        sp.expand(-slope * x + point + slope * at),
-        sp.expand(slope * x - point + slope * at),
-        sp.expand(slope * x + point - slope * at + 1),
+        ("formula", sp.expand(slope * x + point)),
+        ("swap", sp.expand(point * x + slope - point * at)),
+        ("sign", sp.expand(-slope * x + point + slope * at)),
+        ("sign", sp.expand(slope * x - point + slope * at)),
+        ("nearby", sp.expand(slope * x + point - slope * at + 1)),
     ]
     if slope != 0:
-        bad.insert(2, sp.expand(-x / slope + point + at / slope))
-    return slope, point, line, wrongs(f"$y={tex(line)}$", *(f"$y={tex(b)}$" for b in bad))
+        bad.insert(2, ("concept", sp.expand(-x / slope + point + at / slope)))
+    texts, kinds = tagged_wrongs(f"$y={tex(line)}$", *((kind, f"$y={tex(b)}$") for kind, b in bad))
+    return slope, point, line, texts, kinds
 
 
 def tangent_problem(lesson: str, stem: str, f: sp.Expr, at: int, first: str, level: str) -> Problem:
-    slope, point, line, bad = tangent_line(f, at)
+    slope, point, line, wrong, kinds = tangent_line(f, at)
     return Problem(
         lesson,
         stem,
         f"$y={tex(line)}$",
-        bad,
+        wrong,
         (
             first,
             f"النقطة $({at},{tex(point)})$ والميل ${tex(slope)}$.",
@@ -1314,6 +1461,7 @@ def tangent_problem(lesson: str, stem: str, f: sp.Expr, at: int, first: str, lev
         ),
         level,
         {"type": "tangent", "f": f, "at": at, "slope": slope, "intercept": line.subs(x, 0)},
+        wrong_kinds=kinds,
     )
 
 
@@ -1323,11 +1471,18 @@ def derivative_rational_definition(rng: random.Random) -> Problem:
     c, k = rng.randint(-5, 5), nz(rng, -6, 6)
     f, d = k / (x - c), -k / (x - c) ** 2
     shifted = f"x+h{-c:+d}" if c else "x+h"
+    wrong, kinds = tagged_wrongs(
+        d,
+        ("sign", -d),
+        ("concept", k / (x - c)),
+        ("formula", sp.Integer(-k) / (x - c)),
+        ("formula", -k / (x - c) ** 3),
+    )
     return Problem(
         "2.2",
         f"استعمل تعريف المشتقة لإيجاد $f'(x)$ إذا كانت $f(x)={tex(f)}$.",
         m(d),
-        wrongs(d, -d, k / (x - c), sp.Integer(-k) / (x - c), -k / (x - c) ** 3),
+        wrong,
         (
             rf"$f'(x)=\lim\limits_{{h \to 0}}\dfrac{{1}}{{h}}\left({frac(k, shifted)}-{tex(f)}\right)$",
             rf"بتوحيد المقامين: $\dfrac{{{-k}h}}{{h({shifted})({tex(x - c)})}}$، ونختصر $h$.",
@@ -1335,6 +1490,7 @@ def derivative_rational_definition(rng: random.Random) -> Problem:
         ),
         "A",
         {"type": "function", "f": f, "d": d, "order": 1},
+        wrong_kinds=kinds,
     )
 
 
@@ -1367,12 +1523,19 @@ def weight_growth_rate(rng: random.Random) -> Problem:
     t = sp.Symbol("t")
     weight = a * sp.sqrt(t + b)
     value = sp.Rational(a, 2 * root)
+    wrong, kinds = tagged_wrongs(
+        value,
+        ("formula", sp.Rational(a, root)),
+        ("partial", sp.Rational(1, 2 * root)),
+        ("concept", a * root),
+        ("formula", sp.Rational(a * root, t0)),
+    )
     return Problem(
         "2.2",
         f"وزن طفل بالكيلوغرام بعد $t$ شهرًا يُعطى تقريبًا بـ $W(t)={tex(weight)}$. "
         f"أوجد معدل تغير وزنه اللحظي عند $t={t0}$.",
         m(value),
-        wrongs(value, sp.Rational(a, root), sp.Rational(1, 2 * root), a * root, sp.Rational(a * root, t0)),
+        wrong,
         (
             rf"$W'({t0})=\lim\limits_{{h \to 0}}\dfrac{{{a}\sqrt{{{root**2}+h}}-{a * root}}}{{h}}$",
             rf"نضرب في المرافق: $\dfrac{{{a}h}}{{h\left(\sqrt{{{root**2}+h}}+{root}\right)}}$، ثم $h\to 0$.",
@@ -1380,6 +1543,7 @@ def weight_growth_rate(rng: random.Random) -> Problem:
         ),
         "A",
         {"type": "derivative", "f": weight.subs(t, x), "at": t0, "value": value},
+        wrong_kinds=kinds,
     )
 
 
@@ -1398,14 +1562,16 @@ def derivative_of_constant(rng: random.Random) -> Problem:
     )
     name, var = rng.choice([("y", "x"), ("f(x)", "x"), ("s(t)", "t"), ("g(u)", "u")])
     symbol = rf"\dfrac{{d}}{{d{var}}}\left({name}\right)" if name != "y" else DYDX
+    wrong_options, kinds = tagged_wrongs("$0$", ("concept", wrong), ("concept", value), ("concept", 1))
     return Problem(
         "2.3",
         f"إذا كانت ${name}={tex(value)}$ فأوجد ${symbol}$.",
         "$0$",
-        wrongs("$0$", wrong, value, 1),
+        wrong_options,
         (f"${tex(value)}$ عدد ثابت لا يحوي ${var}$.", f"مشتقة الثابت صفر: ${symbol}=0$"),
         "K",
         {"type": "function", "f": value + 0 * x, "d": sp.Integer(0), "order": 1},
+        wrong_kinds=kinds,
     )
 
 
@@ -1417,16 +1583,17 @@ def product_root_quadratic(rng: random.Random) -> Problem:
     v = a * x**2 + b * x + c
     f = sp.sqrt(x) * v
     value = sp.diff(f, x).subs(x, x0)
+    wrong, kinds = tagged_wrongs(
+        value,
+        ("formula", sp.diff(v, x).subs(x, x0) / (2 * sp.sqrt(x0))),
+        ("partial", sp.sqrt(x0) * sp.diff(v, x).subs(x, x0)),
+        ("concept", f.subs(x, x0)),
+    )
     return Problem(
         "2.4",
         rf"إذا كانت $y=\sqrt{{x}}\,({tex(v)})$ فأوجد قيمة ${DYDX}$ عند $x={x0}$.",
         m(value),
-        wrongs(
-            value,
-            sp.diff(v, x).subs(x, x0) / (2 * sp.sqrt(x0)),
-            sp.sqrt(x0) * sp.diff(v, x).subs(x, x0),
-            f.subs(x, x0),
-        ),
+        wrong,
         (
             rf"$u=x^{{1/2}},\ v={tex(v)},\ u'=\dfrac{{1}}{{2}}x^{{-1/2}},\ v'={tex(sp.diff(v, x))}$",
             rf"${DYDX}=\dfrac{{{tex(v)}}}{{2\sqrt{{x}}}}+\sqrt{{x}}\,({tex(sp.diff(v, x))})$",
@@ -1434,6 +1601,7 @@ def product_root_quadratic(rng: random.Random) -> Problem:
         ),
         "A",
         {"type": "derivative", "f": f, "at": x0, "value": value},
+        wrong_kinds=kinds,
     )
 
 
@@ -1462,16 +1630,17 @@ def product_with_chain(rng: random.Random) -> Problem:
     inner = x**2 + b
     f = (x + a) * inner**n
     value = sp.diff(f, x).subs(x, x0)
+    wrong, kinds = tagged_wrongs(
+        value,
+        ("partial", inner.subs(x, x0) ** n),
+        ("partial", n * inner.subs(x, x0) ** (n - 1) * 2 * x0),
+        ("partial", (x0 + a) * n * inner.subs(x, x0) ** (n - 1)),
+    )
     return Problem(
         "2.5",
         f"إذا كانت $y=({tex(x + a)})({tex(inner)})^{n}$ فأوجد قيمة ${DYDX}$ عند $x={x0}$.",
         m(value),
-        wrongs(
-            value,
-            inner.subs(x, x0) ** n,
-            n * inner.subs(x, x0) ** (n - 1) * 2 * x0,
-            (x0 + a) * n * inner.subs(x, x0) ** (n - 1),
-        ),
+        wrong,
         (
             rf"${DYDX}=({tex(inner)})^{n}+({tex(x + a)})\cdot {n}({tex(inner)})^{{{n - 1}}}\cdot 2x$",
             rf"$={tex(sp.factor(sp.diff(f, x)))}$",
@@ -1479,6 +1648,7 @@ def product_with_chain(rng: random.Random) -> Problem:
         ),
         "A",
         {"type": "derivative", "f": f, "at": x0, "value": value},
+        wrong_kinds=kinds,
     )
 
 
@@ -1491,17 +1661,18 @@ def velocity_root_position(rng: random.Random) -> Problem:
     t = sp.Symbol("t")
     position = sp.sqrt(a * t**2 + b)
     value = sp.Rational(a * t0, root)
+    wrong, kinds = tagged_wrongs(
+        value,
+        ("partial", sp.Rational(1, 2 * root)),
+        ("formula", sp.Rational(2 * a * t0, root)),
+        ("concept", sp.Integer(root)),
+        ("formula", sp.Rational(a * t0, 2 * root)),
+    )
     return Problem(
         "2.5",
         f"موضع جسم بالأمتار بعد $t$ ثانية هو $s(t)={tex(position)}$. أوجد سرعته اللحظية عند $t={t0}$.",
         m(value),
-        wrongs(
-            value,
-            sp.Rational(1, 2 * root),
-            sp.Rational(2 * a * t0, root),
-            sp.Integer(root),
-            sp.Rational(a * t0, 2 * root),
-        ),
+        wrong,
         (
             rf"$s(t)=({tex(a * t**2 + b)})^{{1/2}}$",
             rf"$v(t)=\dfrac{{1}}{{2}}({tex(a * t**2 + b)})^{{-1/2}}\cdot {2 * a}t={frac(a * t, position)}$",
@@ -1509,6 +1680,7 @@ def velocity_root_position(rng: random.Random) -> Problem:
         ),
         "A",
         {"type": "derivative", "f": position.subs(t, x), "at": t0, "value": value},
+        wrong_kinds=kinds,
     )
 
 
@@ -1521,17 +1693,25 @@ def exponential_decay_rate(rng: random.Random) -> Problem:
     t = sp.Symbol("t")
     model = amount * sp.exp(-k * t)
     value = -k * amount * sp.exp(-k * t0)
+    wrong, kinds = tagged_wrongs(
+        value,
+        ("sign", -value),
+        ("concept", model.subs(t, t0)),
+        ("partial", -amount * sp.exp(-k * t0)),
+        ("partial", -k * amount),
+    )
     return Problem(
         "2.6",
         f"كمية دواء في الدم (ملغم) بعد $t$ ساعة هي $Q(t)={tex(model)}$. أوجد معدل تغير الكمية عند $t={t0}$.",
         m(value),
-        wrongs(value, -value, model.subs(t, t0), -amount * sp.exp(-k * t0), -k * amount),
+        wrong,
         (
             f"$Q'(t)={tex(sp.diff(model, t))}$",
             rf"$Q'({t0})={tex(value)}\approx {float(value):.2f}$ ملغم/ساعة، والإشارة السالبة تعني التناقص.",
         ),
         "A",
         {"type": "derivative", "f": model.subs(t, x), "at": t0, "value": value},
+        wrong_kinds=kinds,
     )
 
 
@@ -1550,14 +1730,16 @@ def derivative_cosine_forms(rng: random.Random) -> Problem:
         d = -k * n * a * sp.cos(a * x) ** (n - 1) * sp.sin(a * x)
         others = (-d, -k * n * sp.cos(a * x) ** (n - 1) * sp.sin(a * x), k * n * a * sp.sin(a * x) ** (n - 1))
         step = rf"قاعدة السلسلة للقوة: ${n}\cos^{{{n - 1}}}({tex(a * x)})\cdot(-{a}\sin({tex(a * x)}))$"
+    wrong, kinds = tagged_wrongs(d, *zip(("sign", "partial", "concept"), others, strict=True))
     return Problem(
         "2.7",
         f"أوجد ${DYDX}$ إذا كانت $y={tex(f)}$.",
         m(d),
-        wrongs(d, *others),
+        wrong,
         (step, f"${DYDX}={tex(d)}$"),
         "A",
         {"type": "function", "f": f, "d": d, "order": 1},
+        wrong_kinds=kinds,
     )
 
 
@@ -1568,24 +1750,26 @@ def velocity_cosine_position(rng: random.Random) -> Problem:
     t = sp.Symbol("t")
     position = k * sp.cos(t**2 + c)
     value = -2 * k * t0 * sp.sin(t0**2 + c)
+    wrong, kinds = tagged_wrongs(
+        value,
+        ("sign", -value),
+        ("partial", -k * sp.sin(t0**2 + c)),
+        ("concept", -2 * k * t0 * sp.cos(t0**2 + c)),
+        ("concept", position.subs(t, t0)),
+    )
     return Problem(
         "2.7",
         f"موضع جسم بالسنتيمتر بعد $t$ ثانية هو $s(t)={tex(position)}$ (الزاوية بالراديان). "
         f"أوجد سرعته اللحظية عند $t={t0}$.",
         m(value),
-        wrongs(
-            value,
-            -value,
-            -k * sp.sin(t0**2 + c),
-            -2 * k * t0 * sp.cos(t0**2 + c),
-            position.subs(t, t0),
-        ),
+        wrong,
         (
             f"$v(t)=s'(t)={tex(sp.diff(position, t))}$",
             rf"$v({t0})={tex(value)}\approx {float(value):.2f}$ سم/ث",
         ),
         "A",
         {"type": "derivative", "f": position.subs(t, x), "at": t0, "value": value},
+        wrong_kinds=kinds,
     )
 
 
@@ -1604,11 +1788,18 @@ def implicit_with_roots(rng: random.Random) -> Problem:
     value = -F_x / F_y
     coefficient = f"{-a:+d}" if abs(a) != 1 else ("-" if a > 0 else "+")
     shown = rf"\sqrt{{x}}+x\sqrt{{y}}{coefficient}y^2"
+    wrong, kinds = tagged_wrongs(
+        value,
+        ("sign", -value),
+        ("swap", -F_y / F_x),
+        ("partial", -F_x),
+        ("partial", F_x / (2 * a * q)),
+    )
     return Problem(
         "2.8",
         f"أوجد ${DYDX}$ عند النقطة $({p},{q})$ على المنحنى ${shown}={tex(c)}$.",
         m(value),
-        wrongs(value, -value, -F_y / F_x, -F_x, F_x / (2 * a * q)),
+        wrong,
         (
             rf"$\dfrac{{1}}{{2\sqrt{{x}}}}+\sqrt{{y}}+\dfrac{{x}}{{2\sqrt{{y}}}}y'{-2 * a:+d}y\,y'=0$",
             rf"$y'=-\dfrac{{\frac{{1}}{{2\sqrt{{x}}}}+\sqrt{{y}}}}{{\frac{{x}}{{2\sqrt{{y}}}}{-2 * a:+d}y}}$",
@@ -1616,6 +1807,7 @@ def implicit_with_roots(rng: random.Random) -> Problem:
         ),
         "R",
         {"type": "implicit", "F": relation - c, "point": (p, q), "value": value},
+        wrong_kinds=kinds,
     )
 
 
@@ -1629,11 +1821,17 @@ def implicit_second_derivative(rng: random.Random) -> Problem:
     second = sp.simplify(sp.idiff(F, y, x, 2))
     at = {x: p, y: q}
     value = sp.nsimplify(second.subs(at))
+    wrong, kinds = tagged_wrongs(
+        value,
+        ("concept", first.subs(at)),
+        ("sign", -value),
+        ("partial", sp.diff(-a * x**3, x, 2).subs(x, p) / (2 * q)),
+    )
     return Problem(
         "2.9",
         rf"إذا كانت ${tex(a * x**3 + y**2)}={c}$ فأوجد $\dfrac{{d^2y}}{{dx^2}}$ عند النقطة $({p},{q})$.",
         m(value),
-        wrongs(value, first.subs(at), -value, sp.diff(-a * x**3, x, 2).subs(x, p) / (2 * q)),
+        wrong,
         (
             f"$y'={tex(first)}$",
             f"نشتق مرة ثانية بقاعدة القسمة ونعوّض عن $y'$: $y''={tex(second)}$",
@@ -1641,6 +1839,7 @@ def implicit_second_derivative(rng: random.Random) -> Problem:
         ),
         "R",
         {"type": "implicit_second", "F": F, "point": (p, q), "value": value},
+        wrong_kinds=kinds,
     )
 
 
@@ -1653,11 +1852,18 @@ def monotonic_intervals(rng: random.Random) -> Problem:
     inner_increasing = sign < 0
     answer = middle if ask_increasing == inner_increasing else outer
     word = "تزايد" if ask_increasing else "تناقص"
+    wrong, kinds = tagged_wrongs(
+        answer,
+        ("direction", middle),
+        ("direction", outer),
+        ("partial", rf"$(-\infty,{q})$"),
+        ("partial", rf"$({p},\infty)$"),
+    )
     return Problem(
         "3.1",
         f"حدد فترات {word} الدالة $f(x)={tex(f)}$.",
         answer,
-        wrongs(answer, middle, outer, rf"$(-\infty,{q})$", rf"$({p},\infty)$"),
+        wrong,
         (
             f"$f'(x)={tex(sp.factor(sp.diff(f, x)))}$",
             f"النقطتان الحرجتان $x={p}$ و$x={q}$.",
@@ -1673,6 +1879,7 @@ def monotonic_intervals(rng: random.Random) -> Problem:
             "ask": ask_increasing,
             "answer_inner": answer == middle,
         },
+        wrong_kinds=kinds,
     )
 
 
@@ -1684,11 +1891,17 @@ def local_extremum(rng: random.Random) -> Problem:
     other = q if where == p else p
     value = f.subs(x, where)
     word = "العظمى" if want_max else "الصغرى"
+    wrong, kinds = tagged_wrongs(
+        value,
+        ("concept", f.subs(x, other)),
+        ("swap", sp.Integer(where)),
+        ("swap", sp.Integer(other)),
+    )
     return Problem(
         "3.2",
         f"أوجد القيمة {word} المحلية للدالة $f(x)={tex(f)}$.",
         m(value),
-        wrongs(value, f.subs(x, other), sp.Integer(where), sp.Integer(other)),
+        wrong,
         (
             f"$f'(x)={tex(sp.factor(sp.diff(f, x)))}$",
             f"$f''(x)={tex(sp.diff(f, x, 2))}$",
@@ -1696,6 +1909,7 @@ def local_extremum(rng: random.Random) -> Problem:
         ),
         "A",
         {"type": "local", "f": f, "at": where, "value": value, "max": want_max},
+        wrong_kinds=kinds,
     )
 
 
@@ -1709,11 +1923,14 @@ def absolute_extremum(rng: random.Random) -> Problem:
     other = min(values.values()) if want_max else max(values.values())
     word = "العظمى" if want_max else "الصغرى"
     table = "، ".join(f"$f({point})={tex(val)}$" for point, val in values.items())
+    wrong, kinds = tagged_wrongs(
+        value, ("concept", other), *(("partial", candidate) for candidate in values.values())
+    )
     return Problem(
         "3.2",
         f"أوجد القيمة {word} المطلقة للدالة $f(x)={tex(f)}$ على الفترة $[{low},{high}]$.",
         m(value),
-        wrongs(value, other, *values.values()),
+        wrong,
         (
             f"النقطتان الحرجتان $x={p}$ و$x={q}$ داخل الفترة.",
             f"نقارن القيم: {table}",
@@ -1721,6 +1938,7 @@ def absolute_extremum(rng: random.Random) -> Problem:
         ),
         "R",
         {"type": "absolute", "f": f, "low": low, "high": high, "value": value, "max": want_max},
+        wrong_kinds=kinds,
     )
 
 
@@ -1736,17 +1954,18 @@ def inflection_point(rng: random.Random) -> Problem:
     value = f.subs(x, t)
     answer = f"$({t},{tex(value)})$"
     mirror = -t if t else 1
+    wrong, kinds = tagged_wrongs(
+        answer,
+        ("nearby", f"$({t},{tex(value + 1)})$"),
+        ("sign", f"$({mirror},{tex(f.subs(x, mirror))})$"),
+        ("swap", f"$({tex(value)},{t})$"),
+        ("formula", f"$({t + 1},{tex(f.subs(x, t + 1))})$"),
+    )
     return Problem(
         "3.3",
         f"أوجد نقطة الانعطاف لمنحنى الدالة $f(x)={tex(f)}$.",
         answer,
-        wrongs(
-            answer,
-            f"$({t},{tex(value + 1)})$",
-            f"$({mirror},{tex(f.subs(x, mirror))})$",
-            f"$({tex(value)},{t})$",
-            f"$({t + 1},{tex(f.subs(x, t + 1))})$",
-        ),
+        wrong,
         (
             f"$f''(x)={tex(sp.diff(f, x, 2))}$",
             f"$f''(x)=0$ عند $x={t}$ وتتغير الإشارة عندها.",
@@ -1754,6 +1973,7 @@ def inflection_point(rng: random.Random) -> Problem:
         ),
         "A",
         {"type": "inflection", "f": f, "at": t, "value": value},
+        wrong_kinds=kinds,
     )
 
 
@@ -1765,14 +1985,22 @@ def concavity_interval(rng: random.Random) -> Problem:
     right, left = rf"$({t},\infty)$", rf"$(-\infty,{t})$"
     answer, other = (right, left) if right_side else (left, right)
     word = "لأعلى" if up else "لأسفل"
+    wrong, kinds = tagged_wrongs(
+        answer,
+        ("direction", other),
+        ("concept", r"$(-\infty,\infty)$"),
+        ("formula", rf"$({t + 1},\infty)$"),
+        ("formula", rf"$(-\infty,{t + 1})$"),
+    )
     return Problem(
         "3.3",
         f"حدد الفترة التي يكون فيها منحنى $f(x)={tex(f)}$ مقعرًا {word}.",
         answer,
-        wrongs(answer, other, r"$(-\infty,\infty)$", rf"$({t + 1},\infty)$", rf"$(-\infty,{t + 1})$"),
+        wrong,
         (f"$f''(x)={tex(sp.diff(f, x, 2))}$", f"من إشارة المشتقة الثانية: الفترة {answer}"),
         "A",
         {"type": "concavity", "f": f, "at": t, "up": up, "right_side": right_side},
+        wrong_kinds=kinds,
     )
 
 
@@ -1827,14 +2055,17 @@ def extrema_problem(
     others = [t for t in product(EXTREMUM_WORDS, repeat=len(points)) if t not in (truth, swapped)]
     rng.shuffle(others)
     texts = [extrema_text(list(zip([p for p, _ in points], t, strict=True))) for t in [swapped, *others]]
+    pairs = [("direction", texts[0]), *(("concept", text) for text in texts[1:])]
+    wrong, kinds = tagged_wrongs(answer, *pairs[:6])
     return Problem(
         lesson,
         stem,
         answer,
-        wrongs(answer, *texts[:6]),
+        wrong,
         (*steps, f"إذن: {answer}."),
         "R",
         {"type": "extrema", "f": f, "points": points},
+        wrong_kinds=kinds,
     )
 
 
@@ -1856,20 +2087,21 @@ def critical_where_derivative_undefined(rng: random.Random) -> Problem:
     falling, rising = rf"$(-\infty,{c})$", rf"$({c},\infty)$"
     if k < 0:
         falling, rising = rising, falling
+    wrong, kinds = tagged_wrongs(
+        f"$x={c}$",
+        ("concept", NONE_FOUND),
+        ("sign", f"$x={-c}$"),
+        ("concept", "$x=0$"),
+        ("nearby", f"$x={c + 1}$"),
+        ("swap", f"$x={d}$"),
+        ("nearby", f"$x={c - 1}$"),
+        ("nearby", f"$x={c + 2}$"),
+    )
     return Problem(
         "3.1",
         f"أوجد القيم الحرجة للدالة $f(x)={shown}$.",
         f"$x={c}$",
-        wrongs(
-            f"$x={c}$",
-            NONE_FOUND,
-            f"$x={-c}$",
-            "$x=0$",
-            f"$x={c + 1}$",
-            f"$x={d}$",
-            f"$x={c - 1}$",
-            f"$x={c + 2}$",
-        ),
+        wrong,
         (
             rf"$f(x)={coefficient(k)}({tex(x - c)})^{{2/3}}{f'{d:+d}' if d else ''}$، "
             rf"فـ $f'(x)={frac(2 * k, '3' + cube_root_text(x - c))}$",
@@ -1878,6 +2110,7 @@ def critical_where_derivative_undefined(rng: random.Random) -> Problem:
         ),
         "A",
         {"type": "critical_dne", "f": f, "at": c},
+        wrong_kinds=kinds,
     )
 
 
@@ -1892,13 +2125,19 @@ def rational_without_critical_values(rng: random.Random) -> Problem:
     both = rf"$(-\infty,{c})$ و$({c},\infty)$"
     answer = both if (top > 0) == ask_up else NONE_FOUND
     word = "تزايد" if ask_up else "تناقص"
+    wrong, kinds = tagged_wrongs(
+        answer,
+        ("concept", both),
+        ("concept", NONE_FOUND),
+        ("concept", r"$(-\infty,\infty)$"),
+        ("partial", rf"$(-\infty,{c})$ فقط"),
+        ("partial", rf"$({c},\infty)$ فقط"),
+    )
     return Problem(
         "3.1",
         f"حدد فترات {word} الدالة $f(x)={frac(a * x + b, x - c)}$.",
         answer,
-        wrongs(
-            answer, both, NONE_FOUND, r"$(-\infty,\infty)$", rf"$(-\infty,{c})$ فقط", rf"$({c},\infty)$ فقط"
-        ),
+        wrong,
         (
             rf"قاعدة القسمة: $f'(x)={frac(top, f'({tex(x - c)})^2')}$",
             f"البسط ثابت لا يساوي صفرًا فلا قيم حرجة، و$x={c}$ خارج المجال.",
@@ -1907,6 +2146,7 @@ def rational_without_critical_values(rng: random.Random) -> Problem:
         ),
         "A",
         {"type": "monotone_pieces", "f": f, "pole": c, "ask_up": ask_up, "answer": answer},
+        wrong_kinds=kinds,
     )
 
 
@@ -1983,11 +2223,19 @@ def absolute_extrema_quartic(rng: random.Random) -> Problem:
     word = "العظمى" if want_max else "الصغرى"
     table = "، ".join(f"$f({point})={tex(val)}$" for point, val in values.items())
     ends = "+\\infty" if s > 0 else "-\\infty"
+    wrong, kinds = tagged_wrongs(
+        answer,
+        ("concept", NONE_FOUND),
+        *(("partial", m(v)) for v in values.values()),
+        ("sign", m(-best)),
+        ("nearby", m(best + 1)),
+        ("nearby", m(best - 1)),
+    )
     return Problem(
         "3.2",
         f"أوجد القيمة {word} المطلقة للدالة $f(x)={tex(f)}$ على مجموعة الأعداد الحقيقية إن وُجدت.",
         answer,
-        wrongs(answer, NONE_FOUND, *(m(v) for v in values.values()), m(-best), m(best + 1), m(best - 1)),
+        wrong,
         (
             f"$f'(x)={tex(sp.factor(sp.diff(f, x)))}$، والقيم الحرجة $x=0$ و$x={p}$ و$x={q}$.",
             f"جدول القيم: {table}",
@@ -2001,6 +2249,7 @@ def absolute_extrema_quartic(rng: random.Random) -> Problem:
             "answer": answer,
             "value": best if exists else None,
         },
+        wrong_kinds=kinds,
     )
 
 
@@ -2035,18 +2284,19 @@ def concavity_quadratic_or_trig(rng: random.Random) -> Problem:
             positive, negative = (middle, outer) if k > 0 else (outer, middle)
         chosen, other = (positive, negative) if up else (negative, positive)
     answer = intervals_tex(chosen)
+    wrong, kinds = tagged_wrongs(
+        answer,
+        ("direction", intervals_tex(other)),
+        ("concept", intervals_tex([domain])),
+        ("concept", NONE_FOUND),
+        ("partial", r"$\left(0,\pi\right)$"),
+        ("partial", intervals_tex([(sp.Integer(0), sp.oo)])),
+    )
     return Problem(
         "3.3",
         f"حدد الفترات التي يكون فيها منحنى $f(x)={tex(f)}$ مقعرًا {word}{region}.",
         answer,
-        wrongs(
-            answer,
-            intervals_tex(other),
-            intervals_tex([domain]),
-            NONE_FOUND,
-            r"$\left(0,\pi\right)$",
-            intervals_tex([(sp.Integer(0), sp.oo)]),
-        ),
+        wrong,
         (
             f"$f''(x)={tex(sp.diff(f, x, 2))}$",
             "نحل $f''(x)=0$ ونختبر الإشارة على خط الأعداد بين أصفارها."
@@ -2062,6 +2312,7 @@ def concavity_quadratic_or_trig(rng: random.Random) -> Problem:
             "intervals": chosen,
             "domain": (-10, 10) if region == "" else domain,
         },
+        wrong_kinds=kinds,
     )
 
 
@@ -2072,17 +2323,18 @@ def gaussian_inflection(rng: random.Random) -> Problem:
     f = k * sp.exp(-((x - c) ** 2) / (2 * r**2))
     height = k * sp.exp(sp.Rational(-1, 2))
     answer = f"$({c - r},{tex(height)})$ و$({c + r},{tex(height)})$"
+    wrong, kinds = tagged_wrongs(
+        answer,
+        ("concept", f"$({c},{k})$"),
+        ("partial", f"$({c - r},{k})$ و$({c + r},{k})$"),
+        ("formula", f"$({c - 2 * r},{tex(k * sp.exp(-2))})$ و$({c + 2 * r},{tex(k * sp.exp(-2))})$"),
+        ("partial", f"$({c - r},{tex(height)})$ فقط"),
+    )
     return Problem(
         "3.3",
         f"أوجد نقاط انعطاف منحنى الدالة $f(x)={tex(f)}$.",
         answer,
-        wrongs(
-            answer,
-            f"$({c},{k})$",
-            f"$({c - r},{k})$ و$({c + r},{k})$",
-            f"$({c - 2 * r},{tex(k * sp.exp(-2))})$ و$({c + 2 * r},{tex(k * sp.exp(-2))})$",
-            f"$({c - r},{tex(height)})$ فقط",
-        ),
+        wrong,
         (
             f"$f'(x)={tex(sp.factor(sp.diff(f, x)))}$",
             f"$f''(x)={tex(sp.factor(sp.diff(f, x, 2)))}$",
@@ -2091,6 +2343,7 @@ def gaussian_inflection(rng: random.Random) -> Problem:
         ),
         "A",
         {"type": "inflections", "f": f, "points": [(c - r, height), (c + r, height)], "around": c},
+        wrong_kinds=kinds,
     )
 
 
@@ -2141,12 +2394,15 @@ def fence_against_wall(rng: random.Random) -> Problem:
     value = width * sp.Rational(length, 2)
     unit = "مترًا مربعًا"
     answer = with_unit(value, unit)
+    wrong, kinds = tagged_wrongs(
+        answer, *(("formula", with_unit(v, unit)) for v in (width**2, 4 * width**2, 3 * width**2))
+    )
     return Problem(
         "3.5",
         f"لدى مزارع سياج طوله ${length}$ مترًا، ويريد إحاطة حظيرة مستطيلة بجانب جدار مستقيم لا يحتاج إلى سياج. "
         "أوجد أكبر مساحة ممكنة للحظيرة.",
         answer,
-        wrongs(answer, *[with_unit(v, unit) for v in (width**2, 4 * width**2, 3 * width**2)]),
+        wrong,
         (
             f"إذا كان عرض الحظيرة $x$ فطولها ${tex(length - 2 * x)}$ والمساحة $A(x)={tex(area)}$.",
             f"$A'(x)={tex(sp.diff(area, x))}=0$ عند $x={tex(width)}$.",
@@ -2163,6 +2419,7 @@ def fence_against_wall(rng: random.Random) -> Problem:
             "value": value,
             "max": True,
         },
+        wrong_kinds=kinds,
     )
 
 
@@ -2194,12 +2451,13 @@ def open_box(rng: random.Random) -> Problem:
     sheet = (
         f"صفيحة مربعة طول ضلعها ${a}$ سنتيمترًا" if a == b else f"صفيحة مستطيلة أبعادها ${a}$ و${b}$ سنتيمترًا"
     )
+    wrong, kinds = tagged_wrongs(answer, *(("formula", with_unit(volume.subs(x, v), unit)) for v in others))
     return Problem(
         "3.5",
         f"{sheet}، قُصّ من كل ركن منها مربع طول ضلعه $x$ ثم ثُنيت الجوانب لعمل صندوق مفتوح. "
         "أوجد أكبر حجم ممكن للصندوق.",
         answer,
-        wrongs(answer, *[with_unit(volume.subs(x, v), unit) for v in others]),
+        wrong,
         (
             f"$V(x)=x({tex(a - 2 * x)})({tex(b - 2 * x)})$ حيث $0<x<{tex(sp.Rational(a, 2))}$.",
             f"$V'(x)={tex(sp.expand(sp.diff(volume, x)))}=0$ داخل المجال عند $x={n}$.",
@@ -2215,6 +2473,7 @@ def open_box(rng: random.Random) -> Problem:
             "value": value,
             "max": True,
         },
+        wrong_kinds=kinds,
     )
 
 
@@ -2224,11 +2483,17 @@ def minimum_sum_of_squares(rng: random.Random) -> Problem:
     objective = x**2 + (total - x) ** 2
     half = sp.Rational(total, 2)
     value = objective.subs(x, half)
+    wrong, kinds = tagged_wrongs(
+        value,
+        ("partial", half**2),
+        ("formula", sp.Integer(total) ** 2),
+        ("nearby", objective.subs(x, half + 1)),
+    )
     return Problem(
         "3.5",
         f"عددان حقيقيان مجموعهما ${total}$. أوجد أصغر قيمة ممكنة لمجموع مربعيهما.",
         m(value),
-        wrongs(value, half**2, sp.Integer(total) ** 2, objective.subs(x, half + 1)),
+        wrong,
         (
             f"$S(x)=x^2+({tex(total - x)})^2$",
             f"$S'(x)={tex(sp.expand(sp.diff(objective, x)))}=0$ عند $x={tex(half)}$.",
@@ -2244,6 +2509,7 @@ def minimum_sum_of_squares(rng: random.Random) -> Problem:
             "value": value,
             "max": False,
         },
+        wrong_kinds=kinds,
     )
 
 
