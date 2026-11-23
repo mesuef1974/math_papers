@@ -20,7 +20,7 @@ from apps.knowledge.domain.exercise_pages import page_map
 from apps.knowledge.domain.unit_prep import AuthoredObjective
 
 from .calendar_engine import PlanningError
-from .strategies import Strategy, distribute
+from .strategies import LessonProfile, Strategy, distribute, score
 
 # ---- الإعداد: أرقام التصميم في مكان واحد (تُراجع بعد أول تجربة في الصف؛ الزمن والمراحل والسقف قرار المالك) ----
 PERIOD_MINUTES = 45
@@ -403,15 +403,20 @@ def stage_options(library: Iterable[Strategy], name: str) -> tuple[Strategy, ...
     return tuple(s for s in library if s.phase in phases and not s.needs and max(s.min, lo) <= min(s.max, hi))
 
 
+def lesson_blooms(lesson: LessonIndex) -> frozenset[str]:
+    """مستويات بلوم لأهداف الدرس من الفهرس؛ غير المصنَّف لا يُحسب، فدرس بلا تصنيف بلا بلوم ولا تخمين."""
+    return frozenset(b for b in lesson.objectives_bloom if b != "unclassified")
+
+
 def _stages(
     library: Sequence[Strategy],
-    dok: frozenset[int],
+    profile: LessonProfile,
     max_dok: int,
     minutes: int = PERIOD_MINUTES,
     chosen_by_teacher: Mapping[str, str] | None = None,
 ) -> tuple[Stage, ...]:
-    """المراحل الست: لكل مرحلة أنسب استراتيجية بلا موارد لعمق الحصة (أو ما اختاره المعلم منها)، ثم الدقائق ضمن حدّي المرحلة
-    واستراتيجيتها ومجموعها الزمن."""
+    """المراحل الست: لكل مرحلة أنسب استراتيجية بلا موارد لبلوم أهداف الدرس وعمق الحصة (`strategies.score`، أو ما اختاره
+    المعلم منها)، ثم الدقائق ضمن حدّي المرحلة واستراتيجيتها ومجموعها الزمن."""
     forced = chosen_by_teacher or {}
     shift = DEPTH_SHIFT.get(max_dok, 0)
     ideal: dict[str, float] = {}
@@ -429,10 +434,7 @@ def _stages(
                 if strategy is None:
                     raise PrepError(f"الاستراتيجية {forced[name]} لا تصلح للمرحلة {name}")
             else:
-                strategy = sorted(
-                    fits,
-                    key=lambda s: (-len(dok & set(s.dok)), not s.min <= ideal[name] <= s.max, s.slug),
-                )[0]
+                strategy = sorted(fits, key=lambda s: (-score(s, profile, ideal[name]), s.slug))[0]
             lo, hi = max(strategy.min, lo), min(strategy.max, hi)
         chosen[name] = strategy.slug if strategy else None
         bounds[name] = (lo, hi)
@@ -528,7 +530,12 @@ def build_prep(
         exit_ticket=exit_ticket,
         quiz=lesson_quiz_depths(lesson, examples) if last else (),
         recall=recall,
-        stages=_stages(library, depths, max(depths, default=1), chosen_by_teacher=edit.strategies),
+        stages=_stages(
+            library,
+            LessonProfile(bloom=lesson_blooms(lesson), dok=depths),
+            max(depths, default=1),
+            chosen_by_teacher=edit.strategies,
+        ),
         task_guide=(basic_path, advanced_path),
         unit_status=unit_status,
         sources={

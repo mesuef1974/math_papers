@@ -133,9 +133,11 @@ def load_library(path: Path | None = None) -> tuple[Strategy, ...]:
     return library
 
 
-def _score(strategy: Strategy, profile: LessonProfile, ideal: float) -> int:
-    score = 2 * len(profile.bloom & set(strategy.bloom)) + 2 * len(profile.dok & set(strategy.dok))
-    return score + (1 if strategy.min <= ideal <= strategy.max else 0)
+def score(strategy: Strategy, profile: LessonProfile, ideal: float) -> int:
+    """ملاءمة استراتيجية للدرس: نقطتان لكل مستوى بلوم ولكل عمق DOK مشترك، ونقطة إن اتسعت للزمن المثالي. مصدر واحد للمنتقي
+    ولاستراتيجيات مراحل التحضير، فالتطابق في بلوم وDOK يتقدّم دائمًا على الزمن."""
+    points = 2 * len(profile.bloom & set(strategy.bloom)) + 2 * len(profile.dok & set(strategy.dok))
+    return points + (1 if strategy.min <= ideal <= strategy.max else 0)
 
 
 def select(
@@ -151,7 +153,7 @@ def select(
     candidates = [
         s for s in library if s.phase == phase and set(s.needs) <= available and s.slug not in exclude
     ]
-    return sorted(candidates, key=lambda s: (-_score(s, profile, ideal_minutes), s.slug))
+    return sorted(candidates, key=lambda s: (-score(s, profile, ideal_minutes), s.slug))
 
 
 def distribute(
