@@ -1,23 +1,30 @@
-"""وسم المشتتات بنوع الخطأ: كل صيغة من العاشر 1.1 إلى 1.3 تعطي أنواعًا توازي مشتتاتها من التصنيف المعتمد."""
+"""وسم المشتتات بنوع الخطأ: كل صيغة موسومة (العاشر 1.1-1.3، والثاني عشر 1.1-1.4 في generators.py) تعطي أنواعًا توازي مشتتاتها."""
 
 import random
 
 import pytest
 
-from apps.curriculum.courses import GRADE10_SLUG
+from apps.curriculum.courses import DEFAULT_COURSE, GRADE10_SLUG
+from apps.papers.domain import generators
 from apps.papers.domain.generators import ERROR_KINDS, REGISTRY, Problem, tagged_wrongs
 
 TAGGED_LESSONS = ("1.1", "1.2", "1.3")
 SEEDS = range(40)
+G12_TAGGED_LESSONS = ("1.1", "1.2", "1.3", "1.4")
 TAGGED = [
     pytest.param(fn, id=f"{lesson}-{fn.__name__}")
     for lesson in TAGGED_LESSONS
     for fn in REGISTRY[(GRADE10_SLUG, lesson)]
+] + [
+    pytest.param(fn, id=f"g12-{lesson}-{fn.__name__}")
+    for lesson in G12_TAGGED_LESSONS
+    for fn in REGISTRY[(DEFAULT_COURSE, lesson)]
+    if fn.__module__ == generators.__name__  # صيغ الرسوم والمستويات في وحداتها لم تُوسَم بعد
 ]
 
 
 def test_every_tagged_lesson_has_variants():
-    assert len(TAGGED) >= 19
+    assert len(TAGGED) >= 19 + 18
 
 
 @pytest.mark.parametrize("fn", TAGGED)

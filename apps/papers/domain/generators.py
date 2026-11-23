@@ -332,15 +332,29 @@ def limit_from_piecewise(rng: random.Random) -> Problem:
     function = cases((left, f"x<{c}"), (at_c, f"x={c}"), (right, f"x>{c}"))
     answer = m(value) if jump == 0 else NO_LIMIT
     verdict = "النهايتان من الجهتين متساويتان." if jump == 0 else "النهايتان مختلفتان، فالنهاية غير موجودة."
+    wrong, kinds = tagged_wrongs(
+        answer,
+        ("concept", m(at_c)),
+        ("concept", NO_LIMIT),
+        ("partial", m(value)),
+        ("partial", m(value + jump)),
+        ("nearby", m(value + jump + 1)),
+        ("nearby", m(value - 1)),
+    )
     return Problem(
         "1.1",
         f"إذا كانت ${function}$ فأوجد ${lim(c, 'f(x)')}$.",
         answer,
-        wrongs(answer, m(at_c), NO_LIMIT, m(value), m(value + jump), m(value + jump + 1), m(value - 1)),
+        wrong,
         (f"${lim(f'{c}^-', 'f(x)')}={value}$", f"${lim(f'{c}^+', 'f(x)')}={value + jump}$", verdict),
         "A",
         {"type": "one_sided", "left": left, "right": right, "at": c, "value": value if jump == 0 else None},
+        wrong_kinds=kinds,
     )
+
+
+# أنواع أخطاء مرشَّحات limit_from_graph بترتيب pool: نهاية جهة، نهاية جهة، قيمة الدالة، غير موجودة، قريبتان، الإحداثي x
+KINDS_GRAPH_POOL = ("concept", "concept", "concept", "concept", "nearby", "nearby", "swap")
 
 
 @variant("1.1", example=3)
@@ -395,11 +409,12 @@ def limit_from_graph(rng: random.Random) -> Problem:
         if f_c is not None
         else f"لا توجد نقطة مغلقة عند $x={c}$، فالدالة غير معرفة عندها.",
     )
+    wrong, kinds = tagged_wrongs(answer, *zip(KINDS_GRAPH_POOL, pool, strict=True))
     return Problem(
         "1.1",
         f"يبيّن الشكل التمثيل البياني للدالة $f$. أوجد ${expression}$.",
         answer,
-        wrongs(answer, *pool),
+        wrong,
         steps,
         "K",
         {
@@ -413,6 +428,7 @@ def limit_from_graph(rng: random.Random) -> Problem:
             "f_c": f_c,
         },
         graph=graph.as_dict(),
+        wrong_kinds=kinds,
     )
 
 
@@ -423,11 +439,14 @@ def limit_by_factoring(rng: random.Random) -> Problem:
     c = rng.choice([n for n in range(-5, 6) if n not in (b, -a)])
     top, bottom = sp.expand((x - a) * (x + b)), sp.expand((x - a) * (x + c))
     value = sp.Rational(a + b, a + c)
+    wrong, kinds = tagged_wrongs(
+        value, ("concept", NO_LIMIT), ("formula", sp.Rational(b, c) if c else 0), ("concept", 0)
+    )
     return Problem(
         "1.2",
         f"أوجد ${lim(a, frac(top, bottom))}$.",
         m(value),
-        wrongs(value, NO_LIMIT, sp.Rational(b, c) if c else 0, 0),
+        wrong,
         (
             r"التعويض المباشر يعطي صيغة غير معينة $\frac{0}{0}$.",
             f"${frac(top, bottom)}={frac((x - a) * (x + b), (x - a) * (x + c))}={frac(x + b, x + c)}$",
@@ -435,6 +454,7 @@ def limit_by_factoring(rng: random.Random) -> Problem:
         ),
         "A",
         {"type": "limit", "expr": top / bottom, "at": a, "value": value},
+        wrong_kinds=kinds,
     )
 
 
@@ -446,11 +466,18 @@ def limit_by_conjugate(rng: random.Random) -> Problem:
     kx = "x" if k == 1 else f"{k}x"
     root = rf"\sqrt{{{kx}+{p * p}}}"
     shown = frac(f"{root}-{p}", "x")
+    wrong, kinds = tagged_wrongs(
+        value,
+        ("formula", sp.Rational(k, p)),
+        ("concept", 0),
+        ("concept", NO_LIMIT),
+        ("formula", sp.Rational(1, 2 * p)),
+    )
     return Problem(
         "1.2",
         f"أوجد ${lim(0, shown)}$.",
         m(value),
-        wrongs(value, sp.Rational(k, p), 0, NO_LIMIT, sp.Rational(1, 2 * p)),
+        wrong,
         (
             "نضرب البسط والمقام في مرافق البسط.",
             f"${shown}={frac(kx, f'x({root}+{p})')}={frac(k, f'{root}+{p}')}$",
@@ -458,6 +485,7 @@ def limit_by_conjugate(rng: random.Random) -> Problem:
         ),
         "A",
         {"type": "limit", "expr": expr, "at": 0, "value": value},
+        wrong_kinds=kinds,
     )
 
 
@@ -467,14 +495,22 @@ def limit_at_infinity(rng: random.Random) -> Problem:
     b, d = nz(rng, -6, 6), nz(rng, -6, 6)
     top, bottom = a * x**2 + b * x + 1, c * x**2 + d * x - 2
     value = sp.Rational(a, c)
+    wrong, kinds = tagged_wrongs(
+        value,
+        ("coefficient", sp.Rational(b, d)),
+        ("concept", 0),
+        ("concept", NO_LIMIT),
+        ("swap", sp.Rational(c, a)),
+    )
     return Problem(
         "1.2",
         f"أوجد ${lim(r'\infty', frac(top, bottom))}$.",
         m(value),
-        wrongs(value, sp.Rational(b, d), 0, NO_LIMIT, sp.Rational(c, a)),
+        wrong,
         ("نقسم البسط والمقام على $x^2$.", f"النهاية تساوي نسبة المعاملين الرئيسين: ${tex(value)}$"),
         "A",
         {"type": "limit", "expr": top / bottom, "at": sp.oo, "value": value},
+        wrong_kinds=kinds,
     )
 
 
@@ -482,17 +518,19 @@ def limit_at_infinity(rng: random.Random) -> Problem:
 def limit_sine_ratio(rng: random.Random) -> Problem:
     a, b = rng.sample(range(2, 10), 2)
     value = sp.Rational(a, b)
+    wrong, kinds = tagged_wrongs(value, ("swap", sp.Rational(b, a)), ("concept", 1), ("concept", 0))
     return Problem(
         "1.3",
         f"أوجد ${lim(0, frac(sp.sin(a * x), b * x))}$.",
         m(value),
-        wrongs(value, sp.Rational(b, a), 1, 0),
+        wrong,
         (
             rf"نكتب الكسر بالصورة ${tex(value)}\cdot{frac(sp.sin(a * x), a * x)}$",
             rf"بما أن $\lim\limits_{{u \to 0}}\frac{{\sin u}}{{u}}=1$ فالنهاية ${tex(value)}$",
         ),
         "A",
         {"type": "limit", "expr": sp.sin(a * x) / (b * x), "at": 0, "value": value},
+        wrong_kinds=kinds,
     )
 
 
@@ -500,17 +538,19 @@ def limit_sine_ratio(rng: random.Random) -> Problem:
 def limit_tan_over_sin(rng: random.Random) -> Problem:
     a, b = rng.sample(range(2, 10), 2)
     value = sp.Rational(a, b)
+    wrong, kinds = tagged_wrongs(value, ("swap", sp.Rational(b, a)), ("concept", 1), ("concept", 0))
     return Problem(
         "1.3",
         f"أوجد ${lim(0, frac(sp.tan(a * x), sp.sin(b * x)))}$.",
         m(value),
-        wrongs(value, sp.Rational(b, a), 1, 0),
+        wrong,
         (
             r"نقسم البسط والمقام على $x$ ونستعمل $\lim\limits_{u \to 0}\frac{\tan u}{u}=\lim\limits_{u \to 0}\frac{\sin u}{u}=1$",
             f"فالنهاية ${tex(value)}$",
         ),
         "A",
         {"type": "limit", "expr": sp.tan(a * x) / sp.sin(b * x), "at": 0, "value": value},
+        wrong_kinds=kinds,
     )
 
 
@@ -520,17 +560,26 @@ def limit_one_minus_cosine(rng: random.Random) -> Problem:
     value = sp.Rational(a * a, 2 * b)
     half = sp.Rational(a, 2)
     bottom = "x^2" if b == 1 else f"{b}x^2"
+    wrong, kinds = tagged_wrongs(
+        value,
+        ("formula", a),
+        ("square", half),
+        ("concept", 0),
+        ("formula", a * a),
+        ("formula", sp.Rational(a * a, 2)),
+    )
     return Problem(
         "1.3",
         f"أوجد ${lim(0, frac(1 - sp.cos(a * x), bottom))}$.",
         m(value),
-        wrongs(value, a, half, 0, a * a, sp.Rational(a * a, 2)),
+        wrong,
         (
             rf"نستعمل $1-\cos 2u=2\sin^2 u$ مع $u={tex(half * x)}$",
             rf"فالنهاية $\dfrac{{2\left({tex(half)}\right)^2}}{{{b}}}={tex(value)}$",
         ),
         "R",
         {"type": "limit", "expr": (1 - sp.cos(a * x)) / (b * x**2), "at": 0, "value": value},
+        wrong_kinds=kinds,
     )
 
 
@@ -541,11 +590,14 @@ def continuity_constant(rng: random.Random) -> Problem:
     symbol = sp.Symbol("k")
     left, right = symbol * x + b, x**2 + d
     function = cases((left, f"x<{c}"), (right, rf"x\ge {c}"))
+    wrong, kinds = tagged_wrongs(
+        sp.Integer(k), ("sign", -k), ("formula", sp.Rational(b, c)), ("nearby", k + 2)
+    )
     return Problem(
         "1.4",
         f"أوجد قيمة الثابت $k$ التي تجعل الدالة ${function}$ متصلة عند $x={c}$.",
         m(k),
-        wrongs(sp.Integer(k), -k, sp.Rational(b, c), k + 2),
+        wrong,
         (
             f"شرط الاتصال: النهايتان من الجهتين تساويان $f({c})$.",
             f"${tex(left.subs(x, c))}={tex(right.subs(x, c))}$",
@@ -553,6 +605,7 @@ def continuity_constant(rng: random.Random) -> Problem:
         ),
         "A",
         {"type": "continuity", "left": left.subs(symbol, k), "right": right, "at": c},
+        wrong_kinds=kinds,
     )
 
 
@@ -572,12 +625,15 @@ def limit_from_table(rng: random.Random) -> Problem:
     value = a + b
     near = (sp.Rational(a * 100 - 1, 100), sp.Rational(a * 100 + 1, 100))
     rows = "، ".join(f"$f({float(p):.2f})={float(p + b):.2f}$" for p in near)
+    wrong, kinds = tagged_wrongs(
+        sp.Integer(value), ("concept", NO_LIMIT), ("concept", 0), ("swap", a), ("formula", b)
+    )
     return Problem(
         "1.1",
         f"الدالة $f(x)={frac(top, x - a)}$ غير معرفة عند $x={a}$. "
         f"قدّر ${lim(a, 'f(x)')}$ من جدول قيم قريبة من ${a}$ من الجهتين.",
         m(value),
-        wrongs(sp.Integer(value), NO_LIMIT, 0, a, b),
+        wrong,
         (
             rf"التعويض المباشر يعطي $\frac{{0}}{{0}}$، فنحسب قيمًا قريبة من ${a}$: {rows}.",
             f"قيم الجهتين تقترب من ${value}$ كلما اقتربت $x$ من ${a}$.",
@@ -585,6 +641,7 @@ def limit_from_table(rng: random.Random) -> Problem:
         ),
         "K",
         {"type": "table_limit", "top": top, "bottom": x - a, "at": a, "value": value},
+        wrong_kinds=kinds,
     )
 
 
@@ -595,11 +652,20 @@ def infinite_limit_sides(rng: random.Random) -> Problem:
     side = rng.choice(["-", "+", "both"])
     answer = NO_LIMIT if side == "both" else infinity(k if side == "+" else -k)
     at = c if side == "both" else f"{c}^{side}"
+    one_sided = "partial" if side == "both" else "sign"
+    wrong, kinds = tagged_wrongs(
+        answer,
+        (one_sided, POS_INF),
+        (one_sided, NEG_INF),
+        ("concept", NO_LIMIT),
+        ("concept", "$0$"),
+        ("coefficient", m(k)),
+    )
     return Problem(
         "1.1",
         f"إذا كانت $f(x)={frac(k, x - c)}$ فأوجد ${lim(at, 'f(x)')}$.",
         answer,
-        wrongs(answer, POS_INF, NEG_INF, NO_LIMIT, "$0$", m(k)),
+        wrong,
         (
             f"المقام ${tex(x - c)}$ يؤول إلى $0$ والبسط ${k}$ ثابت، فالقيم تكبر بلا حد.",
             f"من اليسار المقام سالب فالكسر يؤول إلى {infinity(-k)}، ومن اليمين موجب فيؤول إلى {infinity(k)}.",
@@ -607,6 +673,7 @@ def infinite_limit_sides(rng: random.Random) -> Problem:
         ),
         "A",
         {"type": "infinite_side", "expr": k / (x - c), "at": c, "side": side, "answer": answer},
+        wrong_kinds=kinds,
     )
 
 
@@ -617,11 +684,19 @@ def infinite_limit_square(rng: random.Random) -> Problem:
     shift = f"+{d}" if d > 0 else (f"{d}" if d < 0 else "")
     shown = frac(k, f"({tex(x - c)})^2") + shift
     answer = infinity(k)
+    wrong, kinds = tagged_wrongs(
+        answer,
+        ("sign", POS_INF),
+        ("sign", NEG_INF),
+        ("concept", NO_LIMIT),
+        ("coefficient", m(d)),
+        ("concept", "$0$"),
+    )
     return Problem(
         "1.1",
         f"إذا كانت $f(x)={shown}$ فأوجد ${lim(c, 'f(x)')}$.",
         answer,
-        wrongs(answer, POS_INF, NEG_INF, NO_LIMIT, m(d), "$0$"),
+        wrong,
         (
             f"المقام $({tex(x - c)})^2$ موجب من الجهتين ويؤول إلى $0$.",
             f"إشارة الكسر إشارة البسط ${k}$ من الجهتين، فالجهتان تتفقان.",
@@ -629,6 +704,7 @@ def infinite_limit_square(rng: random.Random) -> Problem:
         ),
         "A",
         {"type": "infinite_side", "expr": k / (x - c) ** 2 + d, "at": c, "side": "both", "answer": answer},
+        wrong_kinds=kinds,
     )
 
 
@@ -638,12 +714,19 @@ def concentration_at_infinity(rng: random.Random) -> Problem:
     a, b, p = rng.randint(2, 12), rng.randint(1, 9), rng.randint(0, 5)
     t = sp.Symbol("t")
     concentration = (a * t + p) / (t + b)
+    wrong, kinds = tagged_wrongs(
+        sp.Integer(a),
+        ("coefficient", sp.Rational(p, b)),
+        ("concept", 0),
+        ("concept", NO_LIMIT),
+        ("formula", a + b),
+    )
     return Problem(
         "1.1",
         f"تركيز مادة في محلول بعد $t$ دقيقة يُعطى بالدالة $C(t)={frac(a * t + p, t + b)}$ (ملغم/لتر). "
         r"أوجد $\lim\limits_{t \to \infty} C(t)$ وفسّر الناتج.",
         m(a),
-        wrongs(sp.Integer(a), sp.Rational(p, b), 0, NO_LIMIT, a + b),
+        wrong,
         (
             "نقسم البسط والمقام على $t$.",
             rf"الحدّان $\frac{{{p}}}{{t}}$ و$\frac{{{b}}}{{t}}$ يؤولان إلى $0$، فالنهاية $\frac{{{a}}}{{1}}={a}$.",
@@ -651,6 +734,7 @@ def concentration_at_infinity(rng: random.Random) -> Problem:
         ),
         "A",
         {"type": "limit", "expr": concentration.subs(t, x), "at": sp.oo, "value": a},
+        wrong_kinds=kinds,
     )
 
 
@@ -663,11 +747,18 @@ def limit_rules_radical(rng: random.Random) -> Problem:
     p, q = nz(rng, -5, 6), rng.randint(-6, 6)
     value = sp.Rational(p * a + q, root)
     radical = rf"\sqrt{{{tex(x + r)}}}"
+    wrong, kinds = tagged_wrongs(
+        value,
+        ("formula", p * a + q),
+        ("formula", sp.Rational(p * a + q, root * root)),
+        ("concept", NO_LIMIT),
+        ("concept", 0),
+    )
     return Problem(
         "1.2",
         f"أوجد ${lim(a, frac(p * x + q, radical))}$.",
         m(value),
-        wrongs(value, p * a + q, sp.Rational(p * a + q, root * root), NO_LIMIT, 0),
+        wrong,
         (
             rf"نهاية المقام $\sqrt{{{a + r}}}={root}\ne 0$، فنطبّق قاعدة القسمة وقاعدة الجذر.",
             f"نهاية البسط ${tex(p * a + q)}$.",
@@ -675,6 +766,7 @@ def limit_rules_radical(rng: random.Random) -> Problem:
         ),
         "K",
         {"type": "limit", "expr": (p * x + q) / sp.sqrt(x + r), "at": a, "value": value},
+        wrong_kinds=kinds,
     )
 
 
@@ -688,11 +780,20 @@ def limit_dne_after_cancel(rng: random.Random) -> Problem:
     side = rng.choice(["-", "+", "both", "both"])
     answer = NO_LIMIT if side == "both" else infinity(k if side == "+" else -k)
     at = c if side == "both" else f"{c}^{side}"
+    one_sided = "partial" if side == "both" else "sign"
+    wrong, kinds = tagged_wrongs(
+        answer,
+        (one_sided, POS_INF),
+        (one_sided, NEG_INF),
+        ("concept", NO_LIMIT),
+        ("concept", "$0$"),
+        ("formula", m(sp.Rational(k, c - b))),
+    )
     return Problem(
         "1.2",
         f"أوجد ${lim(at, frac(top, bottom))}$.",
         answer,
-        wrongs(answer, POS_INF, NEG_INF, NO_LIMIT, "$0$", m(sp.Rational(k, c - b))),
+        wrong,
         (
             rf"${frac(top, bottom)}={frac(k, x - c)}$ حيث $x\ne {b}$.",
             f"عند ${c}$ يؤول المقام إلى $0$: من اليسار {infinity(-k)} ومن اليمين {infinity(k)}.",
@@ -700,6 +801,7 @@ def limit_dne_after_cancel(rng: random.Random) -> Problem:
         ),
         "A",
         {"type": "infinite_side", "expr": top / bottom, "at": c, "side": side, "answer": answer},
+        wrong_kinds=kinds,
     )
 
 
@@ -717,17 +819,26 @@ def trig_exp_substitution(rng: random.Random) -> Problem:
         expr = (sp.exp(x) + p) / (x + q)
         denominator = x + q
     value = sp.radsimp(sp.simplify(expr.subs(x, at)))
+    wrong, kinds = tagged_wrongs(
+        value,
+        ("concept", NO_LIMIT),
+        ("concept", 0),
+        ("concept", 1),
+        ("formula", sp.Rational(p, q)),
+        ("formula", p),
+    )
     return Problem(
         "1.3",
         f"أوجد ${lim(at, tex(expr))}$.",
         m(value),
-        wrongs(value, NO_LIMIT, 0, 1, sp.Rational(p, q), p),
+        wrong,
         (
             rf"المقام عند $x={tex(at)}$ يساوي ${tex(sp.simplify(denominator.subs(x, at)))}\ne 0$ والدالة متصلة عندها.",
             f"بالتعويض المباشر: $L={tex(value)}$",
         ),
         "K",
         {"type": "limit", "expr": expr, "at": at, "value": value},
+        wrong_kinds=kinds,
     )
 
 
@@ -738,12 +849,15 @@ def removable_discontinuity(rng: random.Random) -> Problem:
     b = rng.choice([n for n in range(-4, 5) if n not in (a, c)])
     top, bottom = sp.expand((x - a) * (x - b)), sp.expand((x - a) * (x - c))
     value = sp.Rational(a - b, a - c)
+    wrong, kinds = tagged_wrongs(
+        value, ("concept", NO_LIMIT), ("concept", 0), ("swap", sp.Rational(a - c, a - b)), ("concept", 1)
+    )
     return Problem(
         "1.4",
         f"الدالة $f(x)={frac(top, bottom)}$ غير متصلة عند $x={a}$ و$x={c}$. "
         f"ما القيمة التي تُعطى للدالة عند $x={a}$ لتصبح متصلة عندها؟",
         m(value),
-        wrongs(value, NO_LIMIT, 0, sp.Rational(a - c, a - b), 1),
+        wrong,
         (
             rf"${frac(top, bottom)}={frac(x - b, x - c)}$ حيث $x\ne {a}$.",
             f"عند $x={a}$ عدم اتصال قابل للإزالة: ${lim(a, 'f(x)')}={tex(value)}$، فنعرّف $f({a})={tex(value)}$.",
@@ -751,6 +865,7 @@ def removable_discontinuity(rng: random.Random) -> Problem:
         ),
         "A",
         {"type": "removable", "expr": top / bottom, "at": a, "pole": c, "value": value},
+        wrong_kinds=kinds,
     )
 
 
@@ -761,11 +876,18 @@ def discontinuity_points(rng: random.Random) -> Problem:
     bottom = sp.expand((x - r1) * (x - r2))
     top = rng.choice([sp.exp(x), x**2 + 1, sp.sqrt(x**2 + 4)])
     answer = f"$x={r1}$ و$x={r2}$"
+    wrong, kinds = tagged_wrongs(
+        answer,
+        ("sign", f"$x={-r2}$ و$x={-r1}$"),
+        ("partial", f"$x={r1}$ فقط"),
+        ("concept", "لا توجد"),
+        ("partial", f"$x={r2}$ فقط"),
+    )
     return Problem(
         "1.4",
         f"حدّد نقاط عدم اتصال الدالة $f(x)={frac(top, bottom)}$.",
         answer,
-        wrongs(answer, f"$x={-r2}$ و$x={-r1}$", f"$x={r1}$ فقط", "لا توجد", f"$x={r2}$ فقط"),
+        wrong,
         (
             r"البسط متصل على $\mathbb{R}$، فعدم الاتصال عند أصفار المقام وحدها.",
             f"${tex(bottom)}={tex(sp.factor(bottom))}$",
@@ -773,6 +895,7 @@ def discontinuity_points(rng: random.Random) -> Problem:
         ),
         "A",
         {"type": "discontinuities", "top": top, "bottom": bottom, "points": [r1, r2]},
+        wrong_kinds=kinds,
     )
 
 
