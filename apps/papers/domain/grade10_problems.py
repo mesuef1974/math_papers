@@ -22,7 +22,7 @@ import sympy as sp
 
 from apps.curriculum.courses import GRADE10_SLUG
 
-from .generators import Problem, frac, m, minus, nz, tagged_wrongs, tex, variant, with_unit, wrongs, x, y
+from .generators import Problem, frac, m, minus, nz, tagged_wrongs, tex, variant, with_unit, x, y
 
 G10 = GRADE10_SLUG
 UP, DOWN = "الأعلى", "الأسفل"
@@ -728,16 +728,16 @@ def solutions(*roots: Any) -> str:
     return " أو ".join(f"$x={tex(r)}$" for r in sorted(set(roots)))
 
 
-def solution_wrongs(answer: str, r1: Any, r2: Any) -> tuple[str, ...]:
+def solution_wrongs(answer: str, r1: Any, r2: Any) -> tuple[tuple[str, ...], tuple[str, ...]]:
     """أخطاء الإشارة أولًا ثم قيم قريبة؛ الثلاثة الأخيرة تختلف دائمًا عن الجواب وعن بعضها."""
-    return wrongs(
+    return tagged_wrongs(
         answer,
-        solutions(-r1, -r2),
-        solutions(-r1, r2),
-        solutions(r1, -r2),
-        solutions(r1 + 1, r2 + 1),
-        solutions(r1 - 1, r2 - 1),
-        solutions(r1, r2 + 1),
+        ("sign", solutions(-r1, -r2)),
+        ("sign", solutions(-r1, r2)),
+        ("sign", solutions(r1, -r2)),
+        ("nearby", solutions(r1 + 1, r2 + 1)),
+        ("nearby", solutions(r1 - 1, r2 - 1)),
+        ("nearby", solutions(r1, r2 + 1)),
     )
 
 
@@ -794,19 +794,20 @@ def solutions_from_x_intercepts(rng: random.Random) -> Problem:
     r1, r2 = two_roots(rng, -7, 7)
     f = sp.expand(rng.choice([-2, -1, 1, 2]) * (x - r1) * (x - r2))
     answer = solutions(r1, r2)
+    wrong, kinds = tagged_wrongs(
+        answer,
+        ("sign", solutions(-r1, -r2)),
+        ("concept", f"$x={f.subs(x, 0)}$"),
+        ("nearby", solutions(r1 + 1, r2 + 1)),
+        ("partial", solutions(r1)),
+        ("partial", solutions(r2)),
+    )
     return Problem(
         "2.1",
         f"يقطع التمثيل البياني للدالة $f(x)={tex(f)}$ المحور $x$ عند النقطتين $({r1},0)$ و$({r2},0)$. "
         f"ما حلول المعادلة ${tex(f)}=0$؟",
         answer,
-        wrongs(
-            answer,
-            solutions(-r1, -r2),
-            f"$x={f.subs(x, 0)}$",
-            solutions(r1 + 1, r2 + 1),
-            solutions(r1),
-            solutions(r2),
-        ),
+        wrong,
         (
             "حلول المعادلة $f(x)=0$ هي أصفار الدالة $f$، أي الإحداثيات $x$ لنقاط تقاطع تمثيلها البياني "
             "مع المحور $x$.",
@@ -814,6 +815,7 @@ def solutions_from_x_intercepts(rng: random.Random) -> Problem:
         ),
         "K",
         {"type": "roots", "f": f, "roots": (r1, r2)},
+        wrong_kinds=kinds,
     )
 
 
@@ -825,24 +827,26 @@ def solutions_from_table(rng: random.Random) -> Problem:
     low, high = r1 - 1, r2 + 1
     table = "، ".join(f"$f({px})={f.subs(x, px)}$" for px in range(low, high + 1))
     answer = solutions(r1, r2)
+    wrong, kinds = tagged_wrongs(
+        answer,
+        ("concept", solutions(low, high)),
+        ("partial", solutions(r1)),
+        ("partial", solutions(r2)),
+        ("sign", solutions(-r1, -r2)),
+        ("concept", f"$x={f.subs(x, 0)}$"),
+    )
     return Problem(
         "2.1",
         f"أُنشئ جدول قيم للدالة $f(x)={tex(f)}$، فكانت: {table}. ما حلول المعادلة ${tex(f)}=0$؟",
         answer,
-        wrongs(
-            answer,
-            solutions(low, high),
-            solutions(r1),
-            solutions(r2),
-            solutions(-r1, -r2),
-            f"$x={f.subs(x, 0)}$",
-        ),
+        wrong,
         (
             "حلول المعادلة هي قيم $x$ التي تكون عندها $f(x)=0$.",
             f"من الجدول: $f({r1})=0$ و$f({r2})=0$، إذن {answer}.",
         ),
         "K",
         {"type": "roots", "f": f, "roots": (r1, r2)},
+        wrong_kinds=kinds,
     )
 
 
@@ -861,15 +865,21 @@ def number_of_solutions_from_vertex(rng: random.Random) -> Problem:
         "المحور $x$ في نقطتين.",
     }[count]
     answer = COUNTS[count]
+    wrong, kinds = tagged_wrongs(
+        answer,
+        *[("concept", text) for n, text in COUNTS.items() if n != count],
+        ("concept", "عدد لا نهائي من الحلول"),
+    )
     return Problem(
         "2.1",
         f"رأس القطع المكافئ الذي يمثّل الدالة التربيعية $f$ هو النقطة $({h},{k})$، ويفتح القطع إلى "
         f"{direction}. كم حلًّا حقيقيًّا للمعادلة $f(x)=0$؟",
         answer,
-        wrongs(answer, *[text for n, text in COUNTS.items() if n != count], "عدد لا نهائي من الحلول"),
+        wrong,
         (reason, f"إذن {COUNT_PHRASES[count]}."),
         "A",
         {"type": "solution_count", "f": (1 if up else -1) * (x - h) ** 2 + k, "count": count},
+        wrong_kinds=kinds,
     )
 
 
@@ -897,6 +907,7 @@ def solution_between_consecutive_integers(rng: random.Random) -> Problem:
         ),
         "A",
         {"type": "sign_change", "f": f, "low": low, "high": low + 1},
+        wrong_kinds=("nearby", "nearby", "nearby"),
     )
 
 
@@ -904,13 +915,21 @@ def solution_between_consecutive_integers(rng: random.Random) -> Problem:
 def approximate_landing_time(rng: random.Random) -> Problem:
     f, v, s, _, low, high = projectile(rng)
     answer = seconds(high)
+    wrong, kinds = tagged_wrongs(
+        answer,
+        ("sign", seconds(-low)),
+        ("formula", seconds(high - low)),
+        ("coefficient", seconds(v / 10)),
+        ("coefficient", seconds(s)),
+        ("formula", seconds(high / 2)),
+    )
     return Problem(
         "2.1",
         "رُميت كرة إلى الأعلى، ويُعطى ارتفاعها بالأمتار بعد $x$ من الثواني بالدالة "
         f"$f(x)={tex(f)}$. يقطع التمثيل البياني للدالة المحور $x$ عند $x\\approx{tenth(low)}$ "
         f"و$x\\approx{tenth(high)}$. بعد كم ثانية تقريبًا تصل الكرة إلى الأرض؟",
         answer,
-        wrongs(answer, seconds(-low), seconds(high - low), seconds(v / 10), seconds(s), seconds(high / 2)),
+        wrong,
         (
             "تصل الكرة إلى الأرض عندما يكون ارتفاعها صفرًا، أي عند حل موجب للمعادلة $f(x)=0$.",
             f"الحل $x\\approx{tenth(low)}$ سالب فلا يمثّل زمنًا، إذن تصل الكرة إلى الأرض بعد "
@@ -918,6 +937,7 @@ def approximate_landing_time(rng: random.Random) -> Problem:
         ),
         "K",
         {"type": "approx_root", "f": f, "value": float(tenth(high))},
+        wrong_kinds=kinds,
     )
 
 
@@ -933,14 +953,16 @@ def zero_product_property(rng: random.Random) -> Problem:
         r1 = sp.Rational(-q, p)
         left, factors = f"({p}x{q:+d}){shifted(r2)}", (f"{p}x{q:+d}", linear(r2))
     answer = solutions(r1, r2)
+    wrong, kinds = solution_wrongs(answer, r1, r2)
     return Problem(
         "2.2",
         f"حلّ المعادلة ${left}=0$ باستعمال خاصية ناتج الضرب الصفري.",
         answer,
-        solution_wrongs(answer, r1, r2),
+        wrong,
         (f"بخاصية ناتج الضرب الصفري: ${factors[0]}=0$ أو ${factors[1]}=0$", f"إذن {answer}."),
         "K",
         {"type": "roots", "f": sp.expand((x - r1) * (x - r2)), "roots": (r1, r2)},
+        wrong_kinds=kinds,
     )
 
 
@@ -952,11 +974,12 @@ def solve_trinomial_by_factoring(rng: random.Random) -> Problem:
             break
     f = sp.expand((x - r1) * (x - r2))
     answer = solutions(r1, r2)
+    wrong, kinds = solution_wrongs(answer, r1, r2)
     return Problem(
         "2.2",
         f"حلّ المعادلة ${tex(f)}=0$ بالتحليل إلى العوامل.",
         answer,
-        solution_wrongs(answer, r1, r2),
+        wrong,
         (
             f"نحلّل ثلاثية الحدود: ${product(r1, r2)}=0$",
             f"بخاصية ناتج الضرب الصفري: ${linear(r1)}=0$ أو ${linear(r2)}=0$",
@@ -964,6 +987,7 @@ def solve_trinomial_by_factoring(rng: random.Random) -> Problem:
         ),
         "K",
         {"type": "roots", "f": f, "roots": (r1, r2)},
+        wrong_kinds=kinds,
     )
 
 
@@ -974,11 +998,12 @@ def solve_rearranged_equation_by_factoring(rng: random.Random) -> Problem:
     other = sp.Rational(-q, p)
     f = sp.expand((p * x + q) * (x - r))
     answer = solutions(other, r)
+    wrong, kinds = solution_wrongs(answer, other, r)
     return Problem(
         "2.2",
         f"حلّ المعادلة ${tex(f + q * r)}={q * r}$ بالتحليل إلى العوامل.",
         answer,
-        solution_wrongs(answer, other, r),
+        wrong,
         (
             f"نكتب المعادلة في الصيغة القياسية: ${tex(f)}=0$",
             f"نحلّل ثلاثية الحدود: $({p}x{q:+d}){shifted(r)}=0$",
@@ -987,6 +1012,7 @@ def solve_rearranged_equation_by_factoring(rng: random.Random) -> Problem:
         ),
         "A",
         {"type": "roots", "f": f, "roots": (other, r)},
+        wrong_kinds=kinds,
     )
 
 
@@ -1014,6 +1040,7 @@ def rectangle_dimensions_by_factoring(rng: random.Random) -> Problem:
         ),
         "A",
         {"type": "rectangle", "width": width, "length": length, "extra": extra, "area": area},
+        wrong_kinds=("nearby", "nearby", "formula"),
     )
 
 
@@ -1029,25 +1056,27 @@ def intercepts_and_axis_from_factored_form(rng: random.Random) -> Problem:
         return f"المقطعان $x$ هما ${first}$ و${second}$، ومحور التماثل $x={axis}$"
 
     answer = text(p, q, h)
+    wrong, kinds = tagged_wrongs(
+        answer,
+        ("sign", text(-q, -p, -h)),
+        ("formula", text(p, q, p + q)),
+        ("formula", text(p, q, q - p)),
+        ("nearby", text(p - 1, q - 1, h - 1)),
+        ("nearby", text(p, q, h + 1)),
+        ("nearby", text(p, q, h - 1)),
+    )
     return Problem(
         "2.2",
         f"أوجد المقطعين $x$ ومعادلة محور التماثل للتمثيل البياني للدالة $f(x)={lead(a)}{product(p, q)}$.",
         answer,
-        wrongs(
-            answer,
-            text(-q, -p, -h),
-            text(p, q, p + q),
-            text(p, q, q - p),
-            text(p - 1, q - 1, h - 1),
-            text(p, q, h + 1),
-            text(p, q, h - 1),
-        ),
+        wrong,
         (
             f"المقطعان $x$ هما صفرا الدالة: $x={p}$ و$x={q}$.",
             f"محور التماثل يمرّ بمنتصف المسافة بين المقطعين: $x=\\dfrac{{{plus(p, q)}}}{{2}}={h}$",
         ),
         "K",
         {"type": "factored_axis", "f": sp.expand(a * (x - p) * (x - q)), "roots": (p, q), "axis": h},
+        wrong_kinds=kinds,
     )
 
 
@@ -1062,20 +1091,21 @@ def factored_form_from_intercepts_and_point(rng: random.Random) -> Problem:
         return f"$f(x)={lead(lead_a)}{product(*sorted((first, second)))}$"
 
     answer = rule(a, p, q)
+    wrong, kinds = tagged_wrongs(
+        answer,
+        ("sign", rule(a, -p, -q)),
+        ("sign", rule(-a, p, q)),
+        ("coefficient", rule(1, p, q)),
+        ("sign", rule(-a, -p, -q)),
+        ("coefficient", rule(2 * a, p, q)),
+        ("coefficient", rule(3 * a, p, q)),
+    )
     return Problem(
         "2.2",
         f"يقطع قطع مكافئ المحور $x$ عند $x={p}$ و$x={q}$، ويمرّ بالنقطة $({s},{t})$. "
         "اكتب قاعدة الدالة التربيعية التي تمثّله في الصيغة التحليلية.",
         answer,
-        wrongs(
-            answer,
-            rule(a, -p, -q),
-            rule(-a, p, q),
-            rule(1, p, q),
-            rule(-a, -p, -q),
-            rule(2 * a, p, q),
-            rule(3 * a, p, q),
-        ),
+        wrong,
         (
             f"المقطعان $x$ هما ${p}$ و${q}$، فالصيغة التحليلية $f(x)=a{product(p, q)}$",
             f"نعوّض النقطة $({s},{t})$: ${t}=a({minus(s, p)})({minus(s, q)})$",
@@ -1083,6 +1113,7 @@ def factored_form_from_intercepts_and_point(rng: random.Random) -> Problem:
         ),
         "A",
         {"type": "factored_point", "f": sp.expand(a * (x - p) * (x - q)), "roots": (p, q), "point": (s, t)},
+        wrong_kinds=kinds,
     )
 
 
@@ -1091,23 +1122,25 @@ def factored_form_from_intercepts_and_point(rng: random.Random) -> Problem:
 def simplify_square_root(rng: random.Random) -> Problem:
     k, free = rng.randint(2, 9), rng.choice(SQUARE_FREE)
     n = k * k * free
+    wrong, kinds = tagged_wrongs(
+        m(root(k, free)),
+        ("square", m(root(k * k, free))),
+        ("swap", m(root(free, k))),
+        ("formula", m(root(k, k * free))),
+        ("nearby", m(root(k + 1, free))),
+    )
     return Problem(
         "2.3",
         f"اكتب $\\sqrt{{{n}}}$ في أبسط صورة.",
         m(root(k, free)),
-        wrongs(
-            m(root(k, free)),
-            m(root(k * k, free)),
-            m(root(free, k)),
-            m(root(k, k * free)),
-            m(root(k + 1, free)),
-        ),
+        wrong,
         (
             f"أكبر عامل مربع كامل للعدد ${n}$ هو ${k * k}$: $\\sqrt{{{n}}}=\\sqrt{{{k * k}\\cdot{free}}}$",
             f"$\\sqrt{{{k * k}}}\\cdot\\sqrt{{{free}}}={root(k, free)}$",
         ),
         "K",
         {"type": "radical", "square": sp.Integer(n), "coefficient": sp.Integer(k), "radicand": free},
+        wrong_kinds=kinds,
     )
 
 
@@ -1116,17 +1149,18 @@ def simplify_multiple_of_square_root(rng: random.Random) -> Problem:
     c, k, free = rng.randint(2, 6), rng.randint(2, 5), rng.choice(SQUARE_FREE)
     n = k * k * free
     answer = m(root(c * k, free))
+    wrong, kinds = tagged_wrongs(
+        answer,
+        ("formula", m(root(c + k, free))),
+        ("square", m(root(c * k * k, free))),
+        ("partial", m(root(c, free))),
+        ("nearby", m(root(c * k + 1, free))),
+    )
     return Problem(
         "2.3",
         f"اكتب ${root(c, n)}$ في أبسط صورة.",
         answer,
-        wrongs(
-            answer,
-            m(root(c + k, free)),
-            m(root(c * k * k, free)),
-            m(root(c, free)),
-            m(root(c * k + 1, free)),
-        ),
+        wrong,
         (
             f"$\\sqrt{{{n}}}=\\sqrt{{{k * k}\\cdot{free}}}={root(k, free)}$",
             f"${root(c, n)}={c}\\cdot{root(k, free)}={root(c * k, free)}$",
@@ -1138,6 +1172,7 @@ def simplify_multiple_of_square_root(rng: random.Random) -> Problem:
             "coefficient": sp.Integer(c * k),
             "radicand": free,
         },
+        wrong_kinds=kinds,
     )
 
 
@@ -1152,11 +1187,21 @@ def simplify_square_root_with_variable(rng: random.Random) -> Problem:
 
     answer = text(k, half, odd)
     even = f"x^{{{2 * half}}}"
+    wrong = (
+        text(k, half, 1 - odd),
+        text(k * k, half, odd),
+        text(k, p, odd),
+    )
+    kinds = (
+        "partial",
+        "square",
+        "formula",
+    )
     return Problem(
         "2.3",
         f"اكتب $\\sqrt{{{n}x^{{{p}}}}}$ في أبسط صورة، حيث $x\\geq 0$.",
         answer,
-        (text(k, half, 1 - odd), text(k * k, half, odd), text(k, p, odd)),
+        wrong,
         (
             "نكتب المجذور بدلالة عوامل مربعة كاملة: "
             f"$\\sqrt{{{n}x^{{{p}}}}}=\\sqrt{{{k * k}\\cdot {even}\\cdot {free}{'x' if odd else ''}}}$",
@@ -1165,6 +1210,7 @@ def simplify_square_root_with_variable(rng: random.Random) -> Problem:
         ),
         "A",
         {"type": "radical", "square": n * x**p, "coefficient": k * x**half, "radicand": free * x**odd},
+        wrong_kinds=kinds,
     )
 
 
@@ -1176,17 +1222,18 @@ def multiply_radical_expressions(rng: random.Random) -> Problem:
     first, second, outer = g * u, g * v, a * b
     answer = m(root(outer * g, u * v))
     split = f"{g * g}\\cdot{u * v}"
+    wrong, kinds = tagged_wrongs(
+        answer,
+        ("partial", m(root(outer, u * v))),
+        ("square", m(root(outer * g * g, u * v))),
+        ("formula", m(root((a + b) * g, u * v))),
+        ("formula", m(root(outer * g, u * v * g))),
+    )
     return Problem(
         "2.3",
         f"أوجد ناتج الضرب في أبسط صورة: ${root(a, first)}\\cdot{root(b, second)}$",
         answer,
-        wrongs(
-            answer,
-            m(root(outer, u * v)),
-            m(root(outer * g * g, u * v)),
-            m(root((a + b) * g, u * v)),
-            m(root(outer * g, u * v * g)),
-        ),
+        wrong,
         (
             "نضرب المعاملين معًا والمجذورين معًا: "
             f"${root(a, first)}\\cdot{root(b, second)}={root(outer, first * second)}$",
@@ -1199,6 +1246,7 @@ def multiply_radical_expressions(rng: random.Random) -> Problem:
             "coefficient": sp.Integer(outer * g),
             "radicand": u * v,
         },
+        wrong_kinds=kinds,
     )
 
 
@@ -1225,11 +1273,18 @@ def rectangle_diagonal_as_radical(rng: random.Random) -> Problem:
     width, length, k, free = rng.choice(DIAGONAL_RECTANGLES)
     n = width * width + length * length
     answer = m(root(k, free))
+    wrong, kinds = tagged_wrongs(
+        answer,
+        ("formula", m(width + length)),
+        ("square", m(root(k * k, free))),
+        ("nearby", m(root(k + 1, free))),
+        ("nearby", m(root(k, free + 1))),
+    )
     return Problem(
         "2.3",
         f"{thing} مستطيلة الشكل طولها ${length}$ وعرضها ${width}$ {unit}. اكتب طول قطرها في أبسط صورة جذرية.",
         answer,
-        wrongs(answer, m(width + length), m(root(k * k, free)), m(root(k + 1, free)), m(root(k, free + 1))),
+        wrong,
         (
             f"بنظرية فيثاغورس طول القطر $\\sqrt{{{length}^2+{width}^2}}=\\sqrt{{{n}}}$",
             f"$\\sqrt{{{n}}}=\\sqrt{{{k * k}\\cdot{free}}}={root(k, free)}$",
@@ -1241,6 +1296,7 @@ def rectangle_diagonal_as_radical(rng: random.Random) -> Problem:
             "coefficient": sp.Integer(k),
             "radicand": free,
         },
+        wrong_kinds=kinds,
     )
 
 
@@ -1256,17 +1312,25 @@ def binomial(b: int) -> str:
 def constant_completing_the_square(rng: random.Random) -> Problem:
     b = rng.choice([*range(2, 21, 2), 3, 5, 7, 9]) * rng.choice([1, -1])
     c = sp.Rational(b, 2) ** 2
+    wrong, kinds = tagged_wrongs(
+        c,
+        ("square", sp.Rational(b, 2)),
+        ("formula", sp.Integer(b * b)),
+        ("formula", sp.Rational(b * b, 2)),
+        ("formula", sp.Integer(2 * b)),
+    )
     return Problem(
         "2.5",
         f"أوجد قيمة $c$ التي تجعل $x^2{b:+d}x+c$ ثلاثية حدود في صورة مربع كامل.",
         m(c),
-        wrongs(c, sp.Rational(b, 2), sp.Integer(b * b), sp.Rational(b * b, 2), sp.Integer(2 * b)),
+        wrong,
         (
             f"نضيف مربع نصف معامل $x$: $c=\\left(\\dfrac{{{b}}}{{2}}\\right)^2={tex(c)}$",
             f"ثلاثية الحدود $x^2{b:+d}x+{tex(c)}$ تساوي ${binomial(b)}^2$.",
         ),
         "K",
         {"type": "perfect_square", "b": b, "c": c},
+        wrong_kinds=kinds,
     )
 
 
@@ -1275,23 +1339,25 @@ def perfect_square_trinomial_as_binomial_square(rng: random.Random) -> Problem:
     h = nz(rng, -10, 10)
     b, c = 2 * h, h * h
     answer = f"${binomial(b)}^2$"
+    wrong, kinds = tagged_wrongs(
+        answer,
+        ("sign", f"$(x{-h:+d})^2$"),
+        ("coefficient", f"$(x{b:+d})^2$"),
+        ("concept", f"$(x{h:+d})(x{-h:+d})$"),
+        ("coefficient", f"$(x{c:+d})^2$"),
+    )
     return Problem(
         "2.5",
         f"اكتب ثلاثية الحدود $x^2{b:+d}x+{c}$ في صورة مربع ثنائية حد.",
         answer,
-        wrongs(
-            answer,
-            f"$(x{-h:+d})^2$",
-            f"$(x{b:+d})^2$",
-            f"$(x{h:+d})(x{-h:+d})$",
-            f"$(x{c:+d})^2$",
-        ),
+        wrong,
         (
             f"نصف معامل $x$ هو ${h}$، ومربعه ${c}$ يساوي الحد الثابت.",
             f"إذن $x^2{b:+d}x+{c}={binomial(b)}^2$.",
         ),
         "K",
         {"type": "perfect_square", "b": b, "c": c},
+        wrong_kinds=kinds,
     )
 
 
@@ -1315,18 +1381,25 @@ def solve_by_completing_the_square(rng: random.Random) -> Problem:
     h, d = nz(rng, -6, 6), rng.choice(SQUARE_FREE)
     f = sp.expand((x - h) ** 2 - d)
     answer = surd_solutions(h, d)
+    wrong = (
+        surd_solutions(-h, d),
+        f"$x={h}\\pm{d}$",
+        surd_solutions(h, d + h * h),
+    )
+    kinds = (
+        "sign",
+        "formula",
+        "partial",
+    )
     return Problem(
         "2.5",
         f"حلّ المعادلة ${tex(f)}=0$ بإكمال المربع.",
         answer,
-        (
-            surd_solutions(-h, d),
-            f"$x={h}\\pm{d}$",
-            surd_solutions(h, d + h * h),
-        ),
+        wrong,
         completing_steps(h, d),
         "A",
         {"type": "roots", "f": f, "roots": (h + sp.sqrt(d), h - sp.sqrt(d))},
+        wrong_kinds=kinds,
     )
 
 
@@ -1336,18 +1409,25 @@ def solve_by_completing_the_square_with_leading_coefficient(rng: random.Random) 
     monic = sp.expand((x - h) ** 2 - d)
     f = sp.expand(a * monic)
     answer = surd_solutions(h, d)
+    wrong = (
+        surd_solutions(-h, d),
+        surd_solutions(h, a * d),
+        f"$x={h}\\pm{d}$",
+    )
+    kinds = (
+        "sign",
+        "formula",
+        "formula",
+    )
     return Problem(
         "2.5",
         f"حلّ المعادلة ${tex(f)}=0$ بإكمال المربع.",
         answer,
-        (
-            surd_solutions(-h, d),
-            surd_solutions(h, a * d),
-            f"$x={h}\\pm{d}$",
-        ),
+        wrong,
         (f"نقسم الطرفين على ${a}$: ${tex(monic)}=0$", *completing_steps(h, d)),
         "A",
         {"type": "roots", "f": f, "roots": (h + sp.sqrt(d), h - sp.sqrt(d))},
+        wrong_kinds=kinds,
     )
 
 
@@ -1361,17 +1441,18 @@ def vertex_form_by_completing_the_square(rng: random.Random) -> Problem:
         return f"$f(x)={vertex_form(1, dh, dk)}$، والرأس $({vertex[0]},{vertex[1]})$"
 
     answer = text(h, k, (h, k))
+    wrong, kinds = tagged_wrongs(
+        answer,
+        ("sign", text(-h, k, (-h, k))),
+        ("sign", text(h, k, (-h, k))),
+        ("coefficient", text(h, c, (h, c))),
+        ("sign", text(h, -k, (h, -k))),
+    )
     return Problem(
         "2.5",
         f"اكتب الدالة $f(x)={tex(f)}$ في صيغة الرأس بإكمال المربع، ثم حدّد رأس القطع المكافئ.",
         answer,
-        wrongs(
-            answer,
-            text(-h, k, (-h, k)),
-            text(h, k, (-h, k)),
-            text(h, c, (h, c)),
-            text(h, -k, (h, -k)),
-        ),
+        wrong,
         (
             f"نضيف مربع نصف معامل $x$ ونطرحه: $f(x)=(x^2{b:+d}x+{h * h})-{h * h}{signed(c)}$",
             f"$f(x)={vertex_form(1, h, k)}$",
@@ -1379,6 +1460,7 @@ def vertex_form_by_completing_the_square(rng: random.Random) -> Problem:
         ),
         "A",
         {"type": "vertex", "f": f, "vertex": (h, k)},
+        wrong_kinds=kinds,
     )
 
 
@@ -1398,11 +1480,12 @@ def quadratic_formula_rational_solutions(rng: random.Random) -> Problem:
     other, disc = sp.Rational(-q, a), (q + a * r) ** 2
     f = a * x**2 + b * x + c
     answer = solutions(other, r)
+    wrong, kinds = solution_wrongs(answer, other, r)
     return Problem(
         "2.6",
         f"حلّ المعادلة ${tex(f)}=0$ باستعمال القانون العام.",
         answer,
-        solution_wrongs(answer, other, r),
+        wrong,
         (
             *formula_values(a, b, c, disc),
             f"$x=\\dfrac{{-b\\pm\\sqrt{{b^2-4ac}}}}{{2a}}=\\dfrac{{{-b}\\pm{abs(q + a * r)}}}{{{2 * a}}}$",
@@ -1410,6 +1493,7 @@ def quadratic_formula_rational_solutions(rng: random.Random) -> Problem:
         ),
         "K",
         {"type": "roots", "f": f, "roots": (other, r)},
+        wrong_kinds=kinds,
     )
 
 
@@ -1427,11 +1511,21 @@ def quadratic_formula_irrational_solutions(rng: random.Random) -> Problem:
 
     surd = f"\\sqrt{{{disc}}}"
     answer = text(-b, surd, 2 * a)
+    wrong = (
+        text(b, surd, 2 * a),
+        text(-b, surd, a if a > 1 else 4),
+        text(-b, str(disc), 2 * a),
+    )
+    kinds = (
+        "sign",
+        "formula",
+        "formula",
+    )
     return Problem(
         "2.6",
         f"حلّ المعادلة ${tex(f)}=0$ باستعمال القانون العام.",
         answer,
-        (text(b, surd, 2 * a), text(-b, surd, a if a > 1 else 4), text(-b, str(disc), 2 * a)),
+        wrong,
         (
             *formula_values(a, b, c, disc),
             f"$x=\\dfrac{{-b\\pm\\sqrt{{b^2-4ac}}}}{{2a}}=\\dfrac{{{-b}\\pm{surd}}}{{{2 * a}}}$",
@@ -1442,6 +1536,7 @@ def quadratic_formula_irrational_solutions(rng: random.Random) -> Problem:
             "f": f,
             "roots": ((-b + sp.sqrt(disc)) / (2 * a), (-b - sp.sqrt(disc)) / (2 * a)),
         },
+        wrong_kinds=kinds,
     )
 
 
@@ -1466,17 +1561,28 @@ def discriminant_and_number_of_solutions(rng: random.Random) -> Problem:
         return f"المميز ${value}$، و{COUNT_PHRASES[n]}"
 
     answer = text(disc, count)
+    wrong = (
+        text(disc, (count + 1) % 3),
+        text(disc, (count + 2) % 3),
+        text(slip, count_from(slip)),
+    )
+    kinds = (
+        "concept",
+        "concept",
+        "formula",
+    )
     return Problem(
         "2.6",
         f"أوجد قيمة المميز للمعادلة ${tex(a * x**2 + b * x + c)}=0$، ثم حدّد عدد حلولها الحقيقية.",
         answer,
-        (text(disc, (count + 1) % 3), text(disc, (count + 2) % 3), text(slip, count_from(slip))),
+        wrong,
         (
             *formula_values(a, b, c, disc),
             f"المميز {('سالب', 'يساوي صفرًا', 'موجب')[count]}، إذن {COUNT_PHRASES[count]}.",
         ),
         "K",
         {"type": "solution_count", "f": a * x**2 + b * x + c, "count": count, "discriminant": disc},
+        wrong_kinds=kinds,
     )
 
 
@@ -1485,11 +1591,18 @@ def constant_for_one_real_solution(rng: random.Random) -> Problem:
     a, b = rng.choice([1, 2, 3, 4]), 2 * nz(rng, -6, 6)
     k = sp.Rational(b * b, 4 * a)
     reduced = f"={tex(k)}" if math.gcd(b * b, 4 * a) > 1 else ""
+    wrong, kinds = tagged_wrongs(
+        k,
+        ("formula", sp.Rational(b * b, a)),
+        ("formula", sp.Rational(b * b, 2 * a)),
+        ("formula", sp.Rational(b, 2 * a)),
+        ("sign", -k),
+    )
     return Problem(
         "2.6",
         f"أوجد قيمة $k$ التي تجعل للمعادلة ${lead(a)}x^2{b:+d}x+k=0$ حلًّا حقيقيًّا واحدًا.",
         m(k),
-        wrongs(k, sp.Rational(b * b, a), sp.Rational(b * b, 2 * a), sp.Rational(b, 2 * a), -k),
+        wrong,
         (
             "للمعادلة حل حقيقي واحد عندما يساوي المميز صفرًا: $b^2-4ac=0$",
             f"$({b})^2-4({a})k=0$",
@@ -1497,6 +1610,7 @@ def constant_for_one_real_solution(rng: random.Random) -> Problem:
         ),
         "A",
         {"type": "solution_count", "f": a * x**2 + b * x + k, "count": 1},
+        wrong_kinds=kinds,
     )
 
 
@@ -1504,13 +1618,21 @@ def constant_for_one_real_solution(rng: random.Random) -> Problem:
 def landing_time_by_quadratic_formula(rng: random.Random) -> Problem:
     f, v, s, disc, low, high = projectile(rng)
     answer = seconds(high)
+    wrong, kinds = tagged_wrongs(
+        answer,
+        ("sign", seconds(-low)),
+        ("formula", seconds(2 * high)),
+        ("coefficient", seconds(v / 10)),
+        ("coefficient", seconds(s)),
+        ("formula", seconds(high - low)),
+    )
     return Problem(
         "2.6",
         "قُذف جسم إلى الأعلى، ويُعطى ارتفاعه بالأمتار بعد $x$ من الثواني بالدالة "
         f"$f(x)={tex(f)}$. استعمل القانون العام لإيجاد الزمن الذي يصل عنده الجسم إلى الأرض، "
         "مقرّبًا الناتج إلى أقرب جزء من عشرة.",
         answer,
-        wrongs(answer, seconds(-low), seconds(2 * high), seconds(v / 10), seconds(s), seconds(high - low)),
+        wrong,
         (
             f"يصل الجسم إلى الأرض عندما $f(x)=0$، أي ${tex(f)}=0$",
             *formula_values(-5, v, s, disc),
@@ -1520,6 +1642,7 @@ def landing_time_by_quadratic_formula(rng: random.Random) -> Problem:
         ),
         "A",
         {"type": "approx_root", "f": f, "value": float(tenth(high))},
+        wrong_kinds=kinds,
     )
 
 
@@ -1547,17 +1670,19 @@ def points(*pairs: tuple[Any, Any]) -> str:
     return " و".join(f"$({tex(px)},{tex(py)})$" for px, py in ordered)
 
 
-def point_wrongs(answer: str, first: tuple[int, int], second: tuple[int, int]) -> tuple[str, ...]:
+def point_wrongs(
+    answer: str, first: tuple[int, int], second: tuple[int, int]
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
     """تبديل الإحداثيات وأخطاء الإشارة أولًا؛ البديلان الأخيران يخالفان الجواب وبعضهما دائمًا."""
     (x1, y1), (x2, y2) = first, second
-    return wrongs(
+    return tagged_wrongs(
         answer,
-        points((x1, y2), (x2, y1)),
-        points((y1, x1), (y2, x2)),
-        points((x1, -y1), (x2, -y2)),
-        points((-x1, y1), (-x2, y2)),
-        points((x1 + 1, y1), (x2 + 1, y2)),
-        points((x1, y1 + 1), (x2, y2 + 1)),
+        ("swap", points((x1, y2), (x2, y1))),
+        ("swap", points((y1, x1), (y2, x2))),
+        ("sign", points((x1, -y1), (x2, -y2))),
+        ("sign", points((-x1, y1), (-x2, y2))),
+        ("nearby", points((x1 + 1, y1), (x2 + 1, y2))),
+        ("nearby", points((x1, y1 + 1), (x2, y2 + 1))),
     )
 
 
@@ -1568,19 +1693,20 @@ def rational_equation_with_constant_numerator(rng: random.Random) -> Problem:
     c = rng.choice([n for n in range(-6, 7) if n not in (0, 1)])
     value = sp.Rational(a, c) - b
     answer = solutions(value)
+    wrong, kinds = tagged_wrongs(
+        answer,
+        ("sign", solutions(sp.Rational(a, c) + b)),
+        ("sign", solutions(-value)),
+        ("formula", solutions(a * c - b)),
+        ("formula", solutions(sp.Rational(c, a) - b)),
+        ("nearby", solutions(value + 1)),
+        ("nearby", solutions(value - 1)),
+    )
     return Problem(
         "2.7",
         f"حلّ المعادلة النسبية ${frac(a, linear(-b))}={c}$.",
         answer,
-        wrongs(
-            answer,
-            solutions(sp.Rational(a, c) + b),
-            solutions(-value),
-            solutions(a * c - b),
-            solutions(sp.Rational(c, a) - b),
-            solutions(value + 1),
-            solutions(value - 1),
-        ),
+        wrong,
         (
             f"نضرب طرفي المعادلة في المقام ${linear(-b)}$: ${a}={lead(c)}{shifted(-b)}$",
             f"${a}={lead(c)}x{c * b:+d}$",
@@ -1589,6 +1715,7 @@ def rational_equation_with_constant_numerator(rng: random.Random) -> Problem:
         ),
         "K",
         {"type": "rational_equation", "lhs": a / (x + b), "rhs": sp.Integer(c), "solutions": (value,)},
+        wrong_kinds=kinds,
     )
 
 
@@ -1598,20 +1725,21 @@ def rational_equation_as_proportion(rng: random.Random) -> Problem:
     b, d = rng.sample(range(-8, 9), 2)
     value = sp.Rational(c * b - a * d, a - c)
     answer = solutions(value)
+    wrong, kinds = tagged_wrongs(
+        answer,
+        ("sign", solutions(-value)),
+        ("sign", solutions(sp.Rational(c * b + a * d, a - c))),
+        ("formula", solutions(sp.Rational(c * b - a * d, a + c))),
+        ("swap", solutions(sp.Rational(a * b - c * d, a - c))),
+        ("nearby", solutions(value + 1)),
+        ("nearby", solutions(value - 1)),
+        ("nearby", solutions(value + 2)),
+    )
     return Problem(
         "2.7",
         f"حلّ المعادلة النسبية ${frac(a, linear(-b))}={frac(c, linear(-d))}$.",
         answer,
-        wrongs(
-            answer,
-            solutions(-value),
-            solutions(sp.Rational(c * b + a * d, a - c)),
-            solutions(sp.Rational(c * b - a * d, a + c)),
-            solutions(sp.Rational(a * b - c * d, a - c)),
-            solutions(value + 1),
-            solutions(value - 1),
-            solutions(value + 2),
-        ),
+        wrong,
         (
             f"نضرب طرفي المعادلة في المقام المشترك ${shifted(-b)}{shifted(-d)}$: "
             f"${lead(a)}{shifted(-d)}={lead(c)}{shifted(-b)}$",
@@ -1622,6 +1750,7 @@ def rational_equation_as_proportion(rng: random.Random) -> Problem:
         ),
         "K",
         {"type": "rational_equation", "lhs": a / (x + b), "rhs": c / (x + d), "solutions": (value,)},
+        wrong_kinds=kinds,
     )
 
 
@@ -1643,17 +1772,18 @@ def values_excluded_from_solutions(rng: random.Random) -> Problem:
         return f"$x={first}$ و$x={second}$"
 
     answer = both(low, high)
+    wrong, kinds = tagged_wrongs(
+        answer,
+        ("sign", both(-high, -low)),
+        ("partial", f"$x={low}$ فقط"),
+        ("partial", f"$x={high}$ فقط"),
+        ("formula", both(low + high, low * high)),
+    )
     return Problem(
         "2.7",
         f"أيّ قيم $x$ لا يمكن أن تكون حلًّا للمعادلة ${text}$ لأنها تجعل مقامًا فيها يساوي صفرًا؟",
         answer,
-        wrongs(
-            answer,
-            both(-high, -low),
-            f"$x={low}$ فقط",
-            f"$x={high}$ فقط",
-            both(low + high, low * high),
-        ),
+        wrong,
         (
             f"المقام ${linear(p)}$ يساوي صفرًا عند $x={p}$، والمقام ${linear(q)}$ يساوي صفرًا عند $x={q}$.",
             f"${tex(bottom)}={product(low, high)}$، فيساوي صفرًا عند القيمتين نفسيهما.",
@@ -1661,6 +1791,7 @@ def values_excluded_from_solutions(rng: random.Random) -> Problem:
         ),
         "K",
         {"type": "excluded_values", "lhs": lhs, "rhs": rhs, "values": (p, q)},
+        wrong_kinds=kinds,
     )
 
 
@@ -1680,20 +1811,21 @@ def work_rate_with_speed_ratio(rng: random.Random) -> Problem:
         if wanted_fast
         else f"إذن تحتاج {second} إلى {answer} {task} بمفردها."
     )
+    wrong, kinds = tagged_wrongs(
+        answer,
+        ("concept", hours(slow if wanted_fast else fast)),
+        ("formula", hours(k * t)),
+        ("formula", hours(2 * t)),
+        ("formula", hours(slow + fast)),
+        ("nearby", hours(wanted + 1)),
+        ("nearby", hours(wanted + 2)),
+    )
     return Problem(
         "2.7",
         f"{together} في {hours(t)} عندما تعملان معًا. سرعة {first} في العمل تساوي {RATIOS[k]} سرعة "
         f"{second}. ما المدة التي تحتاج إليها {first if wanted_fast else second} {task} إذا عملت بمفردها؟",
         answer,
-        wrongs(
-            answer,
-            hours(slow if wanted_fast else fast),
-            hours(k * t),
-            hours(2 * t),
-            hours(slow + fast),
-            hours(wanted + 1),
-            hours(wanted + 2),
-        ),
+        wrong,
         (
             f"ليكن $x$ عدد الساعات التي تحتاج إليها {second} بمفردها، فمعدل عملها $\\dfrac{{1}}{{x}}$ من "
             f"العمل في الساعة، ومعدل عمل {first} $\\dfrac{{{k}}}{{x}}$.",
@@ -1703,6 +1835,7 @@ def work_rate_with_speed_ratio(rng: random.Random) -> Problem:
         ),
         "A",
         {"type": "work_rate", "times": (slow, fast), "together": t, "ratio": k, "answer": wanted},
+        wrong_kinds=kinds,
     )
 
 
@@ -1713,20 +1846,21 @@ def work_rate_with_one_time_known(rng: random.Random) -> Problem:
     t = known * other // (known + other)
     first, second = f"{noun} الأولى", f"{noun} الثانية"
     answer = hours(other)
+    wrong, kinds = tagged_wrongs(
+        answer,
+        ("formula", hours(known - t)),
+        ("formula", hours(known + t)),
+        ("formula", hours(2 * t)),
+        ("nearby", hours(other + 1)),
+        ("nearby", hours(other + 2)),
+        ("nearby", hours(other + 3)),
+    )
     return Problem(
         "2.7",
         f"تحتاج {first} إلى {hours(known)} {task} إذا عملت بمفردها، وإذا عملت معها {second} أنجزتا "
         f"العمل في {hours(t)}. ما المدة التي تحتاج إليها {second} {task} إذا عملت بمفردها؟",
         answer,
-        wrongs(
-            answer,
-            hours(known - t),
-            hours(known + t),
-            hours(2 * t),
-            hours(other + 1),
-            hours(other + 2),
-            hours(other + 3),
-        ),
+        wrong,
         (
             f"ليكن $x$ عدد الساعات التي تحتاج إليها {second} بمفردها. معدل عمل {first} "
             f"$\\dfrac{{1}}{{{known}}}$ من العمل في الساعة، ومعدل عمل {second} $\\dfrac{{1}}{{x}}$.",
@@ -1737,6 +1871,7 @@ def work_rate_with_one_time_known(rng: random.Random) -> Problem:
         ),
         "A",
         {"type": "work_rate", "times": (known, other), "together": t, "answer": other},
+        wrong_kinds=kinds,
     )
 
 
@@ -1755,19 +1890,20 @@ def rational_equation_with_extraneous_solution(rng: random.Random) -> Problem:
     text, lhs, rhs, _ = rational_sum_equation(a, p, q, c)
     cleared = sp.expand(a * (x - q) + x * (x - p) - c)
     answer = solutions(good)
+    wrong, kinds = tagged_wrongs(
+        answer,
+        ("concept", solutions(bad)),
+        ("concept", solutions(good, bad)),
+        ("sign", solutions(-good)),
+        ("sign", solutions(-good, -bad)),
+        ("nearby", solutions(good + 1)),
+        ("nearby", solutions(good - 1)),
+    )
     return Problem(
         "2.7",
         f"ما حل المعادلة ${text}$؟",
         answer,
-        wrongs(
-            answer,
-            solutions(bad),
-            solutions(good, bad),
-            solutions(-good),
-            solutions(-good, -bad),
-            solutions(good + 1),
-            solutions(good - 1),
-        ),
+        wrong,
         (
             f"نضرب طرفي المعادلة في المقام المشترك الأصغر ${product(*sorted((p, q)))}$: "
             f"${lead(a)}{shifted(q)}+x{shifted(p)}={c}$",
@@ -1785,6 +1921,7 @@ def rational_equation_with_extraneous_solution(rng: random.Random) -> Problem:
             "extraneous": (bad,),
             "cleared": cleared,
         },
+        wrong_kinds=kinds,
     )
 
 
@@ -1812,15 +1949,16 @@ def number_of_solutions_of_linear_quadratic_system(rng: random.Random) -> Proble
     parabola = sp.expand(difference + line)
     b, c = -2 * h, h * h + gap
     answer = SYSTEM_COUNTS[count]
+    wrong, kinds = tagged_wrongs(
+        answer,
+        *[("concept", text) for n, text in SYSTEM_COUNTS.items() if n != count],
+        ("concept", "للنظام عدد لا نهائي من الحلول"),
+    )
     return Problem(
         "2.8",
         f"ما عدد حلول النظام الخطي-التربيعي $y={tex(parabola)}$ و$y={tex(line)}$؟",
         answer,
-        wrongs(
-            answer,
-            *[text for n, text in SYSTEM_COUNTS.items() if n != count],
-            "للنظام عدد لا نهائي من الحلول",
-        ),
+        wrong,
         (
             f"نساوي المقدارين: ${tex(parabola)}={tex(line)}$، أي ${tex(difference)}=0$",
             *formula_values(1, b, c, b * b - 4 * c),
@@ -1829,6 +1967,7 @@ def number_of_solutions_of_linear_quadratic_system(rng: random.Random) -> Proble
         ),
         "K",
         {"type": "system", "equations": (y - parabola, y - line), "count": count},
+        wrong_kinds=kinds,
     )
 
 
@@ -1862,12 +2001,13 @@ def back_substitution(slope: int, d: int, r1: int, r2: int) -> str:
 def system_solutions_from_intersection_points(rng: random.Random) -> Problem:
     parabola, line, _, slope, d, first, second = crossing_system(rng, rng.choice([1, -1]))
     answer = points(first, second)
+    wrong, kinds = point_wrongs(answer, first, second)
     return Problem(
         "2.8",
         f"يتقاطع التمثيلان البيانيان للمعادلتين $y={tex(parabola)}$ و$y={tex(line)}$ في نقطتين "
         f"إحداثياهما $x$ هما ${first[0]}$ و${second[0]}$. ما حلول النظام المكوّن من المعادلتين؟",
         answer,
-        point_wrongs(answer, first, second),
+        wrong,
         (
             "حلول النظام الخطي-التربيعي هي نقاط تقاطع المستقيم مع القطع المكافئ.",
             back_substitution(slope, d, first[0], second[0]),
@@ -1875,6 +2015,7 @@ def system_solutions_from_intersection_points(rng: random.Random) -> Problem:
         ),
         "K",
         {"type": "system", "equations": (y - parabola, y - line), "solutions": (first, second)},
+        wrong_kinds=kinds,
     )
 
 
@@ -1882,11 +2023,12 @@ def system_solutions_from_intersection_points(rng: random.Random) -> Problem:
 def solve_system_by_elimination(rng: random.Random) -> Problem:
     parabola, line, difference, slope, d, first, second = crossing_system(rng, 1)
     answer = points(first, second)
+    wrong, kinds = point_wrongs(answer, first, second)
     return Problem(
         "2.8",
         f"حلّ النظام الخطي-التربيعي $y={tex(parabola)}$ و$y={tex(line)}$ بطريقة الحذف.",
         answer,
-        point_wrongs(answer, first, second),
+        wrong,
         (
             f"نطرح المعادلة الخطية من المعادلة التربيعية لحذف $y$: $0={tex(difference)}$",
             f"نحلّل إلى العوامل: ${product(first[0], second[0])}=0$، إذن {solutions(first[0], second[0])}",
@@ -1895,6 +2037,7 @@ def solve_system_by_elimination(rng: random.Random) -> Problem:
         ),
         "A",
         {"type": "system", "equations": (y - parabola, y - line), "solutions": (first, second)},
+        wrong_kinds=kinds,
     )
 
 
@@ -1904,11 +2047,12 @@ def solve_system_by_substitution(rng: random.Random) -> Problem:
     parabola, line, difference, slope, d, first, second = crossing_system(rng, leading)
     monic = sp.expand(difference / leading)
     answer = points(first, second)
+    wrong, kinds = point_wrongs(answer, first, second)
     return Problem(
         "2.8",
         f"حلّ النظام الخطي-التربيعي $y={tex(line)}$ و$y={tex(parabola)}$ بطريقة التعويض.",
         answer,
-        point_wrongs(answer, first, second),
+        wrong,
         (
             f"نعوّض ${tex(line)}$ بدل $y$ في المعادلة التربيعية: ${tex(line)}={tex(parabola)}$",
             f"نكتب المعادلة في الصيغة القياسية: ${tex(difference)}=0$، ونقسم طرفيها على ${leading}$: "
@@ -1919,6 +2063,7 @@ def solve_system_by_substitution(rng: random.Random) -> Problem:
         ),
         "A",
         {"type": "system", "equations": (y - parabola, y - line), "solutions": (first, second)},
+        wrong_kinds=kinds,
     )
 
 
@@ -1935,17 +2080,18 @@ def ball_and_drone_at_same_height(rng: random.Random) -> Problem:
         return f"بعد ${time}$ ثوانٍ، وعلى ارتفاع {meters(level)}"
 
     answer = text(at, height)
+    wrong, kinds = tagged_wrongs(
+        answer,
+        ("coefficient", text(at, d + n * at)),
+        *[("nearby", text(at + step, slope * (at + step) + d)) for step in (1, 2, 3)],
+    )
     return Problem(
         "2.8",
         "قُذفت كرة إلى الأعلى من سطح مبنى، ويُعطى ارتفاعها بالأمتار بعد $x$ من الثواني بالدالة "
         f"$y={tex(ball)}$. في اللحظة نفسها بدأت طائرة مسيّرة بالصعود، ويُعطى ارتفاعها بالدالة "
         f"$y={tex(drone)}$. بعد كم ثانية يكون للكرة والطائرة الارتفاع نفسه؟ وما ذلك الارتفاع؟",
         answer,
-        wrongs(
-            answer,
-            text(at, d + n * at),
-            *[text(at + step, slope * (at + step) + d) for step in (1, 2, 3)],
-        ),
+        wrong,
         (
             f"يكون الارتفاعان متساويين عندما ${tex(ball)}={tex(drone)}$",
             f"نكتب المعادلة في الصيغة القياسية: ${tex(sp.expand(drone - ball))}=0$",
@@ -1958,6 +2104,7 @@ def ball_and_drone_at_same_height(rng: random.Random) -> Problem:
             "equations": (y - ball, y - drone),
             "solutions": ((at, height), (other, slope * other + d)),
         },
+        wrong_kinds=kinds,
     )
 
 
@@ -1994,6 +2141,10 @@ def inequality_solution(r1: int, r2: int, inside: bool, strict: bool) -> tuple[s
         f"الفترة ${interval(None, r1, False, closed)}$ أو الفترة ${interval(r2, None, closed, False)}$",
         ((None, r1, False, closed), (r2, None, closed, False)),
     )
+
+
+# أنواع أخطاء البدائل الثلاثة في solved_inequality بترتيبها: الجانب معكوس، الطرف المفتوح/المغلق معكوس، كلاهما
+OTHERS_KINDS = ("direction", "partial", "concept")
 
 
 def solved_inequality(
@@ -2035,6 +2186,7 @@ def quadratic_inequality_from_x_intercepts(rng: random.Random) -> Problem:
         ),
         "K",
         {"type": "inequality", "conditions": ((f, op),), "pieces": pieces},
+        wrong_kinds=OTHERS_KINDS,
     )
 
 
@@ -2065,6 +2217,7 @@ def quadratic_inequality_without_zeros(rng: random.Random) -> Problem:
             "conditions": ((f, op),),
             "pieces": ((None, None, False, False),) if holds else (),
         },
+        wrong_kinds=("concept", "concept", "concept"),
     )
 
 
@@ -2089,6 +2242,7 @@ def interval_for_set_of_real_numbers(rng: random.Random) -> Problem:
                 (not closed_low, not closed_high),
             )
         )
+        kinds = ("partial", "partial", "concept")
         conditions = ((x - low, ">=" if closed_low else ">"), (x - high, "<=" if closed_high else "<"))
         pieces = ((low, high, closed_low, closed_high),)
         steps = (
@@ -2104,6 +2258,7 @@ def interval_for_set_of_real_numbers(rng: random.Random) -> Problem:
         condition = f"x{(MORE if upward else LESS)[closed]} {at}"
         answer = ray(upward, closed)
         wrong = (ray(upward, not closed), ray(not upward, closed), ray(not upward, not closed))
+        kinds = ("partial", "direction", "concept")
         conditions = ((x - at, (">" if upward else "<") + ("=" if closed else "")),)
         pieces = ((at, None, closed, False),) if upward else ((None, at, False, closed),)
         steps = (
@@ -2121,6 +2276,7 @@ def interval_for_set_of_real_numbers(rng: random.Random) -> Problem:
         (*steps, f"إذن الفترة هي {answer}."),
         "K",
         {"type": "inequality", "conditions": conditions, "pieces": pieces},
+        wrong_kinds=kinds,
     )
 
 
@@ -2145,6 +2301,7 @@ def algebraic_inequality(f: sp.Expr, leading: int, r1: int, r2: int, op: str, fa
         ),
         "A",
         {"type": "inequality", "conditions": ((f, op),), "pieces": pieces},
+        wrong_kinds=OTHERS_KINDS,
     )
 
 
@@ -2239,20 +2396,21 @@ def circle_equation_from_center_and_radius(rng: random.Random) -> Problem:
     h, k = rng.randint(-7, 7), rng.randint(-7, 7)
     shown, r2, slip = radius(rng)
     answer = circle(h, k, r2)
+    wrong, kinds = tagged_wrongs(
+        answer,
+        ("sign", circle(-h, -k, r2)),
+        ("square", circle(h, k, slip)),
+        ("sign", circle(-h, -k, slip)),
+        ("swap", circle(k, h, r2)),
+        ("formula", circle(h, k, 2 * r2)),
+        ("nearby", circle(h, k, r2 + 1)),
+        ("formula", circle(h, k, 3 * r2)),
+    )
     return Problem(
         "2.10",
         f"اكتب معادلة الدائرة التي مركزها $({h},{k})$ وطول نصف قطرها ${shown}$.",
         answer,
-        wrongs(
-            answer,
-            circle(-h, -k, r2),
-            circle(h, k, slip),
-            circle(-h, -k, slip),
-            circle(k, h, r2),
-            circle(h, k, 2 * r2),
-            circle(h, k, r2 + 1),
-            circle(h, k, 3 * r2),
-        ),
+        wrong,
         (
             f"$h={h}$، $k={k}$، $r={shown}$",
             "الصيغة القياسية لمعادلة الدائرة: $(x-h)^2+(y-k)^2=r^2$",
@@ -2260,6 +2418,7 @@ def circle_equation_from_center_and_radius(rng: random.Random) -> Problem:
         ),
         "K",
         circle_check(h, k, r2),
+        wrong_kinds=kinds,
     )
 
 
@@ -2272,17 +2431,18 @@ def center_and_radius_from_circle_equation(rng: random.Random) -> Problem:
         return f"المركز $({a},{b})$، وطول نصف القطر ${length}$"
 
     answer = text(h, k, shown)
+    wrong, kinds = tagged_wrongs(
+        answer,
+        ("sign", text(-h, -k, shown)),
+        ("square", text(h, k, str(r2))),
+        ("sign", text(-h, -k, str(r2))),
+        ("swap", text(k, h, shown)),
+    )
     return Problem(
         "2.10",
         f"أوجد مركز الدائرة {circle(h, k, r2)} وطول نصف قطرها.",
         answer,
-        wrongs(
-            answer,
-            text(-h, -k, shown),
-            text(h, k, str(r2)),
-            text(-h, -k, str(r2)),
-            text(k, h, shown),
-        ),
+        wrong,
         (
             "الصيغة القياسية لمعادلة الدائرة: $(x-h)^2+(y-k)^2=r^2$",
             f"نكتب المعادلة بهذه الصيغة: $(x-({h}))^2+(y-({k}))^2=({shown})^2$",
@@ -2290,6 +2450,7 @@ def center_and_radius_from_circle_equation(rng: random.Random) -> Problem:
         ),
         "K",
         circle_check(h, k, r2),
+        wrong_kinds=kinds,
     )
 
 
@@ -2299,18 +2460,19 @@ def circle_equation_from_center_and_point(rng: random.Random) -> Problem:
     dx, dy = nz(rng, -6, 6), nz(rng, -6, 6)
     p, q, r2 = h + dx, k + dy, dx * dx + dy * dy
     answer = circle(h, k, r2)
+    wrong, kinds = tagged_wrongs(
+        answer,
+        ("concept", circle(p, q, r2)),
+        ("sign", circle(-h, -k, r2)),
+        ("formula", circle(h, k, abs(dx) + abs(dy))),
+        ("formula", circle(h, k, 2 * r2)),
+        ("nearby", circle(h, k, r2 + 1)),
+    )
     return Problem(
         "2.10",
         f"اكتب معادلة الدائرة التي مركزها $({h},{k})$ وتمرّ بالنقطة $({p},{q})$.",
         answer,
-        wrongs(
-            answer,
-            circle(p, q, r2),
-            circle(-h, -k, r2),
-            circle(h, k, abs(dx) + abs(dy)),
-            circle(h, k, 2 * r2),
-            circle(h, k, r2 + 1),
-        ),
+        wrong,
         (
             "طول نصف القطر هو المسافة بين المركز والنقطة، ونجد مربعه بنظرية فيثاغورس: "
             f"$r^2=({minus(p, h)})^2+({minus(q, k)})^2={dx * dx}+{dy * dy}={r2}$",
@@ -2319,6 +2481,7 @@ def circle_equation_from_center_and_point(rng: random.Random) -> Problem:
         ),
         "A",
         circle_check(h, k, r2, points=((p, q),)),
+        wrong_kinds=kinds,
     )
 
 
@@ -2332,19 +2495,20 @@ def circle_equation_from_diameter_endpoints(rng: random.Random) -> Problem:
             break
     (x1, y1), (x2, y2), r2 = (h - dx, k - dy), (h + dx, k + dy), dx * dx + dy * dy
     answer = circle(h, k, r2)
+    wrong, kinds = tagged_wrongs(
+        answer,
+        ("formula", circle(h, k, 4 * r2)),
+        ("concept", circle(x2, y2, r2)),
+        ("sign", circle(-h, -k, r2)),
+        ("formula", circle(h, k, 2 * r2)),
+        ("nearby", circle(h, k, r2 + 1)),
+    )
     return Problem(
         "2.10",
         f"على مخطط إحداثي لحديقة عامة، تقع نهايتا قطر {place} عند النقطتين $({x1},{y1})$ و$({x2},{y2})$. "
         f"اكتب معادلة الدائرة التي تمثّل {edge}.",
         answer,
-        wrongs(
-            answer,
-            circle(h, k, 4 * r2),
-            circle(x2, y2, r2),
-            circle(-h, -k, r2),
-            circle(h, k, 2 * r2),
-            circle(h, k, r2 + 1),
-        ),
+        wrong,
         (
             "مركز الدائرة نقطة منتصف القطر: "
             f"$\\left(\\dfrac{{{plus(x1, x2)}}}{{2}},\\dfrac{{{plus(y1, y2)}}}{{2}}\\right)=({h},{k})$",
@@ -2354,6 +2518,7 @@ def circle_equation_from_diameter_endpoints(rng: random.Random) -> Problem:
         ),
         "A",
         circle_check(h, k, r2, points=((x1, y1), (x2, y2)), diameter=True),
+        wrong_kinds=kinds,
     )
 
 
@@ -2367,12 +2532,13 @@ def point_position_relative_to_circle(rng: random.Random) -> Problem:
     p, q, d2 = h + dx, k + dy, dx * dx + dy * dy
     sign, word = RELATIONS[position]
     answer = POSITIONS[position]
+    wrong = (*[text for name, text in POSITIONS.items() if name != position], "هي مركز الدائرة")
     return Problem(
         "2.10",
         f"حدّد موقع النقطة $({p},{q})$ بالنسبة إلى الدائرة {circle(h, k, r2)}: هل تقع على الدائرة أم "
         "داخلها أم خارجها؟",
         answer,
-        (*[text for name, text in POSITIONS.items() if name != position], "هي مركز الدائرة"),
+        wrong,
         (
             f"نعوّض $x={p}$ و$y={q}$ في الطرف الأيسر من المعادلة: "
             f"$({minus(p, h)})^2+({minus(q, k)})^2={dx * dx}+{dy * dy}={d2}$",
@@ -2387,6 +2553,7 @@ def point_position_relative_to_circle(rng: random.Random) -> Problem:
             "point": (p, q),
             "position": position,
         },
+        wrong_kinds=("concept", "concept", "concept"),
     )
 
 
@@ -2395,11 +2562,12 @@ def solve_line_and_circle_system(rng: random.Random) -> Problem:
     r2, slope, c, first, second = rng.choice(LINE_CIRCLE_SYSTEMS)
     line = slope * x + c
     answer = points(first, second)
+    wrong, kinds = point_wrongs(answer, first, second)
     return Problem(
         "2.10",
         f"حلّ النظام الخطي-التربيعي $y={tex(line)}$ و$x^2+y^2={r2}$.",
         answer,
-        point_wrongs(answer, first, second),
+        wrong,
         (
             f"نعوّض ${tex(line)}$ بدل $y$ في معادلة الدائرة: $x^2+({tex(line)})^2={r2}$",
             f"نفكّ المربع ونجمع الحدود المتشابهة: ${tex(sp.expand(x**2 + line**2 - r2))}=0$",
@@ -2410,6 +2578,7 @@ def solve_line_and_circle_system(rng: random.Random) -> Problem:
         ),
         "A",
         {"type": "system", "equations": (y - line, x**2 + y**2 - r2), "solutions": (first, second)},
+        wrong_kinds=kinds,
     )
 
 
@@ -2429,25 +2598,19 @@ def lengths(value: Any, unit: str = CM) -> str:
     return with_unit(sp.nsimplify(value), unit)
 
 
-def length_wrongs(value: Any, *candidates: Any, unit: str = CM) -> tuple[str, ...]:
-    """ثلاثة بدائل أطوال موجبة مختلفة عن الجواب: الأخطاء الشائعة أولًا ثم قيم قريبة."""
-    seen, result = {sp.nsimplify(value)}, []
-    for candidate in (*candidates, value + 1, value - 1, value + 2, 2 * value, value + 3, value - 2):
+def tagged_lengths(
+    value: Any, *pairs: tuple[str, Any], unit: str = CM
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """ثلاثة بدائل أطوال موجبة مختلفة عن الجواب، كل مرشَّح مع نوع خطئه؛ ما أُضيف تتمةً «nearby»."""
+    seen, texts, kinds = {sp.nsimplify(value)}, [], []
+    fillers = tuple(("nearby", c) for c in (value + 1, value - 1, value + 2, 2 * value, value + 3, value - 2))
+    for kind, candidate in (*pairs, *fillers):
         shown = sp.nsimplify(candidate)
         if shown > 0 and shown not in seen:
             seen.add(shown)
-            result.append(lengths(shown, unit))
-    return tuple(result[:3])
-
-
-def text_wrongs(answer: str, *candidates: str) -> tuple[str, ...]:
-    """بدائل نصية مختلفة عن الجواب وبعضها عن بعض."""
-    seen, result = {answer}, []
-    for candidate in candidates:
-        if candidate not in seen:
-            seen.add(candidate)
-            result.append(candidate)
-    return tuple(result[:3])
+            texts.append(lengths(shown, unit))
+            kinds.append(kind)
+    return tuple(texts[:3]), tuple(kinds[:3])
 
 
 def reduced_pair(rng: random.Random, low: int, high: int) -> tuple[int, int]:
@@ -2546,6 +2709,7 @@ def triangle_similarity_criterion(rng: random.Random) -> Problem:
         ),
         "K",
         {"type": "criterion", "kind": kind, **data},
+        wrong_kinds=("concept", "concept", "concept"),
     )
 
 
@@ -2556,12 +2720,18 @@ def missing_side_in_similar_triangles(rng: random.Random) -> Problem:
     step = 2 if isinstance(k, sp.Rational) else 1
     p, q = rng.sample([n for n in range(4, 15) if n % step == 0], 2)
     big_p, big_q = k * p, k * q
+    wrong, kinds = tagged_lengths(
+        big_q,
+        ("formula", q + (big_p - p)),
+        ("concept", big_p + q),
+        ("formula", sp.Rational(q) / k),
+    )
     return Problem(
         "3.3",
         f"المثلثان ${a1}{b1}{c1}$ و${a2}{b2}{c2}$ متشابهان ($\\triangle {a1}{b1}{c1}\\sim\\triangle {a2}{b2}{c2}$). "
         f"إذا كان ${a1}{b1}={p}$ سم و${b1}{c1}={q}$ سم و${a2}{b2}={big_p}$ سم، فما طول ${b2}{c2}$؟",
         lengths(big_q),
-        length_wrongs(big_q, q + (big_p - p), big_p + q, sp.Rational(q) / k),
+        wrong,
         (
             "الأضلاع المتناظرة في المثلثين المتشابهين متناسبة: "
             f"$\\dfrac{{{a2}{b2}}}{{{a1}{b1}}}=\\dfrac{{{b2}{c2}}}{{{b1}{c1}}}$",
@@ -2570,6 +2740,7 @@ def missing_side_in_similar_triangles(rng: random.Random) -> Problem:
         ),
         "K",
         {"type": "similar_sides", "first": (p, q), "second": (big_p, big_q), "asked": 1},
+        wrong_kinds=kinds,
     )
 
 
@@ -2581,17 +2752,18 @@ def perimeter_of_similar_triangle(rng: random.Random) -> Problem:
     base = tuple(s * mult for s in rng.choice(SIDE_TRIPLES))
     scale_up = tuple(k * s for s in base)
     perimeter, big_perimeter = sum(base), sum(scale_up)
+    wrong, kinds = tagged_lengths(
+        big_perimeter,
+        ("concept", perimeter),
+        ("formula", scale_up[0] + base[1] + base[2]),
+        ("formula", perimeter + 3 * (scale_up[0] - base[0])),
+    )
     return Problem(
         "3.3",
         f"المثلث ${a1}{b1}{c1}$ أطوال أضلاعه ${base[0]}$ سم و${base[1]}$ سم و${base[2]}$ سم، وهو يشابه المثلث "
         f"${a2}{b2}{c2}$ حيث ${a2}{b2}$ يناظر ${a1}{b1}$ وطوله ${scale_up[0]}$ سم. أوجد محيط المثلث ${a2}{b2}{c2}$.",
         lengths(big_perimeter),
-        length_wrongs(
-            big_perimeter,
-            perimeter,
-            scale_up[0] + base[1] + base[2],
-            perimeter + 3 * (scale_up[0] - base[0]),
-        ),
+        wrong,
         (
             f"معامل التشابه بين الضلعين المتناظرين: $\\dfrac{{{scale_up[0]}}}{{{base[0]}}}={tex(k)}$",
             f"محيط المثلث ${a1}{b1}{c1}$ يساوي ${base[0]}+{base[1]}+{base[2]}={perimeter}$ سم.",
@@ -2600,6 +2772,7 @@ def perimeter_of_similar_triangle(rng: random.Random) -> Problem:
         ),
         "A",
         {"type": "similar_sides", "first": base, "second": scale_up, "perimeter": (perimeter, big_perimeter)},
+        wrong_kinds=kinds,
     )
 
 
@@ -2615,13 +2788,19 @@ def side_from_similar_triangles_algebraic(rng: random.Random) -> Problem:
     first, second = x + p, m * x - n
     shown_first, shown_second = f"x+{p}", f"{m}x-{n}"
     value = k * (x0 + p)
+    wrong, kinds = tagged_lengths(
+        value,
+        ("partial", x0),
+        ("partial", x0 + p),
+        ("formula", k * x0),
+    )
     return Problem(
         "3.3",
         f"المثلثان ${a1}{b1}{c1}$ و${a2}{b2}{c2}$ متشابهان ($\\triangle {a1}{b1}{c1}\\sim\\triangle {a2}{b2}{c2}$). "
         f"إذا كان ${a1}{b1}={shown_first}$ سم و${a2}{b2}={shown_second}$ سم و${b1}{c1}={q}$ سم و${b2}{c2}={k * q}$ سم، "
         f"فما طول ${a2}{b2}$؟",
         lengths(value),
-        length_wrongs(value, x0, x0 + p, k * x0),
+        wrong,
         (
             "الأضلاع المتناظرة متناسبة: "
             f"$\\dfrac{{{a1}{b1}}}{{{a2}{b2}}}=\\dfrac{{{b1}{c1}}}{{{b2}{c2}}}$، "
@@ -2638,6 +2817,7 @@ def side_from_similar_triangles_algebraic(rng: random.Random) -> Problem:
             "value": value,
             "expr": second,
         },
+        wrong_kinds=kinds,
     )
 
 
@@ -2657,12 +2837,19 @@ def height_from_shadows(rng: random.Random) -> Problem:
     h, s = rng.choice([(1, 2), (2, 3), (3, 2), (2, 5), (3, 4), (4, 3), (5, 4), (3, 5), (6, 5)])
     t = rng.randint(3, 14)
     big_h, big_s = h * t, s * t
+    wrong, kinds = tagged_lengths(
+        big_h,
+        ("formula", big_s + h - s),
+        ("formula", big_s - h),
+        ("formula", big_s - s),
+        unit=METER,
+    )
     return Problem(
         "3.3",
         f"في اللحظة نفسها من النهار، يبلغ طول ظل {known} ارتفاع{pronoun} ${h}$ م ما مقداره ${s}$ م، "
         f"ويبلغ طول ظل {target} ما مقداره ${big_s}$ م. ما ارتفاع {target}؟",
         lengths(big_h, METER),
-        length_wrongs(big_h, big_s + h - s, big_s - h, big_s - s, unit=METER),
+        wrong,
         (
             "أشعة الشمس متوازية، فالمثلثان القائمان (الجسم وظله) فيهما زاوية ارتفاع الشمس نفسها وزاوية قائمة، "
             "فهما متشابهان بتطابق زاويتين.",
@@ -2672,6 +2859,7 @@ def height_from_shadows(rng: random.Random) -> Problem:
         ),
         "A",
         {"type": "proportion", "pairs": ((h, s), (big_h, big_s)), "value": big_h},
+        wrong_kinds=kinds,
     )
 
 
@@ -2748,6 +2936,7 @@ def similarity_statement_with_altitude(rng: random.Random) -> Problem:
             "answer": sequence,
             "wrong": tuple(orders[:3]),
         },
+        wrong_kinds=("swap", "swap", "swap"),
     )
 
 
@@ -2759,12 +2948,18 @@ def leg_from_projection(rng: random.Random) -> Problem:
     projection = values["AD" if which == "AC" else "DB"]
     leg = values[which]
     leg_name, near = (f"{a}{c}", f"{a}{d}") if which == "AC" else (f"{b}{c}", f"{d}{b}")
+    wrong, kinds = tagged_lengths(
+        leg,
+        ("square", projection * values["AB"]),
+        ("formula", values["AB"] - projection),
+        ("concept", values["CD"]),
+    )
     return Problem(
         "3.4",
         f"في المثلث ${a}{b}{c}$ القائم الزاوية في ${c}$ رُسم العمود ${c}{d}$ على الوتر ${a}{b}$. "
         f"إذا كان ${near}={projection}$ سم و${a}{b}={values['AB']}$ سم، فما طول ${leg_name}$؟",
         lengths(leg),
-        length_wrongs(leg, projection * values["AB"], values["AB"] - projection, values["CD"]),
+        wrong,
         (
             "طول كل ساق هو المتوسط الهندسي بين طول الوتر وطول مسقط الساق عليه: "
             f"${leg_name}^2={near}\\times {a}{b}$",
@@ -2779,6 +2974,7 @@ def leg_from_projection(rng: random.Random) -> Problem:
             "value": leg,
             "given": {"AD" if which == "AC" else "DB": projection, "AB": values["AB"]},
         },
+        wrong_kinds=kinds,
     )
 
 
@@ -2796,13 +2992,19 @@ def segment_from_similar_right_triangles(rng: random.Random) -> Problem:
     else:
         ratio = f"\\dfrac{{{c}{d}}}{{{d}{b}}}=\\dfrac{{{a}{c}}}{{{c}{b}}}"
         solve = f"{d}{b}=\\dfrac{{{cd}\\times {bc}}}{{{ac}}}"
+    wrong, kinds = tagged_lengths(
+        value,
+        ("swap", other),
+        ("concept", values["AB"]),
+        ("concept", cd),
+    )
     return Problem(
         "3.4",
         f"في المثلث ${a}{b}{c}$ القائم الزاوية في ${c}$ رُسم العمود ${c}{d}$ على الوتر ${a}{b}$. "
         f"إذا كان ${a}{c}={ac}$ سم و${b}{c}={bc}$ سم و${c}{d}={cd}$ سم، فاستعمل تشابه المثلثين "
         f"${a}{c}{d}$ و${c}{b}{d}$ لإيجاد طول ${name}$.",
         lengths(value),
-        length_wrongs(value, other, values["AB"], cd),
+        wrong,
         (
             f"المثلثان ${a}{c}{d}$ و${c}{b}{d}$ قائمان في ${d}$، والزاوية ${a}{c}{d}$ تطابق الزاوية ${b}$ "
             f"(كلتاهما متممة للزاوية ${a}$)، فـ $\\triangle {a}{c}{d}\\sim\\triangle {c}{b}{d}$.",
@@ -2817,6 +3019,7 @@ def segment_from_similar_right_triangles(rng: random.Random) -> Problem:
             "asked": asked,
             "value": value,
         },
+        wrong_kinds=kinds,
     )
 
 
@@ -2825,12 +3028,18 @@ def altitude_as_geometric_mean(rng: random.Random) -> Problem:
     first, second = rng.sample(rng.choice(SQUARE_PRODUCT_PAIRS), 2)
     a, b, c, d = rng.choice(RIGHT_NAMES)
     height = math.isqrt(first * second)
+    wrong, kinds = tagged_lengths(
+        height,
+        ("concept", sp.Rational(first + second, 2)),
+        ("square", first * second),
+        ("formula", first + second),
+    )
     return Problem(
         "3.4",
         f"في المثلث ${a}{b}{c}$ القائم الزاوية في ${c}$ رُسم العمود ${c}{d}$ على الوتر ${a}{b}$. "
         f"إذا كان ${a}{d}={first}$ سم و${d}{b}={second}$ سم، فما طول ${c}{d}$؟",
         lengths(height),
-        length_wrongs(height, sp.Rational(first + second, 2), first * second, first + second),
+        wrong,
         (
             "طول العمود النازل من رأس القائمة على الوتر هو المتوسط الهندسي بين طولي قطعتي الوتر: "
             f"${c}{d}^2={a}{d}\\times {d}{b}$",
@@ -2839,6 +3048,7 @@ def altitude_as_geometric_mean(rng: random.Random) -> Problem:
         ),
         "K",
         {"type": "geometric_mean", "parts": (first, second), "value": height},
+        wrong_kinds=kinds,
     )
 
 
@@ -2849,12 +3059,18 @@ def altitude_from_two_legs(rng: random.Random) -> Problem:
     first, second = rng.sample((values["AC"], values["BC"]), 2)
     height, hypotenuse = values["CD"], values["AB"]
     projection = sp.Rational(first * first, hypotenuse)
+    wrong, kinds = tagged_lengths(
+        height,
+        ("formula", sp.Rational(first * second, 2)),
+        ("formula", first + second - hypotenuse),
+        ("concept", projection),
+    )
     return Problem(
         "3.4",
         f"في المثلث ${a}{b}{c}$ القائم الزاوية في ${c}$ رُسم العمود ${c}{d}$ على الوتر ${a}{b}$. "
         f"إذا كان ${a}{c}={first}$ سم و${b}{c}={second}$ سم، فما طول ${c}{d}$؟",
         lengths(height),
-        length_wrongs(height, sp.Rational(first * second, 2), first + second - hypotenuse, projection),
+        wrong,
         (
             f"نجد الوتر بنظرية فيثاغورس: ${a}{b}=\\sqrt{{{first}^2+{second}^2}}={hypotenuse}$ سم.",
             f"من ${a}{c}^2={a}{d}\\times {a}{b}$ نجد مسقط ${a}{c}$ على الوتر: "
@@ -2864,6 +3080,7 @@ def altitude_from_two_legs(rng: random.Random) -> Problem:
         ),
         "A",
         {"type": "altitude", "legs": (first, second), "asked": "CD", "value": height},
+        wrong_kinds=kinds,
     )
 
 
@@ -2880,12 +3097,19 @@ def geometric_mean_in_context(rng: random.Random) -> Problem:
     first, second = rng.sample(rng.choice(SQUARE_PRODUCT_PAIRS), 2)
     place, support, short = rng.choice(PATH_SCENES)
     total, height = first + second, math.isqrt(first * second)
+    wrong, kinds = tagged_lengths(
+        height,
+        ("concept", sp.Rational(total, 2)),
+        ("square", first * second),
+        ("formula", total),
+        unit=METER,
+    )
     return Problem(
         "3.4",
         f"في {place} أُنشئ {support} من رأس الزاوية القائمة عموديًا على الوتر، فقسم الوتر إلى قطعتين "
         f"طولاهما ${first}$ م و${second}$ م. ما طول {short}؟",
         lengths(height, METER),
-        length_wrongs(height, sp.Rational(total, 2), first * second, total, unit=METER),
+        wrong,
         (
             "المثلثان الصغيران الناتجان عن الخط العمودي متشابهان مع المثلث الكبير، فطول الخط هو المتوسط الهندسي "
             "بين طولي قطعتي الوتر.",
@@ -2893,6 +3117,7 @@ def geometric_mean_in_context(rng: random.Random) -> Problem:
         ),
         "A",
         {"type": "geometric_mean", "parts": (first, second), "value": height},
+        wrong_kinds=kinds,
     )
 
 
@@ -2921,17 +3146,18 @@ def segment_from_parallel_line(rng: random.Random) -> Problem:
     def label(n: str) -> str:
         return names[n] if n == unknown else str(given[n])
 
+    wrong, kinds = tagged_lengths(
+        value,
+        ("formula", top + bottom_one - bottom_two),
+        ("swap", sp.Rational(top * bottom_two, bottom_one)),
+        ("swap", sp.Rational(bottom_one * bottom_two, top)),
+    )
     return Problem(
         "3.5",
         f"في المثلث ${a}{b}{c}$ تقع النقطة ${d}$ على ${a}{b}$ والنقطة ${e}$ على ${a}{c}$، والقطعة ${d}{e}$ توازي ${b}{c}$. "
         f"إذا كان {facts}، فما طول ${names[unknown]}$؟",
         lengths(value),
-        length_wrongs(
-            value,
-            top + bottom_one - bottom_two,
-            sp.Rational(top * bottom_two, bottom_one),
-            sp.Rational(bottom_one * bottom_two, top),
-        ),
+        wrong,
         (
             "المستقيم الموازي لأحد أضلاع المثلث يقسم الضلعين الآخرين إلى أجزاء متناسبة: "
             f"$\\dfrac{{{a}{d}}}{{{d}{b}}}=\\dfrac{{{a}{e}}}{{{e}{c}}}$",
@@ -2940,6 +3166,7 @@ def segment_from_parallel_line(rng: random.Random) -> Problem:
         ),
         "K",
         {"type": "parallel_division", "values": given, "asked": unknown, "value": value},
+        wrong_kinds=kinds,
     )
 
 
@@ -2952,12 +3179,18 @@ def midsegment_length(rng: random.Random) -> Problem:
     value, given = (half, base) if know_base else (base, half)
     given_text = f"${b}{c}={base}$ سم" if know_base else f"${d}{e}={half}$ سم"
     asked_name = f"{d}{e}" if know_base else f"{b}{c}"
+    wrong, kinds = tagged_lengths(
+        value,
+        ("concept", given),
+        ("formula", base + half),
+        ("formula", abs(base - half)),
+    )
     return Problem(
         "3.5",
         f"في المثلث ${a}{b}{c}$ النقطة ${d}$ منتصف ${a}{b}$ والنقطة ${e}$ منتصف ${a}{c}$. "
         f"إذا كان {given_text}، فما طول ${asked_name}$؟",
         lengths(value),
-        length_wrongs(value, given, base + half, abs(base - half)),
+        wrong,
         (
             f"القطعة ${d}{e}$ تصل بين منتصفي ضلعين في المثلث، فهي توازي الضلع الثالث وطولها نصف طوله: "
             f"${d}{e}=\\dfrac{{1}}{{2}}{b}{c}$",
@@ -2971,6 +3204,7 @@ def midsegment_length(rng: random.Random) -> Problem:
             "asked": "DE" if know_base else "BC",
             "value": value,
         },
+        wrong_kinds=kinds,
     )
 
 
@@ -3003,12 +3237,13 @@ def parallel_line_with_whole_side(rng: random.Random) -> Problem:
             f"إذن ${a}{e}={ae}$ سم."
         )
         finish = f"${a}{e}={ae}$ سم." if unknown == "AE" else f"${e}{c}={a}{c}-{a}{e}={side}-{ae}={ec}$ سم."
+    texts, kinds = tagged_lengths(value, *[("formula", w) for w in wrong])
     return Problem(
         "3.5",
         f"في المثلث ${a}{b}{c}$ تقع ${d}$ على ${a}{b}$ و${e}$ على ${a}{c}$ والقطعة ${d}{e}$ توازي ${b}{c}$. "
         f"إذا كان {given}، فما طول ${names[unknown]}$؟",
         lengths(value),
-        length_wrongs(value, *wrong),
+        texts,
         (
             f"نجد ${d}{b}={a}{b}-{a}{d}={db}$ سم، ثم نستعمل التناسب الناتج عن توازي ${d}{e}$ و${b}{c}$: "
             f"$\\dfrac{{{a}{d}}}{{{d}{b}}}=\\dfrac{{{a}{e}}}{{{e}{c}}}$",
@@ -3022,6 +3257,7 @@ def parallel_line_with_whole_side(rng: random.Random) -> Problem:
             "asked": unknown,
             "value": value,
         },
+        wrong_kinds=kinds,
     )
 
 
@@ -3042,12 +3278,18 @@ def medial_triangle_perimeter(rng: random.Random) -> Problem:
         ]
     )
     perimeter = sum(sides) // 2
+    wrong, kinds = tagged_lengths(
+        perimeter,
+        ("concept", sum(sides)),
+        ("partial", sides[0] // 2 + sides[1] // 2),
+        ("formula", sum(sides) // 4),
+    )
     return Problem(
         "3.5",
         f"في المثلث ${a}{b}{c}$: ${a}{b}={sides[0]}$ سم و${b}{c}={sides[1]}$ سم و${c}{a}={sides[2]}$ سم. "
         f"النقاط ${d}$ و${e}$ و${f}$ منتصفات ${a}{b}$ و${b}{c}$ و${c}{a}$ على الترتيب. أوجد محيط المثلث ${d}{e}{f}$.",
         lengths(perimeter),
-        length_wrongs(perimeter, sum(sides), sides[0] // 2 + sides[1] // 2, sum(sides) // 4),
+        wrong,
         (
             f"كل ضلع في المثلث ${d}{e}{f}$ يصل بين منتصفي ضلعين في المثلث الكبير، فطوله نصف طول الضلع الثالث.",
             f"${d}{e}=\\dfrac{{{sides[2]}}}{{2}}={sides[2] // 2}$ سم، و${e}{f}=\\dfrac{{{sides[0]}}}{{2}}={sides[0] // 2}$ سم، "
@@ -3056,6 +3298,7 @@ def medial_triangle_perimeter(rng: random.Random) -> Problem:
         ),
         "A",
         {"type": "medial_perimeter", "sides": sides, "value": perimeter},
+        wrong_kinds=kinds,
     )
 
 
@@ -3094,6 +3337,7 @@ def parallel_line_find_x(rng: random.Random) -> Problem:
         ),
         "R",
         {"type": "parallel_algebra", "proportion": (ad_expr, db, ae_expr, ec), "x": x0, "total": whole},
+        wrong_kinds=("nearby", "nearby", "partial"),
     )
 
 
@@ -3114,20 +3358,21 @@ def parallel_lines_two_transversals(rng: random.Random) -> Problem:
     p, q = u * s, v * s
     one, two, total = u * t, v * t, (u + v) * t
     answer = f"${one}$ م و${two}$ م"
+    wrong, kinds = tagged_wrongs(
+        answer,
+        ("swap", f"${two}$ م و${one}$ م"),
+        ("formula", f"${total - p}$ م و${total - q}$ م"),
+        ("nearby", f"${one + 1}$ م و${two - 1}$ م"),
+        ("formula", f"${total // 2}$ م و${total - total // 2}$ م"),
+        ("nearby", f"${one + 2}$ م و${two - 2}$ م"),
+    )
     return Problem(
         "3.5",
         f"{scene}. على {first} تحدد المستقيمات المتوازية الثلاثة قطعتين طولاهما ${p}$ م و${q}$ م، "
         f"وعلى {second} المسافة بين المستقيمين الأول والثالث ${total}$ م. "
         f"أوجد طولي القطعتين اللتين تحددهما المستقيمات الثلاثة على {second}.",
         answer,
-        text_wrongs(
-            answer,
-            f"${two}$ م و${one}$ م",
-            f"${total - p}$ م و${total - q}$ م",
-            f"${one + 1}$ م و${two - 1}$ م",
-            f"${total // 2}$ م و${total - total // 2}$ م",
-            f"${one + 2}$ م و${two - 2}$ م",
-        ),
+        wrong,
         (
             "المستقيمات المتوازية التي تقطع قاطعين تقسمهما إلى أجزاء متناسبة: النسبة بين القطعتين على أحد القاطعين تساوي "
             "النسبة بين القطعتين المناظرتين على الآخر.",
@@ -3136,4 +3381,5 @@ def parallel_lines_two_transversals(rng: random.Random) -> Problem:
         ),
         "R",
         {"type": "transversals", "first": (p, q), "second": (one, two), "total": total},
+        wrong_kinds=kinds,
     )
