@@ -32,9 +32,11 @@ from apps.planning.domain.prep import (
     Recall,
     TeacherEdit,
     _digest_payload,
+    _stages,
     allocate,
     build_prep,
     derived_paths,
+    lesson_blooms,
     lesson_examples,
     parse_ranges,
     prep_digest,
@@ -63,7 +65,7 @@ from apps.planning.domain.prep_checks import (
     t12_last_period,
     t13_closed_fields,
 )
-from apps.planning.domain.strategies import load_library
+from apps.planning.domain.strategies import LessonProfile, load_library
 from apps.planning.selectors import lesson_preps
 
 LIBRARY = {s.slug: s for s in load_library()}
@@ -136,6 +138,30 @@ def test_stages_follow_gradual_release_and_sum_to_45(preps):
         stages = row.prep.stages
         assert tuple(s.name for s in stages) == STAGE_NAMES
         assert sum(s.minutes for s in stages) == PERIOD_MINUTES
+
+
+def _stage_strategy(profile: LessonProfile, stage: str) -> str | None:
+    return next(
+        s.strategy for s in _stages(tuple(LIBRARY.values()), profile, max(profile.dok)) if s.name == stage
+    )
+
+
+def test_stage_strategies_follow_objective_bloom_with_dok():
+    """بلوم أهداف الدرس يدخل اختيار استراتيجية المرحلة مع DOK بالدرجة نفسها التي يرتّب بها المنتقي (`strategies.score`)."""
+    depths = frozenset({1, 2, 3})
+    assert _stage_strategy(LessonProfile(dok=depths), "independent") == "practice-find-the-error"
+    applying = LessonProfile(bloom=frozenset({"تطبيق"}), dok=depths)
+    assert _stage_strategy(applying, "independent") == "practice-graded-independent"
+    evaluating = LessonProfile(bloom=frozenset({"تحليل", "تقويم"}), dok=depths)
+    assert _stage_strategy(evaluating, "independent") == "practice-find-the-error"
+
+
+def test_lesson_blooms_skip_unclassified_objectives(preps):
+    from apps.knowledge.selectors import course_index
+
+    lesson = next(x for x in course_index(GRADE10_SLUG).lessons if x.lesson == "1.4")
+    assert lesson_blooms(lesson) == {"تطبيق", "فهم"}
+    assert lesson_blooms(lesson.model_copy(update={"objectives_bloom": ["unclassified"]})) == frozenset()
 
 
 def test_recall_links_each_period_to_what_came_before(preps):

@@ -34,6 +34,7 @@ from .domain.plan_periods import plan_periods as derive_plan_periods
 from .domain.prep import (
     PeriodPrep,
     build_prep,
+    lesson_blooms,
     lesson_examples,
     lesson_quiz_depths,
     recall_for,
@@ -75,7 +76,7 @@ PLAN_COURSE = GRADE10_SLUG  # المقرر الافتراضي للتخطيط: أ
 def profile_from_lesson(lesson: LessonIndex) -> LessonProfile:
     """بلوم من أهداف الدرس (غير المصنَّف لا يُحسب) وDOK من صفوف تحليل تمارينه؛ ما لم يُقرأ يبقى فارغًا فلا يُخمَّن."""
     return LessonProfile(
-        bloom=frozenset(b for b in lesson.objectives_bloom if b != "unclassified"),
+        bloom=lesson_blooms(lesson),
         dok=frozenset(row.dok for row in lesson.analysis),
     )
 
