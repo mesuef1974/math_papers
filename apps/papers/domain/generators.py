@@ -29,6 +29,20 @@ LEVEL_SAMPLES = 6  # بذور يُستدل بها على مستوى الصيغة
 DYDX = r"\dfrac{dy}{dx}"
 
 
+# تصنيف أخطاء الطلاب الذي يُوسَم به كل مشتتّ (قرار المالك 2026-11-23: الوسم داخل المولّد)
+ERROR_KINDS = {
+    "sign": "عكس إشارة",
+    "direction": "عكس اتجاه أو جانب",
+    "swap": "تبديل إحداثيين أو قيمتين",
+    "coefficient": "استعمال معامل أو قيمة معطاة بدل المطلوب",
+    "square": "نسيان التربيع أو استبداله",
+    "formula": "عملية أو صيغة خاطئة",
+    "partial": "جزء من الجواب صحيح",
+    "concept": "خلط في المفهوم",
+    "nearby": "قيمة قريبة بلا خطأ محدد",
+}
+
+
 @dataclass(frozen=True)
 class Problem:
     lesson: str
@@ -45,6 +59,16 @@ class Problem:
     )  # خيارات رسوم، الأول هو الصحيح
     essay_ok: bool = True
     variant: str = field(default="", compare=False)  # اسم الصيغة التي ولّدتها؛ يضعه generate()
+    # نوع الخطأ الذي ولّد كل مشتتّ في wrong، بالترتيب نفسه (مفاتيح ERROR_KINDS)؛ فارغ لصيغة لم تُوسَم بعد
+    wrong_kinds: tuple[str, ...] = field(default=(), compare=False)
+
+    def __post_init__(self) -> None:
+        if self.wrong_kinds:
+            if len(self.wrong_kinds) != len(self.wrong):
+                raise ValueError(f"أنواع الأخطاء {self.wrong_kinds} لا توازي المشتتات {self.wrong}")
+            unknown = set(self.wrong_kinds) - ERROR_KINDS.keys()
+            if unknown:
+                raise ValueError(f"نوع خطأ غير معتمد: {sorted(unknown)}")
 
     @property
     def key(self) -> str:
@@ -257,6 +281,15 @@ def wrongs(answer: Any, *candidates: Any) -> tuple[str, ...]:
             seen.add(text)
             result.append(text)
     return tuple(result[:3])
+
+
+def tagged_wrongs(answer: Any, *pairs: tuple[str, Any]) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """كـ wrongs، لكن كل مرشَّح يأتي مع نوع خطأه؛ يعيد (المشتتات، أنواعها) بالترتيب نفسه، وما أُضيف تتمةً «nearby»."""
+    texts = wrongs(answer, *[candidate for _, candidate in pairs])
+    kinds: dict[str, str] = {}
+    for kind, candidate in pairs:
+        kinds.setdefault(candidate if isinstance(candidate, str) else m(candidate), kind)
+    return texts, tuple(kinds.get(text, "nearby") for text in texts)
 
 
 def cases(*rows: tuple[Any, str]) -> str:

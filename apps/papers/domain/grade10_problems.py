@@ -22,7 +22,7 @@ import sympy as sp
 
 from apps.curriculum.courses import GRADE10_SLUG
 
-from .generators import Problem, frac, m, minus, nz, tex, variant, with_unit, wrongs, x, y
+from .generators import Problem, frac, m, minus, nz, tagged_wrongs, tex, variant, with_unit, wrongs, x, y
 
 G10 = GRADE10_SLUG
 UP, DOWN = "الأعلى", "الأسفل"
@@ -111,12 +111,18 @@ def parabola_opening_and_width(rng: random.Random) -> Problem:
 
     up, narrow = bool(a > 0), bool(abs(a) > 1)
     answer = describe(up, narrow)
+    wrong, kinds = tagged_wrongs(
+        answer,
+        ("partial", describe(up, not narrow)),
+        ("partial", describe(not up, narrow)),
+        ("direction", describe(not up, not narrow)),
+    )
     return Problem(
         "1.1",
         f"صف اتجاه فتحة التمثيل البياني للدالة $f(x)={ax2(a)}$ واتساعه مقارنةً بالتمثيل البياني "
         "للدالة التربيعية الرئيسة $g(x)=x^2$.",
         answer,
-        (describe(up, not narrow), describe(not up, narrow), describe(not up, not narrow)),
+        wrong,
         (
             f"$a={tex(a)}$ {sign_word(a)}، فالقطع المكافئ يفتح إلى {opening(a)}.",
             f"$|a|={tex(abs(a))}$ {'أكبر' if narrow else 'أصغر'} من $1$، فالتمثيل البياني "
@@ -124,6 +130,7 @@ def parabola_opening_and_width(rng: random.Random) -> Problem:
         ),
         "K",
         {"type": "parabola_shape", "f": a * x**2, "answer": answer},
+        wrong_kinds=kinds,
     )
 
 
@@ -133,11 +140,14 @@ def parabola_through_point(rng: random.Random) -> Problem:
     halves = [HALF, -HALF, sp.Rational(3, 2), -sp.Rational(3, 2)] if p % 2 == 0 else []
     a = rng.choice([-4, -3, -2, -1, 1, 2, 3, 4, *halves])
     q = a * p * p
+    wrong, kinds = tagged_wrongs(
+        a, ("square", a * p), ("square", q * p * p), ("sign", -a), ("formula", q - p * p)
+    )
     return Problem(
         "1.1",
         f"يمرّ التمثيل البياني للدالة $f(x)=ax^2$ بالنقطة $({p},{tex(q)})$. أوجد قيمة $a$.",
         m(a),
-        wrongs(a, a * p, q * p * p, -a, q - p * p),
+        wrong,
         (
             f"نعوّض إحداثيي النقطة في قاعدة الدالة: ${tex(q)}=a({p})^2$",
             f"${tex(q)}={p * p}a$",
@@ -145,6 +155,7 @@ def parabola_through_point(rng: random.Random) -> Problem:
         ),
         "K",
         {"type": "value", "f": a * x**2, "at": p, "value": q},
+        wrong_kinds=kinds,
     )
 
 
@@ -155,17 +166,20 @@ def parabola_monotone_interval(rng: random.Random) -> Problem:
     right = bool(a > 0) == increasing
     word = "متزايدة" if increasing else "متناقصة"
     answer, other = ("$x>0$", "$x<0$") if right else ("$x<0$", "$x>0$")
+    wrong = (other, "جميع الأعداد الحقيقية", f"$x>{tex(a)}$")
+    kinds = ("direction", "concept", "coefficient")
     return Problem(
         "1.1",
         f"حدّد الفترة التي تكون فيها الدالة $f(x)={ax2(a)}$ {word}.",
         answer,
-        (other, "جميع الأعداد الحقيقية", f"$x>{tex(a)}$"),
+        wrong,
         (
             f"$a={tex(a)}$ {sign_word(a)}، فالقطع المكافئ يفتح إلى {opening(a)}، ورأسه $(0,0)$.",
             f"الدالة {word} على {'يمين' if right else 'يسار'} محور التماثل $x=0$، أي عندما {answer}.",
         ),
         "K",
         {"type": "parabola_monotone", "f": a * x**2, "increasing": increasing, "answer": answer},
+        wrong_kinds=kinds,
     )
 
 
@@ -185,11 +199,18 @@ def parabola_rule_from_table(rng: random.Random) -> Problem:
         return f"$a={tex(da)}$، و$f({at})={tex(dv)}$"
 
     answer = text(a, value)
+    wrong, kinds = tagged_wrongs(
+        answer,
+        ("square", text(a, a * at)),
+        ("sign", text(-a, -value)),
+        ("coefficient", text(a * p, a * p * at * at)),
+        ("formula", text(a, 2 * a * at)),
+    )
     return Problem(
         "1.1",
         f"يبيّن الجدول قيمًا للدالة $f(x)=ax^2$: ${table}$ أوجد قيمة $a$، ثم أوجد $f({at})$.",
         answer,
-        wrongs(answer, text(a, a * at), text(-a, -value), text(a * p, a * p * at * at), text(a, 2 * a * at)),
+        wrong,
         (
             f"من الجدول $f({p})={tex(a * p * p)}$، فنعوّض في القاعدة: ${tex(a * p * p)}=a({p})^2$",
             f"$a={frac(a * p * p, p * p)}={tex(a)}$",
@@ -197,6 +218,7 @@ def parabola_rule_from_table(rng: random.Random) -> Problem:
         ),
         "K",
         {"type": "table_rule", "xs": xs, "values": tuple(values), "at": at, "answer": answer},
+        wrong_kinds=kinds,
     )
 
 
@@ -208,18 +230,25 @@ def square_area_cost(rng: random.Random) -> Problem:
     cost = rate * side * side
     unit = "ريال"
     answer = with_unit(cost, unit)
+    wrong, kinds = tagged_wrongs(
+        answer,
+        ("square", with_unit(rate * side, unit)),
+        ("formula", with_unit(2 * rate * side, unit)),
+        ("formula", with_unit(rate + side * side, unit)),
+    )
     return Problem(
         "1.1",
         f"تُعطى تكلفة {work} {place} مربعة الشكل طول ضلعها $x$ من الأمتار بالريال بالدالة "
         f"$f(x)={rate}x^2$. أوجد تكلفة {work} {place} طول ضلعها ${side}$ أمتار.",
         answer,
-        wrongs(answer, *[with_unit(v, unit) for v in (rate * side, 2 * rate * side, rate + side * side)]),
+        wrong,
         (
             f"نعوّض $x={side}$: $f({side})={rate}({side})^2$",
             f"$f({side})={rate}\\times{side * side}={cost}$",
         ),
         "K",
         {"type": "value", "f": rate * x**2, "at": side, "value": cost},
+        wrong_kinds=kinds,
     )
 
 
@@ -230,17 +259,24 @@ def parabola_average_rate(rng: random.Random) -> Problem:
     q = rng.choice([n for n in range(p + 1, p + 5) if n != -p])
     low, high = a * p * p, a * q * q
     value = a * (p + q)
+    wrong, kinds = tagged_wrongs(
+        value,
+        ("formula", high - low),
+        ("formula", a * (q - p)),
+        ("sign", sp.Rational(high + low, q - p)),
+    )
     return Problem(
         "1.1",
         f"أوجد متوسط معدل التغيّر للدالة $f(x)={ax2(a)}$ في الفترة ${p} \\le x \\le {q}$.",
         m(value),
-        wrongs(value, high - low, a * (q - p), sp.Rational(high + low, q - p)),
+        wrong,
         (
             f"$f({p})={low}$ و$f({q})={high}$",
             f"${frac(f'f({q})-f({p})', minus(q, p))}={frac(high - low, q - p)}={value}$",
         ),
         "A",
         {"type": "average", "f": a * x**2, "a": p, "b": q, "value": value},
+        wrong_kinds=kinds,
     )
 
 
@@ -269,16 +305,18 @@ def vertical_shift_of_parent(rng: random.Random) -> Problem:
     up, side = (UP, RIGHT) if k > 0 else (DOWN, LEFT)
     flipped = DOWN if k > 0 else UP
     answer = shift_text(abs(k), up, (0, k))
+    wrong = (
+        shift_text(abs(k), flipped, (0, -k)),
+        shift_text(abs(k), side, (k, 0)),
+        shift_text(abs(k), up, (k, 0)),
+    )
+    kinds = ("direction", "concept", "swap")
     return Problem(
         "1.2",
         f"صف كيف ينتج التمثيل البياني للدالة $g(x)={ax2(a)}{signed(k)}$ من التمثيل البياني للدالة "
         f"$f(x)={ax2(a)}$، وحدّد رأسه.",
         answer,
-        (
-            shift_text(abs(k), flipped, (0, -k)),
-            shift_text(abs(k), side, (k, 0)),
-            shift_text(abs(k), up, (k, 0)),
-        ),
+        wrong,
         (
             f"$g(x)=f(x){signed(k)}$: نضيف ${k}$ إلى كل قيمة من قيم $f$، فكل نقطة تنتقل رأسيًا.",
             f"$k={k}$ {sign_word(k)}، فالإزاحة {units(abs(k))} إلى {up}.",
@@ -286,6 +324,7 @@ def vertical_shift_of_parent(rng: random.Random) -> Problem:
         ),
         "K",
         {"type": "vertical_shift", "f": a * x**2, "g": a * x**2 + k, "answer": answer},
+        wrong_kinds=kinds,
     )
 
 
@@ -295,16 +334,18 @@ def horizontal_shift_of_parent(rng: random.Random) -> Problem:
     side, flipped = (RIGHT, LEFT) if h > 0 else (LEFT, RIGHT)
     up = UP if h > 0 else DOWN
     answer = shift_text(abs(h), side, (h, 0))
+    wrong = (
+        shift_text(abs(h), flipped, (-h, 0)),
+        shift_text(abs(h), up, (0, h)),
+        shift_text(abs(h), flipped, (h, 0)),
+    )
+    kinds = ("direction", "concept", "partial")
     return Problem(
         "1.2",
         f"صف كيف ينتج التمثيل البياني للدالة $g(x)={lead(a)}{shifted(h)}^2$ من التمثيل البياني للدالة "
         f"$f(x)={ax2(a)}$، وحدّد رأسه.",
         answer,
-        (
-            shift_text(abs(h), flipped, (-h, 0)),
-            shift_text(abs(h), up, (0, h)),
-            shift_text(abs(h), flipped, (h, 0)),
-        ),
+        wrong,
         (
             f"$g(x)=f(x-h)$ حيث $h={h}$: الدالة $g$ تأخذ عند $x={h}$ القيمة التي تأخذها $f$ عند $x=0$.",
             f"$h={h}$ {sign_word(h)}، فالإزاحة {units(abs(h))} إلى {side}.",
@@ -312,6 +353,7 @@ def horizontal_shift_of_parent(rng: random.Random) -> Problem:
         ),
         "K",
         {"type": "horizontal_shift", "f": a * x**2, "g": a * (x - h) ** 2, "answer": answer},
+        wrong_kinds=kinds,
     )
 
 
@@ -324,12 +366,19 @@ def mirror_of_y_intercept(rng: random.Random) -> Problem:
         return f"المقطع $y$ هو $(0,{value})$، ونظيره حول محور التماثل $({px},{value})$"
 
     answer = text(2 * h, c)
+    wrong, kinds = tagged_wrongs(
+        answer,
+        ("sign", text(-2 * h, c)),
+        ("coefficient", text(2 * h, k)),
+        ("formula", text(h, c)),
+        ("sign", text(2 * h, -a * h * h + k)),
+    )
     return Problem(
         "1.2",
         f"للدالة $f(x)={vertex_form(a, h, k)}$، أوجد المقطع $y$ لتمثيلها البياني، والنقطة المناظرة له "
         "حول محور التماثل.",
         answer,
-        wrongs(answer, text(-2 * h, c), text(2 * h, k), text(h, c), text(2 * h, -a * h * h + k)),
+        wrong,
         (
             f"الرأس $({h},{k})$، ومحور التماثل $x={h}$.",
             f"المقطع $y$: $f(0)={lead(a)}({minus(0, h)})^2{signed(k)}={c}$، أي النقطة $(0,{c})$.",
@@ -338,6 +387,7 @@ def mirror_of_y_intercept(rng: random.Random) -> Problem:
         ),
         "A",
         {"type": "mirror_point", "f": a * (x - h) ** 2 + k, "point": (2 * h, c), "answer": answer},
+        wrong_kinds=kinds,
     )
 
 
@@ -346,11 +396,13 @@ def vertex_and_axis_from_vertex_form(rng: random.Random) -> Problem:
     a = rng.choice([*INTEGER_SCALES, HALF, -HALF])
     h = nz(rng, -6, 6)
     k = rng.choice([n for n in range(-8, 9) if n not in (0, h, -h)])
+    wrong = (vertex_text(-h, k), vertex_text(h, -k), vertex_text(k, h))
+    kinds = ("sign", "sign", "swap")
     return Problem(
         "1.2",
         f"حدّد إحداثيي رأس القطع المكافئ ومعادلة محور التماثل للدالة $f(x)={vertex_form(a, h, k)}$.",
         vertex_text(h, k),
-        (vertex_text(-h, k), vertex_text(h, -k), vertex_text(k, h)),
+        wrong,
         (
             "الدالة مكتوبة في صيغة الرأس $f(x)=a(x-h)^2+k$، ورأس القطع المكافئ $(h,k)$.",
             f"بالمقارنة: $h={h}$ و$k={k}$، فالرأس $({h},{k})$.",
@@ -358,6 +410,7 @@ def vertex_and_axis_from_vertex_form(rng: random.Random) -> Problem:
         ),
         "K",
         {"type": "vertex", "f": a * (x - h) ** 2 + k, "vertex": (h, k)},
+        wrong_kinds=kinds,
     )
 
 
@@ -365,18 +418,21 @@ def vertex_and_axis_from_vertex_form(rng: random.Random) -> Problem:
 def translation_of_parent(rng: random.Random) -> Problem:
     h, k = nz(rng, -6, 6), nz(rng, -6, 6)
     answer = translation_text(h, k)
+    wrong = (translation_text(-h, k), translation_text(h, -k), translation_text(-h, -k))
+    kinds = ("sign", "sign", "sign")
     return Problem(
         "1.2",
         f"صف كيف ينتج التمثيل البياني للدالة $g(x)={vertex_form(1, h, k)}$ من التمثيل البياني "
         "للدالة $f(x)=x^2$.",
         answer,
-        (translation_text(-h, k), translation_text(h, -k), translation_text(-h, -k)),
+        wrong,
         (
             f"$h={h}$: إزاحة أفقية {units(abs(h))} إلى {RIGHT if h > 0 else LEFT}.",
             f"$k={k}$: إزاحة رأسية {units(abs(k))} إلى {UP if k > 0 else DOWN}.",
         ),
         "K",
         {"type": "translation", "g": (x - h) ** 2 + k, "text": answer},
+        wrong_kinds=kinds,
     )
 
 
@@ -391,17 +447,20 @@ def rule_from_translation(rng: random.Random) -> Problem:
         f"أُزيح التمثيل البياني للدالة $f(x)=x^2$ {units(abs(h))} إلى {RIGHT if h > 0 else LEFT}، "
         f"و{units(abs(k))} إلى {UP if k > 0 else DOWN}. اكتب قاعدة الدالة الناتجة $g$ في صيغة الرأس."
     )
+    wrong = (rule(-h, k), rule(h, -k), rule(-h, -k))
+    kinds = ("sign", "sign", "sign")
     return Problem(
         "1.2",
         stem,
         rule(h, k),
-        (rule(-h, k), rule(h, -k), rule(-h, -k)),
+        wrong,
         (
             f"الإزاحة الأفقية تعطي $h={h}$، والإزاحة الرأسية تعطي $k={k}$.",
             f"نعوّض في $g(x)=(x-h)^2+k$: $g(x)={vertex_form(1, h, k)}$",
         ),
         "K",
         {"type": "translation", "g": (x - h) ** 2 + k, "text": stem},
+        wrong_kinds=kinds,
     )
 
 
@@ -417,12 +476,20 @@ def vertex_form_from_vertex_and_point(rng: random.Random) -> Problem:
         return f"$f(x)={vertex_form(da, dh, dk)}$"
 
     answer = rule(a, h, k)
+    wrong, kinds = tagged_wrongs(
+        answer,
+        ("sign", rule(a, -h, k)),
+        ("sign", rule(-a, h, k)),
+        ("swap", rule(a, k, h)),
+        ("sign", rule(a, h, -k)),
+        ("sign", rule(-a, -h, k)),
+    )
     return Problem(
         "1.2",
         f"رأس قطع مكافئ هو النقطة $({h},{k})$، ويمرّ القطع بالنقطة $({p},{q})$. "
         "اكتب قاعدة الدالة التربيعية التي تمثّله في صيغة الرأس.",
         answer,
-        wrongs(answer, rule(a, -h, k), rule(-a, h, k), rule(a, k, h), rule(a, h, -k), rule(-a, -h, k)),
+        wrong,
         (
             f"نعوّض الرأس في صيغة الرأس: $f(x)=a{shifted(h)}^2{signed(k)}$",
             f"نعوّض النقطة $({p},{q})$: ${q}=a({minus(p, h)})^2{signed(k)}$",
@@ -430,17 +497,18 @@ def vertex_form_from_vertex_and_point(rng: random.Random) -> Problem:
         ),
         "A",
         {"type": "vertex_point", "f": a * (x - h) ** 2 + k, "vertex": (h, k), "point": (p, q)},
+        wrong_kinds=kinds,
     )
 
 
-def ball_wrongs(answer: str, peak: int, at: int, start: int) -> tuple[str, ...]:
+def ball_wrongs(answer: str, peak: int, at: int, start: int) -> tuple[tuple[str, ...], tuple[str, ...]]:
     """أخطاء شائعة في مسألة أقصى ارتفاع: ارتفاع البداية، وزمن العودة إليه، وتبديل الإحداثيين."""
     unit = "مترًا"
-    return wrongs(
+    return tagged_wrongs(
         answer,
-        f"{with_unit(peak, unit)} عند $x={2 * at}$",
-        f"{with_unit(10 * at, unit)} عند $x={at}$",
-        f"{with_unit(peak + start, unit)} عند $x={at}$",
+        ("partial", f"{with_unit(peak, unit)} عند $x={2 * at}$"),
+        ("formula", f"{with_unit(10 * at, unit)} عند $x={at}$"),
+        ("formula", f"{with_unit(peak + start, unit)} عند $x={at}$"),
     )
 
 
@@ -449,12 +517,13 @@ def ball_height_vertex_form(rng: random.Random) -> Problem:
     at, start = rng.randint(2, 4), rng.randint(1, 9)
     peak = 5 * at * at + start
     answer = f"{with_unit(peak, 'مترًا')} عند $x={at}$"
+    wrong, kinds = ball_wrongs(answer, peak, at, start)
     return Problem(
         "1.2",
         "قُذفت كرة إلى الأعلى، ويُعطى ارتفاعها بالأمتار بعد $x$ من الثواني بالدالة "
         f"$f(x)={vertex_form(-5, at, peak)}$. أوجد أقصى ارتفاع تبلغه الكرة والزمن الذي تبلغه عنده.",
         answer,
-        ball_wrongs(answer, peak, at, start),
+        wrong,
         (
             "الدالة في صيغة الرأس و$a=-5$ سالب، فللدالة قيمة عظمى عند رأس القطع المكافئ.",
             f"الرأس $({at},{peak})$.",
@@ -470,6 +539,7 @@ def ball_height_vertex_form(rng: random.Random) -> Problem:
             "value": peak,
             "max": True,
         },
+        wrong_kinds=kinds,
     )
 
 
@@ -483,11 +553,18 @@ def axis_and_vertex_from_standard_form(rng: random.Random) -> Problem:
         return f"محور التماثل $x={px}$، والرأس $({px},{a * px * px + b * px + c})$"
 
     answer = text(h)
+    wrong, kinds = tagged_wrongs(
+        answer,
+        ("sign", text(-h)),
+        ("formula", text(2 * h)),
+        ("coefficient", f"محور التماثل $x={h}$، والرأس $({h},{c})$"),
+        ("sign", text(-2 * h)),
+    )
     return Problem(
         "1.3",
         f"أوجد معادلة محور التماثل وإحداثيي رأس القطع المكافئ للدالة $f(x)={tex(f)}$.",
         answer,
-        wrongs(answer, text(-h), text(2 * h), f"محور التماثل $x={h}$، والرأس $({h},{c})$", text(-2 * h)),
+        wrong,
         (
             f"$a={a}$ و$b={b}$، فمحور التماثل {axis_step(a, b, h)}",
             f"الإحداثي $y$ للرأس: {value_step(a, b, c, h, k)}",
@@ -495,6 +572,7 @@ def axis_and_vertex_from_standard_form(rng: random.Random) -> Problem:
         ),
         "K",
         {"type": "vertex", "f": f, "vertex": (h, k)},
+        wrong_kinds=kinds,
     )
 
 
@@ -509,17 +587,25 @@ def intercept_and_opening_from_standard_form(rng: random.Random) -> Problem:
         return f"المقطع $y$ هو ${value}$، ويفتح القطع المكافئ إلى {UP if opens_up else DOWN}"
 
     answer = text(c, up)
+    wrong, kinds = tagged_wrongs(
+        answer,
+        ("direction", text(c, not up)),
+        ("coefficient", text(b, up)),
+        ("coefficient", text(a, not up)),
+        ("coefficient", text(b, not up)),
+    )
     return Problem(
         "1.3",
         f"حدّد المقطع $y$ للتمثيل البياني للدالة $f(x)={tex(f)}$ واتجاه فتحة القطع المكافئ.",
         answer,
-        wrongs(answer, text(c, not up), text(b, up), text(a, not up), text(b, not up)),
+        wrong,
         (
             f"المقطع $y$ هو قيمة الدالة عند $x=0$: $f(0)={c}$.",
             f"$a={a}$ {sign_word(a)}، فالقطع المكافئ يفتح إلى {opening(a)}.",
         ),
         "K",
         {"type": "standard_features", "f": f, "answer": answer},
+        wrong_kinds=kinds,
     )
 
 
@@ -533,17 +619,18 @@ def extreme_value_from_standard_form(rng: random.Random) -> Problem:
     f, b, c = standard_from_vertex(a, h, k)
     is_max = a < 0
     answer = extreme_text(is_max, k)
+    wrong, kinds = tagged_wrongs(
+        answer,
+        ("concept", extreme_text(not is_max, k)),
+        ("coefficient", extreme_text(is_max, c)),
+        ("coefficient", extreme_text(not is_max, c)),
+        ("swap", extreme_text(is_max, h)),
+    )
     return Problem(
         "1.3",
         f"هل للدالة $f(x)={tex(f)}$ قيمة عظمى أم قيمة صغرى؟ أوجد هذه القيمة.",
         answer,
-        wrongs(
-            answer,
-            extreme_text(not is_max, k),
-            extreme_text(is_max, c),
-            extreme_text(not is_max, c),
-            extreme_text(is_max, h),
-        ),
+        wrong,
         (
             f"$a={a}$ {sign_word(a)}، فالقطع المكافئ يفتح إلى {opening(a)}، وللدالة قيمة "
             f"{'عظمى' if is_max else 'صغرى'} عند الرأس.",
@@ -552,6 +639,7 @@ def extreme_value_from_standard_form(rng: random.Random) -> Problem:
         ),
         "A",
         {"type": "parabola_extreme", "f": f, "at": h, "value": k, "answer": answer},
+        wrong_kinds=kinds,
     )
 
 
@@ -569,18 +657,19 @@ def compare_maximum_values(rng: random.Random) -> Problem:
         return f"الدالة ${name}$، والفرق ${value}$"
 
     answer = text(larger, gap)
+    wrong, kinds = tagged_wrongs(
+        answer,
+        ("partial", text(smaller, gap)),
+        ("formula", text(larger, top_f + top_g)),
+        ("formula", text(smaller, top_f + top_g)),
+        ("nearby", text(larger, gap + 1)),
+    )
     return Problem(
         "1.3",
         f"الدالة $f(x)={tex(f)}$، والدالة $g$ دالة تربيعية يفتح تمثيلها البياني إلى الأسفل ورأسه "
         f"$({h_g},{top_g})$. أيّ الدالتين قيمتها العظمى أكبر؟ وما الفرق بين القيمتين العظميين؟",
         answer,
-        wrongs(
-            answer,
-            text(smaller, gap),
-            text(larger, top_f + top_g),
-            text(smaller, top_f + top_g),
-            text(larger, gap + 1),
-        ),
+        wrong,
         (
             f"$a={a}$ سالب، فللدالة $f$ قيمة عظمى عند الرأس، ومحور التماثل {axis_step(a, b, h)}",
             f"القيمة العظمى للدالة $f$: {value_step(a, b, c, h, top_f)}",
@@ -596,6 +685,7 @@ def compare_maximum_values(rng: random.Random) -> Problem:
             "other": top_g,
             "answer": answer,
         },
+        wrong_kinds=kinds,
     )
 
 
@@ -605,12 +695,13 @@ def ball_height_standard_form(rng: random.Random) -> Problem:
     peak = 5 * at * at + start
     f, b, c = standard_from_vertex(-5, at, peak)
     answer = f"{with_unit(peak, 'مترًا')} عند $x={at}$"
+    wrong, kinds = ball_wrongs(answer, peak, at, start)
     return Problem(
         "1.3",
         "رُميت كرة إلى الأعلى، ويُعطى ارتفاعها بالأمتار بعد $x$ من الثواني بالدالة "
         f"$f(x)={tex(f)}$. أوجد أقصى ارتفاع تبلغه الكرة والزمن الذي تبلغه عنده.",
         answer,
-        ball_wrongs(answer, peak, at, start),
+        wrong,
         (
             f"$a=-5$ سالب، فللدالة قيمة عظمى عند الرأس، ومحور التماثل {axis_step(-5, b, at)}",
             value_step(-5, b, c, at, peak),
@@ -618,6 +709,7 @@ def ball_height_standard_form(rng: random.Random) -> Problem:
         ),
         "A",
         {"type": "optimum", "f": f, "low": 0, "high": 2 * at, "arg": at, "value": peak, "max": True},
+        wrong_kinds=kinds,
     )
 
 
