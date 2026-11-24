@@ -566,3 +566,19 @@ def test_number_range_reads_left_to_right_in_arabic_text():
     footer = " – ".join((title, "10"))
     assert footer.endswith(f"2026{ooxml.NB_HYPHEN}2027{ooxml.RLM} – 10")
     assert isolate_number_ranges("الدرس 3.5") == "الدرس 3.5"
+
+
+def test_booklet_form_number_sits_in_the_closing_row_not_a_table_of_its_own(client):
+    data = build_docx({**sample_payload(client, show_key=False)})
+    doc = Document(io.BytesIO(data))
+    form_cells = [
+        cell.text
+        for table in doc.tables
+        for row in table.rows
+        for cell in row.cells
+        if "رقم النموذج" in cell.text
+    ]
+    assert form_cells, "رقم النموذج غاب عن الكراسة"
+    assert all(
+        "انتهت جميع الأسئلة" in text for text in form_cells
+    )  # لا جدول يحمل الرقم وحده فيسقط في صفحة فارغة
