@@ -51,6 +51,16 @@ GROUP = (
 )
 
 
+# تخطيطات الماستر بأسمائها فيختار المعلم منها حين يضيف شريحة: الزخرفة على الشرائح نفسها لا على التخطيطات (S8 يقيسها)
+LAYOUTS = {1: "عنوان", 2: "محتوى", 3: "مقطع من الكتاب"}
+
+
+def layout_of(slide: PeriodSlide) -> int:
+    if slide.kind == "title":
+        return 1
+    return 3 if slide.clip is not None else 2
+
+
 def fit(width_px: int, height_px: int, box_cx: int, box_cy: int) -> tuple[int, int]:
     """أكبر مقاس داخل الصندوق بنسبة الصورة نفسها (يكبّر أو يصغّر ولا يشوّه)."""
     scale = min(box_cx / width_px, box_cy / height_px)
@@ -90,6 +100,7 @@ class _Canvas:
     shapes: list[str] = field(default_factory=list)
     media: list[tuple[str, bytes]] = field(default_factory=list)
     next_id: int = 2
+    layout: int = 2  # رقم التخطيط في الماستر (LAYOUTS)
 
     def _id(self) -> int:
         self.next_id += 1
@@ -138,7 +149,7 @@ def _lockup(c: _Canvas, lockup: bytes, cy: int, y: int) -> None:
     c.picture(lockup, WIDTH - MARGIN - cx, y, cx, cy, LOCKUP_ALT, name="شعار")
 
 
-def _footer(c: _Canvas, lockup: bytes) -> None:
+def _footer(c: _Canvas, lockup: bytes, k: int, n: int) -> None:
     c.rect(MARGIN, FOOT_Y - 30000, WIDTH - 2 * MARGIN, 12000, GOLD)
     _lockup(c, lockup, FOOT_H - 60000, FOOT_Y + 20000)
     c.text(
@@ -150,11 +161,21 @@ def _footer(c: _Canvas, lockup: bytes) -> None:
         anchor="ctr",
         name="تذييل",
     )
+    # رقم الشريحة بكلمات عربية لا «k / n»: الخطوط المائلة بين رقمين تنقلب في فقرة RTL فتُقرأ «n / k»
+    c.text(
+        WIDTH // 2 - 1500000,
+        FOOT_Y,
+        3000000,
+        FOOT_H,
+        [_para(f"شريحة {k} من {n}", FOOT_PT, INK, algn="ctr")],
+        anchor="ctr",
+        name="رقم الشريحة",
+    )
 
 
-def _render(slide: PeriodSlide, lockup: bytes) -> _Canvas:
+def _render(slide: PeriodSlide, lockup: bytes, k: int, n: int) -> _Canvas:
     """الترتيب في الشجرة ترتيب القراءة: العنوان أولًا ثم المحتوى ثم التذييل."""
-    c = _Canvas()
+    c = _Canvas(layout=layout_of(slide))
     x, y, cx, cy = CONTENT_BOX
     if slide.kind == "title":
         c.rect(0, 0, WIDTH, 4000000, BRAND)
@@ -193,7 +214,7 @@ def _render(slide: PeriodSlide, lockup: bytes) -> _Canvas:
         c.picture(slide.clip.png, x + (cx - w) // 2, y + (cy - h) // 2, w, h, slide.alt, name=CLIP_PREFIX)
     elif slide.bullets:
         c.text(x, y, cx, cy, [_para(b, slide.body_pt, INK, bullet=True) for b in slide.bullets])
-    _footer(c, lockup)
+    _footer(c, lockup, k, n)
     return c
 
 
@@ -251,12 +272,19 @@ BACKGROUND = (
 )
 MASTER = (
     f"{XML}<p:sldMaster {NS}><p:cSld>{BACKGROUND}<p:spTree>{GROUP}</p:spTree></p:cSld>{CLR_MAP}"
-    '<p:sldLayoutIdLst><p:sldLayoutId id="2147483649" r:id="rId1"/></p:sldLayoutIdLst></p:sldMaster>'
+    "<p:sldLayoutIdLst>"
+    + "".join(f'<p:sldLayoutId id="{2147483648 + i}" r:id="rId{i}"/>' for i in LAYOUTS)
+    + "</p:sldLayoutIdLst></p:sldMaster>"
 )
-LAYOUT = (
-    f'{XML}<p:sldLayout {NS} type="blank" preserve="1"><p:cSld name="فارغ"><p:spTree>{GROUP}</p:spTree></p:cSld>'
-    "<p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sldLayout>"
-)
+
+
+def _layout(name: str) -> str:
+    return (
+        f'{XML}<p:sldLayout {NS} preserve="1" userDrawn="1"><p:cSld name="{name}"><p:spTree>{GROUP}</p:spTree></p:cSld>'
+        "<p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sldLayout>"
+    )
+
+
 NOTES_MASTER = (
     f"{XML}<p:notesMaster {NS}><p:cSld>{BACKGROUND}<p:spTree>{GROUP}<p:sp><p:nvSpPr>"
     '<p:cNvPr id="2" name="ملاحظات"/><p:cNvSpPr><a:spLocks noGrp="1"/></p:cNvSpPr><p:nvPr><p:ph type="body" idx="1"/>'
@@ -270,12 +298,12 @@ NOTES_MASTER = (
 def build_period_pptx(deck: PeriodDeck) -> bytes:
     """ملف PPTX للحصة: شريحة لكل شريحة في النموذج بترتيبه، ولكل شريحة صفحة ملاحظات بجانب المعلم."""
     lockup = LOCKUP.read_bytes()
-    canvases = [_render(s, lockup) for s in deck.slides]
-    n = len(canvases)
+    n = len(deck.slides)
+    canvases = [_render(s, lockup, k, n) for k, s in enumerate(deck.slides, start=1)]
     overrides = [
         ("/ppt/presentation.xml", CT_PML + "presentation.main+xml"),
         ("/ppt/slideMasters/slideMaster1.xml", CT_PML + "slideMaster+xml"),
-        ("/ppt/slideLayouts/slideLayout1.xml", CT_PML + "slideLayout+xml"),
+        *((f"/ppt/slideLayouts/slideLayout{i}.xml", CT_PML + "slideLayout+xml") for i in LAYOUTS),
         ("/ppt/notesMasters/notesMaster1.xml", CT_PML + "notesMaster+xml"),
         ("/ppt/theme/theme1.xml", "application/vnd.openxmlformats-officedocument.theme+xml"),
         ("/ppt/theme/theme2.xml", "application/vnd.openxmlformats-officedocument.theme+xml"),
@@ -327,15 +355,16 @@ def build_period_pptx(deck: PeriodDeck) -> bytes:
         ),
         "ppt/slideMasters/slideMaster1.xml": MASTER,
         "ppt/slideMasters/_rels/slideMaster1.xml.rels": _rels(
-            [
-                ("rId1", f"{REL}/slideLayout", "../slideLayouts/slideLayout1.xml"),
-                ("rId2", f"{REL}/theme", "../theme/theme1.xml"),
-            ]
+            [(f"rId{i}", f"{REL}/slideLayout", f"../slideLayouts/slideLayout{i}.xml") for i in LAYOUTS]
+            + [(f"rId{len(LAYOUTS) + 1}", f"{REL}/theme", "../theme/theme1.xml")]
         ),
-        "ppt/slideLayouts/slideLayout1.xml": LAYOUT,
-        "ppt/slideLayouts/_rels/slideLayout1.xml.rels": _rels(
-            [("rId1", f"{REL}/slideMaster", "../slideMasters/slideMaster1.xml")]
-        ),
+        **{f"ppt/slideLayouts/slideLayout{i}.xml": _layout(name) for i, name in LAYOUTS.items()},
+        **{
+            f"ppt/slideLayouts/_rels/slideLayout{i}.xml.rels": _rels(
+                [("rId1", f"{REL}/slideMaster", "../slideMasters/slideMaster1.xml")]
+            )
+            for i in LAYOUTS
+        },
         "ppt/notesMasters/notesMaster1.xml": NOTES_MASTER,
         "ppt/notesMasters/_rels/notesMaster1.xml.rels": _rels(
             [("rId1", f"{REL}/theme", "../theme/theme2.xml")]
@@ -346,7 +375,7 @@ def build_period_pptx(deck: PeriodDeck) -> bytes:
     for k, (c, slide) in enumerate(zip(canvases, deck.slides, strict=True), start=1):
         parts[f"ppt/slides/slide{k}.xml"] = c.xml()
         parts[f"ppt/slides/_rels/slide{k}.xml.rels"] = _rels(
-            [("rId1", f"{REL}/slideLayout", "../slideLayouts/slideLayout1.xml")]
+            [("rId1", f"{REL}/slideLayout", f"../slideLayouts/slideLayout{c.layout}.xml")]
             + [
                 (f"rId{j + 2}", f"{REL}/image", f"../media/slide{k}_{name}")
                 for j, (name, _) in enumerate(c.media)
