@@ -57,7 +57,9 @@ from .term_plan import COURSES
 from .text import norm
 
 # اسم المقطع كما يقبله `publish_assets` (`apps.assets.services.CLIP`؛ يطابقه اختبار)
-NAME = re.compile(r"^(?P<lesson>\d\.\d{1,2})_m(?P<n>\d{1,2})_p(?P<page>\d{1,3})(?P<cont>_cont)?\.png$")
+NAME = re.compile(
+    r"^(?P<lesson>\d\.\d{1,2})_(?P<k>[mt])(?P<n>\d{1,2})_p(?P<page>\d{1,3})(?P<cont>_cont)?\.png$"
+)
 DEFAULTS: dict[str, Any] = {
     "course": None,  # المقرر الذي تُعدّ أمثلة دروسه
     "courses_dir": None,  # مجلد المقررات؛ الافتراضي مجلد المستودع

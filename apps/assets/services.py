@@ -21,9 +21,7 @@ from apps.curriculum.models import Course, Lesson
 from .models import Asset
 from .storage import Storage, get_storage
 
-CLIP = re.compile(
-    r"^(?P<lesson>\d\.\d{1,2})_(?P<tag>[mt])(?P<n>\d{1,2})_p(?P<page>\d{1,3})(?P<cont>_cont)?\.png$"
-)
+CLIP = re.compile(r"^(?P<lesson>\d\.\d{1,2})_(?P<k>[mt])(?P<n>\d{1,2})_p(?P<page>\d{1,3})(?P<cont>_cont)?\.png$")  # fmt: skip  # noqa: E501
 PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
 LINK_SALT = "assets.link"
 PRACTICE_TAG = "t"
@@ -78,7 +76,7 @@ def scan(source: Path) -> tuple[list[Clip], list[str]]:
         if match is None:
             unmatched.append(path.name)
             continue
-        key = (match["lesson"], PRACTICE_TAG == match["tag"], int(match["n"]))
+        key = (match["lesson"], PRACTICE_TAG == match["k"], int(match["n"]))
         groups.setdefault(key, []).append((int(match["page"]), bool(match["cont"]), path))
     clips, problems = [], []
     for (lesson, practice, number), items in sorted(groups.items()):
