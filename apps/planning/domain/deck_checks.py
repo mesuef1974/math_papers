@@ -29,6 +29,7 @@ from .deck import (
     example_alt,
     objective_bullet,
     period_deck_key,
+    try_alt,
 )
 from .prep import STAGE_NAMES, PeriodPrep, Recall
 from .prep_checks import PASS, CheckResult, _result, blocking_failures
@@ -51,7 +52,7 @@ KIND_CODE = {
     "quiz": "Q",
     "homework": "H",
 }
-ORDER = re.compile(r"^TR?O?(E+VY?C?)*D?K?X?Q?H?$")
+ORDER = re.compile(r"^TR?O?(E+VY*C?)*D?K?X?Q?H?$")
 TEACHER_MARKERS = ("DOK", "الطور", "الدقائق")
 WORD = re.compile(r"[^\W\d_]+")
 
@@ -255,7 +256,7 @@ def s10_accessibility(deck: PeriodDeck, prep: PeriodPrep) -> CheckResult:
         e = examples.get(s.clip.n)
         if s.refs != (s.clip.n,):
             problems.append(f"الشريحة {i}: الصورة للمثال {s.clip.n} والشريحة لـ {s.refs}")
-        if e is None or s.alt != example_alt(e):
+        if e is None or s.alt != (try_alt(e) if s.kind == "try" else example_alt(e)):
             problems.append(f"الشريحة {i}: نص بديل ناقص للمثال {s.clip.n}")
     return _result("S10", problems)
 

@@ -195,3 +195,33 @@ def test_missing_blob_is_404_not_500(teacher_client, published):
 
 def test_storage_is_a_local_storage_in_tests(local_store):
     assert isinstance(get_storage(), LocalStorage) and get_storage().root == local_store.resolve()
+
+
+def test_practice_clips_publish_as_their_own_kind_beside_the_example_of_the_same_number(tmp_path, g10):
+    """`<درس>_t<مثال>_p<صفحة>` مقطع «حاول أن تحل» (نوع practice) بجانب مقطع المثال نفسه دون تعارض، وidempotent."""
+    folder = tmp_path / "clips"
+    folder.mkdir()
+    write(folder, "1.2_m3_p39.png", 3)
+    write(folder, "1.2_t3_p40.png", 6)
+    write(folder, "1.2_t3_p41_cont.png", 7)
+    found, unmatched = scan(folder)
+    assert [(c.number, c.part, c.kind) for c in found] == [
+        (3, 0, Asset.Kind.EXAMPLE),
+        (3, 0, Asset.Kind.PRACTICE),
+        (3, 1, Asset.Kind.PRACTICE),
+    ]
+    assert unmatched == []
+    first = publish_assets(GRADE10_SLUG, folder)
+    assert (first.created, first.unchanged) == (3, 0)
+    rows = list(Asset.objects.order_by("kind", "part").values_list("kind", "number", "part", "key"))
+    assert [r[:3] for r in rows] == [("example", 3, 0), ("practice", 3, 0), ("practice", 3, 1)]
+    assert "/example3-0-" in rows[0][3] and "/practice3-0-" in rows[1][3] and "/practice3-1-" in rows[2][3]
+    assert publish_assets(GRADE10_SLUG, folder).changed == 0
+
+
+def test_practice_clip_without_its_own_original_is_rejected(tmp_path):
+    folder = tmp_path / "clips"
+    folder.mkdir()
+    write(folder, "1.2_t3_p41_cont.png", 7)
+    with pytest.raises(AssetError, match="تدريب 3"):
+        scan(folder)

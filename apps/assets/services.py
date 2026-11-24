@@ -1,6 +1,6 @@
 """نشر الأصول: ملفات مجلد → طبقة التخزين + فهرس `Asset`. idempotent بتجزئة المحتوى.
 
-المصدر مجلد مقاطع بأسماء `<درس>_m<مثال>_p<صفحة>[_cont].png`. المقطع بلا `_cont` هو الأصل (part=0)، وما يتبعه من تتمات
+المصدر مجلد مقاطع بأسماء `<درس>_m<مثال>_p<صفحة>[_cont].png` للأمثلة و`<درس>_t<مثال>_p<صفحة>[_cont].png` لمقطع «حاول أن تحل» لمثال (نوع practice، قرار المالك 2026-11-24). المقطع بلا `_cont` هو الأصل (part=0)، وما يتبعه من تتمات
 على صفحات تالية بترتيب الصفحة (part=1...). تشغيل ثانٍ على المجلد نفسه يعطي صفر تغييرات، وملف مفقود من التخزين يُعاد رفعه.
 """
 
@@ -21,9 +21,10 @@ from apps.curriculum.models import Course, Lesson
 from .models import Asset
 from .storage import Storage, get_storage
 
-CLIP = re.compile(r"^(?P<lesson>\d\.\d{1,2})_m(?P<n>\d{1,2})_p(?P<page>\d{1,3})(?P<cont>_cont)?\.png$")
+CLIP = re.compile(r"^(?P<lesson>\d\.\d{1,2})_(?P<k>[mt])(?P<n>\d{1,2})_p(?P<page>\d{1,3})(?P<cont>_cont)?\.png$")  # fmt: skip  # noqa: E501
 PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
 LINK_SALT = "assets.link"
+PRACTICE_TAG = "t"
 
 
 class AssetError(ValueError):
@@ -63,6 +64,7 @@ class Clip:
     lesson: str
     number: int
     part: int
+    kind: str = "example"
 
 
 def scan(source: Path) -> tuple[list[Clip], list[str]]:
@@ -74,24 +76,28 @@ def scan(source: Path) -> tuple[list[Clip], list[str]]:
         if match is None:
             unmatched.append(path.name)
             continue
-        key = (match["lesson"], int(match["n"]))
+        key = (match["lesson"], PRACTICE_TAG == match["k"], int(match["n"]))
         groups.setdefault(key, []).append((int(match["page"]), bool(match["cont"]), path))
     clips, problems = [], []
-    for (lesson, number), items in sorted(groups.items()):
+    for (lesson, practice, number), items in sorted(groups.items()):
         items.sort(key=lambda item: item[0])
         mains = [item for item in items if not item[1]]
         if len(mains) != 1 or items[0][1]:
             names = [item[2].name for item in items]
-            problems.append(f"{lesson} مثال {number}: يلزم مقطع أصلي واحد في أول صفحاته ({names})")
+            problems.append(
+                f"{lesson} {'تدريب' if practice else 'مثال'} {number}: يلزم مقطع أصلي واحد في أول صفحاته ({names})"
+            )
             continue
-        clips.extend(Clip(item[2], lesson, number, part) for part, item in enumerate(items))
+        kind = Asset.Kind.PRACTICE if practice else Asset.Kind.EXAMPLE
+        clips.extend(Clip(item[2], lesson, number, part, kind) for part, item in enumerate(items))
     if problems:
         raise AssetError("؛ ".join(problems))
     return clips, unmatched
 
 
 def asset_key(course: Course, clip: Clip, sha256: str) -> str:
-    return f"assets/{course.slug}/{clip.lesson}/example{clip.number}-{clip.part}-{sha256[:16]}.png"
+    stem = "practice" if clip.kind == Asset.Kind.PRACTICE else "example"
+    return f"assets/{course.slug}/{clip.lesson}/{stem}{clip.number}-{clip.part}-{sha256[:16]}.png"
 
 
 def publish_assets(course_slug: str, source: Path, storage: Storage | None = None) -> PublishReport:
@@ -117,7 +123,7 @@ def publish_assets(course_slug: str, source: Path, storage: Storage | None = Non
         slot = {
             "course": course,
             "lesson": lessons[clip.lesson],
-            "kind": Asset.Kind.EXAMPLE,
+            "kind": clip.kind,
             "number": clip.number,
             "part": clip.part,
         }
