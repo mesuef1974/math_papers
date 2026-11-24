@@ -90,8 +90,8 @@ def merge_short_continuations(clips: Sequence[ExampleClip]) -> tuple[ExampleClip
     """مقاطع العرض من مقاطع المصدر: تتمة «تابع المثال» التي لا تبلغ حد S7 وحدها تُضمّ تحت صورة ما قبلها من المثال نفسه في
     PNG واحدة (بلا إعادة تحجيم، وبينهما فاصل أبيض) فتصير شريحة واحدة، والأجزاء تُرقَّم متصلة. ما لا دمج فيه يعود كما هو."""
     out: list[ExampleClip] = []
-    for n in sorted({c.n for c in clips}):
-        mine = sorted((c for c in clips if c.n == n), key=lambda c: c.part)
+    for kind, n in sorted({(c.kind, c.n) for c in clips}):
+        mine = sorted((c for c in clips if c.kind == kind and c.n == n), key=lambda c: c.part)
         for part, group in enumerate(merge_groups([(c.width_px, c.height_px) for c in mine]), start=1):
             members = [mine[i] for i in group]
             if len(members) == 1:
@@ -99,5 +99,5 @@ def merge_short_continuations(clips: Sequence[ExampleClip]) -> tuple[ExampleClip
                 continue
             gap = max(1, round(max(c.width_px for c in members) * MERGE_GAP_SHARE))
             png, width, height = stack_png([c.png for c in members], gap)
-            out.append(ExampleClip(n=n, png=png, width_px=width, height_px=height, part=part))
+            out.append(ExampleClip(n=n, png=png, width_px=width, height_px=height, part=part, kind=kind))
     return tuple(out)

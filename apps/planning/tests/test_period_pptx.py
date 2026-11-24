@@ -301,3 +301,56 @@ def test_slides_use_named_master_layouts_by_kind(sample):
         rels = parts[f"ppt/slides/_rels/slide{k}.xml.rels"].decode()
         want = 1 if slide.kind == "title" else 3 if slide.clip is not None else 2
         assert f"slideLayout{want}.xml" in rels, (k, slide.kind)
+
+
+def _practice_for(prep, numbers, png: bytes = CLEAR) -> tuple[ExampleClip, ...]:
+    return tuple(
+        ExampleClip(n=n, png=png, width_px=1600, height_px=900, part=1, kind="practice") for n in numbers
+    )
+
+
+def test_practice_clip_makes_a_try_slide_between_the_solution_and_the_classwork(loaded_courses):
+    """مقطع «حاول أن تحل» لمثال يضيف شريحة try بعد حل المثال وقبل تدريبه الصفي، بنصها البديل ومفتاح عرض جديد."""
+    from apps.planning.domain.deck_checks import check_deck
+    from apps.planning.domain.prep_checks import blocking_failures
+
+    row = next(r for r in lesson_preps(GRADE10_SLUG) if any(e.n for e in r.prep.examples))
+    prep = row.prep
+    first = prep.examples[0].n
+    plain = build_period_deck(prep, clips_for(prep))
+    clips = (*clips_for(prep), *_practice_for(prep, [first]))
+    deck = build_period_deck(prep, clips)
+    assert deck.key != plain.key
+    kinds = [s.kind for s in deck.slides]
+    assert kinds.count("try") == 1 and [s.kind for s in plain.slides].count("try") == 0
+    i = kinds.index("try")
+    assert (
+        kinds[i - 1] == "reveal"
+        and deck.slides[i].refs == (first,)
+        and deck.slides[i].clip.kind == "practice"
+    )
+    assert deck.slides[i].alt.startswith("حاول أن تحل") and deck.slides[i].title.startswith("حاول أن تحل")
+    data = build_period_pptx(deck)
+    assert [r.status for r in check_pptx(data, build_period_pptx(deck))] == [PASS, PASS, PASS]
+    results = check_deck(deck, prep, clips, row.checks)
+    assert not blocking_failures(results), [r for r in results if r.status == FAIL]
+
+
+def test_deck_without_practice_clips_keeps_its_old_key_and_slides(loaded_courses):
+    """غياب مقاطع التدريب لا يغيّر شيئًا: المفتاح يُحسب من الأمثلة وحدها والتدريب الصفي نص كما كان."""
+    from apps.planning.domain.deck import period_deck_key
+
+    prep = next(iter(lesson_preps(GRADE10_SLUG))).prep
+    clips = clips_for(prep)
+    deck = build_period_deck(prep, clips)
+    assert deck.key == period_deck_key(prep, clips)
+    assert all(s.kind != "try" for s in deck.slides)
+
+
+def test_practice_clip_for_a_foreign_example_or_a_gap_is_loud(loaded_courses):
+    prep = next(iter(lesson_preps(GRADE10_SLUG))).prep
+    with pytest.raises(DeckError, match="خارج الحصة"):
+        build_period_deck(prep, (*clips_for(prep), *_practice_for(prep, [999])))
+    gap = ExampleClip(n=prep.examples[0].n, png=CLEAR, width_px=1600, height_px=900, part=2, kind="practice")
+    with pytest.raises(DeckError, match="غير متصلة"):
+        build_period_deck(prep, (*clips_for(prep), gap))

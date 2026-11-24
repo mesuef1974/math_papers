@@ -42,8 +42,11 @@ class ExampleClip:
     width_px: int
     height_px: int
     part: int = 1
+    kind: str = "example"  # example | practice («حاول أن تحل» لمثال: مقطع التدريب من كتاب الطالب)
 
     def __post_init__(self) -> None:
+        if self.kind not in ("example", "practice"):
+            raise DeckError(f"نوع مقطع غير معروف: {self.kind}")
         if self.part < 1:
             raise DeckError(f"جزء المثال {self.n} غير صالح")
         if self.width_px <= 0 or self.height_px <= 0:
@@ -99,6 +102,9 @@ PERIOD_TEXT = {
     "try_title": "حاول أن تحل: مثال {n}",
     "alt": "مثال {n} من كتاب الطالب",
     "alt_page": "مثال {n} من كتاب الطالب، ص {page}",
+    "try_continued_title": "تابع حاول أن تحل: مثال {n}",
+    "try_alt": "حاول أن تحل: مثال {n} من كتاب الطالب",
+    "try_alt_page": "حاول أن تحل: مثال {n} من كتاب الطالب، ص {page}",
     "classwork_title": "تدريب صفي: مثال {n}",
     "exercises": "حلّ تمارين الكتاب: {numbers}",
     "independent_title": "الممارسة المستقلة",
@@ -158,17 +164,32 @@ def _t(name: str, **values: object) -> str:
     return isolate_number_ranges(PERIOD_TEXT[name].format(**values))
 
 
-def deck_key_of(prep: PeriodPrep, clip_digests: Iterable[tuple[int, int, str]]) -> str:
+def deck_key_of(
+    prep: PeriodPrep,
+    clip_digests: Iterable[tuple[int, int, str]],
+    practice_digests: Iterable[tuple[int, int, str]] = (),
+) -> str:
     """مفتاح ملف العرض من تجزئة التحضير وتجزئة SHA-256 لكل مقطع (المثال، الجزء، التجزئة): يكفي فهرس الأصول لحسابه
     دون قراءة الصور، وتغيّر التحضير أو مقطع أو صيغة الملف يعطي مفتاحًا جديدًا."""
     digest = hashlib.sha256(f"{PERIOD_DECK_FORMAT}|{prep_digest(prep)}".encode())
     for n, part, sha in sorted(clip_digests):
         digest.update(f"|{n}.{part}:{sha}".encode())
+    for n, part, sha in sorted(practice_digests):  # لاحقة لا تمسّ مفتاح عرض بلا مقاطع تدريب
+        digest.update(f"|t{n}.{part}:{sha}".encode())
     return f"decks/{prep.course}/{prep.lesson}-k{prep.k}of{prep.n}-p{prep.minutes}-{digest.hexdigest()[:16]}.pptx"
 
 
+def _clip_digest(clip: ExampleClip) -> tuple[int, int, str]:
+    return clip.n, clip.part, hashlib.sha256(clip.png).hexdigest()
+
+
 def period_deck_key(prep: PeriodPrep, clips: Sequence[ExampleClip]) -> str:
-    return deck_key_of(prep, ((c.n, c.part, hashlib.sha256(c.png).hexdigest()) for c in clips))
+    """`clips` مقاطع الأمثلة ومقاطع التدريب معًا؛ يفرزها النوع."""
+    return deck_key_of(
+        prep,
+        (_clip_digest(c) for c in clips if c.kind == "example"),
+        (_clip_digest(c) for c in clips if c.kind == "practice"),
+    )
 
 
 def objective_bullet(prep: PeriodPrep, index: int) -> str:
@@ -209,6 +230,30 @@ def _clip_groups(prep: PeriodPrep, clips: Sequence[ExampleClip]) -> dict[int, tu
     return groups
 
 
+def _practice_groups(prep: PeriodPrep, clips: Sequence[ExampleClip]) -> dict[int, tuple[ExampleClip, ...]]:
+    """مقاطع «حاول أن تحل» لكل مثال: اختيارية (لا مقطع لمثال يبقى تدريبه نصًّا)، لكن مقطعًا لمثال خارج الحصة أو مكررًا أو
+    بأجزاء غير متصلة خطأ لا تخمين."""
+    seen = [(c.n, c.part) for c in clips]
+    if len(set(seen)) != len(seen):
+        raise DeckError("مقطع تدريب مكرر")
+    outside = sorted({c.n for c in clips} - {e.n for e in prep.examples})
+    if outside:
+        raise DeckError(f"مقاطع تدريب لأمثلة خارج الحصة: {outside}")
+    groups: dict[int, tuple[ExampleClip, ...]] = {}
+    for e in prep.examples:
+        mine = tuple(sorted((c for c in clips if c.n == e.n), key=lambda c: c.part))
+        if not mine:
+            continue
+        if [c.part for c in mine] != list(range(1, len(mine) + 1)):
+            raise DeckError(f"أجزاء تدريب المثال {e.n} غير متصلة")
+        groups[e.n] = mine
+    return groups
+
+
+def try_alt(example: PrepExample) -> str:
+    return _t("try_alt_page", n=example.n, page=example.page) if example.page else _t("try_alt", n=example.n)
+
+
 def _period_example_notes(example: PrepExample) -> tuple[str, ...]:
     notes = []
     if example.representations:
@@ -234,7 +279,11 @@ def _slide(kind: str, title: str, **fields) -> PeriodSlide:
     return PeriodSlide(kind=kind, phase=SLIDE_PHASE[kind], title=title, **fields)
 
 
-def _draft_slides(prep: PeriodPrep, groups: dict[int, tuple[ExampleClip, ...]]) -> list[PeriodSlide]:
+def _draft_slides(
+    prep: PeriodPrep,
+    groups: dict[int, tuple[ExampleClip, ...]],
+    practice: dict[int, tuple[ExampleClip, ...]] | None = None,
+) -> list[PeriodSlide]:
     """الشرائح بترتيب المراحل بلا دقائق: العنوان والاستدعاء، الأهداف، ولكل مثال مقاطعه وحله وتدريبه الصفي، ثم الممارسة
     المستقلة والفحص وبطاقة الخروج واختبار الدرس والواجب."""
     bullets = [_t("period", k=prep.k, n=prep.n)]
@@ -272,6 +321,9 @@ def _draft_slides(prep: PeriodPrep, groups: dict[int, tuple[ExampleClip, ...]]) 
         slides.append(
             _slide("reveal", example_title("reveal", e), refs=(e.n,), clip=clips[-1], alt=example_alt(e))
         )
+        for clip in (practice or {}).get(e.n, ()):
+            title = _t("try_title" if clip.part == 1 else "try_continued_title", n=e.n)
+            slides.append(_slide("try", title, refs=(e.n,), clip=clip, alt=try_alt(e)))
         if e.n in classwork:
             exercises = classwork[e.n].exercises
             slides.append(
@@ -350,10 +402,12 @@ def build_period_deck(
 
     `shown` المقاطع كما تُرسم حين تخالف المصدر (تتمة قصيرة ضُمّت إلى ما قبلها في طبقة المقاطع): الشرائح منها، والمفتاح
     من `clips` المصدر دائمًا فيبقى محسوبًا من فهرس الأصول وحده."""
-    groups = _clip_groups(prep, clips)
+    groups = _clip_groups(prep, [c for c in clips if c.kind == "example"])
     if shown is not None:
-        groups = _clip_groups(prep, shown)
-    slides = _timed(prep, _draft_slides(prep, groups))
+        groups = _clip_groups(prep, [c for c in shown if c.kind == "example"])
+    drawn = clips if shown is None else shown
+    practice = _practice_groups(prep, [c for c in drawn if c.kind == "practice"])
+    slides = _timed(prep, _draft_slides(prep, groups, practice))
     return PeriodDeck(
         key=period_deck_key(prep, clips),
         course=prep.course,

@@ -144,7 +144,7 @@ def _prepared(
         raise DeckError(f"تحضير الحصة لم يجتز معاييره الحاجبة: {_deck_failure(item.checks)}")
     numbers = [e.n for e in item.prep.examples]
     assets = selectors.deck_assets(course, lesson, numbers)
-    missing = sorted(set(numbers) - {a.number for a in assets})
+    missing = sorted(set(numbers) - {a.number for a in assets if a.kind == "example"})
     if missing:
         raise DeckError(f"لا مقاطع منشورة للأمثلة {number_list(missing)} من الدرس {lesson}")
     return item, assets, selectors.deck_key(item.prep, assets)

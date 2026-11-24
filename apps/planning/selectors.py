@@ -165,17 +165,24 @@ PPTX_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.presentationm
 
 
 def deck_assets(course_slug: str, lesson_code: str, numbers: Collection[int]) -> list[Asset]:
-    """مقاطع أمثلة الحصة المنشورة (أرقامها `numbers`) بترتيب المثال فتتمته."""
+    """مقاطع أمثلة الحصة المنشورة (أرقامها `numbers`) ومقاطع «حاول أن تحل» لها إن نُشرت، بترتيب النوع فالمثال فتتمته."""
     return list(
         Asset.objects.filter(
-            course__slug=course_slug, lesson__code=lesson_code, kind=Asset.Kind.EXAMPLE, number__in=numbers
-        ).order_by("number", "part")
+            course__slug=course_slug,
+            lesson__code=lesson_code,
+            kind__in=(Asset.Kind.EXAMPLE, Asset.Kind.PRACTICE),
+            number__in=numbers,
+        ).order_by("kind", "number", "part")
     )
 
 
 def deck_key(prep: PeriodPrep, assets: Sequence[Asset]) -> str:
     """مفتاح عرض الحصة من فهرس الأصول وحده (تجزئة كل مقطع مخزَّنة معه) فلا تُقرأ الصور لمعرفة الحالة."""
-    return deck_key_of(prep, ((a.number, a.part + 1, a.sha256) for a in assets))
+
+    def digests(kind: str):
+        return ((a.number, a.part + 1, a.sha256) for a in assets if a.kind == kind)
+
+    return deck_key_of(prep, digests(Asset.Kind.EXAMPLE), digests(Asset.Kind.PRACTICE))
 
 
 def clips_of(assets: Sequence[Asset], storage: Storage | None = None) -> tuple[ExampleClip, ...]:
@@ -187,6 +194,7 @@ def clips_of(assets: Sequence[Asset], storage: Storage | None = None) -> tuple[E
             width_px=a.width,
             height_px=a.height,
             part=a.part + 1,
+            kind=a.kind,
         )
         for a in assets
     )
@@ -425,7 +433,9 @@ def deck_periods(course: str, owner: AbstractBaseUser | None = None) -> list[dic
     """حصص الدروس بترتيب الخطة لصفحة العروض بتحضير المعلم: حالة معاييرها وعدد أمثلتها، و`clips` صادقة حين نُشر مقطع لكل
     مثال فيها، و`stale` صادقة حين يخالف آخر عرض طلبه المعلم للحصة مفتاحَ تحضيره الحالي (عدّل تحضيره بعده)."""
     by_lesson: dict[str, list[Asset]] = {}
-    rows = Asset.objects.filter(course__slug=course, kind=Asset.Kind.EXAMPLE).order_by("number", "part")
+    rows = Asset.objects.filter(
+        course__slug=course, kind__in=(Asset.Kind.EXAMPLE, Asset.Kind.PRACTICE)
+    ).order_by("kind", "number", "part")
     for asset in rows.select_related("lesson"):
         by_lesson.setdefault(asset.lesson.code, []).append(asset)
     built: dict[tuple[str, int], str] = {}
@@ -441,7 +451,7 @@ def deck_periods(course: str, owner: AbstractBaseUser | None = None) -> list[dic
             {
                 **row,
                 "examples": len(numbers),
-                "clips": numbers <= {a.number for a in assets},
+                "clips": numbers <= {a.number for a in assets if a.kind == Asset.Kind.EXAMPLE},
                 "stale": last is not None and last != deck_key(item.prep, assets),
             }
         )
