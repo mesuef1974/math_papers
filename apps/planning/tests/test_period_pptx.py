@@ -354,3 +354,38 @@ def test_practice_clip_for_a_foreign_example_or_a_gap_is_loud(loaded_courses):
     gap = ExampleClip(n=prep.examples[0].n, png=CLEAR, width_px=1600, height_px=900, part=2, kind="practice")
     with pytest.raises(DeckError, match="غير متصلة"):
         build_period_deck(prep, (*clips_for(prep), gap))
+
+
+# ---- شريط المراحل وشارة الدقائق ----
+
+
+def _named(root, name):
+    return [
+        sp for sp in root.iter(f"{P}sp") if sp.find(f"{P}nvSpPr/{P}cNvPr").get("name", "").startswith(name)
+    ]
+
+
+def test_stage_strip_marks_the_current_phase_and_badge_shows_its_minutes(sample):
+    from apps.planning.domain.deck import STAGE_SHORT
+
+    parts = _parts(build_period_pptx(sample))
+    phases = [p for p in STAGE_SHORT if p in {s.phase for s in sample.slides}]
+    for k, (slide, root) in enumerate(zip(sample.slides, _slides(parts), strict=True), start=1):
+        labels = _named(root, "مرحلة")
+        badges = _named(root, "دقائق")
+        if slide.kind == "title":
+            assert not labels and not badges
+            continue
+        assert ["".join(sp.itertext()) for sp in labels] == [STAGE_SHORT[p] for p in phases], k
+        bold = [sp for sp in labels if sp.find(f".//{A}rPr").get("b") == "1"]
+        assert ["".join(sp.itertext()) for sp in bold] == [STAGE_SHORT[slide.phase]], k
+        assert "".join(badges[0].itertext()) == f"{slide.minutes} د", k
+
+
+def test_stage_strip_stays_inside_the_bar_and_keeps_gold_off_text(sample):
+    parts = _parts(build_period_pptx(sample))
+    for root in _slides(parts)[1:]:
+        for sp in _named(root, "مرحلة") + _named(root, "دقائق"):
+            off, ext = sp.find(f".//{A}off"), sp.find(f".//{A}ext")
+            assert int(off.get("y")) + int(ext.get("cy")) <= 1_000_000
+    assert s8_identity(build_period_pptx(sample)).status == PASS
