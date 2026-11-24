@@ -662,13 +662,16 @@ def question_block(
         _bilingual_rule(doc, "انتهت الأسئلة الموضوعية", "End of multiple-choice questions")
 
 
-def _bilingual_rule(doc, ar: str, en: str) -> None:
+def _bilingual_rule(doc, ar: str, en: str, form_label: str = "") -> None:
     table = x.make_table(
         doc, 1, [CONTENT_CM / 2, CONTENT_CM / 2], borders={"top": x.BRAND_EDGE, "bottom": x.BRAND_EDGE}
     )
     x.set_row(table.rows[0])
     x.set_cell(table.cell(0, 0), CONTENT_CM / 2, shade=x.SHADE)
-    x.add_text(x.new_paragraph(table.cell(0, 0), after=0), ar, size=10, bold=True)
+    paragraph = x.new_paragraph(table.cell(0, 0), after=0)
+    x.add_text(paragraph, ar, size=10, bold=True)
+    if form_label:
+        x.add_text(paragraph, f"   ·   {form_label}", size=9, color=x.SOFT)
     x.set_cell(table.cell(0, 1), CONTENT_CM / 2, shade=x.SHADE)
     x.add_text(x.new_paragraph(table.cell(0, 1), rtl=False, align="left", after=0), en, size=10, bold=True)
     x.spacer(doc, 6)
@@ -694,24 +697,19 @@ def sheet(doc, paper: dict, header: dict, *, page_break: bool = False) -> None:
         if index < len(questions) - 1 and not closes_section:
             # خط مستقيم بعرض النص كاملًا (بين الهامشين) يفصل السؤال عن الذي يليه
             x.new_paragraph(doc, before=2, after=6, line=None, exact_pt=3, bottom=("single", 6, x.RULE))
+    form_label = f"رقم النموذج {paper['seed']}"
     if booklet:
-        _bilingual_rule(doc, "انتهت جميع الأسئلة", "End of all questions")
+        # رقم النموذج في صف الختام نفسه: جدول تذييل منفصل كان يسقط وحده في صفحة شبه فارغة
+        _bilingual_rule(doc, "انتهت جميع الأسئلة", "End of all questions", form_label)
+        score_page(doc, paper)
+        return
     foot = x.make_table(
         doc, 1, [CONTENT_CM / 2, CONTENT_CM / 2], borders={"top": {"val": "single", "sz": 4, "color": x.RULE}}
     )
     x.set_cell(foot.cell(0, 0), CONTENT_CM / 2)
-    x.add_text(
-        x.new_paragraph(foot.cell(0, 0), after=0), "" if booklet else "انتهت الأسئلة", size=9, color=x.SOFT
-    )
+    x.add_text(x.new_paragraph(foot.cell(0, 0), after=0), "انتهت الأسئلة", size=9, color=x.SOFT)
     x.set_cell(foot.cell(0, 1), CONTENT_CM / 2)
-    x.add_text(
-        x.new_paragraph(foot.cell(0, 1), align="left", after=0),
-        f"رقم النموذج {paper['seed']}",
-        size=9,
-        color=x.SOFT,
-    )
-    if booklet:
-        score_page(doc, paper)
+    x.add_text(x.new_paragraph(foot.cell(0, 1), align="left", after=0), form_label, size=9, color=x.SOFT)
 
 
 def score_page(doc, paper: dict) -> None:
