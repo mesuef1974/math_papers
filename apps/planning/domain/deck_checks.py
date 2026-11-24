@@ -11,7 +11,7 @@ import re
 from collections.abc import Iterable, Sequence
 
 from apps.knowledge.domain.course_index import REPRESENTATIONS
-from apps.papers.domain.bidi import isolate_number_ranges, strip_isolation
+from apps.papers.domain.bidi import LRI, PDI, isolate_number_ranges, strip_isolation
 
 from .check_items import item_words_source, period_items
 from .deck import (
@@ -236,7 +236,7 @@ def s9_direction(deck: PeriodDeck) -> CheckResult:
         problems += [
             f"الشريحة {i}: مدى غير معزول في {strip_isolation(t)!r}"
             for t in s.texts
-            if isolate_number_ranges(strip_isolation(t)) != t
+            if isolate_number_ranges(strip_isolation(t)) != t.replace(LRI, "").replace(PDI, "")
         ]
     return _result("S9", problems)
 

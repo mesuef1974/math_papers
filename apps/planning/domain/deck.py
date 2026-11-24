@@ -18,6 +18,7 @@ from apps.papers.domain.book_source import number_list, numbers_with_pages
 
 from .calendar_engine import PlanningError
 from .check_items import OPTION_LETTERS, PeriodItems, option_label, period_items
+from .plain_math import plain_math
 from .prep import PeriodPrep, PrepExample, prep_digest
 from .prep_sheet import STAGE_LABELS, recall_label, split_minutes
 
@@ -59,7 +60,7 @@ class ExampleClip:
 # ---- عرض الحصة من تحضيرها ----
 
 # الإعداد: أرقام التصميم في مكان واحد (افتراضات تُراجع بعد أول تجربة في الصف)
-PERIOD_DECK_FORMAT = 6  # 6: شريط المراحل ودقائق المرحلة على الشريحة (5: بند الاسترجاع المتباعد في شريحة التذكّر؛ 4: بنود البنك في التحقق والخروج؛ 3: تخطيطات الماستر ورقم الشريحة)
+PERIOD_DECK_FORMAT = 7  # 7: صيغ LaTeX رموزًا مقروءة في البنود (6: شريط المراحل ودقائق المرحلة على الشريحة (5: بند الاسترجاع المتباعد في شريحة التذكّر؛ 4: بنود البنك في التحقق والخروج؛ 3: تخطيطات الماستر ورقم الشريحة)
 MINUTES_PER_SLIDE = 2
 TITLE_PT, BODY_PT = 36, 28
 MIN_TITLE_PT, MIN_BODY_PT = 32, 24
@@ -293,7 +294,10 @@ def _exercise_notes(prep: PeriodPrep, exercises: Sequence[int]) -> tuple[str, ..
 
 def item_bullets(item) -> tuple[str, ...]:
     """السؤال وخياراته الأربعة (أ-د) على الشريحة؛ المفتاح ونوع الخطأ في الملاحظات وحدها."""
-    return (isolate_number_ranges(item.stem), *(option_label(i, o.text) for i, o in enumerate(item.options)))
+    return (
+        isolate_number_ranges(plain_math(item.stem)),
+        *(option_label(i, o.text) for i, o in enumerate(item.options)),
+    )
 
 
 def item_notes(item) -> tuple[str, ...]:
