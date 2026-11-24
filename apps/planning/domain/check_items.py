@@ -12,7 +12,7 @@ from dataclasses import dataclass
 
 from apps.papers.domain.bidi import isolate_number_ranges, strip_isolation
 from apps.papers.domain.generators import ERROR_KINDS
-from apps.papers.domain.item_bank import Item, ItemBankError, exit_ticket
+from apps.papers.domain.item_bank import Item, ItemBankError, exit_ticket, retrieval
 
 from .prep import PeriodPrep
 
@@ -26,6 +26,7 @@ ITEM_LINE_CHARS = 60  # كـ `deck.LINE_CHARS`: حروف السطر بخط 24pt
 class PeriodItems:
     formative: dict[int, Item]  # مثال -> بنده، والغائب يبقى سؤالًا نصيًّا
     exit: Item | None
+    retrieval: Item | None = None  # استرجاع متباعد في شريحة التذكّر للحصة الأولى من الدرس
 
 
 def items_seed(prep: PeriodPrep) -> int:
@@ -54,6 +55,24 @@ def _item(prep: PeriodPrep, example: int, seed: int) -> Item | None:
     return None
 
 
+def _retrieval_item(prep: PeriodPrep, seed: int) -> Item | None:
+    """بند من درس سابق متباعد: يُدار ترتيب الدروس ببذرة الحصة فلا يقع الاستدعاء على أول درس دائمًا، ويُستبعد الدرس
+    السابق مباشرة ما دام غيره موجودًا (استدعاؤه في ربط الحصة نفسه)."""
+    earlier = prep.earlier_lessons[:-1] or prep.earlier_lessons
+    if prep.k != 1 or not earlier:
+        return None
+    turn = seed % len(earlier)
+    ordered = [*earlier[turn:], *earlier[:turn]]
+    for attempt in range(SEED_TRIES):
+        try:
+            item = retrieval(prep.course, ordered, count=1, seed=seed + attempt * 2)[0]
+        except ItemBankError:
+            return None
+        if fits_slide(item):
+            return item
+    return None
+
+
 def period_items(prep: PeriodPrep) -> PeriodItems:
     seed = items_seed(prep)
     formative = {}
@@ -62,7 +81,7 @@ def period_items(prep: PeriodPrep) -> PeriodItems:
         if item is not None:
             formative[n] = item
     ticket = _item(prep, prep.exit_ticket.example, seed + 1) if prep.exit_ticket else None
-    return PeriodItems(formative=formative, exit=ticket)
+    return PeriodItems(formative=formative, exit=ticket, retrieval=_retrieval_item(prep, seed + 2))
 
 
 def option_label(index: int, text: str) -> str:

@@ -59,7 +59,7 @@ class ExampleClip:
 # ---- عرض الحصة من تحضيرها ----
 
 # الإعداد: أرقام التصميم في مكان واحد (افتراضات تُراجع بعد أول تجربة في الصف)
-PERIOD_DECK_FORMAT = 5  # 5: شريط المراحل ودقائق المرحلة على الشريحة (4: بنود بنك الأسئلة في شريحتي التحقق والخروج (3: تخطيطات الماستر ورقم الشريحة)
+PERIOD_DECK_FORMAT = 6  # 6: شريط المراحل ودقائق المرحلة على الشريحة (5: بند الاسترجاع المتباعد في شريحة التذكّر؛ 4: بنود البنك في التحقق والخروج؛ 3: تخطيطات الماستر ورقم الشريحة)
 MINUTES_PER_SLIDE = 2
 TITLE_PT, BODY_PT = 36, 28
 MIN_TITLE_PT, MIN_BODY_PT = 32, 24
@@ -339,10 +339,18 @@ def _draft_slides(
     pages = sorted({e.page for e in prep.examples if e.page})
     if pages:
         bullets.append(_t("book_pages", pages=number_list(pages)))
-    slides = [
-        _slide("title", _t("title", lesson=prep.lesson), bullets=tuple(bullets)),
-        _slide("recall", _t("recall_title"), bullets=(isolate_number_ranges(recall_label(prep.recall)),)),
-    ]
+    items = items or period_items(prep)
+    recall_text = isolate_number_ranges(recall_label(prep.recall))
+    if items.retrieval is None:
+        recall = _slide("recall", _t("recall_title"), bullets=(recall_text,))
+    else:  # الاسترجاع المتباعد: بند من درس سابق، وسياق الاستدعاء في الملاحظات
+        recall = _slide(
+            "recall",
+            _t("recall_title"),
+            bullets=item_bullets(items.retrieval),
+            notes=(recall_text, *item_notes(items.retrieval)),
+        )
+    slides = [_slide("title", _t("title", lesson=prep.lesson), bullets=tuple(bullets)), recall]
     if prep.objectives:
         notes = tuple(
             _t("objective_note", n=o.example, condition=o.condition, criterion=o.criterion)
@@ -392,7 +400,6 @@ def _draft_slides(
             paths.append(_t("advanced", numbers=numbers_with_pages(list(prep.advanced), prep.exercise_pages)))
         notes = (_t("differentiation_note"), *_exercise_notes(prep, [*prep.basic, *prep.advanced]))
         slides.append(_slide("differentiation", _t("independent_title"), bullets=tuple(paths), notes=notes))
-    items = items or period_items(prep)
     with_item, as_text = _split_check_questions(prep, items)
     for n in with_item:
         slides.append(

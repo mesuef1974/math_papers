@@ -310,3 +310,34 @@ def test_every_deck_with_items_passes_density_and_words(built):
         for check in (s6_density, s9_direction, s13_no_guide_text):
             result = check(deck) if check is not s13_no_guide_text else check(deck, prep)
             assert not _fails(result), (prep.lesson, prep.k, result)
+
+
+# ---- الاسترجاع المتباعد في شريحة التذكّر ----
+
+
+def _recall(deck):
+    return next(s for s in deck.slides if s.kind == "recall")
+
+
+def test_first_period_of_a_later_lesson_recalls_a_bank_item_from_an_earlier_lesson(built):
+    shown = [b for b in built if b[0].k == 1 and b[0].earlier_lessons and len(_recall(b[3]).bullets) == 5]
+    assert shown, "لا حصة أولى بشريحة استرجاع من البنك"
+    for prep, _, _, deck in shown:
+        slide = _recall(deck)
+        assert prep.lesson not in prep.earlier_lessons
+        assert [b[:2] for b in slide.bullets[1:]] == ["أ)", "ب)", "ج)", "د)"]
+        assert "الإجابة الصحيحة" in " ".join(slide.notes)
+
+
+def test_retrieval_is_absent_outside_first_periods_and_first_lesson(built):
+    for prep, _, _, deck in built:
+        if prep.k > 1 or not prep.earlier_lessons:
+            assert prep.earlier_lessons == () or prep.k == 1
+            assert len(_recall(deck).bullets) == 1, (prep.lesson, prep.k)
+
+
+def test_retrieval_item_is_deterministic(built):
+    from apps.planning.domain.check_items import period_items
+
+    prep = next(b[0] for b in built if b[0].k == 1 and b[0].earlier_lessons)
+    assert period_items(prep).retrieval == period_items(prep).retrieval

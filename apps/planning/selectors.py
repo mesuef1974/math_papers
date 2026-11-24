@@ -291,6 +291,8 @@ def lesson_preps(
                 audience=None if unit is None else unit.audience,
                 teacher=edit.edit_for(period.k, default_groups),
             )
+            if period.k == 1 and position:
+                prep = replace(prep, earlier_lessons=tuple(order[:position]))
             checks = check_prep(
                 prep,
                 by_slug,
