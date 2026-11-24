@@ -12,6 +12,7 @@ from dataclasses import dataclass
 
 from apps.papers.domain.book_source import numbers_with_pages
 
+from .check_items import period_items
 from .non_lesson import NonLessonPrep, PaperLink
 from .prep import PeriodPrep, PrepExample, Recall
 from .prep_checks import BLOCKING, NON_LESSON_BLOCKING, WARNING, CheckResult
@@ -240,6 +241,9 @@ def _closing(prep: PeriodPrep, strategy: Strategy | None) -> str:
         head = f"{title}: اختبار الدرس وتلخيص أفكاره"
     elif prep.exit_ticket:
         head = f"{title}: بطاقة خروج من مهارة المثال {prep.exit_ticket.example}"
+        item = period_items(prep).exit
+        if item is not None:  # بند البنك نفسه الذي في شريحة الخروج، ومفتاحه عند المعلم في ملاحظات العرض
+            head += f" — {item.stem}"
     else:
         head = f"{title}: تلخيص أفكار الحصة"
     return _activity(head, strategy)
