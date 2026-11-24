@@ -153,7 +153,9 @@ def _convert(latex: str) -> str:
             else:
                 out.append(f"\\{name}")  # مجهول: يبقى فيرفضه `convertible`
         elif ch == "^":
-            out.append(_script(_convert(r.group()), SUPER_OK, SUPERSCRIPT, "^"))
+            raised = _convert(r.group())
+            # الدرجة رمز علوي أصلًا: `90^\circ` تصير `90°` لا `90^°`
+            out.append(raised if raised == "°" else _script(raised, SUPER_OK, SUPERSCRIPT, "^"))
         elif ch == "_":
             out.append(_script(_convert(r.group()), SUB_OK, SUBSCRIPT, "_"))
         elif ch in "{}":
