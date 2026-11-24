@@ -14,7 +14,9 @@ from io import BytesIO
 from pathlib import Path
 from xml.sax.saxutils import escape
 
-from .domain.deck import PeriodDeck, PeriodSlide
+from apps.papers.domain.bidi import isolate_number_ranges
+
+from .domain.deck import MINUTES_BADGE, STAGE_SHORT, PeriodDeck, PeriodSlide
 
 WIDTH, HEIGHT = 12192000, 6858000  # 13.333in × 7.5in
 EMU_PER_INCH = 914400
@@ -32,6 +34,9 @@ MARGIN = 600000
 BAR_H = 1000000
 FOOT_Y = 6330000
 FOOT_H = 420000
+TITLE_H = 700000  # ارتفاع العنوان داخل الشريط؛ تحته صف المراحل
+STRIP_PT = 14
+BADGE_W = 1200000
 # منطقة المحتوى بين شريط العنوان والتذييل: فيها النقاط ومقطع المثال (S7 يقيس المقطع بها)
 CONTENT_BOX = (MARGIN, BAR_H + 200000, WIDTH - 2 * MARGIN, FOOT_Y - 150000 - (BAR_H + 200000))
 CLIP_PREFIX = "مقطع"  # اسم شكل صورة المثال، يميّزه عن الشعار في الفحص
@@ -173,7 +178,45 @@ def _footer(c: _Canvas, lockup: bytes, k: int, n: int) -> None:
     )
 
 
-def _render(slide: PeriodSlide, lockup: bytes, k: int, n: int) -> _Canvas:
+def _stage_strip(c: _Canvas, slide: PeriodSlide, phases: tuple[str, ...]) -> None:
+    """صف المراحل أسفل الشريط: المرحلة الحالية بخط ثقيل وخط ذهبي تحتها (الذهبي زخرفة لا نص)، والبقية بالأبيض الخفيف،
+    وعلى يسار العنوان شارة دقائق المرحلة. الأسماء أقصر من تسميات المراحل في التحضير فتتسع للصف."""
+    x, _, cx, _ = CONTENT_BOX
+    seg = cx // len(phases)
+    for i, phase in enumerate(phases):  # الأولى عند اليمين: ترتيب القراءة من اليمين
+        sx = x + cx - (i + 1) * seg
+        current = phase == slide.phase
+        c.text(
+            sx,
+            TITLE_H,
+            seg,
+            BAR_H - TITLE_H - 40000,
+            [_para(STAGE_SHORT[phase], STRIP_PT, WHITE, bold=current, algn="ctr")],
+            anchor="ctr",
+            name="مرحلة",
+        )
+        if current:
+            c.rect(sx + seg // 6, BAR_H - 40000, seg - seg // 3, 30000, GOLD)
+    c.text(
+        x,
+        0,
+        BADGE_W,
+        TITLE_H,
+        [
+            _para(
+                isolate_number_ranges(MINUTES_BADGE.format(minutes=slide.minutes)),
+                STRIP_PT + 4,
+                WHITE,
+                bold=True,
+                algn="l",
+            )
+        ],
+        anchor="ctr",
+        name="دقائق",
+    )
+
+
+def _render(slide: PeriodSlide, lockup: bytes, k: int, n: int, phases: tuple[str, ...] = ()) -> _Canvas:
     """الترتيب في الشجرة ترتيب القراءة: العنوان أولًا ثم المحتوى ثم التذييل."""
     c = _Canvas(layout=layout_of(slide))
     x, y, cx, cy = CONTENT_BOX
@@ -200,15 +243,18 @@ def _render(slide: PeriodSlide, lockup: bytes, k: int, n: int) -> _Canvas:
         _lockup(c, lockup, 600000, HEIGHT - 300000 - 600000)
         return c
     c.rect(0, 0, WIDTH, BAR_H, BRAND)
+    staged = bool(phases) and slide.phase in phases
     c.text(
-        MARGIN,
+        MARGIN + (BADGE_W if staged else 0),
         0,
-        cx,
-        BAR_H,
+        cx - (BADGE_W if staged else 0),
+        TITLE_H if staged else BAR_H,
         [_para(slide.title, slide.title_pt, WHITE, bold=True, font=TITLE_FONT)],
         anchor="ctr",
         name="عنوان",
     )
+    if staged:
+        _stage_strip(c, slide, phases)
     if slide.clip is not None:
         w, h = fit(slide.clip.width_px, slide.clip.height_px, cx, cy)
         c.picture(slide.clip.png, x + (cx - w) // 2, y + (cy - h) // 2, w, h, slide.alt, name=CLIP_PREFIX)
@@ -299,7 +345,9 @@ def build_period_pptx(deck: PeriodDeck) -> bytes:
     """ملف PPTX للحصة: شريحة لكل شريحة في النموذج بترتيبه، ولكل شريحة صفحة ملاحظات بجانب المعلم."""
     lockup = LOCKUP.read_bytes()
     n = len(deck.slides)
-    canvases = [_render(s, lockup, k, n) for k, s in enumerate(deck.slides, start=1)]
+    present = {s.phase for s in deck.slides}
+    phases = tuple(p for p in STAGE_SHORT if p in present)  # مراحل هذا العرض بترتيبها
+    canvases = [_render(s, lockup, k, n, phases) for k, s in enumerate(deck.slides, start=1)]
     overrides = [
         ("/ppt/presentation.xml", CT_PML + "presentation.main+xml"),
         ("/ppt/slideMasters/slideMaster1.xml", CT_PML + "slideMaster+xml"),
