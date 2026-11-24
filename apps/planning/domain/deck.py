@@ -17,6 +17,7 @@ from apps.papers.domain.bidi import isolate_number_ranges
 from apps.papers.domain.book_source import number_list, numbers_with_pages
 
 from .calendar_engine import PlanningError
+from .check_items import OPTION_LETTERS, PeriodItems, option_label, period_items
 from .prep import PeriodPrep, PrepExample, prep_digest
 from .prep_sheet import STAGE_LABELS, recall_label, split_minutes
 
@@ -58,7 +59,7 @@ class ExampleClip:
 # ---- عرض الحصة من تحضيرها ----
 
 # الإعداد: أرقام التصميم في مكان واحد (افتراضات تُراجع بعد أول تجربة في الصف)
-PERIOD_DECK_FORMAT = 3  # 3: تخطيطات الماستر الثلاثة ورقم الشريحة
+PERIOD_DECK_FORMAT = 4  # 4: بنود بنك الأسئلة في شريحتي التحقق والخروج (3: تخطيطات الماستر ورقم الشريحة)
 MINUTES_PER_SLIDE = 2
 TITLE_PT, BODY_PT = 36, 28
 MIN_TITLE_PT, MIN_BODY_PT = 32, 24
@@ -113,6 +114,10 @@ PERIOD_TEXT = {
     "check_title": "تحقّق من فهمك",
     "skill_question": "سؤال من مهارة المثال {n}",
     "exit_title": "بطاقة الخروج",
+    "option_letters": "أ ب ج د",
+    "answer_note": "الإجابة الصحيحة: {letter}",
+    "distractor_note": "الخيار {letter}: {misconception}",
+    "choose_justify_note": "اختر ثم برّر: يختار الطالب وحده قبل التفاعل ثم يكتب مبرره فرديًا بعده",
     "quiz_title": "اختبار الدرس",
     "quiz_count": "عدد الأسئلة {count}",
     "homework_title": "الواجب",
@@ -275,6 +280,36 @@ def _exercise_notes(prep: PeriodPrep, exercises: Sequence[int]) -> tuple[str, ..
     return tuple(out)
 
 
+def item_bullets(item) -> tuple[str, ...]:
+    """السؤال وخياراته الأربعة (أ-د) على الشريحة؛ المفتاح ونوع الخطأ في الملاحظات وحدها."""
+    return (isolate_number_ranges(item.stem), *(option_label(i, o.text) for i, o in enumerate(item.options)))
+
+
+def item_notes(item) -> tuple[str, ...]:
+    """جانب المعلم: مفتاح الإجابة، وسوء الفهم الذي يكشفه كل خيار خاطئ، وخطوة «اختر ثم برّر» بقيدها الفردي."""
+    notes = [_t("answer_note", letter=OPTION_LETTERS[item.answer_index])]
+    for i, option in enumerate(item.options):
+        if not option.correct:
+            notes.append(_t("distractor_note", letter=OPTION_LETTERS[i], misconception=option.misconception))
+    notes.append(_t("choose_justify_note"))
+    return tuple(notes)
+
+
+def _split_check_questions(prep: PeriodPrep, items: PeriodItems) -> tuple[list[int], tuple[int, ...]]:
+    """أمثلة الفحص بشريحة بند لكل منها، والباقي (بلا بند أو فوق ما تتسع له دقائق الغلق، شريحة بدقيقة على الأقل) سؤالًا
+    نصيًّا في شريحة واحدة."""
+    closing = next((st.minutes for st in prep.stages if st.name == "closing"), 0)
+    others = bool(prep.exit_ticket) + bool(prep.quiz) + bool(prep.homework)
+    budget = max(closing - others, 0)
+    with_item = [n for n in prep.formative if n in items.formative]
+    as_text = [n for n in prep.formative if n not in items.formative]
+    if len(with_item) + bool(as_text) > budget:
+        keep = max(budget - 1, 0)
+        as_text = [n for n in prep.formative if n not in with_item[:keep]]
+        with_item = with_item[:keep]
+    return with_item, tuple(as_text)
+
+
 def _slide(kind: str, title: str, **fields) -> PeriodSlide:
     return PeriodSlide(kind=kind, phase=SLIDE_PHASE[kind], title=title, **fields)
 
@@ -283,6 +318,7 @@ def _draft_slides(
     prep: PeriodPrep,
     groups: dict[int, tuple[ExampleClip, ...]],
     practice: dict[int, tuple[ExampleClip, ...]] | None = None,
+    items: PeriodItems | None = None,
 ) -> list[PeriodSlide]:
     """الشرائح بترتيب المراحل بلا دقائق: العنوان والاستدعاء، الأهداف، ولكل مثال مقاطعه وحله وتدريبه الصفي، ثم الممارسة
     المستقلة والفحص وبطاقة الخروج واختبار الدرس والواجب."""
@@ -345,15 +381,40 @@ def _draft_slides(
             paths.append(_t("advanced", numbers=numbers_with_pages(list(prep.advanced), prep.exercise_pages)))
         notes = (_t("differentiation_note"), *_exercise_notes(prep, [*prep.basic, *prep.advanced]))
         slides.append(_slide("differentiation", _t("independent_title"), bullets=tuple(paths), notes=notes))
-    if prep.formative:
-        questions = tuple(_t("skill_question", n=n) for n in prep.formative)
-        slides.append(_slide("check", _t("check_title"), bullets=questions, refs=prep.formative))
+    items = items or period_items(prep)
+    with_item, as_text = _split_check_questions(prep, items)
+    for n in with_item:
+        slides.append(
+            _slide(
+                "check",
+                _t("check_title"),
+                bullets=item_bullets(items.formative[n]),
+                refs=(n,),
+                notes=item_notes(items.formative[n]),
+            )
+        )
+    if as_text:
+        questions = tuple(_t("skill_question", n=n) for n in as_text)
+        slides.append(_slide("check", _t("check_title"), bullets=questions, refs=as_text))
     if prep.exit_ticket:
         n, dok = prep.exit_ticket.example, prep.exit_ticket.dok
-        notes = (_t("depth_note", depths=f"DOK {dok}"),)
-        slides.append(
-            _slide("exit", _t("exit_title"), bullets=(_t("skill_question", n=n),), refs=(n,), notes=notes)
-        )
+        depth = _t("depth_note", depths=f"DOK {dok}")
+        if items.exit is None:
+            slides.append(
+                _slide(
+                    "exit", _t("exit_title"), bullets=(_t("skill_question", n=n),), refs=(n,), notes=(depth,)
+                )
+            )
+        else:
+            slides.append(
+                _slide(
+                    "exit",
+                    _t("exit_title"),
+                    bullets=item_bullets(items.exit),
+                    refs=(n,),
+                    notes=(depth, *item_notes(items.exit)),
+                )
+            )
     if prep.quiz:
         counts = Counter(prep.quiz)
         depths = "، ".join(f"DOK {d} × {counts[d]}" for d in sorted(counts))
@@ -407,7 +468,7 @@ def build_period_deck(
         groups = _clip_groups(prep, [c for c in shown if c.kind == "example"])
     drawn = clips if shown is None else shown
     practice = _practice_groups(prep, [c for c in drawn if c.kind == "practice"])
-    slides = _timed(prep, _draft_slides(prep, groups, practice))
+    slides = _timed(prep, _draft_slides(prep, groups, practice, period_items(prep)))
     return PeriodDeck(
         key=period_deck_key(prep, clips),
         course=prep.course,

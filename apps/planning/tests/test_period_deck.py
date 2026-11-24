@@ -266,3 +266,47 @@ def test_s13_no_guide_text_fails(built):
     stranger = replace(clips[0], n=99)
     assert _fails(s13_no_guide_text(_replace_slide(deck, "example", clip=stranger), prep))
     assert isinstance(deck.slides[0], PeriodSlide)
+
+
+# ---- بنود بنك الأسئلة في شريحتي التحقق والخروج ----
+
+
+def _item_slides(deck):
+    return [s for s in deck.slides if s.kind in ("check", "exit") and len(s.bullets) == 5]
+
+
+def _with_items(built):
+    return next(b for b in built if any(s.kind == "exit" and len(s.bullets) == 5 for s in b[3].slides))
+
+
+def test_check_and_exit_show_bank_items(built):
+    prep, _, _, deck = _with_items(built)
+    exit_slide = next(s for s in deck.slides if s.kind == "exit")
+    assert [b[:2] for b in exit_slide.bullets[1:]] == ["أ)", "ب)", "ج)", "د)"]
+    assert any(s.kind == "check" and len(s.bullets) == 5 for s in deck.slides)
+    assert prep.exit_ticket is not None
+    assert sum(len(_item_slides(b[3])) for b in built) > len(built)  # أغلب الحصص ببنود لا نصوص احتياطية
+
+
+def test_answer_key_and_error_kind_in_notes_only(built):
+    from apps.papers.domain.generators import ERROR_KINDS
+
+    _, _, _, deck = _with_items(built)
+    for s in _item_slides(deck):
+        notes = " ".join(s.notes)
+        assert "الإجابة الصحيحة" in notes and "اختر ثم برّر" in notes
+        assert sum("الخيار" in n for n in s.notes) == 3
+        assert not any(m in " ".join(s.bullets) for m in ("الإجابة الصحيحة", *ERROR_KINDS.values()))
+
+
+def test_items_are_deterministic_by_seed(built):
+    prep, _, clips, deck = _with_items(built)
+    assert build_period_deck(prep, clips).slides == deck.slides
+    assert deck.key == period_deck_key(prep, clips)
+
+
+def test_every_deck_with_items_passes_density_and_words(built):
+    for prep, _, _, deck in built:
+        for check in (s6_density, s9_direction, s13_no_guide_text):
+            result = check(deck) if check is not s13_no_guide_text else check(deck, prep)
+            assert not _fails(result), (prep.lesson, prep.k, result)
