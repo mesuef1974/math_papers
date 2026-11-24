@@ -274,3 +274,30 @@ def test_clip_must_be_a_real_png_with_dimensions():
         ExampleClip(n=1, png=b"JPEG", width_px=10, height_px=10)
     with pytest.raises(DeckError):
         ExampleClip(n=1, png=make_png(2, 2), width_px=0, height_px=10)
+
+
+def test_every_slide_numbers_itself_in_reading_words(sample):
+    """رقم الشريحة في التذييل نصًا عربيًا «شريحة k من n» (لا خط مائل بين رقمين: ينقلب في RTL) عدا شريحة العنوان."""
+    data = build_period_pptx(sample)
+    parts = _parts(data)
+    n = len(sample.slides)
+    for k, slide in enumerate(sample.slides, start=1):
+        text = "".join(etree.fromstring(parts[f"ppt/slides/slide{k}.xml"]).itertext())
+        expected = f"شريحة {k} من {n}"
+        assert (expected in text) == (slide.kind != "title"), (k, slide.kind)
+
+
+def test_slides_use_named_master_layouts_by_kind(sample):
+    """ثلاثة تخطيطات بأسمائها (عنوان، محتوى، مقطع من الكتاب) تُسند للشرائح بنوعها، وكل تخطيط يصل إلى الماستر."""
+    parts = _parts(build_period_pptx(sample))
+    names = {
+        i: etree.fromstring(parts[f"ppt/slideLayouts/slideLayout{i}.xml"]).find(f"{P}cSld").get("name")
+        for i in (1, 2, 3)
+    }
+    assert names == {1: "عنوان", 2: "محتوى", 3: "مقطع من الكتاب"}
+    master = parts["ppt/slideMasters/_rels/slideMaster1.xml.rels"].decode()
+    assert all(f"slideLayout{i}.xml" in master for i in (1, 2, 3))
+    for k, slide in enumerate(sample.slides, start=1):
+        rels = parts[f"ppt/slides/_rels/slide{k}.xml.rels"].decode()
+        want = 1 if slide.kind == "title" else 3 if slide.clip is not None else 2
+        assert f"slideLayout{want}.xml" in rels, (k, slide.kind)

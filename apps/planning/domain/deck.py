@@ -55,7 +55,7 @@ class ExampleClip:
 # ---- عرض الحصة من تحضيرها ----
 
 # الإعداد: أرقام التصميم في مكان واحد (افتراضات تُراجع بعد أول تجربة في الصف)
-PERIOD_DECK_FORMAT = 2
+PERIOD_DECK_FORMAT = 3  # 3: تخطيطات الماستر الثلاثة ورقم الشريحة
 MINUTES_PER_SLIDE = 2
 TITLE_PT, BODY_PT = 36, 28
 MIN_TITLE_PT, MIN_BODY_PT = 32, 24
