@@ -7,6 +7,8 @@ import re
 NB_HYPHEN = "\u2011"  # الشرطة غير القاطعة
 LRM = "\u200e"
 RLM = "\u200f"
+LRI = "\u2066"  # عزل LTR لمقطع رياضي (يضعه عرض الحصة)
+PDI = "\u2069"
 NUMBER_RANGE = re.compile(r"\d+(?:\s*[-–/]\s*\d+)+")
 
 
@@ -20,4 +22,4 @@ def isolate_number_ranges(text: str) -> str:
 
 def strip_isolation(text: str) -> str:
     """عكس `isolate_number_ranges`: النص قبل العزل."""
-    return text.replace(LRM, "").replace(RLM, "").replace(NB_HYPHEN, "-")
+    return text.replace(LRM, "").replace(RLM, "").replace(LRI, "").replace(PDI, "").replace(NB_HYPHEN, "-")

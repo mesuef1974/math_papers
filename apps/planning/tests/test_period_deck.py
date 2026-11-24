@@ -341,3 +341,17 @@ def test_retrieval_item_is_deterministic(built):
 
     prep = next(b[0] for b in built if b[0].k == 1 and b[0].earlier_lessons)
     assert period_items(prep).retrieval == period_items(prep).retrieval
+
+
+# ---- صيغ LaTeX رموز مقروءة على شرائح البنود ----
+
+
+def test_no_raw_latex_on_any_item_slide(built):
+    import re
+
+    raw = re.compile(r"\$|\\|\[a-zA-Z]|\{|\}")
+    for prep, _, _, deck in built:
+        for s in deck.slides:
+            if s.kind in ("check", "exit", "recall"):
+                for text in (*s.bullets, *s.notes):
+                    assert not raw.search(text), (prep.lesson, prep.k, s.kind, text)

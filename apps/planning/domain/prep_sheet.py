@@ -14,6 +14,7 @@ from apps.papers.domain.book_source import numbers_with_pages
 
 from .check_items import period_items
 from .non_lesson import NonLessonPrep, PaperLink
+from .plain_math import plain_math
 from .prep import PeriodPrep, PrepExample, Recall
 from .prep_checks import BLOCKING, NON_LESSON_BLOCKING, WARNING, CheckResult
 from .strategies import Strategy, with_roles
@@ -238,7 +239,7 @@ def _objective_rows(prep: PeriodPrep, library: Mapping[str, Strategy]) -> tuple[
 def _retrieval_tail(prep: PeriodPrep) -> str:
     """سؤال الاسترجاع المتباعد من البنك (شريحة التذكّر نفسها) حين يوجد، ومفتاحه في ملاحظات العرض."""
     item = period_items(prep).retrieval
-    return f" — استرجاع متباعد: {item.stem}" if item is not None else ""
+    return f" — استرجاع متباعد: {plain_math(item.stem)}" if item is not None else ""
 
 
 def _closing(prep: PeriodPrep, strategy: Strategy | None) -> str:
@@ -249,7 +250,7 @@ def _closing(prep: PeriodPrep, strategy: Strategy | None) -> str:
         head = f"{title}: بطاقة خروج من مهارة المثال {prep.exit_ticket.example}"
         item = period_items(prep).exit
         if item is not None:  # بند البنك نفسه الذي في شريحة الخروج، ومفتاحه عند المعلم في ملاحظات العرض
-            head += f" — {item.stem}"
+            head += f" — {plain_math(item.stem)}"
     else:
         head = f"{title}: تلخيص أفكار الحصة"
     return _activity(head, strategy)

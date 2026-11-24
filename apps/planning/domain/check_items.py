@@ -14,6 +14,7 @@ from apps.papers.domain.bidi import isolate_number_ranges, strip_isolation
 from apps.papers.domain.generators import ERROR_KINDS
 from apps.papers.domain.item_bank import Item, ItemBankError, exit_ticket, retrieval
 
+from .plain_math import convertible, plain_math
 from .prep import PeriodPrep
 
 OPTION_LETTERS = ("أ", "ب", "ج", "د")
@@ -40,7 +41,11 @@ def fits_slide(item: Item) -> bool:
     if item.graph is not None:
         return False
     texts = (item.stem, *(o.text for o in item.options))
-    return all(math.ceil(len(strip_isolation(t)) / ITEM_LINE_CHARS) <= MAX_ITEM_LINES for t in texts)
+    if not all(convertible(t) for t in texts):  # مصفوفة أو أمر بلا تحويل مقروء: يبقى سؤالًا نصيًّا
+        return False
+    return all(
+        math.ceil(len(strip_isolation(plain_math(t))) / ITEM_LINE_CHARS) <= MAX_ITEM_LINES for t in texts
+    )
 
 
 def _item(prep: PeriodPrep, example: int, seed: int) -> Item | None:
@@ -85,12 +90,16 @@ def period_items(prep: PeriodPrep) -> PeriodItems:
 
 
 def option_label(index: int, text: str) -> str:
-    return isolate_number_ranges(f"{OPTION_LETTERS[index]}) {text}")
+    return isolate_number_ranges(f"{OPTION_LETTERS[index]}) {plain_math(text)}")
 
 
 def item_words_source(item: Item) -> list[str]:
     """نصوص البند التي تدخل العرض: السؤال والخيارات وأوصاف أخطاء مشتتاتها."""
-    return [item.stem, *(o.text for o in item.options), *(o.misconception or "" for o in item.options)]
+    return [
+        plain_math(item.stem),
+        *(plain_math(o.text) for o in item.options),
+        *(o.misconception or "" for o in item.options),
+    ]
 
 
 def all_misconceptions() -> list[str]:
