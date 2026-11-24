@@ -76,3 +76,53 @@ def test_template_package_has_no_dangling_parts(path):
                 if mode != "External":
                     resolved = (Path("/") / base / target).resolve().as_posix()
                     assert re.sub(r"^[A-Za-z]:", "", resolved).lstrip("/") in names, (rels, target)
+
+
+def _sheet(objectives: int):
+    from apps.planning.domain.prep_sheet import ObjectiveRow, PrepSheet
+
+    row = ObjectiveRow(1, "هدف", False, "نشاط", "تقويم", 10, "تحقق", "تقويم", 10)
+    return PrepSheet(
+        course="g10-s1", lesson="1.1", lesson_title="درس", unit=1, k=1, n=1, week=1, number=1, minutes=45,
+        year="2026-2027", semester="الأول", grade="العاشر", unit_label="1", day_date="", outcomes="", main_sources="",
+        support_sources="", warmup="", warmup_minutes=5, objectives=(row,) * objectives, closing="", closing_minutes=5,
+        homework="", basic="", advanced="", quiz="", stages=(), checks=(),
+    )  # fmt: skip
+
+
+@pytest.mark.parametrize("objectives", [1, 4])
+def test_prep_docx_has_no_full_height_blank_paragraph_to_spill_a_page(objectives):
+    """الفقرات الفارغة بين الجداول وبعد آخرها صغيرة الارتفاع الثابت فلا تنتج صفحة فارغة في آخر الملف."""
+    from io import BytesIO
+
+    from docx import Document
+    from docx.oxml.ns import qn
+
+    from apps.planning.prep_word import prep_docx
+
+    document = Document(BytesIO(prep_docx(_sheet(objectives), "معلم")))
+    body = list(document.element.body)
+    blanks = [c for c in body if c.tag == qn("w:p") and not "".join(c.itertext()).strip()]
+    for blank in blanks:
+        spacing = blank.find(qn("w:pPr")).find(qn("w:spacing"))
+        assert spacing.get(qn("w:lineRule")) == "exact" and int(spacing.get(qn("w:line"))) <= 120
+    assert [c.tag.split("}")[1] for c in body] == ["tbl", "p", "tbl", "p", "tbl", "p", "sectPr"]
+    last = blanks[-1].find(qn("w:pPr")).find(qn("w:spacing"))
+    assert int(last.get(qn("w:line"))) <= 20
+    assert b'w:br w:type="page"' not in document.element.xml.encode()
+
+
+def test_each_objective_keeps_its_teach_and_check_rows_on_one_page():
+    from io import BytesIO
+
+    from docx import Document
+    from docx.oxml.ns import qn
+
+    from apps.planning.prep_word import prep_docx
+
+    document = Document(BytesIO(prep_docx(_sheet(3), "معلم")))
+    rows = document.tables[0].rows[13:19]
+    for index, row in enumerate(rows):
+        assert row._tr.find(qn("w:trPr")).find(qn("w:cantSplit")) is not None
+        keeps = row._tr.find(".//" + qn("w:keepNext")) is not None
+        assert keeps == (index % 2 == 0)  # صف التعليم يلصق بصف التحقق الذي بعده فقط
