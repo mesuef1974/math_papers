@@ -181,6 +181,8 @@ class PeriodPrep:
     sources: Mapping[str, str] = field(default_factory=dict)
     # صفحة كل تمرين في الحصة (الصفي والمساران والواجب) في كتاب الطالب حين تُعرف؛ الفارغ خارج التجزئة
     exercise_pages: Mapping[int, int] = field(default_factory=dict, metadata=DIGEST_OMITS_DEFAULT)
+    # دروس المقرر قبل هذا الدرس بترتيبها، للحصة الأولى وحدها: مصدر بند الاسترجاع المتباعد؛ الفارغ خارج التجزئة
+    earlier_lessons: tuple[str, ...] = field(default=(), metadata=DIGEST_OMITS_DEFAULT)
 
     @property
     def practice_examples(self) -> tuple[PrepExample, ...]:

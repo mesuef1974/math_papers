@@ -477,10 +477,11 @@ def test_grade10_preps_are_untouched_by_the_practice_field(preps):
         assert all(not e.practice for e in (*prep.examples, *prep.review))
         assert not prep.exercise_pages
         assert prep.task_guide[0] and prep.task_guide[1]
-        old = asdict(prep)
+        old = asdict(replace(prep, earlier_lessons=()))  # حقل الاسترجاع لاحق: خارج التجزئة حين يفرغ
         for example in (*old["examples"], *old["review"]):
             del example["practice"]
         del old["exercise_pages"]
+        del old["earlier_lessons"]
         text = json.dumps(
             old,
             default=sorted,
@@ -488,7 +489,11 @@ def test_grade10_preps_are_untouched_by_the_practice_field(preps):
             sort_keys=True,
             separators=(",", ":"),
         )
-        assert prep_digest(prep) == hashlib.sha256(text.encode("utf-8")).hexdigest()
+        assert (
+            prep_digest(replace(prep, earlier_lessons=())) == hashlib.sha256(text.encode("utf-8")).hexdigest()
+        )
+        if prep.earlier_lessons:  # الدروس السابقة تغيّر بند الاسترجاع فتغيّر البصمة
+            assert prep_digest(prep) != prep_digest(replace(prep, earlier_lessons=()))
     _, _, unguided = _unguided()
     assert prep_digest(unguided[0]) != prep_digest(replace(unguided[0], examples=()))
 
@@ -500,6 +505,7 @@ def _digest_before_145(prep):
     for example in (*old["examples"], *old["review"]):
         del example["practice"]
     assert not old.pop("exercise_pages")
+    assert not old.pop("earlier_lessons")
     text = json.dumps(old, default=sorted, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
@@ -536,7 +542,8 @@ def test_digest_drops_marked_fields_at_their_default_by_one_rule():
     marked = {f.name for f in fields(PrepExample) if f.metadata.get("digest_omits_default")}
     assert marked == {"practice"}
     assert {f.name for f in fields(PeriodPrep) if f.metadata.get("digest_omits_default")} == {
-        "exercise_pages"
+        "exercise_pages",
+        "earlier_lessons",
     }
 
 

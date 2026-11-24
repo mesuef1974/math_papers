@@ -235,6 +235,12 @@ def _objective_rows(prep: PeriodPrep, library: Mapping[str, Strategy]) -> tuple[
     return tuple(rows)
 
 
+def _retrieval_tail(prep: PeriodPrep) -> str:
+    """سؤال الاسترجاع المتباعد من البنك (شريحة التذكّر نفسها) حين يوجد، ومفتاحه في ملاحظات العرض."""
+    item = period_items(prep).retrieval
+    return f" — استرجاع متباعد: {item.stem}" if item is not None else ""
+
+
 def _closing(prep: PeriodPrep, strategy: Strategy | None) -> str:
     title = strategy.title if strategy else ""
     if prep.is_last and prep.quiz:
@@ -302,7 +308,7 @@ def prep_sheet(
         main_sources="كتاب الطالب: " + "، ".join(pages) if pages else "كتاب الطالب",
         support_sources=SUPPORT_SOURCES,
         warmup=_activity(
-            f"{titles.get(stages['warmup'].strategy or '', '')}: {recall_label(prep.recall)}",
+            f"{titles.get(stages['warmup'].strategy or '', '')}: {recall_label(prep.recall)}{_retrieval_tail(prep)}",
             library.get(stages["warmup"].strategy or ""),
         ),
         warmup_minutes=stages["warmup"].minutes,
