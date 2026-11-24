@@ -291,7 +291,11 @@ def allowed_words(prep: PeriodPrep) -> frozenset[str]:
     recalls.append(recall_label(Recall("prior_knowledge")))
     authored = [p for o in prep.objectives if o.source == "authored" for p in o.parts]
     items = period_items(prep)
-    shown = (*items.formative.values(), *([items.exit] if items.exit else []))
+    shown = (
+        *items.formative.values(),
+        *([items.exit] if items.exit else []),
+        *([items.retrieval] if items.retrieval else []),
+    )
     bank_texts = [t for item in shown for t in item_words_source(item)]
     return frozenset(
         _words(
