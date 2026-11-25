@@ -1192,8 +1192,66 @@ def assert_error_spotting(item):
     assert item.correct_step != item.steps[item.wrong_step - 1]
 
 
+def true_average_rate(c):
+    f = c["f"]
+    return ((f.subs(x, c["b"]) - f.subs(x, c["a"])) / (c["b"] - c["a"]),)
+
+
+def true_leading_coefficient(c):
+    """معامل القطع الذي رأسه vertex ويمرّ بـ point، بحل معادلة التعويض لا بقواعد الخطوات."""
+    (h, k), (p, q), a = c["vertex"], c["point"], sp.Symbol("a")
+    return tuple(sp.solve(a * (p - h) ** 2 + k - q, a))
+
+
+def true_vertex(c):
+    (h,) = sp.solve(sp.diff(c["f"], x), x)
+    return (h, c["f"].subs(x, h))
+
+
+VALUE_TRUTHS = {
+    "average_rate": true_average_rate,
+    "leading_coefficient": true_leading_coefficient,
+    "vertex": true_vertex,
+}
+
+
+def rule_values(rule, known):
+    """قيم خطوة من قاعدتها وقيم الخطوات التي قبلها (الرمز s<خطوة>_<موضع>)."""
+    at = {sp.Symbol(f"s{i}_{j}"): value for i, row in enumerate(known, 1) for j, value in enumerate(row)}
+    return tuple(sp.sympify(expr).subs(at) for expr in rule)
+
+
+def same_values(one, two):
+    return len(one) == len(two) and [float(v) for v in one] == pytest.approx([float(v) for v in two], abs=TOL)
+
+
+def assert_value_chain(item):
+    """الخطوة n صحيحة إن طابقت قاعدتها مطبَّقةً على القيم المعروضة قبلها: الموسومة وحدها تخالفها."""
+    c = item.check
+    shown, rules = c["steps"], c["rules"]
+    truth = VALUE_TRUTHS[c["quantity"]](c)
+    assert len(shown) == len(rules) == len(item.steps) and 1 <= item.wrong_step <= len(item.steps)
+    for n in range(1, len(rules) + 1):
+        follows = same_values(shown[n - 1], rule_values(rules[n - 1], shown[: n - 1]))
+        assert follows == (n != item.wrong_step), (n, item.wrong_step, item.steps)
+    # التصحيح قاعدة الخطوة على ما قبلها، وإكمال الحل منه بالقواعد يبلغ الجواب المحسوب من المعطيات مباشرة
+    known = list(shown[: item.wrong_step - 1])
+    assert same_values(c["fixed"], rule_values(rules[item.wrong_step - 1], known))
+    known.append(c["fixed"])
+    for rule in rules[item.wrong_step :]:
+        known.append(rule_values(rule, known))
+    assert same_values(known[-1], truth)
+    assert not same_values(shown[-1], truth)
+    assert item.correct_step != item.steps[item.wrong_step - 1]
+
+
 SPOTTING = [(lesson, fn) for (_, lesson), fns in ERROR_SPOTTING.items() for fn in fns]
-SPOTTING_CHECKS = {"error_spotting": assert_error_spotting}
+SPOTTING_CHECKS = {"error_spotting": assert_error_spotting, "error_spotting_values": assert_value_chain}
+
+
+@pytest.mark.parametrize("lesson", ["1.1", "1.2", "1.3"])
+def test_error_spotting_covers_every_lesson_of_grade10_unit_one(lesson):
+    assert ERROR_SPOTTING.get((GRADE10_SLUG, lesson)), lesson
 
 
 def test_error_spotting_has_a_grade10_variant_outside_the_paper_registry():
