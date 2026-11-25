@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
 from typing import Any
 
 from axes.exceptions import AxesBackendPermissionDenied
@@ -12,6 +14,9 @@ from django.http import HttpRequest
 
 from .middleware import request_id_of
 from .models import AuditLog
+from .selectors import plan_metrics
+
+PLAN_FILE = "docs/innovation_plan.yaml"
 
 
 @transaction.atomic
@@ -58,6 +63,36 @@ def sign_in(request: HttpRequest, username: str, password: str) -> AbstractBaseU
     login(request, user)
     record_audit(action="auth.login", actor=user, target=username[:255], request_id=request_id)
     return user
+
+
+class PlanMetricsError(ValueError):
+    """ملف الخطة غائب أو لا يصلح للقياس."""
+
+
+def plan_kpi_keys(plan: dict[str, Any]) -> list[str]:
+    return [kpi["key"] for initiative in plan.get("initiatives", []) for kpi in initiative.get("kpis", [])]
+
+
+def write_plan_metrics(root: Path, plan_file: str = PLAN_FILE) -> Path:
+    """يكتب مؤشرات الخطة JSON في `metrics_file`. idempotent: بلا تاريخ ولا ترتيب متغيّر، فقاعدة لم تتغير
+    تعطي الملف نفسه بايتًا ببايت. الملف أعداد ونسب مجمَّعة فقط."""
+    import yaml  # في بيئة التطوير وحدها (requirements-dev): الأمر يُشغَّل من جهاز المالك لا من الخادم
+
+    plan_path = root / plan_file
+    if not plan_path.is_file():
+        raise PlanMetricsError(f"ملف الخطة غير موجود: {plan_path}")
+    try:
+        plan = yaml.safe_load(plan_path.read_text(encoding="utf-8"))
+        keys = plan_kpi_keys(plan)
+        target = (root / plan["metrics_file"]).resolve()
+    except (yaml.YAMLError, KeyError, TypeError, AttributeError) as error:
+        raise PlanMetricsError(f"ملف الخطة غير سليم: {error!r}") from error
+    if not target.is_relative_to(root.resolve()):
+        raise PlanMetricsError(f"metrics_file خارج المستودع: {plan['metrics_file']}")
+    text = json.dumps(plan_metrics(keys), ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(text, encoding="utf-8", newline="\n")
+    return target
 
 
 def sign_out(request: HttpRequest) -> None:
