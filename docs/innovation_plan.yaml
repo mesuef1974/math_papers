@@ -76,6 +76,13 @@ initiatives:
           - {path: apps/planning/tests/test_misconception_board.py, has: test_counts_match_results}
           - {path: frontend/src/pages/MisconceptionsPage.vue}
         cards: ["20261125-055945"]
+      - id: M1.4
+        title: إدخال نتائج الطلاب من الواجهة
+        done_when: المعلم يدخل اختيارات شعبته في بنود بطاقة الخروج نفسها فتظهر في لوحة سوء الفهم، بلا تخزين أسماء في المتصفح.
+        probes:
+          - {path: apps/planning/tests/test_result_entry.py, has: test_entry_items_match_exit_ticket}
+          - {path: frontend/src/pages/ResultsEntryPage.vue}
+        cards: ["20261125-184413"]
     kpis:
       - {key: tagged_objective_formulas_pct, title: الصيغ الموضوعية الموسومة, unit: "%", baseline: 100, target: 100}
       - {key: results_with_error_kind_pct, title: إجابات خاطئة مسجَّلة بنوع خطأ, unit: "%", baseline: 0, target: 90}
