@@ -132,7 +132,7 @@ initiatives:
         done_when: اختبار يعدّ الدروس الممتحَنة التي لها صيغة اكتشف الخطأ ويساويها بعددها.
         probes:
           - {path: apps/papers/tests/test_grade10.py, has: test_every_examinable_lesson_has_error_spotting}
-        cards: []
+        cards: ["20261125-b413ee", "20261125-9fac4a", "20261125-a96fb6", "20261125-53e6dd"]
       - id: M3.3
         title: عرضها في الورقة والمفتاح وWord
         done_when: الحل المعروض يظهر مرقَّم الخطوات في الشاشة وPDF وWord، والمفتاح يذكر رقم الخطوة ونوع الخطأ.
@@ -140,7 +140,7 @@ initiatives:
           - {path: frontend/src/components/ErrorSpottingPart.vue}
         cards: []
     kpis:
-      - {key: lessons_with_error_spotting, title: دروس لها صيغة اكتشف الخطأ, unit: درس, baseline: 0, target: 19}
+      - {key: lessons_with_error_spotting, title: دروس ممتحَنة لها صيغة اكتشف الخطأ, unit: درس, baseline: 0, target: 14}
     decisions:
       - {text: مستوى DOK المعتمد لهذا النوع وهل يدخل الاختبارات أم أوراق العمل وحدها, status: open}
     risks: []
