@@ -1,4 +1,7 @@
-"""نماذج نحيلة: نتيجة الصف في الدرس وتقرير الحصة (مستوى الشعبة فقط، لا بيانات طلاب فردية: PDPPL)، ومراجعة المعلم لأهداف حصته.
+"""نماذج نحيلة: نتيجة الصف في الدرس وتقرير الحصة (مستوى الشعبة)، ومراجعة المعلم لأهداف حصته، ونتيجة الطالب لكل بند.
+
+بيانات الطالب الفردية (PDPPL، قرار المالك 2026-11-25) في `SectionStudent` و`ItemResult` وحدهما: رقم قيد واسم مختصر، تُحذف
+بنهاية السنة الأكاديمية (`services.purge_ended_results`)، ولا تدخل أسماؤها سجل التدقيق.
 
 السجل يرتبط بالدرس نفسه (`lesson`، ومنه مقرره): الرمز «1.1» درس مختلف في كل كتاب، ومعلم يدرّس صفّين لا تتصادم سجلاته.
 `lesson` مطلوب وهو مصدر الرمز الوحيد (`lesson.code`): لا نسخة من الرمز في السجل.
@@ -197,3 +200,65 @@ class DeckBuild(TimeStampedModel):
 
     def __str__(self) -> str:
         return f"{self.owner_id} · {self.lesson.code} الحصة {self.k}"
+
+
+# ───── تشخيص الخطأ: نتيجة الطالب لكل بند (قرار المالك 2026-11-25) ─────
+
+ENROLLMENT_LENGTH = 20
+STUDENT_NAME_LENGTH = 30
+ITEM_OPTION_COUNT = 4  # رقم الخيار من 0 إلى 3
+# الحدود نفسها يفرضها `domain/item_results.py` قبل الكتابة (يحرس تطابقهما `test_student_results.py`)
+
+
+class SectionStudent(TimeStampedModel):
+    """طالب في شعبة معلم: رقم القيد والاسم الأول واسم العائلة فقط، لا اسم رباعي ولا أي بيان آخر (تقليل البيانات)."""
+
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="section_students"
+    )
+    section = models.CharField(max_length=20)
+    enrollment_no = models.CharField(max_length=ENROLLMENT_LENGTH)
+    first_name = models.CharField(max_length=STUDENT_NAME_LENGTH)
+    last_name = models.CharField(max_length=STUDENT_NAME_LENGTH)
+
+    class Meta:
+        ordering = ["section", "enrollment_no"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["owner", "section", "enrollment_no"], name="planning_student_one_per_enrollment"
+            ),
+        ]
+
+    def __str__(self) -> str:  # بلا اسم: النص يظهر في السجلات ورسائل الأخطاء
+        return f"{self.section} · {self.enrollment_no}"
+
+
+class ItemResult(TimeStampedModel):
+    """اختيار طالب في بند من بنك البنود (الدرس والمثال والبذرة تعيّنه). الصحة ونوع الخطأ مشتقان من البنك عند الحفظ."""
+
+    student = models.ForeignKey(SectionStudent, on_delete=models.CASCADE, related_name="results")
+    lesson = models.ForeignKey("curriculum.Lesson", on_delete=models.PROTECT, related_name="item_results")
+    example = models.PositiveSmallIntegerField()
+    seed = models.PositiveIntegerField()
+    choice = models.PositiveSmallIntegerField()
+    correct = models.BooleanField()
+    error_kind = models.CharField(max_length=16, blank=True, default="")  # مفتاح من ERROR_KINDS، وفارغ للصحيح
+
+    class Meta:
+        ordering = ["student_id", "lesson_id", "example", "seed"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["student", "lesson", "example", "seed"], name="planning_result_one_per_item"
+            ),
+            models.CheckConstraint(
+                condition=Q(example__gte=1) & Q(choice__lt=ITEM_OPTION_COUNT),
+                name="planning_result_item_valid",
+            ),
+            models.CheckConstraint(
+                condition=Q(correct=True, error_kind="") | (Q(correct=False) & ~Q(error_kind="")),
+                name="planning_result_kind_iff_wrong",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.student_id} · {self.lesson_id} مثال {self.example}: {self.choice}"

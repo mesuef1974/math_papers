@@ -12,6 +12,8 @@
 - POST /preps/<مقرر>/<درس>/<k>/review  علامة «راجعتُ أهداف الحصة»
 - PUT  /preps/<مقرر>/<درس>/<k>/override  تعديل المعلم لحصص الدرس (التوزيع والاستراتيجيات والتمارين المحذوفة)، له وحده
 - DELETE /preps/<مقرر>/<درس>/<k>/override  استرجاع التحضير المشترك للدرس
+- POST /results/<مقرر>/<درس>          نتائج طلاب شعبة في بنود الدرس دفعة واحدة (idempotent؛ نوع الخطأ من بنك البنود)
+- GET  /results/<مقرر>/<درس>?section=  نتائج شعبة من شعب المعلم وأعداد أخطائها بالنوع؛ 403 لشعبة ليست له
 """
 
 from __future__ import annotations
@@ -30,9 +32,12 @@ from apps.assets.storage import StorageError, get_storage
 from apps.core.middleware import request_id_of
 from apps.core.services import record_audit
 from apps.papers.access import TeacherAuth
+from apps.papers.domain.item_bank import OPTION_COUNT
 
 from . import selectors, services
+from .domain.calendar_engine import PlanningError
 from .domain.deck import DeckError
+from .domain.item_results import MAX_ENTRIES, MAX_EXAMPLE, MAX_SEED, Entry, ResultsError
 from .domain.objective_text import ObjectiveLockedError, ObjectiveNotFoundError, ObjectiveTextError
 from .domain.prep_override import OverrideError
 from .prep_word import DOCX_CONTENT_TYPE, prep_docx, prep_filename
@@ -388,6 +393,106 @@ def review_prep(request: HttpRequest, course: str, lesson: str, k: int):
     with _objective_errors():
         services.mark_reviewed(request.user, course, lesson, k, request_id=request_id_of(request))
     return _prep_out(_teacher_sheet(request, course, lesson, k))
+
+
+# ───── تشخيص الخطأ: نتيجة الطالب لكل بند (قرار المالك 2026-11-25) ─────
+
+
+class ItemResultIn(Schema):
+    """اختيار طالب في بند. لا حقل للصحة ولا لنوع الخطأ: يُشتقان من بنك البنود في الخادم."""
+
+    enrollment_no: str = Field(max_length=40)
+    first_name: str = Field(max_length=120)
+    last_name: str = Field(max_length=120)
+    example: int = Field(ge=1, le=MAX_EXAMPLE)
+    seed: int = Field(ge=0, le=MAX_SEED)
+    choice: int = Field(ge=0, lt=OPTION_COUNT)
+
+
+class SectionResultsIn(Schema):
+    section: str = Field(max_length=40)
+    results: list[ItemResultIn] = Field(min_length=1, max_length=MAX_ENTRIES)
+
+
+class ResultsSavedOut(Schema):
+    students: int
+    results: int
+    created: int
+    updated: int
+
+
+class ItemResultOut(Schema):
+    example: int
+    seed: int
+    choice: int
+    correct: bool
+    error_kind: str | None
+    misconception: str | None
+
+
+class StudentResultsOut(Schema):
+    enrollment_no: str
+    first_name: str
+    last_name: str
+    results: list[ItemResultOut]
+
+
+class ErrorKindOut(Schema):
+    kind: str
+    label: str
+    count: int
+
+
+class SectionResultsOut(Schema):
+    course: str
+    lesson: str
+    section: str
+    attempted: int
+    correct: int
+    kinds: list[ErrorKindOut]
+    students: list[StudentResultsOut]
+
+
+@router.post("results/{course}/{lesson}", response=ResultsSavedOut)
+def record_results(request: HttpRequest, course: str, lesson: str, payload: SectionResultsIn):
+    """نتائج شعبة المعلم في بنود درس دفعة واحدة (idempotent)."""
+    try:
+        return services.record_item_results(
+            request.user,
+            course,
+            lesson,
+            payload.section,
+            [Entry(**row.dict()) for row in payload.results],
+            request_id=request_id_of(request),
+        )
+    except ResultsError as error:
+        raise HttpError(422, str(error)) from error
+    except PlanningError as error:  # مقرر أو درس مجهول، أو شعبة بلا اسم
+        raise HttpError(404, str(error)) from error
+
+
+@router.get("results/{course}/{lesson}", response=SectionResultsOut)
+def section_results(request: HttpRequest, response: HttpResponse, course: str, lesson: str, section: str):
+    """نتائج شعبة من شعب المعلم في درس؛ 403 لشعبة ليست له. كل قراءة وكل رفض في سجل التدقيق بلا أسماء."""
+    target = services.results_target(course, lesson, section.strip()[:40])
+    try:
+        data = selectors.section_results(request.user, course, lesson, section)
+    except selectors.SectionNotOwnedError as error:
+        record_audit(
+            action="results.denied", actor=request.user, target=target, request_id=request_id_of(request)
+        )
+        raise HttpError(403, "الشعبة ليست من شعبك") from error
+    except selectors.ResultsNotFoundError as error:
+        raise HttpError(404, str(error)) from error
+    record_audit(
+        action="results.read",
+        actor=request.user,
+        target=target,
+        payload={"students": len(data["students"]), "results": data["attempted"]},
+        request_id=request_id_of(request),
+    )
+    response["Cache-Control"] = "private, no-store"
+    return data
 
 
 @router.get("preps/{course}/{lesson}/{k}/word")

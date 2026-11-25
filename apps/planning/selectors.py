@@ -6,11 +6,12 @@
 
 from __future__ import annotations
 
+from collections import Counter
 from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 
 from django.contrib.auth.models import AbstractBaseUser
-from django.db.models import QuerySet
+from django.db.models import Prefetch, QuerySet
 
 from apps.assets.models import Asset
 from apps.assets.selectors import asset_bytes
@@ -21,6 +22,7 @@ from apps.curriculum.selectors import calendar_data, lessons, term_plan_data
 from apps.knowledge.domain.course_index import LessonIndex
 from apps.knowledge.domain.unit_prep import approved_standards, unit_prep
 from apps.knowledge.selectors import course_index, example_numbers, lesson_index
+from apps.papers.domain.generators import ERROR_KINDS
 
 from .domain.calendar_engine import Closure, Plan, Slot, Term, allocate, parse_terms, sessions
 from .domain.deck import ExampleClip, deck_key_of
@@ -63,11 +65,13 @@ from .example_clips import merge_groups
 from .models import (
     ClassOutcomeRecord,
     DeckBuild,
+    ItemResult,
     LessonRunRecord,
     ObjectiveOverride,
     ObjectiveSuggestion,
     PeriodPrepOverride,
     PrepReview,
+    SectionStudent,
 )
 
 PLAN_COURSE = GRADE10_SLUG  # المقرر الافتراضي للتخطيط: أول مقرر له خطة فصلية في الجداول
@@ -124,6 +128,78 @@ def decision_of(record: ClassOutcomeRecord) -> Decision:
 def run_reports(owner: AbstractBaseUser, section: str | None = None) -> QuerySet[LessonRunRecord]:
     rows = LessonRunRecord.objects.filter(owner=owner).select_related("lesson")
     return rows.filter(section=section) if section else rows
+
+
+# ───── تشخيص الخطأ: نتيجة الطالب لكل بند (قرار المالك 2026-11-25) ─────
+
+
+class SectionNotOwnedError(PermissionError):
+    """الشعبة ليست من شعب المعلم: لا طالب له فيها. الرد واحد سواء وُجدت عند غيره أم لم توجد."""
+
+
+class ResultsNotFoundError(LookupError):
+    """لا درس بهذا الرمز في المقرر."""
+
+
+def owned_sections(owner: AbstractBaseUser) -> list[str]:
+    """شعب المعلم: ما له فيه طلاب."""
+    rows = SectionStudent.objects.filter(owner=owner).order_by("section")
+    return list(rows.values_list("section", flat=True).distinct())
+
+
+def section_results(owner: AbstractBaseUser, course: str, lesson: str, section: str) -> dict:
+    """نتائج طلاب شعبة المعلم في بنود درس، وأعداد أخطائها بنوع الخطأ (`ERROR_KINDS`) للتشخيص.
+
+    `SectionNotOwnedError` لشعبة ليست له قبل أي قراءة أخرى، و`ResultsNotFoundError` لدرس مجهول. الطالب بلا نتيجة في
+    الدرس يظهر بقائمة فارغة."""
+    section = section.strip()
+    roster = SectionStudent.objects.filter(owner=owner, section=section)
+    if not section or not roster.exists():
+        raise SectionNotOwnedError(f"الشعبة {section} ليست من شعبك")
+    record = Lesson.objects.filter(course__slug=course, code=lesson).first()
+    if record is None:
+        raise ResultsNotFoundError(f"الدرس {lesson} غير موجود في المقرر {course}")
+    students = roster.prefetch_related(
+        Prefetch("results", queryset=ItemResult.objects.filter(lesson=record), to_attr="lesson_results")
+    )
+    rows, kinds, attempted, correct = [], Counter(), 0, 0
+    for student in students:
+        results = []
+        for r in student.lesson_results:
+            attempted += 1
+            correct += r.correct
+            kinds[r.error_kind] += not r.correct
+            results.append(
+                {
+                    "example": r.example,
+                    "seed": r.seed,
+                    "choice": r.choice,
+                    "correct": r.correct,
+                    "error_kind": r.error_kind or None,
+                    "misconception": ERROR_KINDS.get(r.error_kind),
+                }
+            )
+        rows.append(
+            {
+                "enrollment_no": student.enrollment_no,
+                "first_name": student.first_name,
+                "last_name": student.last_name,
+                "results": results,
+            }
+        )
+    return {
+        "course": course,
+        "lesson": record.code,
+        "section": section,
+        "attempted": attempted,
+        "correct": correct,
+        "kinds": [
+            {"kind": kind, "label": label, "count": kinds[kind]}
+            for kind, label in ERROR_KINDS.items()
+            if kinds[kind]
+        ],
+        "students": rows,
+    }
 
 
 def _course_plan(course: str) -> tuple[Course, TermPlan]:

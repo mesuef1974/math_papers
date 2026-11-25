@@ -34,6 +34,7 @@ PostgreSQL + Redis. النشر على Railway (`railway.toml`).
 - كل مسارات `apps/papers/api.py` خلف `TeacherAuth`: جلسة (401 دونها) وصلاحية `curriculum.generate_paper` (403 دونها).
 - المعلم = عضو مجموعة `teachers`: `python manage.py create_teacher <اسم>` (idempotent). المشرف العام يملك الصلاحية ضمنًا.
 - الدخول `POST /api/auth/login` يفحص CSRF صراحة ويبدّل الجلسة ويُسجَّل في AuditLog؛ axes يقفل بعد 5 محاولات.
+- بيانات الطالب الفردية (قرار المالك 2026-11-25) في `planning.SectionStudent` و`ItemResult` وحدهما: رقم قيد واسم أول واسم عائلة، ونوع الخطأ يُشتق من بنك البنود لا من العميل. `/api/v1/results/<مقرر>/<درس>` للمعلم في شعبه فقط (403 لغيرها)، وسجل التدقيق أعداد بلا أسماء ولا أرقام قيد. الاحتفاظ حتى نهاية العام: `python manage.py purge_student_results` (idempotent، `--dry-run`).
 - `TRUSTED_PROXY_COUNT` (الإنتاج 1 لـ Railway) يحدد عنوان العميل الحقيقي للقفل؛ لا تجعله صفرًا خلف وكيل.
 
 ## الهوية البصرية
