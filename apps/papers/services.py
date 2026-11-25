@@ -36,6 +36,8 @@ from .domain.generators import (
     variants,
 )
 from .domain.marking import marking
+from .domain.remedial import MAX_PARTS as MAX_REMEDIAL_PARTS
+from .domain.remedial import RemedialRecipe, StudentError, remedial_recipe
 from .domain.rotation import RotationSlot, rotate
 from .models import PrintProfile, SavedPaper
 from .selectors import PROFILE_FIELDS, print_profile, saved_paper
@@ -709,3 +711,25 @@ def build_bundle_item(slug: str, lesson_code: str, bundle_seed: int) -> dict:
     }
     cache.set(key, paper, 60 * 60 * 24)
     return paper
+
+
+def build_remedial_recipe(
+    owner: AbstractBaseUser,
+    course: str,
+    section: str,
+    enrollment_no: str,
+    seed: int | None = None,
+    *,
+    lesson: str | None = None,
+    max_parts: int = MAX_REMEDIAL_PARTS,
+) -> RemedialRecipe:
+    """وصفة الورقة العلاجية لطالب في شعبة المعلم من أخطائه المسجَّلة في المقرر (أو في درس منه). قراءة فقط.
+
+    الأخطاء من قارئ التخطيط (يرفض شعبة ليست للمعلم ورقم قيد ليس فيها)؛ والطالب بلا أخطاء وصفته فارغة. الوصفة أرقام
+    ومسائل بلا اسم ولا رقم قيد.
+    """
+    from apps.planning.selectors import student_errors  # التخطيط يستورد هذه الوحدة: الاستيراد عند النداء
+
+    rows = student_errors(owner, course, section, enrollment_no, lesson)
+    errors = [StudentError(row["lesson"], row["example"], row["error_kind"], row["seed"]) for row in rows]
+    return remedial_recipe(course, errors, new_seed() if seed is None else seed, max_parts=max_parts)

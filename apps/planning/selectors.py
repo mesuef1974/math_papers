@@ -273,6 +273,35 @@ def section_results(owner: AbstractBaseUser, course: str, lesson: str, section: 
     }
 
 
+class StudentNotFoundError(LookupError):
+    """لا طالب بهذا رقم القيد في شعبة المعلم."""
+
+
+def student_errors(
+    owner: AbstractBaseUser, course: str, section: str, enrollment_no: str, lesson: str | None = None
+) -> list[dict]:
+    """أخطاء طالب في بنود مقرر (أو درس منه) للورقة العلاجية: الدرس والمثال ونوع الخطأ وبذرة البند، بلا اسم ولا رقم قيد.
+
+    `SectionNotOwnedError` لشعبة ليست للمعلم قبل أي قراءة أخرى، و`StudentNotFoundError` لرقم قيد ليس فيها. الطالب بلا
+    أخطاء قائمة فارغة."""
+    section = section.strip()
+    roster = SectionStudent.objects.filter(owner=owner, section=section)
+    if not section or not roster.exists():
+        raise SectionNotOwnedError(f"الشعبة {section} ليست من شعبك")
+    student = roster.filter(enrollment_no=enrollment_no.strip()).first()
+    if student is None:
+        raise StudentNotFoundError(f"لا طالب بهذا رقم القيد في الشعبة {section}")
+    rows = ItemResult.objects.filter(student=student, correct=False, lesson__course__slug=course)
+    if lesson is not None:
+        rows = rows.filter(lesson__code=lesson)
+    return [
+        {"lesson": code, "example": example, "error_kind": kind, "seed": seed}
+        for code, example, kind, seed in rows.order_by("lesson__code", "example", "seed").values_list(
+            "lesson__code", "example", "error_kind", "seed"
+        )
+    ]
+
+
 def _course_plan(course: str) -> tuple[Course, TermPlan]:
     row, raw = term_plan_data(course)
     plan = parse_term_plan(raw, row.semester)
