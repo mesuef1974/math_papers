@@ -37,7 +37,7 @@ initiatives:
         probes:
           - {path: apps/core/management/commands/plan_metrics.py}
           - {path: apps/core/tests/test_plan_metrics.py, has: test_metrics_are_idempotent}
-        cards: []
+        cards: ["20261125-5289eb"]
       - id: M0.2
         title: المشغّل يحدّث وثيقة الخطة بعد كل مزامنة للدفتر
         done_when: دمج بطاقة يغيّر حالة معلَمها في الوثيقة بلا تدخل.
@@ -68,7 +68,7 @@ initiatives:
         done_when: نموذج بهجرة expand، وإدخال نتائج شعبة يُسجَّل في AuditLog، وطلب معلم آخر لها يعيد 403.
         probes:
           - {path: apps/planning/tests/test_student_results.py, has: test_other_teacher_gets_403}
-        cards: []
+        cards: ["20261125-c03df9"]
       - id: M1.3
         title: لوحة سوء الفهم للشعبة والدرس
         done_when: اللوحة تعرض عدد الطلاب لكل نوع خطأ وأسماءهم، واختبار يطابق أعدادها بالبيانات المدخلة.
@@ -80,7 +80,7 @@ initiatives:
       - {key: tagged_objective_formulas_pct, title: الصيغ الموضوعية الموسومة, unit: "%", baseline: 100, target: 100}
       - {key: results_with_error_kind_pct, title: إجابات خاطئة مسجَّلة بنوع خطأ, unit: "%", baseline: 0, target: 90}
     decisions:
-      - {text: هوية الطالب في القاعدة (اسم كامل أم رقم قيد مع اسم مختصر) ومدة الاحتفاظ, status: open}
+      - {text: "هوية الطالب رقم قيد واسم مختصر، والاحتفاظ حتى نهاية العام الدراسي ثم حذف آلي مع بقاء الأعداد المجمَّعة (المالك 2026-11-25)", status: decided}
     risks:
       - نوع خطأ لا يطابق تفكير الطالب فعلًا، فيُراجَع التصنيف على عيّنة أوراق حقيقية قبل اعتماد اللوحة.
 
@@ -126,7 +126,7 @@ initiatives:
         done_when: الفحص يثبت أن الخطوة الموسومة وحدها خاطئة وأن تصحيحها يعيد الجواب الصحيح.
         probes:
           - {path: apps/papers/tests/test_generators.py, has: test_error_spotting}
-        cards: []
+        cards: ["20261125-4786ec"]
       - id: M3.2
         title: تغطية دروس العاشر الممتحَنة بصيغة واحدة على الأقل
         done_when: اختبار يعدّ الدروس الممتحَنة التي لها صيغة اكتشف الخطأ ويساويها بعددها.
