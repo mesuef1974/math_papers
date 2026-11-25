@@ -15,6 +15,7 @@
 - POST /results/<مقرر>/<درس>          نتائج طلاب شعبة في بنود الدرس دفعة واحدة (idempotent؛ نوع الخطأ من بنك البنود)
 - GET  /results/<مقرر>/<درس>?section=  نتائج شعبة من شعب المعلم وأعداد أخطائها بالنوع؛ 403 لشعبة ليست له
 - GET  /results/sections              شعب المعلم (ما له فيه طلاب)
+- GET  /results/<مقرر>/<درس>/items    بنود بطاقات الخروج المعروضة في حصص الدرس (المثال والبذرة والنص) بلا الصحيح
 - GET  /misconceptions/<مقرر>/<درس>?section=  لوحة سوء الفهم: طلاب كل نوع خطأ في شعبة المعلم؛ 403 لشعبة ليست له
 """
 
@@ -504,6 +505,32 @@ def _read_section(
 def result_sections(request: HttpRequest):
     """شعب المعلم: ما أدخل فيه طلابًا."""
     return selectors.owned_sections(request.user)
+
+
+class EntryItemOut(Schema):
+    """بند بطاقة خروج لإدخال النتائج: نصه وخياراته بترتيبها. لا حقل للصحيح ولا لنوع الخطأ."""
+
+    k: int
+    n: int
+    example: int
+    seed: int
+    stem: str
+    options: list[str]
+
+
+class EntryItemsOut(Schema):
+    course: str
+    lesson: str
+    items: list[EntryItemOut]
+
+
+@router.get("results/{course}/{lesson}/items", response=EntryItemsOut)
+def entry_items(request: HttpRequest, course: str, lesson: str):
+    """بنود بطاقات الخروج التي عُرضت على طلاب المعلم في حصص الدرس، بمثالها وبذرتها، لإدخال اختيارات الطلاب."""
+    try:
+        return selectors.entry_items(request.user, course, lesson)
+    except selectors.PrepNotFoundError as error:
+        raise HttpError(404, str(error)) from error
 
 
 @router.get("results/{course}/{lesson}", response=SectionResultsOut)

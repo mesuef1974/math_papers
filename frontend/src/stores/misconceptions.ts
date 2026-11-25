@@ -2,7 +2,7 @@ import { defineStore } from "pinia";
 import { api, ApiError } from "@/api/client";
 import { accessMessage, type Lesson } from "@/stores/papers";
 
-// لوحة سوء الفهم: لكل نوع خطأ طلاب شعبة المعلم الذين وقعوا فيه في درس. قراءة فقط؛ النتائج لا تُدخل من الواجهة.
+// لوحة سوء الفهم: لكل نوع خطأ طلاب شعبة المعلم الذين وقعوا فيه في درس. قراءة فقط؛ إدخال النتائج في `resultsEntry.ts`.
 export interface BoardStudent {
   enrollment_no: string;
   first_name: string;
@@ -41,6 +41,8 @@ let boardTicket = 0;
 
 export const useMisconceptionsStore = defineStore("misconceptions", {
   state: () => ({
+    // آخر مقرر ودرس وشعبة أُدخلت نتائجها: تفتح اللوحة عليها بعد الحفظ (في الذاكرة وحدها، وبلا أي بيان طالب).
+    last: null as { course: string; lesson: string; section: string } | null,
     sections: [] as string[],
     sectionsLoaded: false,
     lessons: [] as Lesson[],
