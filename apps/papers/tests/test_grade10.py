@@ -55,6 +55,14 @@ def test_no_generator_is_built_on_enrichment_content():
     assert out_of_scope(GRADE10_SLUG, plan.enrichment_lessons, plan.enrichment_examples) == []
 
 
+def test_no_error_spotting_variant_is_built_on_enrichment_content():
+    from apps.papers.domain.generators import ERROR_SPOTTING
+
+    plan = read_source(GRADE10_SLUG).term_plan.to_domain(1)
+    assert any(course == GRADE10_SLUG for course, _ in ERROR_SPOTTING)
+    assert out_of_scope(GRADE10_SLUG, plan.enrichment_lessons, plan.enrichment_examples, ERROR_SPOTTING) == []
+
+
 def test_scope_guard_reports_each_kind_of_violation():
     """الحارس نفسه: مثال إثرائي، ودرس إثرائي، وصيغة بلا رقم مثال، كلٌّ يُبلَّغ باسمه."""
     plan = read_source(GRADE10_SLUG).term_plan.to_domain(1)

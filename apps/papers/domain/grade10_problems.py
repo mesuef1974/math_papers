@@ -22,7 +22,21 @@ import sympy as sp
 
 from apps.curriculum.courses import GRADE10_SLUG
 
-from .generators import Problem, frac, m, minus, nz, tagged_wrongs, tex, variant, with_unit, x, y
+from .generators import (
+    ERROR_SPOTTING,
+    ErrorSpotting,
+    Problem,
+    frac,
+    m,
+    minus,
+    nz,
+    tagged_wrongs,
+    tex,
+    variant,
+    with_unit,
+    x,
+    y,
+)
 
 G10 = GRADE10_SLUG
 UP, DOWN = "الأعلى", "الأسفل"
@@ -1400,6 +1414,110 @@ def solve_by_completing_the_square(rng: random.Random) -> Problem:
         "A",
         {"type": "roots", "f": f, "roots": (h + sp.sqrt(d), h - sp.sqrt(d))},
         wrong_kinds=kinds,
+    )
+
+
+# «اكتشف الخطأ» في إكمال المربع: الزلّة → (رقم الخطوة التي تقع فيها، نوع الخطأ من ERROR_KINDS).
+COMPLETING_SLIPS = {
+    "moved_sign": (1, "sign"),  # نقل الحد الثابت دون تغيير إشارته
+    "unsquared_half": (2, "square"),  # أضاف إلى الطرف الأيمن نصف معامل x بلا تربيع
+    "binomial_sign": (3, "sign"),  # عكس إشارة العدد داخل القوس
+    "single_root": (4, "partial"),  # أخذ الجذر الموجب وحده
+    "no_root": (4, "formula"),  # لم يأخذ جذر الطرف الأيمن
+    "center_sign": (5, "sign"),  # نقل العدد إلى الطرف الأيمن دون تغيير إشارته
+}
+SPOTTING_RADICANDS = (1, 4, 9, 16, *SQUARE_FREE)
+
+
+def clean_radicand(n: int) -> bool:
+    """موجب، ومربع كامل أو بلا عامل مربع: جذره عدد صحيح أو جذر لا يُبسَّط."""
+    return n > 0 and (math.isqrt(n) ** 2 == n or square_free(n))
+
+
+def root_text(n: int) -> str:
+    whole = math.isqrt(n)
+    return str(whole) if whole * whole == n else f"\\sqrt{{{n}}}"
+
+
+def spread_solutions(center: int, radicand: int) -> str:
+    """حلّا (x-center)²=radicand: عددان صحيحان إن كان المجذور مربعًا كاملًا، وإلا center±√radicand."""
+    whole = math.isqrt(radicand)
+    if whole * whole == radicand:
+        return solutions(center - whole, center + whole)
+    return surd_solutions(center, radicand)
+
+
+def completing_chain(h: int, d: int, slip: str | None = None) -> list[tuple[str, sp.Expr]] | None:
+    """خطوات حل x²-2hx+h²-d=0 بإكمال المربع، كل خطوة نصها ومعادلتها (عبارة = 0) من الأعداد نفسها.
+
+    slip زلّة واحدة تُزرع في خطوتها وتُبنى عليها الخطوات التالية بلا خطأ آخر؛ None الحل الصحيح.
+    يعيد None إن خرج الطرف الأيمن بعد الزلّة مجذورًا غير نظيف.
+    """
+    b, c = -2 * h, h * h - d
+    moved = c if slip == "moved_sign" else -c
+    added = -h if slip == "unsquared_half" else h * h
+    right = moved + added
+    if not clean_radicand(right):
+        return None
+    center = -h if slip == "binomial_sign" else h
+    last = -center if slip == "center_sign" else center
+    left = x**2 + b * x
+    square = (x - center) ** 2
+    if slip == "single_root":
+        whole = math.isqrt(right)
+        value = str(last + whole) if whole * whole == right else f"{last}+{root_text(right)}"
+        side, fourth = root_text(right), x - center - sp.sqrt(right)
+        final_text, final = f"$x={value}$", x - last - sp.sqrt(right)
+    else:
+        spread = right * right if slip == "no_root" else right
+        side, fourth = f"\\pm {root_text(spread)}", square - spread
+        final_text, final = spread_solutions(last, spread), (x - last) ** 2 - spread
+    return [
+        (f"ننقل الحد الثابت إلى الطرف الأيمن: $x^2{b:+d}x={moved}$", left - moved),
+        (
+            f"نضيف مربع نصف معامل $x$ إلى الطرفين: $x^2{b:+d}x+{h * h}={plus(moved, added)}$",
+            left + h * h - right,
+        ),
+        (f"نكتب الطرف الأيسر في صورة مربع كامل: ${shifted(center)}^2={right}$", square - right),
+        (f"نأخذ الجذر التربيعي للطرفين: ${linear(center)}={side}$", fourth),
+        (f"إذن {final_text}", final),
+    ]
+
+
+@variant("2.5", G10, example=2, registry=ERROR_SPOTTING)
+def spot_error_in_completing_the_square(rng: random.Random) -> ErrorSpotting:
+    slip = rng.choice(sorted(COMPLETING_SLIPS))
+    while True:
+        h, d = nz(rng, -6, 6), rng.choice(SPOTTING_RADICANDS)
+        shown = completing_chain(h, d, slip)
+        # الزلّة يجب أن تغيّر الحلول: حد ثابت غير صفري، ونصف المعامل يخالف مربعه، والمجذور يخالف مربعه
+        changes = (
+            h * h != d and not (slip == "unsquared_half" and h == -1) and not (slip == "no_root" and d == 1)
+        )
+        if shown is not None and changes:
+            break
+    solved = completing_chain(h, d)
+    if solved is None:  # المجذور d نظيف بالاختيار
+        raise AssertionError((h, d))
+    step, kind = COMPLETING_SLIPS[slip]
+    f = sp.expand((x - h) ** 2 - d)
+    return ErrorSpotting(
+        "2.5",
+        f"حلّ طالب المعادلة ${tex(f)}=0$ بإكمال المربع في الخطوات المرقّمة الآتية، فأخطأ في خطوة واحدة "
+        "وبنى عليها ما بعدها. حدّد رقم الخطوة الخاطئة، ثم صحّحها.",
+        tuple(text for text, _ in shown),
+        step,
+        kind,
+        solved[step - 1][0],
+        spread_solutions(h, d),
+        "R",
+        {
+            "type": "error_spotting",
+            "given": f,
+            "steps": tuple(equation for _, equation in shown),
+            "fixed": solved[step - 1][1],
+            "roots": (h + sp.sqrt(d), h - sp.sqrt(d)),
+        },
     )
 
 

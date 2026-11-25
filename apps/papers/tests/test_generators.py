@@ -1,5 +1,6 @@
 """كل جواب يُتحقق منه عدديًا بطريقة مستقلة عن طريقة بنائه، عبر بذور كثيرة."""
 
+import dataclasses
 import math
 import operator
 import random
@@ -9,7 +10,16 @@ import mpmath
 import pytest
 import sympy as sp
 
-from apps.papers.domain.generators import NO_LIMIT, REGISTRY, available_lessons, x, y
+from apps.curriculum.courses import GRADE10_SLUG
+from apps.papers.domain.generators import (
+    ERROR_KINDS,
+    ERROR_SPOTTING,
+    NO_LIMIT,
+    REGISTRY,
+    available_lessons,
+    x,
+    y,
+)
 from apps.papers.domain.graphs import value_at
 
 SEEDS = range(120)
@@ -1149,6 +1159,78 @@ def test_problem_shape(lesson, generator):
         for option in problem.option_graphs:
             assert_graph_in_window(option)
         assert problem.mcq_ok or problem.essay_ok
+
+
+def solution_set(expr):
+    """الحلول الحقيقية لمعادلة الخطوة (عبارتها = 0) بجذور عددية، لا بالطريقة التي بُنيت بها الخطوة."""
+    found = []
+    for root in sp.Poly(expr, x).nroots(n=30):
+        value = complex(root)
+        if abs(value.imag) < TOL and not any(abs(value.real - seen) < TOL for seen in found):
+            found.append(value.real)
+    return sorted(found)
+
+
+def same_solutions(one, two):
+    return len(one) == len(two) and one == pytest.approx(two, abs=TOL)
+
+
+def assert_error_spotting(item):
+    """الخطوة n صحيحة إن حفظت حلول ما قبلها (والمعادلة المعطاة قبل الأولى): الموسومة وحدها تغيّرها."""
+    c = item.check
+    truth = solution_set(c["given"])
+    chain = [c["given"], *c["steps"]]
+    assert len(c["steps"]) == len(item.steps) and 1 <= item.wrong_step <= len(item.steps)
+    for n in range(1, len(chain)):
+        kept = same_solutions(solution_set(chain[n]), solution_set(chain[n - 1]))
+        assert kept == (n != item.wrong_step), (n, item.wrong_step, item.steps)
+    # التصحيح يتبع ما قبل الخطوة الخاطئة ويعيد حلول المعادلة المعطاة، وهي الجواب المكتوب؛ والمعروض ينتهي بغيره
+    assert same_solutions(solution_set(c["fixed"]), solution_set(chain[item.wrong_step - 1]))
+    assert same_solutions(solution_set(c["fixed"]), truth)
+    assert same_solutions(sorted(float(sp.N(root)) for root in c["roots"]), truth)
+    assert not same_solutions(solution_set(chain[-1]), truth)
+    assert item.correct_step != item.steps[item.wrong_step - 1]
+
+
+SPOTTING = [(lesson, fn) for (_, lesson), fns in ERROR_SPOTTING.items() for fn in fns]
+SPOTTING_CHECKS = {"error_spotting": assert_error_spotting}
+
+
+def test_error_spotting_has_a_grade10_variant_outside_the_paper_registry():
+    """صيغ «اكتشف الخطأ» في سجلّها وحده: لا تدخل اختيار الأوراق ولا بصمة الصيغ القائمة."""
+    assert any(course == GRADE10_SLUG for course, _ in ERROR_SPOTTING)
+    registered = {fn for fns in REGISTRY.values() for fn in fns}
+    assert not registered & {fn for _, fn in SPOTTING}
+
+
+@pytest.mark.parametrize(("lesson", "generator"), SPOTTING, ids=[fn.__name__ for _, fn in SPOTTING])
+def test_error_spotting_plants_exactly_one_wrong_step(lesson, generator):
+    seen = set()
+    for seed in SEEDS:
+        item = generator(random.Random(seed))
+        SPOTTING_CHECKS[item.check["type"]](item)
+        seen.add((item.wrong_step, item.error_kind))
+        text = " ".join([item.stem, item.answer, item.correct_step, *item.steps])
+        assert item.lesson == lesson and item.level in {"K", "A", "R"}
+        assert item.error_kind in ERROR_KINDS
+        assert text.count("$") % 2 == 0, text
+        assert not any(bad in text for bad in ("zoo", "nan", "None"))
+        again = generator(random.Random(seed))
+        assert again == item and str(again.check) == str(item.check), seed
+    # الخطأ يتنقل بين الخطوات والأنواع، فلا يُحفظ موضعه
+    assert len({step for step, _ in seen}) >= 3 and len({kind for _, kind in seen}) >= 3, seen
+
+
+def test_error_spotting_rejects_a_malformed_item():
+    item = SPOTTING[0][1](random.Random(0))
+    for change in (
+        {"error_kind": "غير معتمد"},
+        {"wrong_step": 0},
+        {"wrong_step": len(item.steps) + 1},
+        {"correct_step": item.steps[item.wrong_step - 1]},
+    ):
+        with pytest.raises(ValueError):
+            dataclasses.replace(item, **change)
 
 
 def assert_graph_in_window(graph):

@@ -85,19 +85,61 @@ class Problem:
         return hashlib.sha1(self.key.encode("utf-8"), usedforsecurity=False).hexdigest()[:12]
 
 
+@dataclass(frozen=True)
+class ErrorSpotting:
+    """«اكتشف الخطأ»: حل كامل مرقَّم الخطوات فيه خطوة واحدة خاطئة، والمطلوب رقمها وتصحيحها.
+
+    الخطوات بعد الخاطئة مبنية عليها بلا خطأ جديد، فالحل المعروض ينتهي بجواب غير الصحيح.
+    """
+
+    lesson: str
+    stem: str
+    steps: tuple[str, ...]  # الخطوات المعروضة بترتيبها؛ رقم الخطوة موضعها بدءًا من 1
+    wrong_step: int
+    error_kind: str  # مفتاح من ERROR_KINDS
+    correct_step: str  # الخطوة wrong_step بعد تصحيحها
+    answer: str  # الجواب الصحيح الذي ينتهي إليه الحل بعد التصحيح
+    level: str
+    # معادلة لكل خطوة (عبارتها = 0) ليتحقق اختبار مستقل عدديًا من أن الموسومة وحدها تغيّر الحلول
+    check: dict[str, Any] = field(default_factory=dict, compare=False)
+
+    def __post_init__(self) -> None:
+        if self.error_kind not in ERROR_KINDS:
+            raise ValueError(f"نوع خطأ غير معتمد: {self.error_kind}")
+        if not 1 <= self.wrong_step <= len(self.steps):
+            raise ValueError(f"رقم الخطوة الخاطئة {self.wrong_step} خارج الخطوات ({len(self.steps)})")
+        if self.correct_step == self.steps[self.wrong_step - 1]:
+            raise ValueError("الخطوة المصحَّحة تطابق الخطوة المعروضة")
+
+    @property
+    def diagnosis(self) -> str:
+        return ERROR_KINDS[self.error_kind]
+
+
 Generator = Callable[[random.Random], Problem]
+Spotter = Callable[[random.Random], ErrorSpotting]
 # المفتاح (معرّف المقرر، رمز الدرس): رمز الدرس وحده يتكرر بين المقررات.
 REGISTRY: dict[tuple[str, str], list[Generator]] = {}
+# صيغ «اكتشف الخطأ» في سجلّ مستقل: لا تدخل اختيار الأوراق ولا بصمة الصيغ (generator_version)، فالأوراق
+# المحفوظة تُعاد كما هي.
+ERROR_SPOTTING: dict[tuple[str, str], list[Spotter]] = {}
 # رقم مثال الكتاب الذي تقيس الصيغة مهارته، بمفتاح (مقرر، درس، اسم الصيغة). يلزم كل مقرر له نطاق اختبار:
 # فيه أمثلة إثرائية لا يُبنى عليها سؤال (انظر out_of_scope).
 SKILL_EXAMPLES: dict[tuple[str, str, str], int] = {}
 
 
-def variant(
-    lesson: str, course: str = DEFAULT_COURSE, example: int | None = None
-) -> Callable[[Generator], Generator]:
-    def register(fn: Generator) -> Generator:
-        REGISTRY.setdefault((course, lesson), []).append(fn)
+def variant[F: Callable[[random.Random], Any]](
+    lesson: str,
+    course: str = DEFAULT_COURSE,
+    example: int | None = None,
+    *,
+    registry: dict[tuple[str, str], list[F]] | None = None,
+) -> Callable[[F], F]:
+    """يسجّل الصيغة في سجلّ الأوراق، أو في السجلّ المعطى (ERROR_SPOTTING) لنوع آخر من المسائل."""
+
+    def register(fn: F) -> F:
+        target: dict[tuple[str, str], list[Any]] = REGISTRY if registry is None else registry
+        target.setdefault((course, lesson), []).append(fn)
         if example is not None:
             SKILL_EXAMPLES[(course, lesson, fn.__name__)] = example
         return fn
@@ -111,11 +153,14 @@ def skill_example(course: str, lesson: str, name: str) -> int | None:
 
 
 def out_of_scope(
-    course: str, enrichment_lessons: Collection[str], enrichment_examples: Mapping[str, Collection[int]]
+    course: str,
+    enrichment_lessons: Collection[str],
+    enrichment_examples: Mapping[str, Collection[int]],
+    registry: Mapping[tuple[str, str], list[Any]] = REGISTRY,
 ) -> list[str]:
     """صيغ المقرر الخارجة عن نطاق الاختبار: درس إثرائي، أو مثال إثرائي، أو صيغة لم تصرّح بمثالها."""
     found = []
-    for (registered, lesson), fns in sorted(REGISTRY.items()):
+    for (registered, lesson), fns in sorted(registry.items()):
         if registered != course:
             continue
         for fn in fns:
