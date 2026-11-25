@@ -11,7 +11,7 @@ import re
 from collections.abc import Iterable, Sequence
 
 from apps.knowledge.domain.course_index import REPRESENTATIONS
-from apps.papers.domain.bidi import LRI, PDI, isolate_number_ranges, strip_isolation
+from apps.papers.domain.bidi import LRM, NB_HYPHEN, NUMBER_RANGE, RLM, isolate_number_ranges, strip_isolation
 
 from .check_items import item_words_source, period_items
 from .deck import (
@@ -227,6 +227,16 @@ def s6_density(deck: PeriodDeck) -> CheckResult:
     return _result("S6", problems)
 
 
+def _ranges_isolated(text: str) -> bool:
+    """كل مدى رقمي في النص بين LRM وRLM: بعزل المدى نفسه، أو داخل مقطع رياضي `plain_math` (له LRM وRLM حوله)."""
+    wrapped = [m.group(1) for m in re.finditer(f"{LRM}(.*?){RLM}", text)]
+    for m in NUMBER_RANGE.finditer(strip_isolation(text)):
+        isolated = f"{LRM}{m.group(0).replace('-', NB_HYPHEN)}{RLM}"
+        if isolated not in text and not any(m.group(0) in w for w in wrapped):
+            return False
+    return True
+
+
 def s9_direction(deck: PeriodDeck) -> CheckResult:
     """كل شريحة من اليمين إلى اليسار، وكل مدى رقمي في نصوصها معزول بـ `isolate_number_ranges`."""
     problems = []
@@ -236,7 +246,7 @@ def s9_direction(deck: PeriodDeck) -> CheckResult:
         problems += [
             f"الشريحة {i}: مدى غير معزول في {strip_isolation(t)!r}"
             for t in s.texts
-            if isolate_number_ranges(strip_isolation(t)) != t.replace(LRI, "").replace(PDI, "")
+            if not _ranges_isolated(t)
         ]
     return _result("S9", problems)
 

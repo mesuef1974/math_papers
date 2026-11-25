@@ -1,7 +1,7 @@
 """صيغ LaTeX رموزًا مقروءة حيث لا يعرض الملف معادلات (شرائح PPTX وخانات Word النصية): نقي حتمي بلا Django.
 
 يحوّل مقاطع `$...$` وحدها ويترك النص العربي كما هو. الأسس والأدلة بالرموز العلوية والسفلية حين يملكها يونيكود وإلا
-`^(..)` و`_(..)`، والكسر `a/b` أو `(a)/(b)`، والجذر `√`. كل مقطع بعزل من اليسار إلى اليمين (LRI وPDI) فلا يقلب اتجاه
+`^(..)` و`_(..)`، والكسر `a/b` أو `(a)/(b)`، والجذر `√`. كل مقطع بين LRM وRLM (لا عزل LRI/PDI: PowerPoint يرسمه مربعات ولا يطبّقه) فلا يقلب اتجاه
 الفقرة العربية ترتيب الرموز. ما لا يُحوَّل بأمان (مصفوفات وأوامر مجهولة) يعيد `None` من `convertible`، فيبقى سؤالًا نصيًّا.
 """
 
@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import re
 
-from apps.papers.domain.bidi import LRI, PDI
+from apps.papers.domain.bidi import LRM, RLM
 
 MATH = re.compile(r"\$([^$]+)\$")
 SIMPLE = re.compile(r"[\w.]+")
@@ -153,7 +153,9 @@ def _convert(latex: str) -> str:
             else:
                 out.append(f"\\{name}")  # مجهول: يبقى فيرفضه `convertible`
         elif ch == "^":
-            out.append(_script(_convert(r.group()), SUPER_OK, SUPERSCRIPT, "^"))
+            raised = _convert(r.group())
+            # الدرجة رمز علوي أصلًا: `90^\circ` تصير `90°` لا `90^°`
+            out.append(raised if raised == "°" else _script(raised, SUPER_OK, SUPERSCRIPT, "^"))
         elif ch == "_":
             out.append(_script(_convert(r.group()), SUB_OK, SUBSCRIPT, "_"))
         elif ch in "{}":
@@ -175,5 +177,5 @@ def convertible(text: str) -> bool:
 
 
 def plain_math(text: str) -> str:
-    """النص بعد تحويل كل مقطع `$...$` إلى رموز مقروءة بعزل LTR؛ وما خارج المقاطع كما هو."""
-    return MATH.sub(lambda m: f"{LRI}{_convert(m.group(1))}{PDI}", text)
+    """النص بعد تحويل كل مقطع `$...$` إلى رموز مقروءة بعلامتي LRM/RLM؛ وما خارج المقاطع كما هو."""
+    return MATH.sub(lambda m: f"{LRM}{_convert(m.group(1))}{RLM}", text)

@@ -2,7 +2,7 @@
 
 import pytest
 
-from apps.papers.domain.bidi import LRI, PDI, strip_isolation
+from apps.papers.domain.bidi import LRM, RLM, strip_isolation
 from apps.planning.domain.plain_math import convertible, plain_math
 
 
@@ -17,6 +17,8 @@ def conv(text: str) -> str:
         (r"$x^{-1}$", "x⁻¹"),
         (r"$x^{2n}$", "x²ⁿ"),
         (r"$x^{a+b}$", "x^(a+b)"),
+        (r"$90^\circ$", "90°"),
+        (r"$\angle A = 45^{\circ}$", "∠ A = 45°"),
         (r"$a_1$", "a₁"),
         (r"$\frac{1}{2}x^2$", "1/2x²"),
         (r"$\dfrac{x+1}{x-2}$", "(x+1)/(x-2)"),
@@ -40,7 +42,8 @@ def test_arabic_text_outside_math_is_untouched_and_each_segment_is_ltr_isolated(
     text = r"أوجد قيمة $x^2$ و $\frac{1}{3}$ ثم صف."
     out = plain_math(text)
     assert out.startswith("أوجد قيمة ") and out.endswith(" ثم صف.")
-    assert out.count(LRI) == 2 and out.count(PDI) == 2
+    assert out.count(LRM) == 2 and out.count(RLM) == 2
+    assert not any(c in out for c in "⁦⁧⁨⁩")  # PowerPoint يرسمها مربعات
     assert strip_isolation(out) == "أوجد قيمة x² و 1/3 ثم صف."
 
 
