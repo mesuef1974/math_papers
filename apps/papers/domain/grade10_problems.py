@@ -16,6 +16,7 @@ from __future__ import annotations
 import itertools
 import math
 import random
+from collections.abc import Callable, Sequence
 from typing import Any
 
 import sympy as sp
@@ -111,6 +112,85 @@ def axis_step(a: int, b: int, h: int) -> str:
 
 def value_step(a: int, b: int, c: int, h: int, k: int) -> str:
     return f"$f({h})={lead(a)}({h})^2{b:+d}({h}){signed(c)}={k}$"
+
+
+# «اكتشف الخطأ» في حل حسابي: كل خطوة قيم تُحسب بقاعدة (عبارات sympy) من قيم الخطوات التي قبلها.
+SPOT_TASK = (
+    "في الخطوات المرقّمة الآتية، فأخطأ في خطوة واحدة وبنى عليها ما بعدها. حدّد رقم الخطوة الخاطئة، ثم صحّحها."
+)
+Rule = tuple[Any, ...]
+Row = tuple[Any, ...]
+
+
+def ref(step: int, part: int = 0) -> sp.Symbol:
+    """قيمة من خطوة سابقة (رقمها من 1) داخل قاعدة خطوة لاحقة."""
+    return sp.Symbol(f"s{step}_{part}")
+
+
+def value_chain(rules: Sequence[Rule], slip: tuple[int, Rule] | None = None) -> list[Row] | None:
+    """قيم الخطوات بالتتابع؛ slip (رقم خطوة، قاعدة خاطئة) تُزرع فيها وتُبنى عليها الخطوات التالية بقواعدها.
+
+    يعيد None إن خرجت قيمة غير نسبية (قسمة على صفر بعد الزلّة).
+    """
+    rows: list[Row] = []
+    for n, rule in enumerate(rules, 1):
+        used = slip[1] if slip is not None and slip[0] == n else rule
+        known = {ref(i, j): value for i, row in enumerate(rows, 1) for j, value in enumerate(row)}
+        row = tuple(sp.sympify(expr).subs(known) for expr in used)
+        if not all(value.is_rational for value in row):
+            return None
+        rows.append(row)
+    return rows
+
+
+def spotted_values(
+    lesson: str,
+    stem: str,
+    rules: Sequence[Rule],
+    slip: tuple[int, str, Rule],
+    texts: Callable[[list[Row], bool], tuple[str, ...]],
+    answer: str,
+    given: dict[str, Any],
+) -> ErrorSpotting | None:
+    """مسألة «اكتشف الخطأ» من سلسلة قيم: slip (رقم الخطوة، نوع الخطأ، قاعدتها الخاطئة).
+
+    texts يكتب الخطوات من قيمها (والعلم: هل هي المعروضة بزلّتها). يعيد None إن لم تغيّر الزلّة الجواب.
+    """
+    step, kind, wrong = slip
+    solved, shown = value_chain(rules), value_chain(rules, (step, wrong))
+    if solved is None or shown is None or shown[-1] == solved[-1]:
+        return None
+    return ErrorSpotting(
+        lesson,
+        stem,
+        texts(shown, True),
+        step,
+        kind,
+        texts(solved, False)[step - 1],
+        answer,
+        "R",
+        {
+            "type": "error_spotting_values",
+            **given,
+            "steps": tuple(shown),
+            "rules": tuple(rules),
+            "fixed": solved[step - 1],
+        },
+    )
+
+
+def exact(value: Any) -> str:
+    """عدد نسبي: صحيح كما هو، وكسر بإشارته أمامه."""
+    value = sp.Rational(value)
+    if value.q == 1:
+        return str(value.p)
+    return f"{'-' if value < 0 else ''}\\dfrac{{{abs(value.p)}}}{{{value.q}}}"
+
+
+def quotient(top: Any, bottom: Any) -> str:
+    """الكسر كما كُتب ثم قيمته المبسّطة إن خالفته."""
+    shown, value = frac(top, bottom), exact(sp.Rational(top, bottom))
+    return shown if shown == value else f"{shown}={value}"
 
 
 # الدرس 1.1: المميزات الأساسية للدالة التربيعية f(x)=ax²
@@ -725,6 +805,186 @@ def ball_height_standard_form(rng: random.Random) -> Problem:
         {"type": "optimum", "f": f, "low": 0, "high": 2 * at, "arg": at, "value": peak, "max": True},
         wrong_kinds=kinds,
     )
+
+
+# «اكتشف الخطأ» في الوحدة 1: الزلّة → (رقم الخطوة التي تقع فيها، نوع الخطأ من ERROR_KINDS).
+AVERAGE_RATE_SLIPS = {
+    "unsquared": (1, "square"),  # ضرب المعامل في x بلا تربيع
+    "doubled": (2, "square"),  # ضاعف x بدل تربيعه
+    "interval_sign": (3, "sign"),  # طرح عددًا سالبًا دون تغيير إشارته
+    "reversed": (4, "swap"),  # بدّل ترتيب قيمتي الدالة في البسط
+    "undivided": (4, "formula"),  # لم يقسم على طول الفترة
+}
+VERTEX_POINT_SLIPS = {
+    "bracket_sign": (1, "sign"),  # عكس إشارة h داخل القوس
+    "unsquared": (2, "square"),  # لم يربّع ما داخل القوس
+    "moved_sign": (3, "sign"),  # نقل الحد الثابت دون تغيير إشارته
+    "inverted": (4, "swap"),  # قسم المعامل على الطرف الآخر
+    "multiplied": (4, "formula"),  # ضرب بدل القسمة
+}
+STANDARD_VERTEX_SLIPS = {
+    "axis_sign": (1, "sign"),  # أسقط الإشارة السالبة من قانون محور التماثل
+    "axis_no_two": (1, "formula"),  # قسم على a بدل 2a
+    "unsquared": (2, "square"),  # عوّض في الحد التربيعي بلا تربيع
+    "negative_square": (2, "sign"),  # جعل مربع العدد السالب سالبًا
+    "swapped": (3, "swap"),  # بدّل إحداثيي الرأس
+}
+
+
+def average_rate_item(a: int, p: int, q: int, slip: str) -> ErrorSpotting | None:
+    step, kind = AVERAGE_RATE_SLIPS[slip]
+    low, high, width = ref(1), ref(2), ref(3)
+    rules: tuple[Rule, ...] = ((a * p * p,), (a * q * q,), (q - p,), ((high - low) / width,))
+    wrong: Rule = {
+        "unsquared": (a * p,),
+        "doubled": (2 * a * q,),
+        "interval_sign": (q + p,),
+        "reversed": ((low - high) / width,),
+        "undivided": (high - low,),
+    }[slip]
+    if slip == "interval_sign" and p >= 0:  # الزلّة في طرح عدد سالب
+        return None
+
+    def texts(rows: list[Row], slipped: bool) -> tuple[str, ...]:
+        (start,), (end,), (length,), (rate,) = rows
+        top = minus(start, end) if slipped and slip == "reversed" else minus(end, start)
+        change = top if slipped and slip == "undivided" else frac(top, length)
+        return (
+            f"نحسب قيمة الدالة عند بداية الفترة: $f({p})={lead(a)}({p})^2={start}$",
+            f"نحسب قيمة الدالة عند نهاية الفترة: $f({q})={lead(a)}({q})^2={end}$",
+            f"نحسب طول الفترة: ${minus(q, p)}={length}$",
+            f"متوسط معدل التغيّر: ${change}={exact(rate)}$",
+        )
+
+    return spotted_values(
+        "1.1",
+        f"أوجد طالب متوسط معدل التغيّر للدالة $f(x)={ax2(a)}$ في الفترة ${p} \\le x \\le {q}$ {SPOT_TASK}",
+        rules,
+        (step, kind, wrong),
+        texts,
+        m(a * (p + q)),
+        {"quantity": "average_rate", "f": a * x**2, "a": p, "b": q},
+    )
+
+
+@variant("1.1", G10, example=5, registry=ERROR_SPOTTING)
+def spot_error_in_average_rate(rng: random.Random) -> ErrorSpotting:
+    slip = rng.choice(sorted(AVERAGE_RATE_SLIPS))
+    while True:
+        a, p = rng.choice([-4, -3, -2, -1, 1, 2, 3, 4]), rng.randint(-4, 3)
+        q = rng.choice([n for n in range(p + 1, p + 5) if n != -p])
+        item = average_rate_item(a, p, q, slip)
+        if item is not None:
+            return item
+
+
+def vertex_point_item(a: int, h: int, k: int, d: int, slip: str) -> ErrorSpotting | None:
+    step, kind = VERTEX_POINT_SLIPS[slip]
+    p, q = h + d, a * d * d + k
+    gap, square, moved, found = ref(1), ref(2), ref(3), ref(4)
+    rules: tuple[Rule, ...] = ((p - h,), (gap**2,), (q - k,), (moved / square,), (found,))
+    wrong: Rule = {
+        "bracket_sign": (p + h,),
+        "unsquared": (gap,),
+        "moved_sign": (q + k,),
+        "inverted": (square / moved,),
+        "multiplied": (moved * square,),
+    }[slip]
+
+    def texts(rows: list[Row], slipped: bool) -> tuple[str, ...]:
+        _, (factor,), (left,), (value,), _ = rows
+        bracket = f"{p}{h:+d}" if slipped and slip == "bracket_sign" else minus(p, h)
+        difference = f"{q}{k:+d}" if slipped and slip == "moved_sign" else minus(q, k)
+        if slipped and slip == "multiplied":
+            solving = f"{left}\\times{factor if factor >= 0 else f'({factor})'}={exact(value)}"
+        elif slipped and slip == "inverted":
+            solving = quotient(factor, left)
+        else:
+            solving = quotient(left, factor)
+        return (
+            f"نعوّض الرأس والنقطة في صيغة الرأس: ${q}=a({bracket})^2{signed(k)}$",
+            f"نبسّط ما داخل القوس ونربّعه: ${q}={lead(factor)}a{signed(k)}$",
+            f"ننقل الحد الثابت إلى الطرف الأيسر: ${difference}={lead(factor)}a$، أي ${left}={lead(factor)}a$",
+            f"نوجد قيمة $a$: $a={solving}$",
+            f"إذن $f(x)={vertex_form(value, h, k)}$",
+        )
+
+    item = spotted_values(
+        "1.2",
+        f"رأس قطع مكافئ هو النقطة $({h},{k})$، ويمرّ القطع بالنقطة $({p},{q})$. كتب طالب قاعدة الدالة "
+        f"التربيعية التي تمثّله في صيغة الرأس {SPOT_TASK}",
+        rules,
+        (step, kind, wrong),
+        texts,
+        f"$f(x)={vertex_form(a, h, k)}$",
+        {"quantity": "leading_coefficient", "vertex": (h, k), "point": (p, q)},
+    )
+    # معامل صفري في الحل المعروض لا يترك دالة تربيعية
+    return None if item is None or item.check["steps"][-1][0] == 0 else item
+
+
+@variant("1.2", G10, example=5, registry=ERROR_SPOTTING)
+def spot_error_in_vertex_form_from_point(rng: random.Random) -> ErrorSpotting:
+    slip = rng.choice(sorted(VERTEX_POINT_SLIPS))
+    while True:
+        a, h, k = rng.choice(INTEGER_SCALES), nz(rng, -5, 5), nz(rng, -6, 6)
+        item = vertex_point_item(a, h, k, rng.choice([-3, -2, -1, 1, 2, 3]), slip)
+        if item is not None:
+            return item
+
+
+def standard_vertex_item(a: int, h: int, k: int, slip: str) -> ErrorSpotting | None:
+    step, kind = STANDARD_VERTEX_SLIPS[slip]
+    f, b, c = standard_from_vertex(a, h, k)
+    at = ref(1)
+
+    def terms(first: Any) -> Rule:
+        """حدّا التعويض ثم مجموعهما مع الحد الثابت."""
+        return (first, b * at, first + b * at + c)
+
+    rules: tuple[Rule, ...] = ((sp.Rational(-b, 2 * a),), terms(a * at**2), (at, ref(2, 2)))
+    wrong: Rule = {
+        "axis_sign": (sp.Rational(b, 2 * a),),
+        "axis_no_two": (sp.Rational(-b, a),),
+        "unsquared": terms(a * at),
+        "negative_square": terms(-a * at**2),
+        "swapped": (ref(2, 2), at),
+    }[slip]
+    if slip == "negative_square" and h > 0:  # الزلّة في تربيع عدد سالب
+        return None
+
+    def texts(rows: list[Row], slipped: bool) -> tuple[str, ...]:
+        (axis,), (first, second, total), (px, py) = (tuple(int(value) for value in row) for row in rows)
+        formula = f"-\\dfrac{{b}}{{2a}}=-\\dfrac{{{b}}}{{2({a})}}"
+        if slipped and slip == "axis_sign":
+            formula = f"\\dfrac{{b}}{{2a}}=\\dfrac{{{b}}}{{2({a})}}"
+        elif slipped and slip == "axis_no_two":
+            formula = f"-\\dfrac{{b}}{{a}}=-\\dfrac{{{b}}}{{{a}}}"
+        return (
+            f"$a={a}$ و$b={b}$، فمحور التماثل $x={formula}={axis}$",
+            f"نعوّض في قاعدة الدالة: $f({axis})={lead(a)}({axis})^2{b:+d}({axis}){signed(c)}"
+            f"={first}{second:+d}{signed(c)}={total}$",
+            f"إذن رأس القطع المكافئ $({px},{py})$",
+        )
+
+    return spotted_values(
+        "1.3",
+        f"أوجد طالب محور التماثل ورأس القطع المكافئ للدالة $f(x)={tex(f)}$ {SPOT_TASK}",
+        rules,
+        (step, kind, wrong),
+        texts,
+        f"محور التماثل $x={h}$، والرأس $({h},{k})$",
+        {"quantity": "vertex", "f": f},
+    )
+
+
+@variant("1.3", G10, example=2, registry=ERROR_SPOTTING)
+def spot_error_in_vertex_from_standard_form(rng: random.Random) -> ErrorSpotting:
+    slip = rng.choice(sorted(STANDARD_VERTEX_SLIPS))
+    while True:
+        item = standard_vertex_item(rng.choice(INTEGER_SCALES), nz(rng, -4, 4), rng.randint(-9, 9), slip)
+        if item is not None:
+            return item
 
 
 # الوحدة 2 (أ): حل المعادلات التربيعية
@@ -1503,8 +1763,7 @@ def spot_error_in_completing_the_square(rng: random.Random) -> ErrorSpotting:
     f = sp.expand((x - h) ** 2 - d)
     return ErrorSpotting(
         "2.5",
-        f"حلّ طالب المعادلة ${tex(f)}=0$ بإكمال المربع في الخطوات المرقّمة الآتية، فأخطأ في خطوة واحدة "
-        "وبنى عليها ما بعدها. حدّد رقم الخطوة الخاطئة، ثم صحّحها.",
+        f"حلّ طالب المعادلة ${tex(f)}=0$ بإكمال المربع {SPOT_TASK}",
         tuple(text for text, _ in shown),
         step,
         kind,
