@@ -1,0 +1,332 @@
+# خطة مبادرات المنصة: المصدر الوحيد. الوثيقة docs/innovation_plan.md تُولَّد منه ولا تُعدَّل يدويًا:
+#   python scripts/plan_status.py --write
+# القياس آلي: المعلَم «منجز» حين تنجح كل مجسّاته (probes) وتُدمج كل بطاقاته (cards).
+#   probe: {path: <ملف>}            الملف موجود
+#   probe: {path: <ملف>, has: <نص>} الملف موجود ويحوي النص (اسم اختبار مثلًا)
+# مؤشرات الأثر (kpis) تُقرأ من docs/innovation_metrics.json الذي يكتبه أمر plan_metrics (المبادرة M0).
+# depends يقبل معرّف مبادرة (كلها منجزة) أو معرّف معلَم.
+# التواريخ مقترحة ويعدّلها المالك هنا وحده.
+
+version: 1
+title: خطة مبادرات المنصة
+started: 2026-11-25
+metrics_file: docs/innovation_metrics.json
+
+principles:
+  - كل مسألة تُولَّد أصليًا وكل مولّد جديد له فحص عددي مستقل (نطاق المحتوى).
+  - بيانات الطلاب قاصرون تحت PDPPL، فأقل بيانات ممكنة، وكل قراءة وكتابة في AuditLog، ولا صورة ورقة تُخزَّن.
+  - كل هجرة expand/contract تُراجَع بشريًا، وما يتجاوز 300ms مهمة خلفية idempotent.
+  - لا تبدأ مبادرة قبل إنجاز ما تعتمد عليه، ولا يُعدّ معلَم منجزًا إلا بمجسّه.
+
+waves:
+  - {id: W1, title: حلقة التشخيص والعلاج, due: 2026-12-24}
+  - {id: W2, title: الاختبار والحصة المتكيّفة, due: 2027-01-28}
+  - {id: W3, title: إغلاق حلقة الورق, due: 2027-03-04}
+  - {id: W4, title: خارج الصف, due: 2027-04-15}
+
+initiatives:
+  - id: M0
+    title: القياس
+    wave: W1
+    goal: مؤشرات الأثر تُحسب من قاعدة الإنتاج بأمر واحد وتدخل هذه الخطة بلا إدخال يدوي.
+    depends: []
+    milestones:
+      - id: M0.1
+        title: أمر plan_metrics يكتب مؤشرات الخطة JSON من الجداول بـ ORM
+        done_when: تشغيله مرتين على قاعدة لم تتغير يعطي الملف نفسه، وكل مفتاح مؤشر في هذه الخطة موجود فيه.
+        probes:
+          - {path: apps/core/management/commands/plan_metrics.py}
+          - {path: apps/core/tests/test_plan_metrics.py, has: test_metrics_are_idempotent}
+        cards: []
+      - id: M0.2
+        title: المشغّل يحدّث وثيقة الخطة بعد كل مزامنة للدفتر
+        done_when: دمج بطاقة يغيّر حالة معلَمها في الوثيقة بلا تدخل.
+        probes:
+          - {path: automation/runner.py, has: plan_status}
+        cards: []
+    kpis: []
+    decisions:
+      - {text: ربط التحديث بالمشغّل تعديل على automation/runner.py وهو محظور على الدمج الآلي فيدمجه المالك يدويًا, status: open}
+    risks:
+      - قراءة قاعدة الإنتاج من جهاز المالك تحتاج النفق المشفّر لا الوصول العام.
+
+  - id: M1
+    title: تشخيص الخطأ لا الدرجة
+    wave: W1
+    goal: كل إجابة خاطئة تسمّي سوء الفهم، والمعلم يرى الصف بأنواع الأخطاء لا بالمتوسط.
+    depends: []
+    milestones:
+      - id: M1.1
+        title: وسم مشتتات كل الصيغ الموضوعية بنوع الخطأ
+        done_when: test_error_kinds.py يحرس توازي wrong_kinds مع wrong لكل صيغ المقررين.
+        probes:
+          - {path: apps/papers/tests/test_error_kinds.py}
+          - {path: apps/papers/domain/item_bank.py}
+        cards: []
+      - id: M1.2
+        title: نتيجة الطالب لكل بند (الطالب والبند والخيار المختار ونوع خطئه)
+        done_when: نموذج بهجرة expand، وإدخال نتائج شعبة يُسجَّل في AuditLog، وطلب معلم آخر لها يعيد 403.
+        probes:
+          - {path: apps/planning/tests/test_student_results.py, has: test_other_teacher_gets_403}
+        cards: []
+      - id: M1.3
+        title: لوحة سوء الفهم للشعبة والدرس
+        done_when: اللوحة تعرض عدد الطلاب لكل نوع خطأ وأسماءهم، واختبار يطابق أعدادها بالبيانات المدخلة.
+        probes:
+          - {path: apps/planning/tests/test_misconception_board.py, has: test_counts_match_results}
+          - {path: frontend/src/pages/MisconceptionsPage.vue}
+        cards: []
+    kpis:
+      - {key: tagged_objective_formulas_pct, title: الصيغ الموضوعية الموسومة, unit: "%", baseline: 100, target: 100}
+      - {key: results_with_error_kind_pct, title: إجابات خاطئة مسجَّلة بنوع خطأ, unit: "%", baseline: 0, target: 90}
+    decisions:
+      - {text: هوية الطالب في القاعدة (اسم كامل أم رقم قيد مع اسم مختصر) ومدة الاحتفاظ, status: open}
+    risks:
+      - نوع خطأ لا يطابق تفكير الطالب فعلًا، فيُراجَع التصنيف على عيّنة أوراق حقيقية قبل اعتماد اللوحة.
+
+  - id: M2
+    title: ورقة علاجية لكل طالب
+    wave: W1
+    goal: بعد كل كوز تخرج لكل طالب ورقة من أخطائه هو بأرقام مختلفة ومفتاح واحد للمعلم.
+    depends: [M1.2]
+    milestones:
+      - id: M2.1
+        title: خدمة تبني وصفة ورقة من أنواع أخطاء الطالب
+        done_when: اختبار عددي يثبت أن كل جزء في الورقة يقيس مثالًا أخطأ فيه الطالب، والبذرة تعيد الورقة نفسها.
+        probes:
+          - {path: apps/papers/tests/test_remedial.py, has: test_parts_target_student_errors}
+        cards: []
+      - id: M2.2
+        title: حزمة الشعبة مهمة خلفية (PDF واحد وصفحة لكل طالب ومفتاح مجمَّع)
+        done_when: شعبة من 30 طالبًا تُبنى بمهمة idempotent، وإعادتها لا تنشئ ملفًا ثانيًا.
+        probes:
+          - {path: apps/papers/tests/test_remedial.py, has: test_class_pack_is_idempotent}
+        cards: []
+      - id: M2.3
+        title: زر «أوراق علاجية» في لوحة سوء الفهم
+        done_when: المعلم ينزّل الحزمة من اللوحة، والحارس البصري أخضر للصفحة.
+        probes:
+          - {path: frontend/src/stores/remedial.ts}
+        cards: []
+    kpis:
+      - {key: remedial_coverage_pct, title: طلاب أخطؤوا وصدرت لهم ورقة علاجية, unit: "%", baseline: 0, target: 80}
+      - {key: remedial_pack_seconds_p95, title: زمن بناء حزمة الشعبة (المئين 95), unit: ث, baseline: null, target: 60, lower_is_better: true}
+    decisions: []
+    risks:
+      - درس بلا صيغ كافية لمثال بعينه، فتُملأ الورقة من أقرب مثال في الدرس ويُذكر ذلك في المفتاح.
+
+  - id: M3
+    title: مسألة «اكتشف الخطأ»
+    wave: W1
+    goal: نوع مولّد يعرض حلًّا كاملًا فيه خطأ واحد مزروع، والمطلوب تحديده وتصحيحه.
+    depends: [M1.1]
+    milestones:
+      - id: M3.1
+        title: نوع المسألة في المجال وفحصه العددي
+        done_when: الفحص يثبت أن الخطوة الموسومة وحدها خاطئة وأن تصحيحها يعيد الجواب الصحيح.
+        probes:
+          - {path: apps/papers/tests/test_generators.py, has: test_error_spotting}
+        cards: []
+      - id: M3.2
+        title: تغطية دروس العاشر الممتحَنة بصيغة واحدة على الأقل
+        done_when: اختبار يعدّ الدروس الممتحَنة التي لها صيغة اكتشف الخطأ ويساويها بعددها.
+        probes:
+          - {path: apps/papers/tests/test_grade10.py, has: test_every_examinable_lesson_has_error_spotting}
+        cards: []
+      - id: M3.3
+        title: عرضها في الورقة والمفتاح وWord
+        done_when: الحل المعروض يظهر مرقَّم الخطوات في الشاشة وPDF وWord، والمفتاح يذكر رقم الخطوة ونوع الخطأ.
+        probes:
+          - {path: frontend/src/components/ErrorSpottingPart.vue}
+        cards: []
+    kpis:
+      - {key: lessons_with_error_spotting, title: دروس لها صيغة اكتشف الخطأ, unit: درس, baseline: 0, target: 19}
+    decisions:
+      - {text: مستوى DOK المعتمد لهذا النوع وهل يدخل الاختبارات أم أوراق العمل وحدها, status: open}
+    risks: []
+
+  - id: M4
+    title: توأم الاختبار وخريطة الجاهزية
+    wave: W2
+    goal: لكل شعبة خريطة تبيّن أي خانة في جدول المواصفات ما زالت ضعيفة، وخطة مراجعة مولَّدة تسدّها.
+    depends: [M1.2]
+    milestones:
+      - id: M4.1
+        title: خريطة الجاهزية (خانة الجدول × الشعبة) من نتائج البنود
+        done_when: اختبار يطابق نسبة كل خانة ببيانات مدخلة، والخانة بلا بيانات تظهر «لم تُقَس» لا صفرًا.
+        probes:
+          - {path: apps/planning/tests/test_readiness.py, has: test_cell_rates_match_results}
+        cards: []
+      - id: M4.2
+        title: خطة مراجعة مولَّدة من الخانات الضعيفة
+        done_when: الخطة توزّع الحصص المتاحة قبل الاختبار على الخانات بوزن درجتها وضعفها، وتحترم التقويم.
+        probes:
+          - {path: apps/planning/tests/test_readiness.py, has: test_review_plan_respects_calendar}
+        cards: []
+      - id: M4.3
+        title: صفحة الجاهزية وتنزيل اختبار تجريبي مطابق للجدول
+        done_when: المعلم يرى الخريطة وينزّل اختبارًا بأوزان الجدول ومستوياته من الصفحة نفسها.
+        probes:
+          - {path: frontend/src/pages/ReadinessPage.vue}
+        cards: []
+    kpis:
+      - {key: blueprint_cells_measured_pct, title: خانات الجدول المقيسة قبل الاختبار بأسبوعين, unit: "%", baseline: 0, target: 90}
+    decisions: []
+    risks:
+      - جدول مواصفات لم تكتمل مولّدات دروسه لا يُعرض للتوليد، فخريطته تبقى للقياس وحده.
+
+  - id: M5
+    title: الحصة التي تعيد كتابة نفسها
+    wave: W2
+    goal: نتيجة بطاقة الخروج تقترح تعديل تذكّر الغد وافتتاحه، والمعلم يعتمد بضغطة.
+    depends: [M1.2]
+    milestones:
+      - id: M5.1
+        title: اقتراح تعديل تحضير الحصة التالية من أنواع الأخطاء
+        done_when: اختبار يثبت أن بنود التذكّر المقترحة من الأمثلة التي أخطأ فيها أكثر الصف، حتميًا بالبذرة.
+        probes:
+          - {path: apps/planning/tests/test_adaptive_prep.py, has: test_recall_targets_top_errors}
+        cards: []
+      - id: M5.2
+        title: اعتماد المعلم أو رفضه يُحفظ ويدخل العرض والتحضير في Word
+        done_when: الاقتراح المعتمد يظهر في شريحة التذكّر وملف Word، والمرفوض لا يُعاد اقتراحه للحصة نفسها.
+        probes:
+          - {path: apps/planning/tests/test_adaptive_prep.py, has: test_approved_suggestion_reaches_deck}
+        cards: []
+    kpis:
+      - {key: adaptive_suggestions_approved_pct, title: اقتراحات التعديل التي اعتمدها المعلم, unit: "%", baseline: null, target: 60}
+    decisions: []
+    risks:
+      - اقتراحات كثيرة تُهمَل، فالحد اقتراح واحد لكل حصة.
+
+  - id: M6
+    title: حزمة المعلم البديل
+    wave: W2
+    goal: طلب واحد يُخرج حزمة حصة مكتفية بذاتها لمن يغطّيها.
+    depends: []
+    milestones:
+      - id: M6.1
+        title: مهمة خلفية تجمع تحضيرًا مختصرًا وعرضًا وورقة ومفتاحًا في ملف واحد
+        done_when: الحزمة تُبنى لأي حصة لها تحضير، ومفتاحها مشتق من مدخلاتها فإعادة الطلب تعيد الملف نفسه.
+        probes:
+          - {path: apps/planning/tests/test_cover_pack.py, has: test_pack_key_is_stable}
+        cards: []
+      - id: M6.2
+        title: زر الحزمة في صفحة الحصة
+        done_when: المعلم ينزّل الحزمة من صفحة الحصة والحارس البصري أخضر.
+        probes:
+          - {path: frontend/src/stores/coverPack.ts}
+        cards: []
+    kpis:
+      - {key: cover_pack_seconds_p95, title: زمن بناء الحزمة (المئين 95), unit: ث, baseline: null, target: 60, lower_is_better: true}
+    decisions: []
+    risks: []
+
+  - id: M7
+    title: تصحيح بالكاميرا
+    wave: W3
+    goal: المعلم يصوّر ورقة الإجابة فتُصحَّح موضوعياتها وتُسجَّل باسم الطالب.
+    depends: [M1.2]
+    milestones:
+      - id: M7.1
+        title: رمز على الورقة يحمل وصفتها (البذرة والنموذج والطالب) موقّعًا
+        done_when: الرمز يُقرأ من PDF وWord فيعيد الوصفة نفسها، والرمز المعدَّل يُرفض بالتوقيع.
+        probes:
+          - {path: apps/papers/tests/test_sheet_code.py, has: test_tampered_code_is_rejected}
+        cards: []
+      - id: M7.2
+        title: قراءة دوائر الإجابة من الصورة مهمة خلفية بلا تخزين الصورة
+        done_when: دقة 99% فأعلى على مجموعة اختبار من 200 ورقة مصوَّرة، والورقة غير الواضحة تُحال للمعلم ولا تُخمَّن.
+        probes:
+          - {path: apps/papers/tests/test_sheet_reader.py, has: test_accuracy_on_reference_set}
+        cards: []
+      - id: M7.3
+        title: صفحة التصوير في الهاتف ومراجعة ما أُحيل
+        done_when: معلم يصحّح شعبة من هاتفه، والنتائج تدخل جدول نتائج البنود نفسه.
+        probes:
+          - {path: frontend/src/pages/ScanPage.vue}
+        cards: []
+    kpis:
+      - {key: scan_accuracy_pct, title: دقة قراءة الإجابات, unit: "%", baseline: null, target: 99}
+      - {key: scan_referred_pct, title: أوراق أُحيلت للمراجعة اليدوية, unit: "%", baseline: null, target: 5, lower_is_better: true}
+    decisions:
+      - {text: تجربة أولى على ورقة اختيار من متعدد وحدها قبل أي استثمار في المقالي, status: open}
+      - {text: مكتبة قراءة الصور تدخل ملف الأقفال، فطلبها يدمجه المالك يدويًا, status: open}
+    risks:
+      - أعلى مخاطرة تقنية في الخطة، فالمعلَم M7.2 بوابة تُلغى المبادرة إن لم تبلغ دقته.
+      - صورة الورقة بيانات شخصية، فتُعالج في الذاكرة وتُحذف ولا تُرفع إلى التخزين.
+
+  - id: M8
+    title: سياق قطري مولَّد
+    wave: W3
+    goal: مسائل لفظية أصلية من قوالب سياق محلية بأرقام واقعية المدى.
+    depends: []
+    milestones:
+      - id: M8.1
+        title: طبقة قوالب السياق فوق الصيغ العددية
+        done_when: القالب يأخذ أعداد الصيغة ولا يغيّر جوابها، ويثبته فحص عددي لكل قالب.
+        probes:
+          - {path: apps/papers/tests/test_contexts.py, has: test_context_keeps_answer}
+        cards: []
+      - id: M8.2
+        title: 30 قالبًا معتمدًا من المالك موزَّعة على وحدات العاشر
+        done_when: اختبار يعدّ القوالب المعتمدة ومدى أرقام كل قالب ضمن حدوده المعلنة.
+        probes:
+          - {path: apps/papers/tests/test_contexts.py, has: test_thirty_approved_contexts}
+        cards: []
+    kpis:
+      - {key: approved_contexts, title: قوالب سياق معتمدة, unit: قالب, baseline: 0, target: 30}
+    decisions:
+      - {text: اعتماد المالك لصياغة كل قالب قبل ظهوره للمعلمين, status: open}
+    risks:
+      - صياغة تشبه مسألة في الكتاب، فكل قالب يُكتب أصليًا ولا يُنقل من أي مصدر.
+
+  - id: M9
+    title: دفتر ولي الأمر
+    wave: W4
+    goal: رسالة أسبوعية لكل طالب بما أتقنه وما يحتاجه وورقة قصيرة مولَّدة له.
+    depends: [M2.2]
+    milestones:
+      - id: M9.1
+        title: سجل موافقة ولي الأمر وحق السحب
+        done_when: لا تقرير يُبنى لطالب بلا موافقة مسجَّلة، وسحبها يوقف الإرسال ويُسجَّل في AuditLog.
+        probes:
+          - {path: apps/planning/tests/test_guardian_consent.py, has: test_no_report_without_consent}
+        cards: []
+      - id: M9.2
+        title: تقرير الطالب الأسبوعي PDF يسلّمه المعلم
+        done_when: التقرير يُبنى بمهمة خلفية من نتائج الأسبوع، وورقته من خمس مسائل علاجية.
+        probes:
+          - {path: apps/planning/tests/test_guardian_report.py, has: test_weekly_report_from_results}
+        cards: []
+    kpis:
+      - {key: guardian_reports_with_consent_pct, title: تقارير صدرت بموافقة مسجَّلة, unit: "%", baseline: null, target: 100}
+    decisions:
+      - {text: قناة التسليم (ورق يحمله الطالب أم قناة المدرسة الرسمية) وموافقة إدارة المدرسة, status: open}
+    risks:
+      - إرسال آلي لأولياء الأمور خارج قناة المدرسة مخالفة محتملة، فالمرحلة الأولى PDF بيد المعلم وحده.
+
+  - id: M10
+    title: تعدد المدارس
+    wave: W4
+    goal: مدرسة ثانية تعمل على المنصة معزولة ببياناتها وقالبها، ومنسّق المادة يقارن شعبه.
+    depends: [M4.1]
+    milestones:
+      - id: M10.1
+        title: نموذج المدرسة وعزل بيانات المعلمين والطلاب بها
+        done_when: اختبار يثبت أن معلم مدرسة لا يقرأ شعبة ولا نتيجة ولا ورقة محفوظة من مدرسة أخرى في كل المسارات.
+        probes:
+          - {path: apps/core/tests/test_school_isolation.py, has: test_no_cross_school_read}
+        cards: []
+      - id: M10.2
+        title: دور منسّق المادة ولوحة مقارنة الشعب على جدول المواصفات
+        done_when: المنسّق يرى شعب مدرسته وحدها بأعداد بلا أسماء طلاب، والمعلم لا يرى لوحة المنسّق.
+        probes:
+          - {path: apps/planning/tests/test_coordinator_board.py, has: test_coordinator_sees_own_school_only}
+        cards: []
+    kpis:
+      - {key: active_schools, title: مدارس فعّالة, unit: مدرسة, baseline: 1, target: 2}
+    decisions:
+      - {text: نموذج الترخيص والاستضافة لمدرسة خارجية (شركة أذكياء) واتفاقية معالجة البيانات, status: open}
+    risks:
+      - العزل يمسّ كل استعلام، فيُبنى بمدير نماذج واحد وحارس اختبار يمرّ على كل المسارات لا بفحص في كل مسار.
