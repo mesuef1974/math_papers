@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Iterable
+from dataclasses import asdict, dataclass
 from datetime import date, datetime
 from pathlib import Path
 
@@ -28,6 +29,7 @@ from .domain.calendar_engine import PlanningError
 from .domain.deck import DeckError, build_period_deck
 from .domain.deck_checks import check_deck
 from .domain.feedback import ClassOutcome, Decision
+from .domain.item_results import Entry, clean_entries, mark
 from .domain.lesson_run import LessonRun
 from .domain.objective_text import (
     ObjectiveLockedError,
@@ -45,11 +47,13 @@ from .example_clips import merge_short_continuations
 from .models import (
     ClassOutcomeRecord,
     DeckBuild,
+    ItemResult,
     LessonRunRecord,
     ObjectiveOverride,
     ObjectiveSuggestion,
     PeriodPrepOverride,
     PrepReview,
+    SectionStudent,
 )
 from .pptx_checks import check_pptx
 from .pptx_export import build_period_pptx
@@ -123,6 +127,127 @@ def save_run_report(
             ],
         },
     )
+
+
+# ───── تشخيص الخطأ: نتيجة الطالب لكل بند (قرار المالك 2026-11-25) ─────
+
+
+@dataclass(frozen=True)
+class ResultsSaved:
+    """أعداد دفعة نتائج: طلابها وبنودها، وما أُنشئ منها وما تغيّر. بلا أسماء، فتصلح لسجل التدقيق كما هي."""
+
+    students: int
+    results: int
+    created: int
+    updated: int
+
+
+def results_target(course: str, lesson: str, section: str) -> str:
+    """هدف سجل التدقيق لنتائج شعبة في درس: المقرر والدرس والشعبة، بلا طالب."""
+    return f"{course}/{lesson}@{section}"
+
+
+@transaction.atomic
+def record_item_results(
+    owner: AbstractBaseUser,
+    course: str,
+    lesson: str,
+    section: str,
+    entries: Iterable[Entry],
+    *,
+    request_id: str = "",
+) -> ResultsSaved:
+    """يحفظ نتائج شعبة في بنود درس دفعة واحدة؛ idempotent: إعادة الإدخال نفسه لا تضيف صفًّا ولا تغيّر صفًّا.
+
+    الطالب مفتاحه (المعلم، الشعبة، رقم القيد) واسمه يُحدَّث، والنتيجة مفتاحها (الطالب، الدرس، المثال، البذرة) وخيارها
+    يُحدَّث. الصحة ونوع الخطأ من بنك البنود وحده (`item_results.mark`). السجل في AuditLog أعداد فقط بلا أسماء ولا أرقام قيد."""
+    section = _section(section)
+    record = _lesson(course, lesson)
+    marked = mark(course, record.code, clean_entries(entries))
+    wanted = {m.entry.enrollment_no: (m.entry.first_name, m.entry.last_name) for m in marked}
+    roster = SectionStudent.objects.filter(owner=owner, section=section, enrollment_no__in=wanted)
+    known = {s.enrollment_no: (s.first_name, s.last_name) for s in roster}
+    SectionStudent.objects.bulk_create(
+        [
+            SectionStudent(owner=owner, section=section, enrollment_no=no, first_name=first, last_name=last)
+            for no, (first, last) in wanted.items()
+            if known.get(no) != (first, last)
+        ],
+        update_conflicts=True,
+        unique_fields=["owner", "section", "enrollment_no"],
+        update_fields=["first_name", "last_name", "updated_at"],
+    )
+    students = {s.enrollment_no: s for s in roster.all()}
+    stored = {
+        (r.student_id, r.example, r.seed): r.choice
+        for r in ItemResult.objects.filter(student__in=students.values(), lesson=record)
+    }
+    rows, created = [], 0
+    for m in marked:
+        student = students[m.entry.enrollment_no]
+        previous = stored.get((student.pk, m.entry.example, m.entry.seed))
+        if previous == m.entry.choice:
+            continue
+        created += previous is None
+        rows.append(
+            ItemResult(
+                student=student,
+                lesson=record,
+                example=m.entry.example,
+                seed=m.entry.seed,
+                choice=m.entry.choice,
+                correct=m.correct,
+                error_kind=m.error_kind,
+            )
+        )
+    ItemResult.objects.bulk_create(
+        rows,
+        update_conflicts=True,
+        unique_fields=["student", "lesson", "example", "seed"],
+        update_fields=["choice", "correct", "error_kind", "updated_at"],
+    )
+    saved = ResultsSaved(
+        students=len(wanted), results=len(marked), created=created, updated=len(rows) - created
+    )
+    record_audit(
+        action="results.record",
+        actor=owner,
+        target=results_target(course, record.code, section),
+        payload=asdict(saved),
+        request_id=request_id,
+    )
+    return saved
+
+
+@dataclass(frozen=True)
+class ResultsPurged:
+    years: tuple[str, ...]
+    students: int
+    results: int
+
+
+@transaction.atomic
+def purge_ended_results(today: date | None = None, *, write: bool = True) -> ResultsPurged:
+    """يحذف نتائج البنود لمقررات انتهت سنتها الأكاديمية (آخر فصل في `AcademicCalendar` قبل اليوم) وطلابها الذين لم تبقَ
+    لهم نتيجة في سنة جارية؛ idempotent، و`write=False` يعدّ بلا حذف.
+
+    أعداد `ClassOutcomeRecord` المجمَّعة لا تُمسّ: لا بيان فرديًا فيها. سنة بلا تقويم لا تُعدّ منتهية فلا يُحذف منها شيء."""
+    years = tuple(curriculum.ended_academic_years(today or timezone.localdate()))
+    if not years:
+        return ResultsPurged((), 0, 0)
+    ended = ItemResult.objects.filter(lesson__course__academic_year__in=years)
+    current = ItemResult.objects.exclude(lesson__course__academic_year__in=years)
+    leaving = SectionStudent.objects.exclude(pk__in=current.values("student_id"))
+    purged = ResultsPurged(years, leaving.count(), ended.count())
+    if write and (purged.students or purged.results):
+        ended.delete()
+        leaving.delete()
+        record_audit(
+            action="results.purge",
+            target=",".join(years),
+            payload={"students": purged.students, "results": purged.results},
+        )
+    return purged
 
 
 # ───── عرض الحصة من تحضيرها ومقاطع الأصول المنشورة (المرحلة 4 من docs/lesson_prep_plan.md) ─────

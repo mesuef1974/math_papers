@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from django.db.models import Count, QuerySet
+from datetime import date
+
+from django.db.models import Count, Max, QuerySet
 
 from .models import AcademicCalendar, Blueprint, Course, Lesson, TermPlan
 
@@ -69,6 +71,16 @@ def calendar_data(year: str) -> dict:
             for term in calendar.terms.all()
         ],
     }
+
+
+def ended_academic_years(today: date) -> list[str]:
+    """السنوات الأكاديمية التي انتهى آخر فصل في تقويمها قبل `today`؛ سنة بلا تقويم أو بلا فصول لا تُعدّ منتهية."""
+    return list(
+        AcademicCalendar.objects.annotate(last_day=Max("terms__end"))
+        .filter(last_day__lt=today)
+        .order_by("year")
+        .values_list("year", flat=True)
+    )
 
 
 def term_plan_data(course_slug: str) -> tuple[Course, dict]:
