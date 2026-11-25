@@ -14,6 +14,8 @@
 - DELETE /preps/<مقرر>/<درس>/<k>/override  استرجاع التحضير المشترك للدرس
 - POST /results/<مقرر>/<درس>          نتائج طلاب شعبة في بنود الدرس دفعة واحدة (idempotent؛ نوع الخطأ من بنك البنود)
 - GET  /results/<مقرر>/<درس>?section=  نتائج شعبة من شعب المعلم وأعداد أخطائها بالنوع؛ 403 لشعبة ليست له
+- GET  /results/sections              شعب المعلم (ما له فيه طلاب)
+- GET  /misconceptions/<مقرر>/<درس>?section=  لوحة سوء الفهم: طلاب كل نوع خطأ في شعبة المعلم؛ 403 لشعبة ليست له
 """
 
 from __future__ import annotations
@@ -471,28 +473,98 @@ def record_results(request: HttpRequest, course: str, lesson: str, payload: Sect
         raise HttpError(404, str(error)) from error
 
 
-@router.get("results/{course}/{lesson}", response=SectionResultsOut)
-def section_results(request: HttpRequest, response: HttpResponse, course: str, lesson: str, section: str):
-    """نتائج شعبة من شعب المعلم في درس؛ 403 لشعبة ليست له. كل قراءة وكل رفض في سجل التدقيق بلا أسماء."""
+def _read_section(
+    request: HttpRequest, response: HttpResponse, scope: str, read, counts, *where: str
+) -> dict:
+    """قراءة بيانات شعبة في درس: 403 لشعبة ليست للمعلم و404 لدرس مجهول، وكل قراءة وكل رفض في سجل التدقيق بالأعداد
+    وحدها (`counts`) بلا أسماء ولا أرقام قيد، والرد لا يُخزَّن."""
+    course, lesson, section = where
     target = services.results_target(course, lesson, section.strip()[:40])
     try:
-        data = selectors.section_results(request.user, course, lesson, section)
+        data = read(request.user, course, lesson, section)
     except selectors.SectionNotOwnedError as error:
         record_audit(
-            action="results.denied", actor=request.user, target=target, request_id=request_id_of(request)
+            action=f"{scope}.denied", actor=request.user, target=target, request_id=request_id_of(request)
         )
         raise HttpError(403, "الشعبة ليست من شعبك") from error
     except selectors.ResultsNotFoundError as error:
         raise HttpError(404, str(error)) from error
     record_audit(
-        action="results.read",
+        action=f"{scope}.read",
         actor=request.user,
         target=target,
-        payload={"students": len(data["students"]), "results": data["attempted"]},
+        payload=counts(data),
         request_id=request_id_of(request),
     )
     response["Cache-Control"] = "private, no-store"
     return data
+
+
+@router.get("results/sections", response=list[str])
+def result_sections(request: HttpRequest):
+    """شعب المعلم: ما أدخل فيه طلابًا."""
+    return selectors.owned_sections(request.user)
+
+
+@router.get("results/{course}/{lesson}", response=SectionResultsOut)
+def section_results(request: HttpRequest, response: HttpResponse, course: str, lesson: str, section: str):
+    """نتائج شعبة من شعب المعلم في درس؛ 403 لشعبة ليست له. كل قراءة وكل رفض في سجل التدقيق بلا أسماء."""
+    return _read_section(
+        request,
+        response,
+        "results",
+        selectors.section_results,
+        lambda data: {"students": len(data["students"]), "results": data["attempted"]},
+        course,
+        lesson,
+        section,
+    )
+
+
+class BoardStudentOut(Schema):
+    enrollment_no: str
+    first_name: str
+    last_name: str
+    examples: list[int]
+
+
+class BoardKindOut(Schema):
+    kind: str
+    label: str
+    count: int
+    examples: list[int]
+    students: list[BoardStudentOut]
+
+
+class MisconceptionBoardOut(Schema):
+    course: str
+    lesson: str
+    section: str
+    students: int
+    entered: int
+    correct: int
+    missing: int
+    kinds: list[BoardKindOut]
+
+
+@router.get("misconceptions/{course}/{lesson}", response=MisconceptionBoardOut)
+def misconception_board(request: HttpRequest, response: HttpResponse, course: str, lesson: str, section: str):
+    """لوحة سوء الفهم لشعبة من شعب المعلم في درس؛ 403 لشعبة ليست له. السجل أعداد كل نوع بلا أسماء."""
+    return _read_section(
+        request,
+        response,
+        "misconceptions",
+        selectors.misconception_board,
+        lambda data: {
+            "students": data["students"],
+            "entered": data["entered"],
+            "correct": data["correct"],
+            "kinds": {kind["kind"]: kind["count"] for kind in data["kinds"]},
+        },
+        course,
+        lesson,
+        section,
+    )
 
 
 @router.get("preps/{course}/{lesson}/{k}/word")

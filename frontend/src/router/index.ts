@@ -10,6 +10,12 @@ export const router = createRouter({
     { path: "/decks", name: "decks", component: () => import("@/pages/DecksPage.vue"), meta: { title: "عروض الحصص" } },
     { path: "/preps", name: "preps", component: () => import("@/pages/PrepPage.vue"), meta: { title: "تحضير الحصص" } },
     {
+      path: "/misconceptions",
+      name: "misconceptions",
+      component: () => import("@/pages/MisconceptionsPage.vue"),
+      meta: { title: "لوحة سوء الفهم" },
+    },
+    {
       path: "/copilot",
       name: "copilot-automation",
       component: () => import("@/pages/CopilotAutomationPage.vue"),

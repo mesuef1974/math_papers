@@ -32,6 +32,7 @@ const navItems = computed(() => {
     items.push({ to: "/saved", label: "أوراقي", icon: "worksheet" });
     items.push({ to: "/preps", label: "التحضير", icon: "answer-key" });
     items.push({ to: "/decks", label: "العروض", icon: "test" });
+    items.push({ to: "/misconceptions", label: "سوء الفهم", icon: "problem" });
     items.push({ to: "/copilot", label: "المعاون", icon: "curriculum" });
   }
   items.push({ to: "/about", label: "عن المنصة", icon: "teacher" });

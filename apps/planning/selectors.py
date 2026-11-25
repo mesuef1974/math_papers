@@ -11,7 +11,7 @@ from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 
 from django.contrib.auth.models import AbstractBaseUser
-from django.db.models import Prefetch, QuerySet
+from django.db.models import Count, Prefetch, Q, QuerySet
 
 from apps.assets.models import Asset
 from apps.assets.selectors import asset_bytes
@@ -147,11 +147,10 @@ def owned_sections(owner: AbstractBaseUser) -> list[str]:
     return list(rows.values_list("section", flat=True).distinct())
 
 
-def section_results(owner: AbstractBaseUser, course: str, lesson: str, section: str) -> dict:
-    """نتائج طلاب شعبة المعلم في بنود درس، وأعداد أخطائها بنوع الخطأ (`ERROR_KINDS`) للتشخيص.
-
-    `SectionNotOwnedError` لشعبة ليست له قبل أي قراءة أخرى، و`ResultsNotFoundError` لدرس مجهول. الطالب بلا نتيجة في
-    الدرس يظهر بقائمة فارغة."""
+def _owned_lesson(
+    owner: AbstractBaseUser, course: str, lesson: str, section: str
+) -> tuple[str, QuerySet[SectionStudent], Lesson]:
+    """شعبة المعلم ودرسها: `SectionNotOwnedError` لشعبة ليست له قبل أي قراءة أخرى، و`ResultsNotFoundError` لدرس مجهول."""
     section = section.strip()
     roster = SectionStudent.objects.filter(owner=owner, section=section)
     if not section or not roster.exists():
@@ -159,6 +158,78 @@ def section_results(owner: AbstractBaseUser, course: str, lesson: str, section: 
     record = Lesson.objects.filter(course__slug=course, code=lesson).first()
     if record is None:
         raise ResultsNotFoundError(f"الدرس {lesson} غير موجود في المقرر {course}")
+    return section, roster, record
+
+
+def misconception_board(owner: AbstractBaseUser, course: str, lesson: str, section: str) -> dict:
+    """لوحة سوء الفهم لشعبة المعلم في درس: لكل نوع خطأ عدد الطلاب المختلفين الذين وقعوا فيه وقائمتهم والأمثلة التي ظهر
+    فيها، تنازليًا بالعدد (والتساوي بترتيب `ERROR_KINDS`).
+
+    الطالب الذي كرر النوع نفسه يُعدّ فيه مرة، ومن وقع في نوعين يظهر في كليهما. `correct` من أُدخلت نتائجهم بلا خطأ،
+    و`missing` من لا نتيجة لهم في الدرس. ثلاثة استعلامات مجمَّعة مهما بلغ عدد الطلاب. الأخطاء كما في `section_results`."""
+    section, roster, record = _owned_lesson(owner, course, lesson, section)
+    in_lesson = Q(results__lesson=record)
+    totals = roster.aggregate(
+        students=Count("pk", distinct=True),
+        entered=Count("pk", filter=in_lesson, distinct=True),
+        mistaken=Count("pk", filter=in_lesson & Q(results__correct=False), distinct=True),
+    )
+    wrong = ItemResult.objects.filter(student__in=roster, lesson=record, correct=False)
+    counts = dict(
+        wrong.order_by().values_list("error_kind").annotate(students=Count("student_id", distinct=True))
+    )
+    members: dict[str, dict[int, dict]] = {kind: {} for kind in counts}
+    rows = (
+        wrong.order_by("student__enrollment_no", "example")
+        .values_list(
+            "error_kind",
+            "student_id",
+            "student__enrollment_no",
+            "student__first_name",
+            "student__last_name",
+            "example",
+        )
+        .distinct()
+    )
+    for kind, student_id, enrollment_no, first_name, last_name, example in rows:
+        student = members[kind].setdefault(
+            student_id,
+            {
+                "enrollment_no": enrollment_no,
+                "first_name": first_name,
+                "last_name": last_name,
+                "examples": [],
+            },
+        )
+        student["examples"].append(example)
+    order = {kind: index for index, kind in enumerate(ERROR_KINDS)}
+    return {
+        "course": course,
+        "lesson": record.code,
+        "section": section,
+        "students": totals["students"],
+        "entered": totals["entered"],
+        "correct": totals["entered"] - totals["mistaken"],
+        "missing": totals["students"] - totals["entered"],
+        "kinds": [
+            {
+                "kind": kind,
+                "label": ERROR_KINDS.get(kind, kind),
+                "count": counts[kind],
+                "examples": sorted({e for student in members[kind].values() for e in student["examples"]}),
+                "students": list(members[kind].values()),
+            }
+            for kind in sorted(counts, key=lambda kind: (-counts[kind], order.get(kind, len(order))))
+        ],
+    }
+
+
+def section_results(owner: AbstractBaseUser, course: str, lesson: str, section: str) -> dict:
+    """نتائج طلاب شعبة المعلم في بنود درس، وأعداد أخطائها بنوع الخطأ (`ERROR_KINDS`) للتشخيص.
+
+    `SectionNotOwnedError` لشعبة ليست له قبل أي قراءة أخرى، و`ResultsNotFoundError` لدرس مجهول. الطالب بلا نتيجة في
+    الدرس يظهر بقائمة فارغة."""
+    section, roster, record = _owned_lesson(owner, course, lesson, section)
     students = roster.prefetch_related(
         Prefetch("results", queryset=ItemResult.objects.filter(lesson=record), to_attr="lesson_results")
     )
