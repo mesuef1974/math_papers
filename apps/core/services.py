@@ -13,7 +13,7 @@ from django.db import transaction
 from django.http import HttpRequest
 
 from .middleware import request_id_of
-from .models import AuditLog
+from .models import AuditLog, BoardSnapshot
 from .selectors import plan_metrics
 
 PLAN_FILE = "docs/innovation_plan.yaml"
@@ -100,3 +100,8 @@ def sign_out(request: HttpRequest) -> None:
     if user.is_authenticated:
         record_audit(action="auth.logout", actor=user, target=user.get_username())
     logout(request)
+
+
+def store_board_snapshot(payload: dict) -> None:
+    """idempotent: صف واحد يُستبدل، و`updated_at` وقت آخر وصول."""
+    BoardSnapshot.objects.update_or_create(pk=1, defaults={"payload": payload})

@@ -28,6 +28,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 import ledger  # noqa: E402
 import notify  # noqa: E402
+import publish  # noqa: E402
 import review  # noqa: E402
 import sync  # noqa: E402
 from merge_gate import ALWAYS_FORBIDDEN, path_forbidden  # noqa: E402
@@ -446,7 +447,8 @@ def main(argv: list[str] | None = None) -> int:
         code, outcome = 0, "مشغّل آخر يعمل"
     else:
         try:
-            code, outcome = run_card(card, args.model, args.max_turns)
+            with publish.live():
+                code, outcome = run_card(card, args.model, args.max_turns)
         except Exception as exc:
             heartbeat(f"{card}: خطأ: {exc!r}")
             ledger.append(card, "blocked", reason=f"خطأ في المشغّل: {type(exc).__name__}")
@@ -460,6 +462,9 @@ def main(argv: list[str] | None = None) -> int:
         outcome += f" | {recovered}"
     print(outcome)
     heartbeat(outcome)
+    # بعد النبض فتحمله اللقطة؛ وحين لا بطاقة هذا هو الإرسال الدوري
+    if failed := publish.send():
+        print(failed)
     return code
 
 

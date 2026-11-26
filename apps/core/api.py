@@ -5,12 +5,15 @@
 
 from __future__ import annotations
 
+import hmac
+from typing import Literal
+
 from django.conf import settings
 from django.contrib.admin.views.decorators import staff_member_required
 from django.http import HttpRequest
 from ninja import Field, NinjaAPI, Query, Schema, Status
 from ninja.errors import HttpError, ValidationError
-from ninja.security import django_auth
+from ninja.security import HttpBearer, django_auth
 from ninja.utils import check_csrf
 
 from . import selectors, services
@@ -35,6 +38,7 @@ class MeOut(Schema):
     id: int
     username: str
     is_staff: bool
+    is_superuser: bool
     admin_url: str = ""  # يظهر للطاقم فقط
     permissions: list[str]
 
@@ -68,6 +72,7 @@ def me_payload(user) -> dict:
         "id": user.pk,
         "username": user.get_username(),
         "is_staff": user.is_staff,
+        "is_superuser": user.is_superuser,
         "permissions": sorted(user.get_all_permissions()),
     }
 
@@ -106,3 +111,53 @@ def audit(request: HttpRequest, limit: int = Query(50, ge=1, le=200)):
         {"id": row.pk, "action": row.action, "target": row.target, "created_at": row.created_at.isoformat()}
         for row in selectors.recent_audit(limit)
     ]
+
+
+class BoardPushAuth(HttpBearer):
+    """مفتاح سري ثابت لجهاز المالك وحده؛ المقارنة بزمن ثابت."""
+
+    def authenticate(self, request: HttpRequest, token: str) -> bool | None:
+        expected = settings.BOARD_PUSH_TOKEN
+        return True if expected and hmac.compare_digest(token.encode(), expected.encode()) else None
+
+
+class BoardRow(Schema):
+    id: str = Field(max_length=40)
+    title: str = Field("", max_length=300)
+    group: Literal["running", "approval", "queued", "stuck", "done", "backlog"]
+    at_stage: int = Field(ge=0, le=5)
+    age: str = Field("", max_length=40)
+    url: str = Field("", max_length=200, pattern=r"^(https://github\.com/.*)?$")
+    note: str = Field("", max_length=300)
+
+
+class BoardPulse(Schema):
+    text: str = Field(max_length=500)
+    warn: bool
+
+
+class BoardIn(Schema):
+    stages: list[str] = Field(max_length=10)
+    cards: list[BoardRow] = Field(max_length=500)
+    pulse: BoardPulse
+
+
+class BoardOut(Schema):
+    received_at: str | None
+    board: BoardIn | None
+
+
+@api.post("/automation/snapshot", response={204: None}, auth=BoardPushAuth())
+def automation_push(request: HttpRequest, payload: BoardIn):
+    services.store_board_snapshot(payload.dict())
+    return Status(204, None)
+
+
+@api.get("/automation/board", response=BoardOut, auth=django_auth)
+def automation_board(request: HttpRequest):
+    if not request.user.is_superuser:
+        raise HttpError(403, "للمشرف العام فقط")
+    row = selectors.board_snapshot()
+    if row is None:
+        return {"received_at": None, "board": None}
+    return {"received_at": row.updated_at.isoformat(), "board": row.payload}

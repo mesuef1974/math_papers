@@ -6,7 +6,7 @@ from collections.abc import Callable, Iterable
 
 from django.db.models import QuerySet
 
-from .models import AuditLog
+from .models import AuditLog, BoardSnapshot
 
 Metric = Callable[[], float | None]
 
@@ -39,3 +39,7 @@ def plan_metrics(keys: Iterable[str]) -> dict[str, float | None]:
     """قيمة كل مؤشر مطلوب: عدد أو نسبة، و`None` لما لا مصدر له بعد."""
     sources = plan_metric_sources()
     return {key: _number(key, sources[key]()) if key in sources else None for key in keys}
+
+
+def board_snapshot() -> BoardSnapshot | None:
+    return BoardSnapshot.objects.filter(pk=1).first()
