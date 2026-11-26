@@ -130,7 +130,7 @@ const columns = computed(() => {
   font-size: 1rem;
 }
 .chip {
-  border: 1px solid var(--color-border);
+  border: 1px solid var(--color-line);
   border-inline-start-width: 4px;
   border-radius: 8px;
   padding: var(--space-2);
@@ -149,6 +149,6 @@ const columns = computed(() => {
   flex-wrap: wrap;
   gap: var(--space-2);
   padding-block: var(--space-2);
-  border-block-end: 1px solid var(--color-border);
+  border-block-end: 1px solid var(--color-line);
 }
 </style>
