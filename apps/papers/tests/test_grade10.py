@@ -63,6 +63,14 @@ def test_no_error_spotting_variant_is_built_on_enrichment_content():
     assert out_of_scope(GRADE10_SLUG, plan.enrichment_lessons, plan.enrichment_examples, ERROR_SPOTTING) == []
 
 
+def test_every_examinable_lesson_has_error_spotting():
+    from apps.papers.domain.generators import ERROR_SPOTTING
+
+    examinable = {lesson.code for lesson in read_source(GRADE10_SLUG).lessons if lesson.examinable}
+    covered = {lesson for (course, lesson), fns in ERROR_SPOTTING.items() if course == GRADE10_SLUG and fns}
+    assert covered == examinable
+
+
 def test_scope_guard_reports_each_kind_of_violation():
     """الحارس نفسه: مثال إثرائي، ودرس إثرائي، وصيغة بلا رقم مثال، كلٌّ يُبلَّغ باسمه."""
     plan = read_source(GRADE10_SLUG).term_plan.to_domain(1)

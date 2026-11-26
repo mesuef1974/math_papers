@@ -4,6 +4,7 @@ import dataclasses
 import math
 import operator
 import random
+import re
 from fractions import Fraction
 
 import mpmath
@@ -1240,7 +1241,32 @@ def true_circle_through_point(c):
     return (*c["center"], center.distance(sp.Point(*c["point"])) ** 2)
 
 
+def true_similar_perimeter(c):
+    """محيط المثلث المشابه: كل ضلع من تناسبه مع الضلع المعلوم، بحل التناسب لا بمعامل الخطوات."""
+    side = sp.Symbol("side")
+    return (sum(sp.solve(side * c["base"][0] - c["big"] * s, side)[0] for s in c["base"]),)
+
+
+def true_leg_from_segments(c):
+    """طول الساق من إحداثيات الشكل: ارتفاع C يجعل الزاوية عندها قائمة."""
+    ad, db = c["segments"]
+    h = sp.Symbol("h", positive=True)
+    a, b, apex = sp.Matrix([0, 0]), sp.Matrix([ad + db, 0]), sp.Matrix([ad, h])
+    (height,) = sp.solve((a - apex).dot(b - apex), h)
+    end = a if c["leg"] == "AC" else b
+    return ((end - apex).subs(h, height).norm(),)
+
+
+def true_parallel_side(c):
+    """AC من تناسب الجزء إلى الكل: AD/AB = AE/AC."""
+    side = sp.Symbol("side")
+    return tuple(sp.solve(c["AD"] * side - c["AE"] * (c["AD"] + c["DB"]), side))
+
+
 VALUE_TRUTHS = {
+    "similar_perimeter": true_similar_perimeter,
+    "leg_from_segments": true_leg_from_segments,
+    "parallel_side": true_parallel_side,
     "system_points": true_system_points,
     "inequality_solution": true_inequality_solution,
     "circle_through_point": true_circle_through_point,
@@ -1301,6 +1327,11 @@ def test_error_spotting_covers_last_lessons_of_grade10_unit_two(lesson):
     assert ERROR_SPOTTING.get((GRADE10_SLUG, lesson)), lesson
 
 
+@pytest.mark.parametrize("lesson", ["3.3", "3.4", "3.5"])
+def test_error_spotting_covers_every_lesson_of_grade10_unit_three(lesson):
+    assert ERROR_SPOTTING.get((GRADE10_SLUG, lesson)), lesson
+
+
 def test_error_spotting_has_a_grade10_variant_outside_the_paper_registry():
     """صيغ «اكتشف الخطأ» في سجلّها وحده: لا تدخل اختيار الأوراق ولا بصمة الصيغ القائمة."""
     assert any(course == GRADE10_SLUG for course, _ in ERROR_SPOTTING)
@@ -1320,6 +1351,8 @@ def test_error_spotting_plants_exactly_one_wrong_step(lesson, generator):
         assert item.error_kind in ERROR_KINDS
         assert text.count("$") % 2 == 0, text
         assert not any(bad in text for bad in ("zoo", "nan", "None"))
+        # لا يتكرر طرف متتاليًا («AB=16=16»): الزلّة تُظهر ما أخذه الطالب لا الرقم مرتين
+        assert not re.search(r"=([^=$]+)=\1(?=\$)", text), text
         again = generator(random.Random(seed))
         assert again == item and str(again.check) == str(item.check), seed
     # الخطأ يتنقل بين الخطوات والأنواع، فلا يُحفظ موضعه
