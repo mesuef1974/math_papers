@@ -121,7 +121,7 @@ def card_row(card_id: str, now: datetime, alive, open_prs: set[str] | None) -> d
         "id": card_id,
         "title": events[0].get("title", ""),
         "stage": STAGE_OF.get(state),
-        "at_stage": STAGE_OF.get(state, STOPPED_AT.get(state, 1)),
+        "at_stage": STAGE_OF.get(state, last.get("stage", STOPPED_AT.get(state, 1))),
         "since": since,
         "age": age(since),
         "url": url,

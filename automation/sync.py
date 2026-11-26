@@ -97,9 +97,13 @@ def deploy_states(sha: str, repo: str | None) -> set[str]:
     base = f"repos/{repo or '{owner}/{repo}'}/deployments"
     found = run(["gh", "api", f"{base}?sha={sha}", "--jq", ".[].id"])
     states: set[str] = set()
-    for deployment in found.stdout.split() if found.returncode == 0 else []:
+    if found.returncode != 0:
+        raise RuntimeError("gh api فشل")  # يظهر في نبض المشغّل «تعذّرت»
+    for deployment in found.stdout.split():
         proc = run(["gh", "api", f"{base}/{deployment}/statuses", "--jq", ".[].state"])
-        states |= set(proc.stdout.split()) if proc.returncode == 0 else set()
+        if proc.returncode != 0:
+            raise RuntimeError("gh api فشل")
+        states |= set(proc.stdout.split())
     return states
 
 
@@ -115,7 +119,7 @@ def apply_deploys(cards: list[str], prs: list[dict], repo: str | None) -> list[s
         if "success" in states:
             ledger.append(card, "deployed", pr=pr["number"], url=pr.get("url", ""), note="sync")
         elif states & {"failure", "error"}:
-            ledger.append(card, "blocked", reason="فشل النشر على Railway", url=pr.get("url", ""))
+            ledger.append(card, "blocked", reason="فشل النشر على Railway", url=pr.get("url", ""), stage=5)
             notify.send("المشغّل: فشل النشر", f"{card} (#{pr['number']})")
         else:
             continue

@@ -121,3 +121,24 @@ def test_old_merges_are_not_asked_about(book):
     card_in("merged")
     later = sync.datetime.now(sync.UTC) + sync.DEPLOY_WINDOW * 2
     assert sync.awaiting_deploy() == [CARD] and sync.awaiting_deploy(later) == []
+
+
+def test_quiet_asks_about_a_fresh_merge_and_records_its_deployment(book, monkeypatch):
+    card_in("merged")
+    monkeypatch.setattr(sync, "fetch_prs", lambda _: [pr(7, "MERGED") | {"mergeCommit": {"oid": "a" * 40}}])
+    monkeypatch.setattr(sync, "deploy_states", lambda sha, repo: {"success"})
+    assert sync.quiet() == f"{CARD} → deployed (#7)"
+
+
+def test_quiet_leaves_an_old_merge_without_calling_gh(book, monkeypatch):
+    card_in("merged")
+    monkeypatch.setattr(sync, "DEPLOY_WINDOW", sync.timedelta(0) - sync.timedelta(seconds=1))
+    monkeypatch.setattr(sync, "fetch_prs", lambda _: pytest.fail("gh استُدعي لدمج قديم"))
+    assert sync.quiet() == ""
+
+
+def test_a_failing_gh_is_not_read_as_no_deployment(monkeypatch):
+    failed = sync.subprocess.CompletedProcess([], 1, stdout="", stderr="403")
+    monkeypatch.setattr(sync, "run", lambda _: failed)
+    with pytest.raises(RuntimeError):
+        sync.deploy_states("a" * 40, None)

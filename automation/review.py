@@ -14,6 +14,8 @@ REVIEW_TIMEOUT = 20 * 60
 REVIEW_LIMIT = 4000
 READ_ONLY = ["Read", "Glob", "Grep", "Bash(git diff*)", "Bash(git log*)"]
 DENIED = ["Edit", "Write", "Bash(git push*)", "Bash(gh *)", "Bash(railway*)"]
+# `git diff|log` يكتبان ملفًا بـ --output ويشغّلان أداة خارجية بـ --ext-diff
+DENIED += [f"Bash(git {verb}*{flag}*)" for verb in ("diff", "log") for flag in ("--output", "--ext-diff")]
 
 PROMPT = """أنت مراجع مستقل لم تكتب هذا التغيير. اقرأ `git diff origin/main...HEAD` وما يلزم من الملفات، ولا تعدّل شيئًا.
 
