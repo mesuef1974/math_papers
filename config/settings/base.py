@@ -145,6 +145,8 @@ def _immutable_static(path: str, url: str) -> bool:
 
 
 WHITENOISE_IMMUTABLE_FILE_TEST = _immutable_static
+# دون النوع الصحيح يُخدم المانيفست application/octet-stream فيحجب Edge زر تثبيت التطبيق.
+WHITENOISE_MIMETYPES = {".webmanifest": "application/manifest+json"}
 MEDIA_URL = "/media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
