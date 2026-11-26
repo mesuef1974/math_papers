@@ -22,6 +22,12 @@ export const router = createRouter({
       meta: { title: "إدخال نتائج الطلاب" },
     },
     {
+      path: "/automation",
+      name: "automation",
+      component: () => import("@/pages/AutomationPage.vue"),
+      meta: { title: "البث الحي للأتمتة" },
+    },
+    {
       path: "/copilot",
       name: "copilot-automation",
       component: () => import("@/pages/CopilotAutomationPage.vue"),

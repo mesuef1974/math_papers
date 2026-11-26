@@ -31,3 +31,12 @@ class AuditLog(TimeStampedModel):
 
     def __str__(self) -> str:
         return f"{self.action} {self.target}".strip()
+
+
+class BoardSnapshot(TimeStampedModel):
+    """آخر لقطة لبطاقات المشغّل كما أرسلها جهاز المالك: صف واحد يُستبدل (pk=1)."""
+
+    payload = models.JSONField(default=dict)
+
+    def __str__(self) -> str:
+        return "لقطة لوحة المشغّل"

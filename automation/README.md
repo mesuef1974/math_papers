@@ -35,6 +35,7 @@ python automation/schedule.py remove
 - المراجعة المستقلة (`review.py`): جلسة للقراءة فقط بين الفحص وفتح الطلب، رأيها في وصف الطلب واستهلاكها في حدث `pr_opened`. لا تمنع ولا تعتمد.
 - النشر: `sync.py` يكتب `deployed` حين يعلن Railway نجاح نشر إيداع الدمج على GitHub، و`blocked` مع إشعار حين يفشل (خلال 24 ساعة من الدمج).
 - اللوحة: `pythonw scripts/board.py --open` (محلية على 8791، للقراءة فقط).
+- البث إلى المنصة (`publish.py`، صفحة `/automation` للمشرف العام): اضبط `BOARD_PUSH_TOKEN` (سر عشوائي طويل) في متغيرات Railway، وعلى الجهاز متغيّرَي المستخدم `BOARD_PUSH_TOKEN` بالقيمة نفسها و`BOARD_PUSH_URL=https://<النطاق>/api/v1/automation/snapshot`. دونهما لا يُرسل شيء.
 - الصمود: قفل صاحبه ميت يُحرَّر وتُعاد بطاقته مرة؛ وفشل النموذج قبل أي إيداع يُعاد مرة (`MAX_RETRIES`)، وفشل الفحص لا يُعاد.
   إخفاقان متتاليان (`HALT_AFTER`) يوقفان التقاط البطاقات حتى `python automation/runner.py --resume` (العدّاد في `automation/.health`).
   إشعار ويندوز (`notify.py`) عند فتح طلب أو فشل بطاقة أو توقف المشغّل.

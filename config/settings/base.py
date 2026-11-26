@@ -175,6 +175,9 @@ SECURITY_CSP = env(
 SECURITY_PERMISSIONS_POLICY = "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
 
 # تحديد المعدل لمسارات التوليد (حساب sympy على عامِلَين): لكل مستخدم، عبر CACHES.
+# مفتاح استقبال لقطة لوحة المشغّل من جهاز المالك؛ فارغًا يُرفض كل إرسال.
+BOARD_PUSH_TOKEN = env("BOARD_PUSH_TOKEN", "")
+
 NINJA_DEFAULT_THROTTLE_RATES = {
     "user": env("THROTTLE_USER_RATE", "90/m"),
     "anon": env("THROTTLE_ANON_RATE", "30/m"),
