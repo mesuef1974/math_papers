@@ -11,7 +11,7 @@ import re
 from collections.abc import Iterable, Sequence
 
 from apps.knowledge.domain.course_index import REPRESENTATIONS
-from apps.papers.domain.bidi import LRM, NB_HYPHEN, NUMBER_RANGE, RLM, isolate_number_ranges, strip_isolation
+from apps.papers.domain.bidi import LRM, NB_HYPHEN, RLM, isolate_number_ranges, range_matches, strip_isolation
 
 from .check_items import item_words_source, period_items
 from .deck import (
@@ -230,7 +230,7 @@ def s6_density(deck: PeriodDeck) -> CheckResult:
 def _ranges_isolated(text: str) -> bool:
     """كل مدى رقمي في النص بين LRM وRLM: بعزل المدى نفسه، أو داخل مقطع رياضي `plain_math` (له LRM وRLM حوله)."""
     wrapped = [m.group(1) for m in re.finditer(f"{LRM}(.*?){RLM}", text)]
-    for m in NUMBER_RANGE.finditer(strip_isolation(text)):
+    for m in range_matches(strip_isolation(text)):
         isolated = f"{LRM}{m.group(0).replace('-', NB_HYPHEN)}{RLM}"
         if isolated not in text and not any(m.group(0) in w for w in wrapped):
             return False

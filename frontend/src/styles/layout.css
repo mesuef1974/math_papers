@@ -233,6 +233,7 @@
     inset-block-end: 0;
     z-index: 10;
     display: flex;
+    flex-wrap: wrap; /* ما لا يتسع في سطر ينزل إلى التالي ولا يُقصّ */
     justify-content: space-around;
     padding: var(--space-3) 0 max(var(--space-3), env(safe-area-inset-bottom));
     background: var(--color-surface);
@@ -243,7 +244,9 @@
     flex-direction: column;
     align-items: center;
     gap: var(--space-1);
-    min-inline-size: 64px;
+    flex: 1 1 0; /* العناصر تتقاسم العرض، والتسمية الطويلة تلتفّ في سطرين */
+    min-inline-size: 3.25rem;
+    text-align: center;
     font-size: var(--text-xs);
     color: var(--color-ink-soft);
     text-decoration: none;
@@ -252,6 +255,13 @@
   .tab.router-link-active:not([href="/"]) {
     color: var(--color-brand);
     font-weight: var(--weight-bold);
+  }
+}
+
+/* دون هذا العرض تصير تبويبات المعلم السبعة سطرين */
+@media (max-width: 363px) {
+  .shell-main {
+    padding-block-end: 150px;
   }
 }
 

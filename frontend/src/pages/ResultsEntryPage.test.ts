@@ -196,6 +196,7 @@ describe("ResultsEntryPage", () => {
       ["1003", "ناصر", "الكواري"],
     ]);
     expect(wrapper.findAll("tbody tr")).toHaveLength(4);
+    expect(wrapper.text()).toContain("أُضيف من القائمة 3 طلاب إلى الجدول.");
     expect(post).not.toHaveBeenCalled();
   });
 
