@@ -26,6 +26,22 @@ describe("صفحة البث الحي", () => {
     wrapper.unmount();
   });
 
+  it("تحرّك البطاقة حين تنتقل محطتها فقط", async () => {
+    vi.useFakeTimers();
+    const moved = { ...board, board: { ...board.board, cards: [{ ...board.board.cards[0], at_stage: 2 }] } };
+    const get = vi.spyOn(api, "get").mockResolvedValue(board);
+    const wrapper = mount(AutomationPage);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(wrapper.find("[data-token]").exists()).toBe(false);
+    get.mockResolvedValue(moved);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(wrapper.find("[data-token]").attributes("data-token")).toBe("20261126-abc123");
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(wrapper.find("[data-token]").exists()).toBe(false);
+    wrapper.unmount();
+    vi.useRealTimers();
+  });
+
   it("تنبّه حين يقدم عمر اللقطة", async () => {
     vi.spyOn(api, "get").mockResolvedValue({ ...board, received_at: "2020-01-01T00:00:00Z" });
     const wrapper = mount(AutomationPage);
