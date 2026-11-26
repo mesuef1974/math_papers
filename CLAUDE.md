@@ -47,4 +47,5 @@ python manage.py runserver            # 8000
 npm --prefix frontend run dev          # 5173 (HMR عبر django-vite)
 python scripts/prepush_check.py --frontend
 python automation/ledger.py list
+.venv\Scripts\pythonw.exe scripts\board.py --open   # لوحة البطاقات الحية (محلية، للقراءة)
 ```

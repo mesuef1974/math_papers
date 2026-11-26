@@ -16,15 +16,18 @@ import argparse
 import json
 import subprocess
 import sys
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import ledger  # noqa: E402
+import notify  # noqa: E402
 
 OPEN_STATES = ("prepush_ok", "pr_opened", "ci_green", "approved")
 DONE_STATES = ("merged", "deployed", "cancelled")
 BRANCH_PREFIX = "card/"
-PR_FIELDS = "number,state,url,headRefName,mergedAt"
+PR_FIELDS = "number,state,url,headRefName,mergedAt,mergeCommit"
+DEPLOY_WINDOW = timedelta(hours=24)  # بطاقة دُمجت قبلها لا يُسأل عن نشرها كل خمس دقائق
 PR_LIMIT = "500"
 
 
@@ -80,12 +83,60 @@ def apply(rows: list[tuple[str, str | None, dict | None]]) -> list[str]:
     return written
 
 
+def awaiting_deploy(now: datetime | None = None) -> list[str]:
+    now = now or datetime.now(UTC)
+    return [
+        card
+        for card in ledger.cards_in("merged")
+        if now - datetime.fromisoformat(ledger.state(card)["at"]) <= DEPLOY_WINDOW
+    ]
+
+
+def deploy_states(sha: str, repo: str | None) -> set[str]:
+    """حالات نشر Railway لهذا الإيداع كما يكتبها على GitHub؛ فارغة = لا نشر بعد."""
+    base = f"repos/{repo or '{owner}/{repo}'}/deployments"
+    found = run(["gh", "api", f"{base}?sha={sha}", "--jq", ".[].id"])
+    states: set[str] = set()
+    if found.returncode != 0:
+        raise RuntimeError("gh api فشل")  # يظهر في نبض المشغّل «تعذّرت»
+    for deployment in found.stdout.split():
+        proc = run(["gh", "api", f"{base}/{deployment}/statuses", "--jq", ".[].state"])
+        if proc.returncode != 0:
+            raise RuntimeError("gh api فشل")
+        states |= set(proc.stdout.split())
+    return states
+
+
+def apply_deploys(cards: list[str], prs: list[dict], repo: str | None) -> list[str]:
+    """النجاح ← `deployed`، والفشل ← `blocked` مع إشعار؛ ما لم يُحسم يبقى للدورة التالية."""
+    written = []
+    for card in cards:
+        _, pr = decide("merged", [p for p in prs if p.get("headRefName") == BRANCH_PREFIX + card])
+        sha = ((pr or {}).get("mergeCommit") or {}).get("oid")
+        if not sha:
+            continue
+        states = deploy_states(sha, repo)
+        if "success" in states:
+            ledger.append(card, "deployed", pr=pr["number"], url=pr.get("url", ""), note="sync")
+        elif states & {"failure", "error"}:
+            ledger.append(card, "blocked", reason="فشل النشر على Railway", url=pr.get("url", ""), stage=5)
+            notify.send("المشغّل: فشل النشر", f"{card} (#{pr['number']})")
+        else:
+            continue
+        written.append(f"{card} → {ledger.state(card)['event']} (#{pr['number']})")
+    return written
+
+
 def quiet(repo: str | None = None) -> str:
     """للمشغّل: يزامن دون أن يُفشل تشغيله. يعيد ما كُتب، أو سبب التعذّر، أو نصًّا فارغًا."""
     try:
-        if not ledger.cards_in(*OPEN_STATES):
+        waiting = awaiting_deploy()
+        if not ledger.cards_in(*OPEN_STATES) and not waiting:
             return ""
-        return "، ".join(apply(plan(fetch_prs(repo))))
+        prs = fetch_prs(repo)
+        written = apply(plan(prs))
+        written += apply_deploys(awaiting_deploy(), prs, repo)
+        return "، ".join(written)
     except Exception as exc:  # المزامنة خدمة جانبية: شبكة أو gh غائب لا يوقف البطاقات
         return f"تعذّرت ({type(exc).__name__})"
 
