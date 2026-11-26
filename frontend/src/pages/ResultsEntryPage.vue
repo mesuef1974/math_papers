@@ -5,6 +5,7 @@ import { useAuthStore } from "@/stores/auth";
 import { useCoursesStore } from "@/stores/courses";
 import { useMisconceptionsStore } from "@/stores/misconceptions";
 import { useResultsEntryStore, type ResultRow } from "@/stores/resultsEntry";
+import { studentCount } from "@/utils/arabicCount";
 
 // إدخال نتائج بطاقات الخروج: المعلم يختار المقرر والدرس والشعبة، فتظهر بنود الدرس كما عُرضت على الطلاب (من الخادم)
 // وجدول بصف لكل طالب وعمود لكل بند. الصفوف في ذاكرة الصفحة وحدها: لا localStorage ولا sessionStorage.
@@ -145,7 +146,7 @@ function addPasted(text: string) {
   }
   rows.value = [...kept, blankRow()];
   pasted.value = "";
-  notice.value = `أُضيف من القائمة ${students.length} طالبًا إلى الجدول.`;
+  notice.value = `أُضيف من القائمة ${studentCount(students.length)} إلى الجدول.`;
 }
 
 // لصق قائمة متعددة الأسطر في خانة رقم القيد يملأ الجدول دفعة واحدة؛ اللصق العادي في الخانة كما هو.
