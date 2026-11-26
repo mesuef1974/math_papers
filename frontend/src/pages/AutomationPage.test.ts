@@ -19,7 +19,9 @@ describe("صفحة البث الحي", () => {
     vi.spyOn(api, "get").mockResolvedValue(board);
     const wrapper = mount(AutomationPage);
     await flushPromises();
-    expect(wrapper.findAll(".column")[1].text()).toContain("بطاقة تعمل");
+    const station = wrapper.find('[data-station="build"]');
+    expect(station.classes()).toContain("run");
+    expect(station.text()).toContain("بطاقة تعمل");
     expect(wrapper.text()).not.toContain("انقطع البث");
     wrapper.unmount();
   });

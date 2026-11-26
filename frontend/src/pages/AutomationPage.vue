@@ -1,16 +1,8 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { api, ApiError } from "@/api/client";
+import FactoryDiagram, { type BoardCard as Card } from "@/components/FactoryDiagram.vue";
 
-interface Card {
-  id: string;
-  title: string;
-  group: string;
-  at_stage: number;
-  age: string;
-  url: string;
-  note: string;
-}
 interface Board {
   received_at: string | null;
   board: { stages: string[]; cards: Card[]; pulse: { text: string; warn: boolean } } | null;
@@ -19,7 +11,6 @@ interface Board {
 const REFRESH_MS = 10_000;
 // المشغّل يرسل كل 5 دقائق على الأقل؛ ما تجاوز هذا يعني أن الجهاز مطفأ أو الإرسال متعطل.
 const STALE_MS = 12 * 60_000;
-const DONE_LIMIT = 5;
 const GROUPS: [string, string][] = [
   ["running", "تعمل الآن"],
   ["approval", "تنتظر اعتمادك"],
@@ -65,18 +56,6 @@ const sections = computed(() =>
     (s) => s.cards.length,
   ),
 );
-// المخطط: الحية والعالقة في مرحلتها، وأحدث المنتهية في الأخيرة.
-const columns = computed(() => {
-  const stages = data.value?.board?.stages ?? [];
-  const last = stages.length - 1;
-  return stages.map((label, i) => ({
-    label,
-    cards:
-      i === last
-        ? cards.value.filter((c) => c.group === "done").slice(0, DONE_LIMIT)
-        : cards.value.filter((c) => !["done", "backlog"].includes(c.group) && c.at_stage === i),
-  }));
-});
 </script>
 
 <template>
@@ -91,18 +70,7 @@ const columns = computed(() => {
 
   <template v-if="data?.board">
     <p v-if="stale" class="alert alert-error" role="alert">انقطع البث: ما يظهر هو آخر لقطة وصلت.</p>
-    <p class="alert" :class="data.board.pulse.warn ? 'alert-error' : 'alert-info'" role="status">
-      {{ data.board.pulse.text }}
-    </p>
-
-    <ol class="flow" aria-label="مخطط المراحل">
-      <li v-for="column in columns" :key="column.label" class="panel column">
-        <h2>{{ column.label }} <span class="badge">{{ column.cards.length }}</span></h2>
-        <p v-for="card in column.cards" :key="card.id" class="chip" :class="card.group" :title="card.title">
-          <code dir="ltr">{{ card.id.slice(-6) }}</code> <bdi>{{ card.title }}</bdi>
-        </p>
-      </li>
-    </ol>
+    <FactoryDiagram :cards="cards" :pulse="data.board.pulse" />
 
     <section v-for="section in sections" :key="section.id" class="panel" :aria-label="section.name">
       <h2>{{ section.name }} <span class="badge">{{ section.cards.length }}</span></h2>
@@ -119,27 +87,6 @@ const columns = computed(() => {
 </template>
 
 <style scoped>
-.flow {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
-  gap: var(--space-3);
-  list-style: none;
-  padding: 0;
-}
-.column h2 {
-  font-size: 1rem;
-}
-.chip {
-  border: 1px solid var(--color-line);
-  border-inline-start-width: 4px;
-  border-radius: 8px;
-  padding: var(--space-2);
-  overflow-wrap: anywhere;
-}
-.chip.running,
-.chip.approval {
-  border-inline-start-color: var(--color-brand);
-}
 .rows {
   list-style: none;
   padding: 0;
