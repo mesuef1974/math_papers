@@ -3982,7 +3982,7 @@ def leg_item(
 
     def texts(rows: list[Row], slipped: bool) -> tuple[str, ...]:
         (hypotenuse,), (square,), (leg,) = rows
-        total = f"{other}" if slipped and slip == "one_part" else f"{near}+{far}={projection}+{other}"
+        total = far if slipped and slip == "one_part" else f"{near}+{far}={projection}+{other}"
         if slipped and slip == "altitude_mean":
             product_ = f"{near}\\times {far}={projection}\\times {other}"
         else:

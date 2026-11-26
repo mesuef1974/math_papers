@@ -4,6 +4,7 @@ import dataclasses
 import math
 import operator
 import random
+import re
 from fractions import Fraction
 
 import mpmath
@@ -1350,6 +1351,8 @@ def test_error_spotting_plants_exactly_one_wrong_step(lesson, generator):
         assert item.error_kind in ERROR_KINDS
         assert text.count("$") % 2 == 0, text
         assert not any(bad in text for bad in ("zoo", "nan", "None"))
+        # لا يتكرر طرف متتاليًا («AB=16=16»): الزلّة تُظهر ما أخذه الطالب لا الرقم مرتين
+        assert not re.search(r"=([^=$]+)=\1(?=\$)", text), text
         again = generator(random.Random(seed))
         assert again == item and str(again.check) == str(item.check), seed
     # الخطأ يتنقل بين الخطوات والأنواع، فلا يُحفظ موضعه
