@@ -13,6 +13,7 @@ frontend_dist/
 frontend/node_modules/
 .worktrees/
 automation/.lock
+automation/.health
 automation/ledger/*.jsonl
 !automation/ledger/.gitkeep
 .claude/settings.local.json
