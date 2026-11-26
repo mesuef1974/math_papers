@@ -1220,7 +1220,30 @@ def true_discriminant_count(c):
     return (poly.discriminant(), len(set(poly.real_roots())))
 
 
+def true_system_points(c):
+    """نقطتا تقاطع المستقيم والقطع المكافئ (x₁، y₁، x₂، y₂) تصاعديًا، بحل النظام نفسه."""
+    found = sorted(sp.solve(c["equations"], [x, y]))
+    return tuple(value for point in found for value in point)
+
+
+def true_inequality_solution(c):
+    """(الجذر الأصغر، الأكبر، هل الحل بينهما، هل ينتمي الجذران) من مجموعة حل المتباينة نفسها."""
+    relation = {"<": sp.Lt, ">": sp.Gt, "<=": sp.Le, ">=": sp.Ge}[c["op"]](c["f"], 0)
+    solved = sp.solveset(relation, x, sp.S.Reals)
+    low, high = sorted(sp.Poly(c["f"], x).real_roots())
+    return (low, high, int(bool(solved.is_subset(sp.Interval(low, high)))), int(low in solved))
+
+
+def true_circle_through_point(c):
+    """(المركز، مربع المسافة بينه وبين النقطة) بهندسة sympy."""
+    center = sp.Point(*c["center"])
+    return (*c["center"], center.distance(sp.Point(*c["point"])) ** 2)
+
+
 VALUE_TRUTHS = {
+    "system_points": true_system_points,
+    "inequality_solution": true_inequality_solution,
+    "circle_through_point": true_circle_through_point,
     "average_rate": true_average_rate,
     "leading_coefficient": true_leading_coefficient,
     "vertex": true_vertex,
@@ -1270,6 +1293,11 @@ def test_error_spotting_covers_every_lesson_of_grade10_unit_one(lesson):
 
 @pytest.mark.parametrize("lesson", ["2.1", "2.2", "2.3", "2.6"])
 def test_error_spotting_covers_first_lessons_of_grade10_unit_two(lesson):
+    assert ERROR_SPOTTING.get((GRADE10_SLUG, lesson)), lesson
+
+
+@pytest.mark.parametrize("lesson", ["2.7", "2.8", "2.9", "2.10"])
+def test_error_spotting_covers_last_lessons_of_grade10_unit_two(lesson):
     assert ERROR_SPOTTING.get((GRADE10_SLUG, lesson)), lesson
 
 

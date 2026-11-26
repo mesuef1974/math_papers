@@ -2571,6 +2571,69 @@ def rational_equation_with_extraneous_solution(rng: random.Random) -> Problem:
     )
 
 
+# «اكتشف الخطأ» في حل معادلة نسبية بصورة تناسب: الزلّة → (رقم الخطوة التي تقع فيها، نوع الخطأ من ERROR_KINDS).
+PROPORTION_SLIPS = {
+    "own_denominator": (1, "swap"),  # ضرب كل بسط في مقامه هو بدل مقام الطرف الآخر
+    "partial_distribution": (2, "formula"),  # ضرب المعامل في الحد الأول من القوس وحده
+    "moved_sign": (3, "sign"),  # نقل حد x إلى الطرف الأيسر دون تغيير إشارته
+    "inverted": (4, "swap"),  # قسم معامل x على العدد بدل العكس
+}
+
+
+def proportion_chain(a: int, b: int, c: int, d: int, slip: str | None = None) -> Chain | None:
+    """خطوات حل a/(x+b)=c/(x+d)، كل خطوة نصها ومعادلتها (عبارة = 0) من الأعداد نفسها.
+
+    slip زلّة واحدة تُزرع في خطوتها وتُبنى عليها الخطوات التالية بلا خطأ آخر؛ None الحل الصحيح.
+    يعيد None إن تعذّرت القسمة في الخطوة الأخيرة.
+    """
+    left, right = (b, d) if slip == "own_denominator" else (d, b)
+    left_number, right_number = (left, right) if slip == "partial_distribution" else (a * left, c * right)
+    coefficient = a + c if slip == "moved_sign" else a - c
+    number = right_number - left_number
+    if coefficient == 0 or (slip == "inverted" and number == 0):
+        return None
+    value = sp.Rational(coefficient, number) if slip == "inverted" else sp.Rational(number, coefficient)
+    return [
+        (
+            f"نضرب طرفي المعادلة في المقام المشترك ${shifted(-b)}{shifted(-d)}$: "
+            f"${lead(a)}{shifted(-left)}={lead(c)}{shifted(-right)}$",
+            a * (x + left) - c * (x + right),
+        ),
+        (
+            f"نفكّ القوسين: ${lead(a)}x{signed(left_number)}={lead(c)}x{signed(right_number)}$",
+            a * x + left_number - c * x - right_number,
+        ),
+        (
+            f"نجمع حدود $x$ في الطرف الأيسر والأعداد في الطرف الأيمن: ${lead(coefficient)}x={number}$",
+            coefficient * x - number,
+        ),
+        (f"نقسم الطرفين على ${coefficient}$: $x={exact(value)}$", x - value),
+    ]
+
+
+@variant("2.7", G10, example=1, registry=ERROR_SPOTTING)
+def spot_error_in_rational_proportion(rng: random.Random) -> ErrorSpotting:
+    slip = rng.choice(sorted(PROPORTION_SLIPS))
+    while True:
+        a, c = rng.sample(range(2, 10), 2)
+        b, d = rng.sample([n for n in range(-8, 9) if n], 2)
+        shown, solved = proportion_chain(a, b, c, d, slip), proportion_chain(a, b, c, d)
+        # معامل x بعد الجمع لا يساوي ±1 فالقسمة خطوة فعلية، والزلّة تغيّر الحل
+        if abs(a - c) >= 2 and shown is not None and solved is not None and shown[-1][1] != solved[-1][1]:
+            break
+    lhs, rhs = a / (x + b), c / (x + d)
+    value = sp.Rational(c * b - a * d, a - c)
+    return spotted_chain(
+        "2.7",
+        f"حلّ طالب المعادلة النسبية ${frac(a, linear(-b))}={frac(c, linear(-d))}$ {SPOT_TASK}",
+        (shown, solved),
+        PROPORTION_SLIPS[slip],
+        solutions(value),
+        sp.numer(sp.together(lhs - rhs)),
+        (value,),
+    )
+
+
 # الدرس 2.8: الأنظمة الخطية-التربيعية
 SYSTEM_COUNTS = {0: "ليس للنظام حل", 1: "للنظام حل واحد", 2: "للنظام حلّان"}
 CROSSINGS = {0: "لا يتقاطعان", 1: "يتقاطعان في نقطة واحدة", 2: "يتقاطعان في نقطتين"}
@@ -2752,6 +2815,76 @@ def ball_and_drone_at_same_height(rng: random.Random) -> Problem:
         },
         wrong_kinds=kinds,
     )
+
+
+# «اكتشف الخطأ» في حل نظام خطي-تربيعي بالحذف: الزلّة → (رقم الخطوة التي تقع فيها، نوع الخطأ من ERROR_KINDS).
+ELIMINATION_SLIPS = {
+    "linear_sign": (1, "sign"),  # طرح حد x من المعادلة الخطية دون تغيير إشارته
+    "root_sign": (2, "sign"),  # قرأ الحلّين من العاملين بإشارتيهما
+    "no_intercept": (3, "formula"),  # عوّض في المعادلة الخطية وأسقط حدها الثابت
+    "swapped": (4, "swap"),  # كتب الزوج المرتب (y, x)
+}
+
+
+def elimination_item(r1: int, r2: int, slope: int, d: int, slip: str) -> ErrorSpotting | None:
+    """النظام y=x²+bx+c وy=slope·x+d المتقاطعان عند x=r₁ وx=r₂: الفرق، ثم حلّاه، ثم قيمتا y، ثم النقطتان."""
+    step, kind = ELIMINATION_SLIPS[slip]
+    b, c = slope - (r1 + r2), r1 * r2 + d
+    line, parabola = slope * x + d, x**2 + b * x + c
+    if slip == "linear_sign":  # الفرق بعد الزلّة يبقى قابلًا للتحليل بحلّين صحيحين مختلفين
+        disc = (b + slope) ** 2 - 4 * (c - d)
+        if disc <= 0 or math.isqrt(disc) ** 2 != disc:
+            return None
+    middle, constant, low, high = ref(1, 0), ref(1, 1), ref(2, 0), ref(2, 1)
+    spread = sp.sqrt(middle**2 - 4 * constant)
+    rules: tuple[Rule, ...] = (
+        (b - slope, c - d),
+        ((-middle - spread) / 2, (-middle + spread) / 2),
+        (slope * low + d, slope * high + d),
+        (low, ref(3, 0), high, ref(3, 1)),
+    )
+    wrong: Rule = {
+        "linear_sign": (b + slope, c - d),
+        "root_sign": ((middle - spread) / 2, (middle + spread) / 2),
+        "no_intercept": (slope * low, slope * high),
+        "swapped": (ref(3, 0), low, ref(3, 1), high),
+    }[slip]
+
+    def texts(rows: list[Row], slipped: bool) -> tuple[str, ...]:
+        (p, q), (first, second), (y1, y2), (a1, b1, a2, b2) = (tuple(int(v) for v in row) for row in rows)
+        gap = math.isqrt(p * p - 4 * q)
+
+        def value(at: int, found: int) -> str:
+            tail = "" if slipped and slip == "no_intercept" else signed(d)
+            return f"عند $x={at}$: $y={lead(slope)}({at}){tail}={found}$"
+
+        return (
+            f"نطرح المعادلة الخطية من المعادلة التربيعية لحذف $y$: $0={tex(x**2 + p * x + q)}$",
+            f"نحلّل إلى العوامل: ${product((-p - gap) // 2, (-p + gap) // 2)}=0$، إذن "
+            f"{solutions(first, second)}",
+            f"نعوّض في المعادلة الخطية: {value(first, y1)}، و{value(second, y2)}",
+            f"إذن حلّا النظام {points((a1, b1), (a2, b2))}",
+        )
+
+    return spotted_values(
+        "2.8",
+        f"حلّ طالب النظام الخطي-التربيعي $y={tex(parabola)}$ و$y={tex(line)}$ بطريقة الحذف {SPOT_TASK}",
+        rules,
+        (step, kind, wrong),
+        texts,
+        points((r1, slope * r1 + d), (r2, slope * r2 + d)),
+        {"quantity": "system_points", "equations": (y - parabola, y - line)},
+    )
+
+
+@variant("2.8", G10, example=3, registry=ERROR_SPOTTING)
+def spot_error_in_solving_system_by_elimination(rng: random.Random) -> ErrorSpotting:
+    slip = rng.choice(sorted(ELIMINATION_SLIPS))
+    while True:
+        r1, r2 = two_roots(rng, -6, 6)
+        item = elimination_item(r1, r2, nz(rng, -4, 4), nz(rng, -6, 6), slip)
+        if item is not None:
+            return item
 
 
 # الدرس 2.9: المتباينات التربيعية. المثال 4 (النمذجة بمتباينة) إثرائي: لا مسألة سياقية هنا.
@@ -2968,6 +3101,73 @@ def solve_quadratic_inequality_with_common_factor(rng: random.Random) -> Problem
     )
 
 
+# «اكتشف الخطأ» في حل متباينة تربيعية جبريًّا: الزلّة → (رقم الخطوة التي تقع فيها، نوع الخطأ من ERROR_KINDS).
+INEQUALITY_SLIPS = {
+    "root_sign": (1, "sign"),  # قرأ الحلّين من العاملين بإشارتيهما
+    "product_sign": (2, "sign"),  # أخطأ إشارة حاصل ضرب العاملين عند قيمة الاختبار
+    "reversed_region": (3, "direction"),  # عكس الحكم: جعل الحل خارج الحلّين بدل بينهما أو العكس
+    "endpoint": (4, "partial"),  # ضمّ الحلّين إلى مجموعة الحل أو استبعدهما خلافًا لرمز المتباينة
+}
+
+
+def inequality_item(r1: int, r2: int, op: str, slip: str) -> ErrorSpotting | None:
+    """المتباينة (x-r₁)(x-r₂) op 0 ومنتصف r₁ وr₂ صحيح: الحلّان، ثم قيمة المقدار بينهما، ثم الحكم، ثم الحل.
+
+    الصف الأخير (الطرف الأصغر، الأكبر، 1 إن كان الحل بينهما، 1 إن انتمى الطرفان).
+    """
+    step, kind = INEQUALITY_SLIPS[slip]
+    above, closed = op in (">", ">="), int(op in ("<=", ">="))
+    low, high = ref(1, 0), ref(1, 1)
+    at = (low + high) / 2
+    tested = (at - r1) * (at - r2)
+    satisfied = (1 + (1 if above else -1) * sp.sign(ref(2))) / 2
+    rules: tuple[Rule, ...] = ((r1, r2), (tested,), (satisfied,), (low, high, ref(3), closed))
+    wrong: Rule = {
+        "root_sign": (-r2, -r1),
+        "product_sign": (-tested,),
+        "reversed_region": (1 - satisfied,),
+        "endpoint": (low, high, ref(3), 1 - closed),
+    }[slip]
+    f = sp.expand((x - r1) * (x - r2))
+    wanted = ("موجبًا" if above else "سالبًا") + (" أو صفرًا" if closed else "")
+
+    def texts(rows: list[Row], slipped: bool) -> tuple[str, ...]:
+        (first, second), (found,), (inside,), (*_, shut) = (tuple(int(v) for v in row) for row in rows)
+        test = (first + second) // 2
+        return (
+            f"نحل المعادلة المرتبطة بالمتباينة ${tex(f)}=0$ بالتحليل إلى العوامل: ${product(r1, r2)}=0$، "
+            f"إذن {solutions(first, second)}",
+            f"نختبر قيمة بين الحلّين: عند $x={test}$ قيمة المقدار "
+            f"$({minus(test, r1)})({minus(test, r2)})={found}$",
+            f"القيمة {'موجبة' if found > 0 else 'سالبة'} والمتباينة تطلب أن يكون المقدار {wanted}، فالأعداد "
+            f"الواقعة بين الحلّين {'تحقق' if inside else 'لا تحقق'} المتباينة",
+            f"رمز المتباينة «{OP_NAMES[op]}»، إذن الحل "
+            f"{inequality_solution(first, second, bool(inside), not shut)[0]}",
+        )
+
+    item = spotted_values(
+        "2.9",
+        f"حلّ طالب المتباينة التربيعية ${tex(f)}{OP_TEX[op]} 0$ جبريًّا {SPOT_TASK}",
+        rules,
+        (step, kind, wrong),
+        texts,
+        solved_inequality(1, r1, r2, op)[0],
+        {"quantity": "inequality_solution", "f": f, "op": op},
+    )
+    # قيمة الاختبار المعروضة لا تكون صفرًا (منتصف الحلّين المعكوسين قد يقع على جذر)
+    return None if item is None or item.check["steps"][1][0] == 0 else item
+
+
+@variant("2.9", G10, example=3, registry=ERROR_SPOTTING)
+def spot_error_in_solving_quadratic_inequality(rng: random.Random) -> ErrorSpotting:
+    slip = rng.choice(sorted(INEQUALITY_SLIPS))
+    while True:
+        r1 = rng.randint(-7, 5)
+        item = inequality_item(r1, r1 + rng.choice([2, 4, 6]), rng.choice(list(OP_TEX)), slip)
+        if item is not None:
+            return item
+
+
 # الدرس 2.10: معادلة الدائرة. المثال 4 (إكمال المربع لإيجاد المركز ونصف القطر) إثرائي: المعادلات هنا في
 # الصيغة القياسية (x-h)²+(y-k)²=r² دائمًا.
 ROUND_PLACES = (
@@ -3129,6 +3329,66 @@ def circle_equation_from_center_and_point(rng: random.Random) -> Problem:
         circle_check(h, k, r2, points=((p, q),)),
         wrong_kinds=kinds,
     )
+
+
+# «اكتشف الخطأ» في كتابة معادلة دائرة من مركزها ونقطة عليها: الزلّة → (رقم الخطوة، نوع الخطأ من ERROR_KINDS).
+CIRCLE_SLIPS = {
+    "mismatched": (1, "swap"),  # طرح من كل إحداثي الإحداثي الآخر للمركز
+    "doubled": (2, "square"),  # ضاعف الفرقين بدل تربيعهما
+    "subtracted": (3, "formula"),  # طرح المربعين بدل جمعهما
+    "center_sign": (4, "sign"),  # عكس إشارتي المركز عند التعويض في الصيغة القياسية
+}
+
+
+def circle_item(h: int, k: int, dx: int, dy: int, slip: str) -> ErrorSpotting | None:
+    """الدائرة التي مركزها (h,k) وتمرّ بـ(h+dx,k+dy): الفرقان، ثم مربعاهما، ثم r²، ثم (h، k، r²) في المعادلة."""
+    step, kind = CIRCLE_SLIPS[slip]
+    p, q = h + dx, k + dy
+    rules: tuple[Rule, ...] = (
+        (p - h, q - k),
+        (ref(1, 0) ** 2, ref(1, 1) ** 2),
+        (ref(2, 0) + ref(2, 1),),
+        (h, k, ref(3)),
+    )
+    wrong: Rule = {
+        "mismatched": (p - k, q - h),
+        "doubled": (2 * ref(1, 0), 2 * ref(1, 1)),
+        "subtracted": (ref(2, 0) - ref(2, 1),),
+        "center_sign": (-h, -k, ref(3)),
+    }[slip]
+
+    def texts(rows: list[Row], slipped: bool) -> tuple[str, ...]:
+        (across, up), (across2, up2), (r2,), (a, b, _) = (tuple(int(v) for v in row) for row in rows)
+        from_x, from_y = (k, h) if slipped and slip == "mismatched" else (h, k)
+        joined = minus(across2, up2) if slipped and slip == "subtracted" else plus(across2, up2)
+        return (
+            f"نطرح إحداثيي المركز من إحداثيي النقطة: ${minus(p, from_x)}={across}$ و"
+            f"${minus(q, from_y)}={up}$",
+            f"نربّع الفرقين: $({across})^2={across2}$ و$({up})^2={up2}$",
+            f"نجد مربع طول نصف القطر بنظرية فيثاغورس: $r^2={joined}={r2}$",
+            f"نعوّض في الصيغة القياسية $(x-h)^2+(y-k)^2=r^2$: {circle(a, b, r2)}",
+        )
+
+    item = spotted_values(
+        "2.10",
+        f"كتب طالب معادلة الدائرة التي مركزها $({h},{k})$ وتمرّ بالنقطة $({p},{q})$ {SPOT_TASK}",
+        rules,
+        (step, kind, wrong),
+        texts,
+        circle(h, k, dx * dx + dy * dy),
+        {"quantity": "circle_through_point", "center": (h, k), "point": (p, q)},
+    )
+    # مربع طول نصف القطر المعروض موجب، فالمعادلة المعروضة معادلة دائرة
+    return None if item is None or item.check["steps"][2][0] <= 0 else item
+
+
+@variant("2.10", G10, example=1, registry=ERROR_SPOTTING)
+def spot_error_in_circle_equation_through_point(rng: random.Random) -> ErrorSpotting:
+    slip = rng.choice(sorted(CIRCLE_SLIPS))
+    while True:
+        item = circle_item(rng.randint(-6, 6), rng.randint(-6, 6), nz(rng, -6, 6), nz(rng, -6, 6), slip)
+        if item is not None:
+            return item
 
 
 @variant("2.10", G10, example=3)
