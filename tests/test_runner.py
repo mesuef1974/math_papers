@@ -276,3 +276,35 @@ def test_guide_extract_python_is_allowed_only_for_the_pipeline_and_its_tests():
         f"Bash({runner.GUIDE_EXTRACT_PYTHON} -m pytest *)",
     ]
     assert not any(t.startswith("Bash(python *") or t == "Bash(python*)" for t in runner.ALLOWED_TOOLS)
+
+
+def test_the_runner_pins_its_model_unless_told_otherwise(world, tmp_path, monkeypatch):
+    for argv, model in (([], runner.DEFAULT_MODEL), (["--model", "opus"], "opus")):
+        shell = Shell()
+        monkeypatch.setattr(runner, "sh", shell)
+        monkeypatch.setattr(runner, "WORKTREES", tmp_path / model)
+        assert runner.main(argv) == 0
+        cmd = next(cmd for cmd, _ in shell.calls if "--allowedTools" in cmd)
+        assert cmd[cmd.index("--model") + 1] == model
+        assert cmd[cmd.index("--output-format") + 1] == "json"
+
+
+def test_usage_sums_every_model_and_keeps_the_text():
+    one = {"inputTokens": 1, "outputTokens": 2, "cacheReadInputTokens": 3, "cacheCreationInputTokens": 4}
+    out = {"result": "تم", "num_turns": 5, "total_cost_usd": 0.5, "modelUsage": {"b": one, "a": one}}
+    text, usage = runner.parse_result(json.dumps(out))
+    assert text == "تم"
+    assert usage == {
+        "input": 2,
+        "cache_write": 8,
+        "cache_read": 6,
+        "output": 4,
+        "models": ["a", "b"],
+        "turns": 5,
+        "cost_usd": 0.5,
+    }
+
+
+@pytest.mark.parametrize("stdout", ["", "Error: x", "[1]", '{"result": "x"}', '{"modelUsage": []}'])
+def test_unreadable_output_is_logged_raw_without_usage(stdout):
+    assert runner.parse_result(stdout) == (stdout, {})
