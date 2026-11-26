@@ -38,7 +38,8 @@ python automation/schedule.py remove
   في `.worktrees/runner.log` (آخر 200)، يذكر ما انتهى إليه وأي أداة (`claude` أو `git` أو `gh`) غابت عن المسار، ويعرض
   `schedule.py status` آخره.
 - بلا بطاقة `ready` لا يُستدعى النموذج: التشغيل الدوري لا يستهلك توكنات. الاستهلاك يبدأ حين تضع بطاقة بـ `ledger.py ready`،
-  وسقفه `--max-turns` (40)؛ والنموذج الأرخص يُحدَّد بـ `install --model <id>`.
+  وسقفه `--max-turns` (40). النموذج مثبَّت في `runner.DEFAULT_MODEL`، ويُغيَّر بـ `--model <id>` (أو `install --model <id>`).
+  استهلاك كل تشغيل في حدث `coded` بالدفتر (`usage`: توكنز الإدخال والكاش والإخراج والنماذج والأدوار وتقدير التكلفة).
 - الجلسة الآلية تعمل بقائمة صلاحيات صريحة (`ALLOWED_TOOLS`: تعديل الملفات و`python manage.py` و`python -m pytest|ruff`
   و`python scripts/prepush_check.py` و`pytest` و`ruff` و`npm --prefix frontend` و`git add/commit/status/diff/log`، وبايثون بيئة الاستخراج `GUIDE_EXTRACT_PYTHON` على
   `-m tools.extraction` و`-m pytest` وحدهما؛ لا `python` مطلق

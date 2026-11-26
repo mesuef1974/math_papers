@@ -37,6 +37,14 @@ REQUIRED_TOOLS = ("claude", "git", "gh")
 HEARTBEAT_KEEP = 200
 PUSH_DISABLED = "push-disabled://runner-model"
 GH_NO_AUTH = "runner-model-no-auth"
+# بلا تثبيت تأخذ الجلسة الآلية نموذج المستخدم الافتراضي، وهو الأغلى عادة (قرار المالك 2026-11-26).
+DEFAULT_MODEL = "claude-sonnet-5-5"
+USAGE_KEYS = {
+    "input": "inputTokens",
+    "cache_write": "cacheCreationInputTokens",
+    "cache_read": "cacheReadInputTokens",
+    "output": "outputTokens",
+}
 
 # الجلسة الآلية بلا من يوافق: ما لم يُسمح به هنا يُرفض، فبلا هذه القائمة لا اختبار يُشغَّل ولا إيداع يُكتب.
 GUIDE_EXTRACT_PYTHON = "C:/Users/mesue/.venvs/guide_extract/Scripts/python"  # بيئة OpenCV وpymupdf (`tools/extraction/README.md`)
@@ -157,13 +165,27 @@ def model_env(card: str) -> dict[str, str]:
 def model_command(model: str | None, max_turns: int) -> list[str]:
     """النص يُمرَّر على الدخل القياسي: الخيارات متعددة القيم تبتلع أي وسيط موضعي يليها."""
     cmd = [shutil.which("claude") or "claude", "-p", "--max-turns", str(max_turns)]
-    cmd += ["--permission-mode", "acceptEdits"]
+    cmd += ["--permission-mode", "acceptEdits", "--output-format", "json"]
     if model:
         cmd += ["--model", model]
     return [*cmd, "--allowedTools", *ALLOWED_TOOLS, "--disallowedTools", *DISALLOWED_TOOLS]
 
 
-def run_model(path: Path, card: str, model: str | None, max_turns: int) -> int:
+def parse_result(stdout: str) -> tuple[str, dict]:
+    """نص الجلسة واستهلاكها من خرج `--output-format json`. `modelUsage` يشمل الوكلاء الفرعيين.
+    خرج غير مفهوم (انقطاع أو خطأ قبل البدء) يُعاد كما هو بلا استهلاك: القياس لا يُسقط البطاقة."""
+    try:
+        data = json.loads(stdout)
+        models = data["modelUsage"]
+        usage = {key: sum(m.get(src, 0) for m in models.values()) for key, src in USAGE_KEYS.items()}
+        usage |= {"models": sorted(models), "turns": data.get("num_turns")}
+        usage["cost_usd"] = data.get("total_cost_usd")
+    except (ValueError, KeyError, TypeError, AttributeError):
+        return stdout, {}
+    return str(data.get("result") or data.get("subtype") or ""), usage
+
+
+def run_model(path: Path, card: str, model: str | None, max_turns: int) -> tuple[int, dict]:
     meta = ledger.first(card) or {}
     prompt = PROMPT.format(
         title=meta.get("title", card),
@@ -180,8 +202,9 @@ def run_model(path: Path, card: str, model: str | None, max_turns: int) -> int:
     )
     # مخرجات الجلسة الآلية بجوار شجرة العمل (المجلد خارج git) لمراجعة ما فعله النموذج.
     log = WORKTREES / f"{card}.log"
-    log.write_text((proc.stdout or "") + (proc.stderr or ""), encoding="utf-8")
-    return proc.returncode
+    text, usage = parse_result(proc.stdout or "")
+    log.write_text(text + (proc.stderr or ""), encoding="utf-8")
+    return proc.returncode, usage
 
 
 def unpushable(path: Path) -> str:
@@ -261,9 +284,9 @@ def run_card(card: str, model: str | None, max_turns: int) -> tuple[int, str]:
     try:
         ledger.append(card, "claimed", pid=os.getpid())
         path, branch = make_worktree(card)
-        rc = run_model(path, card, model, max_turns)
+        rc, usage = run_model(path, card, model, max_turns)
         head = sh(["git", "rev-parse", "HEAD"], cwd=path, capture_output=True).stdout.strip()
-        ledger.append(card, "coded", exit_code=rc, head=head)
+        ledger.append(card, "coded", exit_code=rc, head=head, usage=usage)
         if reason := unpushable(path):
             ledger.append(card, "blocked", reason=reason, head=head)
             return 1, f"{card}: لا دفع: {reason} — راجع .worktrees/{card}.log"
@@ -284,7 +307,7 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--once", action="store_true", default=True)
     ap.add_argument("--dry-run", action="store_true")
-    ap.add_argument("--model")
+    ap.add_argument("--model", default=DEFAULT_MODEL)
     ap.add_argument("--max-turns", type=int, default=40)
     args = ap.parse_args(argv)
 
