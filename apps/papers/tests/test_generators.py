@@ -1240,7 +1240,32 @@ def true_circle_through_point(c):
     return (*c["center"], center.distance(sp.Point(*c["point"])) ** 2)
 
 
+def true_similar_perimeter(c):
+    """محيط المثلث المشابه: كل ضلع من تناسبه مع الضلع المعلوم، بحل التناسب لا بمعامل الخطوات."""
+    side = sp.Symbol("side")
+    return (sum(sp.solve(side * c["base"][0] - c["big"] * s, side)[0] for s in c["base"]),)
+
+
+def true_leg_from_segments(c):
+    """طول الساق من إحداثيات الشكل: ارتفاع C يجعل الزاوية عندها قائمة."""
+    ad, db = c["segments"]
+    h = sp.Symbol("h", positive=True)
+    a, b, apex = sp.Matrix([0, 0]), sp.Matrix([ad + db, 0]), sp.Matrix([ad, h])
+    (height,) = sp.solve((a - apex).dot(b - apex), h)
+    end = a if c["leg"] == "AC" else b
+    return ((end - apex).subs(h, height).norm(),)
+
+
+def true_parallel_side(c):
+    """AC من تناسب الجزء إلى الكل: AD/AB = AE/AC."""
+    side = sp.Symbol("side")
+    return tuple(sp.solve(c["AD"] * side - c["AE"] * (c["AD"] + c["DB"]), side))
+
+
 VALUE_TRUTHS = {
+    "similar_perimeter": true_similar_perimeter,
+    "leg_from_segments": true_leg_from_segments,
+    "parallel_side": true_parallel_side,
     "system_points": true_system_points,
     "inequality_solution": true_inequality_solution,
     "circle_through_point": true_circle_through_point,
@@ -1298,6 +1323,11 @@ def test_error_spotting_covers_first_lessons_of_grade10_unit_two(lesson):
 
 @pytest.mark.parametrize("lesson", ["2.7", "2.8", "2.9", "2.10"])
 def test_error_spotting_covers_last_lessons_of_grade10_unit_two(lesson):
+    assert ERROR_SPOTTING.get((GRADE10_SLUG, lesson)), lesson
+
+
+@pytest.mark.parametrize("lesson", ["3.3", "3.4", "3.5"])
+def test_error_spotting_covers_every_lesson_of_grade10_unit_three(lesson):
     assert ERROR_SPOTTING.get((GRADE10_SLUG, lesson)), lesson
 
 

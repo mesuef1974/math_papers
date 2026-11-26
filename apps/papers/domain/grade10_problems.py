@@ -3769,6 +3769,77 @@ def height_from_shadows(rng: random.Random) -> Problem:
     )
 
 
+# «اكتشف الخطأ» في محيط مثلث من مثلث يشابهه: الزلّة → (رقم الخطوة، نوع الخطأ من ERROR_KINDS).
+SIMILAR_PERIMETER_SLIPS = {
+    "inverted": (1, "swap"),  # قلب نسبة الضلعين المتناظرين
+    "added": (2, "formula"),  # أضاف فرق الضلعين بدل الضرب في معامل التشابه
+    "missing": (3, "partial"),  # جمع الضلعين المحسوبين وترك الضلع المعطى
+}
+
+
+def similar_perimeter_item(
+    first: tuple[str, str, str],
+    second: tuple[str, str, str],
+    base: tuple[int, int, int],
+    big: int,
+    slip: str,
+) -> ErrorSpotting | None:
+    """مثلثان متشابهان: أضلاع الأول معلومة وأول أضلاع الثاني big؛ المعامل، ثم الضلعان الباقيان، ثم المحيط."""
+    step, kind = SIMILAR_PERIMETER_SLIPS[slip]
+    p, q, r = base
+    rules: tuple[Rule, ...] = (
+        (sp.Rational(big, p),),
+        (ref(1) * q, ref(1) * r),
+        (big + ref(2, 0) + ref(2, 1),),
+    )
+    wrong: Rule = {
+        "inverted": (sp.Rational(p, big),),
+        "added": (q + big - p, r + big - p),
+        "missing": (ref(2, 0) + ref(2, 1),),
+    }[slip]
+    (a1, b1, c1), (a2, b2, c2) = first, second
+
+    def texts(rows: list[Row], slipped: bool) -> tuple[str, ...]:
+        (k,), (side_q, side_r), (total,) = rows
+        top, bottom = (p, big) if slipped and slip == "inverted" else (big, p)
+        if slipped and slip == "added":
+            sides = f"${b2}{c2}={q}+({big}-{p})={tex(side_q)}$ و${c2}{a2}={r}+({big}-{p})={tex(side_r)}$"
+        else:
+            sides = (
+                f"${b2}{c2}={tex(k)}\\times {q}={tex(side_q)}$ و${c2}{a2}={tex(k)}\\times {r}={tex(side_r)}$"
+            )
+        terms = [side_q, side_r] if slipped and slip == "missing" else [big, side_q, side_r]
+        return (
+            f"نجد معامل التشابه من ${a1}{b1}$ إلى ${a2}{b2}$: $k=\\dfrac{{{top}}}{{{bottom}}}={tex(k)}$",
+            f"نجد الضلعين الباقيين: {sides}",
+            f"نجمع لإيجاد المحيط: ${'+'.join(tex(term) for term in terms)}={tex(total)}$ سم",
+        )
+
+    return spotted_values(
+        "3.3",
+        f"حسب طالب محيط المثلث ${a2}{b2}{c2}$، علمًا بأن $\\triangle {a1}{b1}{c1}\\sim\\triangle {a2}{b2}{c2}$ "
+        f"و${a1}{b1}={p}$ سم و${b1}{c1}={q}$ سم و${c1}{a1}={r}$ سم و${a2}{b2}={big}$ سم، {SPOT_TASK}",
+        rules,
+        (step, kind, wrong),
+        texts,
+        lengths(sp.Rational(big * (p + q + r), p)),
+        {"quantity": "similar_perimeter", "base": base, "big": big},
+    )
+
+
+@variant("3.3", G10, example=4, registry=ERROR_SPOTTING)
+def spot_error_in_perimeter_of_similar_triangle(rng: random.Random) -> ErrorSpotting:
+    slip = rng.choice(sorted(SIMILAR_PERIMETER_SLIPS))
+    while True:
+        first, second = pair_of_triangles(rng)
+        k = rng.choice([2, 3, 4, sp.Rational(3, 2), sp.Rational(5, 2)])
+        mult = 2 if isinstance(k, sp.Rational) else 1
+        p, q, r = (s * mult for s in rng.choice(SIDE_TRIPLES))
+        item = similar_perimeter_item(first, second, (p, q, r), int(k * p), slip)
+        if item is not None:
+            return item
+
+
 # الدرس 3.4: تشابه المثلثات القائمة والمتوسط الهندسي
 RIGHT_NAMES = (("A", "B", "C", "D"), ("P", "Q", "R", "S"), ("K", "L", "M", "N"), ("X", "Y", "Z", "W"))
 # (u, v، المقياس): AD=s·u² وDB=s·v² وu²+v² مربع كامل، فكل أطوال الشكل أعداد صحيحة.
@@ -3882,6 +3953,66 @@ def leg_from_projection(rng: random.Random) -> Problem:
         },
         wrong_kinds=kinds,
     )
+
+
+# «اكتشف الخطأ» في طول ساق من مسقطه على الوتر: الزلّة → (رقم الخطوة، نوع الخطأ من ERROR_KINDS).
+LEG_SLIPS = {
+    "one_part": (1, "partial"),  # أخذ القطعة الأخرى وحدها وترًا
+    "altitude_mean": (2, "concept"),  # ضرب قطعتي الوتر (علاقة الارتفاع) بدل المسقط في الوتر
+    "halved": (3, "square"),  # قسم المربع على 2 بدل أخذ جذره
+}
+
+
+def leg_item(
+    names: tuple[str, str, str, str], values: dict[str, int], which: str, slip: str
+) -> ErrorSpotting:
+    """ساق من مثلث قائم ارتفاعه على الوتر: الوتر، ثم مربع الساق، ثم الساق."""
+    step, kind = LEG_SLIPS[slip]
+    a, b, c, d = names
+    segments = {"AC": (f"{a}{d}", f"{d}{b}"), "BC": (f"{d}{b}", f"{a}{d}")}
+    near, far = segments[which]
+    projection, other = (values["AD"], values["DB"]) if which == "AC" else (values["DB"], values["AD"])
+    leg_name = f"{a}{c}" if which == "AC" else f"{b}{c}"
+    rules: tuple[Rule, ...] = ((projection + other,), (projection * ref(1),), (sp.sqrt(ref(2)),))
+    wrong: Rule = {
+        "one_part": (other,),
+        "altitude_mean": (projection * other,),
+        "halved": (ref(2) / 2,),
+    }[slip]
+
+    def texts(rows: list[Row], slipped: bool) -> tuple[str, ...]:
+        (hypotenuse,), (square,), (leg,) = rows
+        total = f"{other}" if slipped and slip == "one_part" else f"{near}+{far}={projection}+{other}"
+        if slipped and slip == "altitude_mean":
+            product_ = f"{near}\\times {far}={projection}\\times {other}"
+        else:
+            product_ = f"{near}\\times {a}{b}={projection}\\times {hypotenuse}"
+        root_ = f"\\dfrac{{{square}}}{{2}}" if slipped and slip == "halved" else f"\\sqrt{{{square}}}"
+        return (
+            f"نجد طول الوتر: ${a}{b}={total}={hypotenuse}$ سم",
+            f"طول الساق متوسط هندسي: ${leg_name}^2={product_}={square}$",
+            f"إذن ${leg_name}={root_}={tex(leg)}$ سم",
+        )
+
+    item = spotted_values(
+        "3.4",
+        f"حسب طالب طول ${leg_name}$ في المثلث ${a}{b}{c}$ القائم الزاوية في ${c}$، وقد رُسم العمود ${c}{d}$ على "
+        f"الوتر ${a}{b}$، حيث ${near}={projection}$ سم و${far}={other}$ سم، {SPOT_TASK}",
+        rules,
+        (step, kind, wrong),
+        texts,
+        lengths(values[which]),
+        {"quantity": "leg_from_segments", "segments": (values["AD"], values["DB"]), "leg": which},
+    )
+    assert item is not None  # كل أطوال الشكل أعداد صحيحة، وكل زلّة تغيّر الساق
+    return item
+
+
+@variant("3.4", G10, example=2, registry=ERROR_SPOTTING)
+def spot_error_in_leg_from_projection(rng: random.Random) -> ErrorSpotting:
+    slip = rng.choice(sorted(LEG_SLIPS))
+    values = right_triangle_values(rng.choice(PROJECTION_SHAPES))
+    return leg_item(rng.choice(RIGHT_NAMES), values, rng.choice(["AC", "BC"]), slip)
 
 
 @variant("3.4", G10, example=3)
@@ -4074,6 +4205,58 @@ def segment_from_parallel_line(rng: random.Random) -> Problem:
         {"type": "parallel_division", "values": given, "asked": unknown, "value": value},
         wrong_kinds=kinds,
     )
+
+
+# «اكتشف الخطأ» في طول ضلع يقطعه مستقيم مواز: الزلّة → (رقم الخطوة، نوع الخطأ من ERROR_KINDS).
+PARALLEL_SLIPS = {
+    "whole_ratio": (1, "concept"),  # نسبة الجزء إلى الضلع كله بدل الجزء إلى الجزء
+    "inverted": (2, "swap"),  # ضرب في النسبة بدل القسمة عليها
+    "one_part": (3, "partial"),  # اكتفى بالقطعة المحسوبة دون جمعها
+}
+
+
+def parallel_side_item(names: tuple[str, ...], ad: int, db: int, ae: int, slip: str) -> ErrorSpotting | None:
+    """DE موازٍ لـ BC: النسبة AD/DB، ثم EC، ثم AC."""
+    step, kind = PARALLEL_SLIPS[slip]
+    a, b, c, d, e = names
+    rules: tuple[Rule, ...] = ((sp.Rational(ad, db),), (ae / ref(1),), (ae + ref(2),))
+    wrong: Rule = {
+        "whole_ratio": (sp.Rational(ad, ad + db),),
+        "inverted": (ae * ref(1),),
+        "one_part": (ref(2),),
+    }[slip]
+
+    def texts(rows: list[Row], slipped: bool) -> tuple[str, ...]:
+        (ratio,), (ec,), (side,) = rows
+        bottom = f"{ad}+{db}" if slipped and slip == "whole_ratio" else f"{db}"
+        operation = r"\times " if slipped and slip == "inverted" else r"\div "
+        total = tex(ec) if slipped and slip == "one_part" else f"{ae}+{tex(ec)}={tex(side)}"
+        return (
+            f"نجد نسبة القطعتين على ${a}{b}$: $\\dfrac{{{a}{d}}}{{{d}{b}}}=\\dfrac{{{ad}}}{{{bottom}}}={tex(ratio)}$",
+            f"من التناسب: ${e}{c}={ae}{operation}{tex(ratio)}={tex(ec)}$ سم",
+            f"إذن ${a}{c}={total}$ سم",
+        )
+
+    return spotted_values(
+        "3.5",
+        f"حسب طالب طول ${a}{c}$ في المثلث ${a}{b}{c}$، حيث ${d}$ على ${a}{b}$ و${e}$ على ${a}{c}$ و"
+        f"${d}{e}\\parallel {b}{c}$ و${a}{d}={ad}$ سم و${d}{b}={db}$ سم و${a}{e}={ae}$ سم، {SPOT_TASK}",
+        rules,
+        (step, kind, wrong),
+        texts,
+        lengths(sp.Rational(ae * (ad + db), ad)),
+        {"quantity": "parallel_side", "AD": ad, "DB": db, "AE": ae},
+    )
+
+
+@variant("3.5", G10, example=1, registry=ERROR_SPOTTING)
+def spot_error_in_side_cut_by_parallel(rng: random.Random) -> ErrorSpotting:
+    slip = rng.choice(sorted(PARALLEL_SLIPS))
+    while True:
+        ad, db, ae, _ = parallel_values(rng)
+        item = parallel_side_item(rng.choice(LETTER_SETS), ad, db, ae, slip)
+        if item is not None:
+            return item
 
 
 @variant("3.5", G10, example=3)
