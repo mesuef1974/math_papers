@@ -179,6 +179,43 @@ def spotted_values(
     )
 
 
+Chain = list[tuple[str, sp.Expr]]
+
+
+def spotted_chain(
+    lesson: str,
+    stem: str,
+    chains: tuple[Chain, Chain],
+    slip: tuple[int, str],
+    answer: str,
+    given: sp.Expr,
+    roots: tuple[Any, ...],
+) -> ErrorSpotting:
+    """مسألة «اكتشف الخطأ» من سلسلتي معادلات (المعروضة بزلّتها، ثم الصحيحة): كل خطوة نصها ومعادلتها (عبارة = 0).
+
+    slip (رقم الخطوة، نوع الخطأ)؛ given المعادلة المعطاة في صيغتها القياسية، وroots حلولها.
+    """
+    shown, solved = chains
+    step, kind = slip
+    return ErrorSpotting(
+        lesson,
+        stem,
+        tuple(text for text, _ in shown),
+        step,
+        kind,
+        solved[step - 1][0],
+        answer,
+        "R",
+        {
+            "type": "error_spotting",
+            "given": given,
+            "steps": tuple(equation for _, equation in shown),
+            "fixed": solved[step - 1][1],
+            "roots": roots,
+        },
+    )
+
+
 def exact(value: Any) -> str:
     """عدد نسبي: صحيح كما هو، وكسر بإشارته أمامه."""
     value = sp.Rational(value)
@@ -1215,6 +1252,68 @@ def approximate_landing_time(rng: random.Random) -> Problem:
     )
 
 
+# «اكتشف الخطأ» في الحل بجدول القيم: الزلّة → (رقم الخطوة التي تقع فيها، نوع الخطأ من ERROR_KINDS).
+TABLE_SLIPS = {
+    "moved_sign": (1, "sign"),  # نقل الطرف الأيمن دون تغيير إشارته
+    "linear_sign": (2, "sign"),  # عكس إشارة الحد الخطي في الدالة المرتبطة
+    "target_value": (3, "coefficient"),  # بحث في الجدول عن الطرف الأيمن المعطى بدل الصفر
+    "single_zero": (3, "partial"),  # اكتفى بأول صفر في الجدول
+}
+
+
+def table_chain(r1: int, r2: int, k: int, shift: int, slip: str | None = None) -> Chain:
+    """خطوات حل x²+bx+c+k=k (جذراه r1<r2) بجدول قيم الدالة المرتبطة، كل خطوة نصها ومعادلتها (عبارة = 0).
+
+    slip زلّة واحدة تُزرع في خطوتها وتُبنى عليها الخطوات التالية بلا خطأ آخر؛ None الحل الصحيح.
+    shift إزاحة الجذرين نحو بعضهما التي تحدثها زلّة تغيّر الحد الثابت (k مختار ليبقيا صحيحين).
+    """
+    b, c = -(r1 + r2), r1 * r2
+    standard = x**2 + b * x + c + (2 * k if slip == "moved_sign" else 0)
+    related = standard.subs(x, -x) if slip == "linear_sign" else standard
+    target = k if slip == "target_value" else 0
+    if slip in ("moved_sign", "target_value"):
+        zeros = (r1 + shift, r2 - shift)
+    elif slip == "linear_sign":
+        zeros = (-r2, -r1)
+    else:
+        zeros = (r1, r2)
+    found = zeros[:1] if slip == "single_zero" else zeros
+    shown = zeros if slip == "linear_sign" else (*zeros, r1, r2)
+    table = "، ".join(f"$f({px})={related.subs(x, px)}$" for px in range(min(shown) - 1, max(shown) + 2))
+    return [
+        (f"نجعل أحد طرفي المعادلة صفرًا: ${tex(standard)}=0$", standard),
+        (f"نكوّن جدول قيم للدالة المرتبطة $f(x)={tex(related)}$: {table}", related),
+        (
+            f"حلول المعادلة قيم $x$ التي تجعل $f(x)={target}$، وهي من الجدول: {solutions(*found)}",
+            sp.Mul(*[x - zero for zero in found]),
+        ),
+    ]
+
+
+@variant("2.1", G10, example=2, registry=ERROR_SPOTTING)
+def spot_error_in_solving_by_table(rng: random.Random) -> ErrorSpotting:
+    slip = rng.choice(sorted(TABLE_SLIPS))
+    while True:
+        r1, gap, shift = rng.randint(-6, 3), rng.randint(1, 5), rng.choice([-1, 1, 2])
+        r2, free = r1 + gap, nz(rng, -6, 6)
+        # الزلّة التي تغيّر الحد الثابت تغيّره بمقدار يبقي الجذرين صحيحين: r1+shift وr2-shift
+        change = shift * (gap - shift)
+        k = {"moved_sign": change // 2, "target_value": -change}.get(slip, free)
+        whole = slip != "moved_sign" or change % 2 == 0
+        if k and whole and r1 + r2 and gap > 2 * shift:
+            break
+    f = sp.expand((x - r1) * (x - r2))
+    return spotted_chain(
+        "2.1",
+        f"حلّ طالب المعادلة ${tex(f + k)}={k}$ باستعمال جدول قيم {SPOT_TASK}",
+        (table_chain(r1, r2, k, shift, slip), table_chain(r1, r2, k, shift)),
+        TABLE_SLIPS[slip],
+        solutions(r1, r2),
+        f,
+        (r1, r2),
+    )
+
+
 # الدرس 2.2: حل المعادلات التربيعية بالتحليل إلى العوامل
 @variant("2.2", G10, example=1)
 def zero_product_property(rng: random.Random) -> Problem:
@@ -1391,6 +1490,63 @@ def factored_form_from_intercepts_and_point(rng: random.Random) -> Problem:
     )
 
 
+# «اكتشف الخطأ» في الحل بالتحليل إلى العوامل: الزلّة → (رقم الخطوة التي تقع فيها، نوع الخطأ من ERROR_KINDS).
+FACTORING_SLIPS = {
+    "factor_sign": (2, "sign"),  # عكس إشارتي العددين داخل العاملين
+    "single_factor": (3, "partial"),  # ساوى عاملًا واحدًا بالصفر
+    "inverted": (4, "swap"),  # قلب الكسر عند حل المعادلة الخطية
+    "undivided": (4, "formula"),  # لم يقسم على معامل x
+}
+
+
+def factoring_chain(p: int, q: int, r: int, slip: str | None = None) -> Chain:
+    """خطوات حل (px+q)(x-r)=0 المعطاة بطرف أيمن غير صفري، كل خطوة نصها ومعادلتها (عبارة = 0).
+
+    slip زلّة واحدة تُزرع في خطوتها وتُبنى عليها الخطوات التالية بلا خطأ آخر؛ None الحل الصحيح.
+    """
+    f = sp.expand((p * x + q) * (x - r))
+    fq, fr = (-q, -r) if slip == "factor_sign" else (q, r)
+    factored = (p * x + fq) * (x - fr)
+    if slip == "inverted":
+        first = sp.Rational(-p, fq)
+    elif slip == "undivided":
+        first = sp.Integer(-fq)
+    else:
+        first = sp.Rational(-fq, p)
+    if slip == "single_factor":
+        zeroed, third, found = f"${p}x{fq:+d}=0$", p * x + fq, (first,)
+    else:
+        zeroed, third, found = f"${p}x{fq:+d}=0$ أو ${linear(fr)}=0$", factored, (first, fr)
+    return [
+        (f"نكتب المعادلة في الصيغة القياسية: ${tex(f)}=0$", f),
+        (f"نحلّل ثلاثية الحدود: $({p}x{fq:+d}){shifted(fr)}=0$", factored),
+        (f"بخاصية ناتج الضرب الصفري: {zeroed}", third),
+        (f"إذن {solutions(*found)}", sp.Mul(*[x - value for value in found])),
+    ]
+
+
+@variant("2.2", G10, example=2, registry=ERROR_SPOTTING)
+def spot_error_in_solving_by_factoring(rng: random.Random) -> ErrorSpotting:
+    slip = rng.choice(sorted(FACTORING_SLIPS))
+    while True:
+        p, r = rng.choice([2, 3, 5]), nz(rng, -6, 6)
+        # |q|>1 وأولي مع p: الحل الكسري لا يصير صحيحًا بقلبه؛ وq≠-r ليبقى الحلّان بعد ترك القسمة مختلفين
+        q = rng.choice([n for n in range(-7, 8) if abs(n) > 1 and math.gcd(p, abs(n)) == 1])
+        if q != -r:
+            break
+    f = sp.expand((p * x + q) * (x - r))
+    other = sp.Rational(-q, p)
+    return spotted_chain(
+        "2.2",
+        f"حلّ طالب المعادلة ${tex(f + q * r)}={q * r}$ بالتحليل إلى العوامل {SPOT_TASK}",
+        (factoring_chain(p, q, r, slip), factoring_chain(p, q, r)),
+        FACTORING_SLIPS[slip],
+        solutions(other, r),
+        f,
+        (other, r),
+    )
+
+
 # الدرس 2.3: إعادة كتابة المقادير الجذرية
 @variant("2.3", G10, example=1)
 def simplify_square_root(rng: random.Random) -> Problem:
@@ -1522,6 +1678,59 @@ def multiply_radical_expressions(rng: random.Random) -> Problem:
         },
         wrong_kinds=kinds,
     )
+
+
+# «اكتشف الخطأ» في تبسيط مضاعف جذر: الزلّة → (رقم الخطوة التي تقع فيها، نوع الخطأ من ERROR_KINDS).
+RADICAL_SLIPS = {
+    "unrooted": (2, "square"),  # أخرج العامل المربع الكامل من الجذر دون أخذ جذره
+    "halved": (2, "formula"),  # نصّف العامل المربع الكامل بدل أخذ جذره
+    "added": (3, "formula"),  # جمع الناتج والمعامل بدل ضربهما
+    "swapped": (4, "swap"),  # بدّل المعامل والمجذور
+}
+
+
+def radical_item(c: int, k: int, free: int, slip: str) -> ErrorSpotting | None:
+    step, kind = RADICAL_SLIPS[slip]
+    n = k * k * free
+    rules: tuple[Rule, ...] = ((k * k, free), (sp.sqrt(ref(1)),), (c * ref(2),), (ref(3), ref(1, 1)))
+    wrong: Rule = {
+        "unrooted": (ref(1),),
+        "halved": (ref(1) / 2,),
+        "added": (c + ref(2),),
+        "swapped": (ref(1, 1), ref(3)),
+    }[slip]
+    if slip == "halved" and k % 2:  # نصف مربع عدد فردي ليس عددًا صحيحًا
+        return None
+
+    def texts(rows: list[Row], slipped: bool) -> tuple[str, ...]:
+        (square, rest), (rooted,), (coefficient,), (outside, inside) = rows
+        split = f"{square}\\cdot{rest}"
+        working = f"{c}+{rooted}" if slipped and slip == "added" else f"{c}\\cdot{rooted}"
+        return (
+            f"نكتب المجذور بدلالة أكبر عامل مربع كامل: ${root(c, n)}={root(c, split)}$",
+            f"نوجد الجذر التربيعي للعامل المربع الكامل: $\\sqrt{{{square}}}={rooted}$",
+            f"نضرب الناتج في المعامل: ${working}={coefficient}$",
+            f"إذن ${root(c, n)}={root(outside, inside)}$",
+        )
+
+    return spotted_values(
+        "2.3",
+        f"كتب طالب ${root(c, n)}$ في أبسط صورة {SPOT_TASK}",
+        rules,
+        (step, kind, wrong),
+        texts,
+        m(root(c * k, free)),
+        {"quantity": "simplified_radical", "square": sp.Integer(c * c * n)},
+    )
+
+
+@variant("2.3", G10, example=2, registry=ERROR_SPOTTING)
+def spot_error_in_simplifying_radical(rng: random.Random) -> ErrorSpotting:
+    slip = rng.choice(sorted(RADICAL_SLIPS))
+    while True:
+        item = radical_item(rng.randint(2, 6), rng.randint(2, 5), rng.choice(SQUARE_FREE), slip)
+        if item is not None:
+            return item
 
 
 def diagonal_rectangles() -> list[tuple[int, int, int, int]]:
@@ -1759,24 +1968,15 @@ def spot_error_in_completing_the_square(rng: random.Random) -> ErrorSpotting:
     solved = completing_chain(h, d)
     if solved is None:  # المجذور d نظيف بالاختيار
         raise AssertionError((h, d))
-    step, kind = COMPLETING_SLIPS[slip]
     f = sp.expand((x - h) ** 2 - d)
-    return ErrorSpotting(
+    return spotted_chain(
         "2.5",
         f"حلّ طالب المعادلة ${tex(f)}=0$ بإكمال المربع {SPOT_TASK}",
-        tuple(text for text, _ in shown),
-        step,
-        kind,
-        solved[step - 1][0],
+        (shown, solved),
+        COMPLETING_SLIPS[slip],
         spread_solutions(h, d),
-        "R",
-        {
-            "type": "error_spotting",
-            "given": f,
-            "steps": tuple(equation for _, equation in shown),
-            "fixed": solved[step - 1][1],
-            "roots": (h + sp.sqrt(d), h - sp.sqrt(d)),
-        },
+        f,
+        (h + sp.sqrt(d), h - sp.sqrt(d)),
     )
 
 
@@ -1961,6 +2161,75 @@ def discriminant_and_number_of_solutions(rng: random.Random) -> Problem:
         {"type": "solution_count", "f": a * x**2 + b * x + c, "count": count, "discriminant": disc},
         wrong_kinds=kinds,
     )
+
+
+# «اكتشف الخطأ» في المميز وعدد الحلول: الزلّة → (رقم الخطوة التي تقع فيها، نوع الخطأ من ERROR_KINDS).
+DISCRIMINANT_SLIPS = {
+    "moved_sign": (1, "sign"),  # نقل الطرف الأيمن دون تغيير إشارته
+    "unsquared": (2, "square"),  # ضاعف b بدل تربيعه
+    "negative_square": (2, "sign"),  # جعل مربع العدد السالب سالبًا
+    "no_four": (3, "formula"),  # أسقط العامل 4
+    "added": (4, "formula"),  # جمع بدل الطرح
+    "reversed_count": (5, "concept"),  # عكس دلالة إشارة المميز على عدد الحلول
+}
+DISCRIMINANT_SIGNS = {-1: "سالب", 0: "يساوي صفرًا", 1: "موجب"}
+
+
+def discriminant_item(a: int, b: int, c: int, slip: str) -> ErrorSpotting | None:
+    """المعادلة ax²+bx=-c: الحد الثابت بعد النقل، ثم b² و4ac والمميز، ثم عدد الحلول من إشارته."""
+    step, kind = DISCRIMINANT_SLIPS[slip]
+    constant, square, product_4ac, value = ref(1), ref(2), ref(3), ref(4)
+    rules: tuple[Rule, ...] = (
+        (c,),
+        (b * b,),
+        (4 * a * constant,),
+        (square - product_4ac,),
+        (value, 1 + sp.sign(value)),
+    )
+    wrong: Rule = {
+        "moved_sign": (-c,),
+        "unsquared": (2 * b,),
+        "negative_square": (-b * b,),
+        "no_four": (a * constant,),
+        "added": (square + product_4ac,),
+        "reversed_count": (value, 1 - sp.sign(value)),
+    }[slip]
+    if slip == "negative_square" and b > 0:  # الزلّة في تربيع عدد سالب
+        return None
+
+    def texts(rows: list[Row], slipped: bool) -> tuple[str, ...]:
+        (free,), (squared,), (four,), (disc,), (_, count) = (tuple(int(v) for v in row) for row in rows)
+        factors = f"({a})({free})" if slipped and slip == "no_four" else f"4({a})({free})"
+        combined = plus(squared, four) if slipped and slip == "added" else minus(squared, four)
+        sign = DISCRIMINANT_SIGNS[(disc > 0) - (disc < 0)]
+        return (
+            f"نكتب المعادلة في الصيغة القياسية: ${tex(a * x**2 + b * x + free)}=0$، "
+            f"فيكون $a={a}$ و$b={b}$ و$c={free}$",
+            f"نحسب مربع $b$: $b^2=({b})^2={squared}$",
+            f"نحسب $4ac$: $4ac={factors}={four}$",
+            f"نحسب المميز: $b^2-4ac={combined}={disc}$",
+            f"المميز {sign}، ف{COUNT_PHRASES[count]}",
+        )
+
+    disc = b * b - 4 * a * c
+    return spotted_values(
+        "2.6",
+        f"حدّد طالب عدد الحلول الحقيقية للمعادلة ${tex(a * x**2 + b * x)}={-c}$ باستعمال المميز {SPOT_TASK}",
+        rules,
+        (step, kind, wrong),
+        texts,
+        f"المميز ${disc}$، و{COUNT_PHRASES[count_from(disc)]}",
+        {"quantity": "discriminant_count", "f": a * x**2 + b * x + c},
+    )
+
+
+@variant("2.6", G10, example=4, registry=ERROR_SPOTTING)
+def spot_error_in_discriminant(rng: random.Random) -> ErrorSpotting:
+    slip = rng.choice(sorted(DISCRIMINANT_SLIPS))
+    while True:
+        item = discriminant_item(nz(rng, -3, 3), nz(rng, -8, 8), nz(rng, -9, 9), slip)
+        if item is not None:
+            return item
 
 
 @variant("2.6", G10, example=4)

@@ -1208,10 +1208,24 @@ def true_vertex(c):
     return (h, c["f"].subs(x, h))
 
 
+def true_simplified_radical(c):
+    """(المعامل، المجذور) لأبسط صورة للجذر التربيعي للعدد المعطى، بتبسيط sympy لا بخطوات المولّد."""
+    coefficient, surd = sp.sqrt(c["square"]).as_coeff_Mul()
+    return (coefficient, surd**2)
+
+
+def true_discriminant_count(c):
+    """(المميز، عدد الحلول الحقيقية المختلفة) من كثيرة الحدود نفسها."""
+    poly = sp.Poly(c["f"], x)
+    return (poly.discriminant(), len(set(poly.real_roots())))
+
+
 VALUE_TRUTHS = {
     "average_rate": true_average_rate,
     "leading_coefficient": true_leading_coefficient,
     "vertex": true_vertex,
+    "simplified_radical": true_simplified_radical,
+    "discriminant_count": true_discriminant_count,
 }
 
 
@@ -1251,6 +1265,11 @@ SPOTTING_CHECKS = {"error_spotting": assert_error_spotting, "error_spotting_valu
 
 @pytest.mark.parametrize("lesson", ["1.1", "1.2", "1.3"])
 def test_error_spotting_covers_every_lesson_of_grade10_unit_one(lesson):
+    assert ERROR_SPOTTING.get((GRADE10_SLUG, lesson)), lesson
+
+
+@pytest.mark.parametrize("lesson", ["2.1", "2.2", "2.3", "2.6"])
+def test_error_spotting_covers_first_lessons_of_grade10_unit_two(lesson):
     assert ERROR_SPOTTING.get((GRADE10_SLUG, lesson)), lesson
 
 
