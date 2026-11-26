@@ -2,6 +2,7 @@
 pytest>=8.3
 pytest-django>=4.9
 pytest-cov>=6.0
+pytest-xdist>=3.6  # الاختبارات متوازية (-n auto) في CI والفحص المحلي
 ruff>=0.8
 mypy>=1.13
 django-stubs[compatible-mypy]>=5.1
