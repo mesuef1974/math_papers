@@ -73,8 +73,20 @@ def test_page_escapes_titles_and_leaves_the_ledger_untouched(tmp_path, monkeypat
     ledger.append("x", "ready")
     before = ledger.card_path("x").read_bytes()
     page = board.render(board.snapshot(tmp_path), "")
-    assert "<script>" not in page and "&lt;script&gt;" in page
+    assert "<script>alert" not in page and "&lt;script&gt;" in page
     assert ledger.card_path("x").read_bytes() == before
+
+
+def test_flow_places_each_card_in_its_stage_for_the_live_move(tmp_path, cards):
+    cards("live", ("claimed", {"pid": 1}), "coded")
+    cards("failed", "prepush_failed")
+    cards("new")
+    data = board.snapshot(tmp_path, NOW, alive=lambda pid: True)
+    columns = board.render_flow(data["groups"]).split('<li class="stage')[1:]
+    assert "الفحص المحلي <b>2</b>" in columns[2]
+    assert "view-transition-name: c-live" in columns[2] and "view-transition-name: c-failed" in columns[2]
+    assert not any("c-new" in column for column in columns)
+    assert "startViewTransition" in board.render(data, "")
 
 
 def test_only_local_host_names_are_served():

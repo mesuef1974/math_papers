@@ -29,7 +29,8 @@ sys.path.insert(0, str(ROOT))
 from automation import ledger  # noqa: E402
 
 PORT = 8791
-REFRESH_SECONDS = 10
+REFRESH_SECONDS = 3
+FLOW_DONE_LIMIT = 5
 IDLE_EXIT_SECONDS = 15 * 60  # المتصفح يبطّئ تحديث التبويب المخفي، فالمهلة أطول من التحديث بكثير
 PR_CACHE_SECONDS = 60
 RECENT_DONE = timedelta(hours=48)
@@ -46,6 +47,7 @@ STAGES = (
 )
 STAGE_OF = {state: i for i, (state, _) in enumerate(STAGES)} | {"ci_green": 4, "approved": 4, "deployed": 5}
 IN_PROGRESS = ("claimed", "coded", "prepush_ok")
+STOPPED_AT = {"blocked": 1, "prepush_failed": 2}  # حيث توقفت على الرسم
 GROUPS = (
     ("running", "تعمل الآن"),
     ("approval", "تنتظر اعتمادك"),
@@ -119,6 +121,8 @@ def card_row(card_id: str, now: datetime, alive, open_prs: set[str] | None) -> d
         "id": card_id,
         "title": events[0].get("title", ""),
         "stage": STAGE_OF.get(state),
+        "at_stage": STAGE_OF.get(state, STOPPED_AT.get(state, 1)),
+        "since": since,
         "age": age(since),
         "url": url,
         "note": "",
@@ -164,6 +168,30 @@ def snapshot(
     return {"groups": groups, "pulse": pulse, "at": now.astimezone().strftime("%H:%M:%S")}
 
 
+def render_chip(row: dict) -> str:
+    e = html.escape
+    # الاسم نفسه قبل التحديث وبعده، فينقل المتصفح الرقاقة من مرحلتها القديمة إلى الجديدة
+    return (
+        f'<div class="chip {row["group"]}" style="view-transition-name: c-{e(row["id"])}" title="{e(row["title"])}">'
+        f'<code dir="ltr">'
+        f"{e(row['id'][-6:])}</code> <small><bdi>{e(row['age'])}</bdi></small><span>{e(row['title'])}</span></div>"
+    )
+
+
+def render_flow(groups: dict) -> str:
+    """رسم المراحل وفيه كل بطاقة حية أو عالقة في مرحلتها، وأحدث المدموجة؛ غير المجهَّزة لا تدخله."""
+    live = [row for key in ("running", "approval", "queued", "stuck") for row in groups[key]]
+    done = sorted(groups["done"], key=lambda row: row["since"])[:FLOW_DONE_LIMIT]
+    columns = []
+    for i, (_, label) in enumerate(STAGES):
+        rows = done if i == len(STAGES) - 1 else [row for row in live if row["at_stage"] == i]
+        total = len(groups["done"]) if i == len(STAGES) - 1 else len(rows)
+        busy = " busy" if any(row["group"] == "running" for row in rows) else ""
+        chips = "".join(map(render_chip, rows))
+        columns.append(f'<li class="stage{busy}"><div class="node">{label} <b>{total}</b></div>{chips}</li>')
+    return f'<ol class="flow" aria-label="مخطط المراحل">{"".join(columns)}</ol>'
+
+
 def render_card(row: dict) -> str:
     e = html.escape
     steps = ""
@@ -172,7 +200,7 @@ def render_card(row: dict) -> str:
             f'<li class="{"past" if i < row["stage"] else "now" if i == row["stage"] else ""}">{label}</li>'
             for i, (_, label) in enumerate(STAGES)
         )
-        steps = f"<ol>{items}</ol>"
+        steps = f'<ol class="steps">{items}</ol>'
     link = ""
     if row["url"].startswith("https://github.com/"):
         number = e(row["url"].rsplit("/", 1)[-1])
@@ -188,7 +216,7 @@ STYLE = """
 * { box-sizing: border-box; }
 body { margin: 0; padding: 24px 16px; background: var(--color-paper); color: var(--color-ink);
   font-family: var(--font-sans); line-height: 1.6; }
-main { max-width: 960px; margin-inline: auto; }
+main { max-width: 1280px; margin-inline: auto; }
 h1 { margin: 0; }
 h2 { margin-block: 28px 8px; font-size: 1.15rem; }
 h3 { margin: 0; font-size: 1rem; }
@@ -202,13 +230,63 @@ article { background: var(--color-surface); border: 1px solid var(--color-line);
 .meta { margin: 4px 0; color: var(--color-ink-soft); font-size: .88rem; }
 .note { margin: 6px 0 0; color: var(--color-danger); font-size: .9rem; }
 a { color: var(--color-brand); }
-ol { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; margin: 6px 0 0; padding: 0; }
-li { border: 1px solid var(--color-line); border-radius: 999px; padding: 1px 10px; font-size: .8rem;
+.steps { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; margin: 6px 0 0; padding: 0; }
+.steps li { border: 1px solid var(--color-line); border-radius: 999px; padding: 1px 10px; font-size: .8rem;
   color: var(--color-ink-soft); }
-li.past { background: var(--color-success-soft); color: var(--color-success); }
-li.now { background: var(--color-brand); border-color: var(--color-brand); color: var(--color-on-brand); }
+.steps li.past { background: var(--color-success-soft); color: var(--color-success); }
+.steps li.now { background: var(--color-brand); border-color: var(--color-brand); color: var(--color-on-brand); }
 summary { cursor: pointer; margin-block: 28px 8px; font-weight: 700; }
+.flow { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 18px; list-style: none;
+  margin: 20px 0 0; padding: 0; align-items: start; }
+.stage { position: relative; min-width: 0; }
+.node { border: 2px solid var(--color-line-strong); border-radius: 12px; background: var(--color-surface);
+  text-align: center; padding: 8px 4px; font-weight: 700; margin-block-end: 8px; }
+.stage + .stage::before { content: "←"; position: absolute; inset-inline-start: -17px; inset-block-start: 8px;
+  color: var(--color-ink-soft); }
+.stage.busy .node { border-color: var(--color-info); background: var(--color-info-soft); color: var(--color-info);
+  animation: pulse 1.6s ease-in-out infinite; }
+.chip { border: 1px solid var(--color-line); border-inline-start: 4px solid var(--color-line-strong);
+  border-radius: 8px; background: var(--color-surface); padding: 4px 8px; margin-block-end: 6px; font-size: .8rem; }
+.chip span { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.chip.running { border-color: var(--color-info); }
+.chip.approval { border-color: var(--color-brand); }
+.chip.stuck { border-color: var(--color-danger); }
+.chip.done { border-color: var(--color-success); }
+@keyframes pulse { 50% { opacity: .55; } }
+::view-transition-group(*) { animation-duration: .9s; }
+@media (max-width: 760px) {
+  .flow { grid-template-columns: 1fr; gap: 8px; }
+  .stage + .stage::before { content: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .stage.busy .node { animation: none; }
+  ::view-transition-group(*) { animation: none; }
+}
 """
+
+
+# يجلب الصفحة نفسها ويبدّل محتواها بانتقال مرئي، فتُرى البطاقة وهي تنتقل؛ الأقسام المفتوحة تبقى مفتوحة
+SCRIPT = """
+const REFRESH = __REFRESH__ * 1000;
+async function tick() {
+  try {
+    const res = await fetch("/", { cache: "no-store" });
+    if (!res.ok) throw new Error(res.status);
+    const next = new DOMParser().parseFromString(await res.text(), "text/html").querySelector("main");
+    const open = [...document.querySelectorAll("details[open]")].map((d) => d.className);
+    next.querySelectorAll("details").forEach((d) => { d.open = open.includes(d.className); });
+    const swap = () => document.querySelector("main").replaceWith(next);
+    if (document.startViewTransition && !document.hidden) await document.startViewTransition(swap).finished;
+    else swap();
+  } catch {
+    const pulse = document.querySelector(".pulse");
+    pulse.textContent = "انقطع الاتصال باللوحة: أعد تشغيلها";
+    pulse.classList.add("warn");
+  }
+  setTimeout(tick, REFRESH);
+}
+setTimeout(tick, REFRESH);
+""".replace("__REFRESH__", str(REFRESH_SECONDS))
 
 
 def render(data: dict, tokens: str) -> str:
@@ -226,10 +304,10 @@ def render(data: dict, tokens: str) -> str:
     return (
         '<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width, initial-scale=1">'
-        f'<meta http-equiv="refresh" content="{REFRESH_SECONDS}">'
         f"<title>بطاقات المشغّل</title><style>{tokens}{STYLE}</style></head><body><main>"
         f'<h1>بطاقات المشغّل</h1><p class="pulse{warn}">'
-        f"{html.escape(pulse['text'])} | حُدّثت {data['at']}</p>{''.join(sections)}</main></body></html>"
+        f"{html.escape(pulse['text'])} | حُدّثت {data['at']}</p>{render_flow(data['groups'])}"
+        f"{''.join(sections)}</main><script>{SCRIPT}</script></body></html>"
     )
 
 
