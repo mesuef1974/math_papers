@@ -16,6 +16,12 @@ export const router = createRouter({
       meta: { title: "لوحة سوء الفهم" },
     },
     {
+      path: "/results/entry",
+      name: "results-entry",
+      component: () => import("@/pages/ResultsEntryPage.vue"),
+      meta: { title: "إدخال نتائج الطلاب" },
+    },
+    {
       path: "/copilot",
       name: "copilot-automation",
       component: () => import("@/pages/CopilotAutomationPage.vue"),

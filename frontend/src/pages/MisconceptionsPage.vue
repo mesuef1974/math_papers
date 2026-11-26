@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onMounted, ref, watch } from "vue";
 import EmptyState from "@/components/EmptyState.vue";
 import { useAuthStore } from "@/stores/auth";
 import { useCoursesStore } from "@/stores/courses";
 import { useMisconceptionsStore } from "@/stores/misconceptions";
 
-// لوحة سوء الفهم: المعلم يختار المقرر والدرس وشعبة من شعبه، فيرى لكل نوع خطأ عدد طلابه وأسماءهم. قراءة فقط.
+// لوحة سوء الفهم: المعلم يختار المقرر والدرس وشعبة من شعبه، فيرى لكل نوع خطأ عدد طلابه وأسماءهم. قراءة فقط؛
+// الإدخال في صفحة ResultsEntryPage.
 const auth = useAuthStore();
 const courses = useCoursesStore();
 const store = useMisconceptionsStore();
@@ -20,8 +21,13 @@ onMounted(async () => {
     courses.courses.length ? Promise.resolve() : courses.load(),
     store.loadSections(),
   ]);
-  course.value = courses.selected || (courses.courses[0]?.slug ?? "");
-  if (store.sections.length === 1) section.value = store.sections[0];
+  const last = store.last; // بعد حفظ نتائج من صفحة الإدخال تُفتح اللوحة على ما أُدخل
+  course.value = last?.course || courses.selected || (courses.courses[0]?.slug ?? "");
+  if (last) {
+    await nextTick(); // بعد أن يفرغ تبديل المقرر خانة الدرس
+    lesson.value = last.lesson;
+    section.value = last.section;
+  } else if (store.sections.length === 1) section.value = store.sections[0];
 });
 
 watch(course, (slug) => {
@@ -46,6 +52,12 @@ const examplesText = (examples: number[]) => examples.join("، ");
       اختر المقرر والدرس والشعبة، فترى لكل نوع خطأ الطلاب الذين وقعوا فيه في
       بنود الدرس والأمثلة التي ظهر فيها، مرتبة من الأكثر شيوعًا.
     </p>
+    <RouterLink
+      v-if="auth.canGenerate"
+      class="btn btn-secondary btn-small"
+      to="/results/entry"
+      >أدخل نتائج الطلاب</RouterLink
+    >
   </header>
 
   <p v-if="!auth.canGenerate" class="alert alert-error" role="alert">

@@ -25,6 +25,7 @@ from apps.knowledge.selectors import course_index, example_numbers, lesson_index
 from apps.papers.domain.generators import ERROR_KINDS
 
 from .domain.calendar_engine import Closure, Plan, Slot, Term, allocate, parse_terms, sessions
+from .domain.check_items import item_stem, option_text, period_items
 from .domain.deck import ExampleClip, deck_key_of
 from .domain.feedback import ClassOutcome, Decision, decide
 from .domain.non_lesson import KINDS as NON_LESSON_KINDS
@@ -643,6 +644,33 @@ def period_item(course: str, lesson: str, k: int, owner: AbstractBaseUser | None
     if item is None:
         raise PrepNotFoundError(f"لا حصة {k} للدرس {lesson} في خطة {course}")
     return item
+
+
+def entry_items(owner: AbstractBaseUser, course: str, lesson: str) -> dict:
+    """بنود بطاقات الخروج لدرس كما عُرضت على طلاب المعلم: لكل حصة بندها بمثاله وبذرته من `period_items` نفسه الذي يبني
+    العرض والتحضير (بتعديل المعلم إن وُجد)، بنص السؤال والخيارات بترتيبها وبلا أي دلالة على الصحيح ولا نوع الخطأ.
+
+    الحصة بلا بطاقة خروج أو بلا بند موضوعي يصلح للشريحة لا بند لها. `PrepNotFoundError` لمقرر بلا خطة أو درس ليس فيها."""
+    _plan_course(course)
+    preps = [p.prep for p in owner_preps(course, owner) if p.prep.lesson == lesson]
+    if not preps:
+        raise PrepNotFoundError(f"لا حصص للدرس {lesson} في خطة {course}")
+    rows = []
+    for prep in preps:
+        items = period_items(prep)
+        if items.exit is None or items.exit_seed is None or prep.exit_ticket is None:
+            continue
+        rows.append(
+            {
+                "k": prep.k,
+                "n": prep.n,
+                "example": prep.exit_ticket.example,
+                "seed": items.exit_seed,
+                "stem": item_stem(items.exit),
+                "options": [option_text(option.text) for option in items.exit.options],
+            }
+        )
+    return {"course": course, "lesson": lesson, "items": rows}
 
 
 def _render(course: str, item: PreparedPeriod, prep: PeriodPrep) -> PrepSheet:

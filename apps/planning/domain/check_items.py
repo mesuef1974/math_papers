@@ -28,6 +28,9 @@ class PeriodItems:
     formative: dict[int, Item]  # مثال -> بنده، والغائب يبقى سؤالًا نصيًّا
     exit: Item | None
     retrieval: Item | None = None  # استرجاع متباعد في شريحة التذكّر للحصة الأولى من الدرس
+    exit_seed: int | None = (
+        None  # البذرة التي ولّدت `exit` فعلًا: بها يُعاد البند نفسه عند إدخال النتائج وتصحيحها
+    )
 
 
 def items_seed(prep: PeriodPrep) -> int:
@@ -48,16 +51,22 @@ def fits_slide(item: Item) -> bool:
     )
 
 
-def _item(prep: PeriodPrep, example: int, seed: int) -> Item | None:
-    """أول بند يصلح للشريحة من بذور متتالية (السؤال الطويل يقصر ببذرة أخرى)؛ None إن لم يصلح أيّ منها."""
+def _seeded_item(prep: PeriodPrep, example: int, seed: int) -> tuple[Item, int] | None:
+    """أول بند يصلح للشريحة من بذور متتالية (السؤال الطويل يقصر ببذرة أخرى) مع بذرته الفعلية؛ None إن لم يصلح أيّ منها."""
     for attempt in range(SEED_TRIES):
+        used = seed + attempt * 2
         try:
-            item = exit_ticket(prep.course, prep.lesson, example, seed=seed + attempt * 2)
+            item = exit_ticket(prep.course, prep.lesson, example, seed=used)
         except ItemBankError:
             return None
         if fits_slide(item):
-            return item
+            return item, used
     return None
+
+
+def _item(prep: PeriodPrep, example: int, seed: int) -> Item | None:
+    found = _seeded_item(prep, example, seed)
+    return None if found is None else found[0]
 
 
 def _retrieval_item(prep: PeriodPrep, seed: int) -> Item | None:
@@ -85,8 +94,21 @@ def period_items(prep: PeriodPrep) -> PeriodItems:
         item = _item(prep, n, seed)
         if item is not None:
             formative[n] = item
-    ticket = _item(prep, prep.exit_ticket.example, seed + 1) if prep.exit_ticket else None
-    return PeriodItems(formative=formative, exit=ticket, retrieval=_retrieval_item(prep, seed + 2))
+    found = _seeded_item(prep, prep.exit_ticket.example, seed + 1) if prep.exit_ticket else None
+    ticket, ticket_seed = found or (None, None)
+    return PeriodItems(
+        formative=formative, exit=ticket, retrieval=_retrieval_item(prep, seed + 2), exit_seed=ticket_seed
+    )
+
+
+def item_stem(item: Item) -> str:
+    """نص السؤال كما يُعرض على الطلاب: في شريحة البند وفي جدول إدخال النتائج."""
+    return isolate_number_ranges(plain_math(item.stem))
+
+
+def option_text(text: str) -> str:
+    """نص الخيار كما يُعرض على الطلاب، بلا حرفه."""
+    return isolate_number_ranges(plain_math(text))
 
 
 def option_label(index: int, text: str) -> str:
