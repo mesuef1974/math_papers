@@ -41,9 +41,9 @@ STAGES = (
     ("ready", "في الطابور"),
     ("claimed", "البرمجة"),
     ("coded", "الفحص المحلي"),
-    ("prepush_ok", "فتح الطلب"),
+    ("prepush_ok", "المراجعة المستقلة"),
     ("pr_opened", "اعتمادك"),
-    ("merged", "مدموجة"),
+    ("merged", "الدمج والنشر"),
 )
 STAGE_OF = {state: i for i, (state, _) in enumerate(STAGES)} | {"ci_green": 4, "approved": 4, "deployed": 5}
 IN_PROGRESS = ("claimed", "coded", "prepush_ok")
@@ -128,7 +128,8 @@ def card_row(card_id: str, now: datetime, alive, open_prs: set[str] | None) -> d
         "note": "",
     }
     if state in ("merged", "deployed"):
-        return row | {"group": "done"} if since <= RECENT_DONE else None
+        note = "" if state == "merged" else "منشورة"
+        return row | {"group": "done", "note": note} if since <= RECENT_DONE else None
     if state == "created":
         return row | {"group": "backlog"}
     if state == "ready":
@@ -174,7 +175,7 @@ def render_chip(row: dict) -> str:
     return (
         f'<div class="chip {row["group"]}" style="view-transition-name: c-{e(row["id"])}" title="{e(row["title"])}">'
         f'<code dir="ltr">'
-        f"{e(row['id'][-6:])}</code> <small><bdi>{e(row['age'])}</bdi></small><span>{e(row['title'])}</span></div>"
+        f"{e(row['id'][-6:])}</code> <small><bdi>{e(row['age'])}</bdi>{' ✓ منشورة' if row['note'] == 'منشورة' else ''}</small><span>{e(row['title'])}</span></div>"
     )
 
 

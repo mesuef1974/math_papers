@@ -28,6 +28,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 import ledger  # noqa: E402
 import notify  # noqa: E402
+import review  # noqa: E402
 import sync  # noqa: E402
 from merge_gate import ALWAYS_FORBIDDEN, path_forbidden  # noqa: E402
 
@@ -323,10 +324,33 @@ def prepush(path: Path, card: str, head: str) -> dict[str, str] | None:
     return checks
 
 
-def push_and_open_pr(path: Path, branch: str, card: str) -> str:
+def review_card(path: Path, card: str) -> dict:
+    """رأي مراجع للقراءة فقط: {text, usage}. أي تعذّر يعيد نصًّا فارغًا."""
+    meta = ledger.first(card) or {}
+    prompt = review.PROMPT.format(
+        title=meta.get("title", card), body=meta.get("body", ""), success=meta.get("success", "")
+    )
+    try:
+        proc = sh(
+            review.command(),
+            cwd=path,
+            check=False,
+            input=prompt,
+            capture_output=True,
+            env=model_env(card),
+            timeout=review.REVIEW_TIMEOUT,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return {"text": "", "usage": {}}
+    text, usage = parse_result(proc.stdout or "")
+    return {"text": text if proc.returncode == 0 and usage else "", "usage": usage}
+
+
+def push_and_open_pr(path: Path, branch: str, card: str, opinion: str = "") -> str:
     sh(["git", "push", "-u", "origin", branch], cwd=path)
     meta = ledger.first(card) or {}
     body = f"بطاقة `{card}`\n\n{meta.get('body', '')}\n\nالنجاح: {meta.get('success', '')}\n\n(يُكتب سطر الاعتماد هنا بعد المراجعة: اعتُمد من المالك — YYYY-MM-DD — الرأس sha8)"
+    body = f"{review.section(opinion)}\n\n{body}"
     proc = sh(
         [
             "gh",
@@ -379,8 +403,9 @@ def run_card(card: str, model: str | None, max_turns: int) -> tuple[int, str]:
             ledger.append(card, "prepush_failed", head=head)
             return 1, f"{card}: الفحص المحلي فشل — البطاقة تبقى في worktree للمراجعة"
         ledger.append(card, "prepush_ok", head=head, checks=sorted(checks))
-        url = push_and_open_pr(path, branch, card)
-        ledger.append(card, "pr_opened", url=url, head=head)
+        opinion = review_card(path, card)
+        url = push_and_open_pr(path, branch, card, opinion["text"])
+        ledger.append(card, "pr_opened", url=url, head=head, review=opinion["usage"])
         return 0, f"{card}: PR {url}"
     finally:
         release_lock()
