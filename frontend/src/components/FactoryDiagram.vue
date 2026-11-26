@@ -1,7 +1,7 @@
 <script setup lang="ts">
-// رسم المصنع بنمط «مخطط التدفق الحي»: محطاته كما يعمل المشغّل، وأعداد البطاقات من البث.
+// رسم المصنع بتخطيط «مخطط التدفق الحي»: محطاته كما يعمل المشغّل، والحركة للبطاقات المنتقلة وحدها.
 // اللوحة المحلية (scripts/factory_view.py) ترسم المحطات نفسها.
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 
 export interface BoardCard {
   id: string;
@@ -19,7 +19,7 @@ const W = 1040;
 const H = 730;
 const NW = 280;
 const NH = 84;
-const TOUR_MS = 1900;
+const MOVE_MS = 2600; // مدة رحلة البطاقة بين محطتين
 const COL = [990, 660, 330]; // الحافة اليمنى لكل عمود، من اليمين إلى اليسار
 
 interface Station {
@@ -120,44 +120,64 @@ const nodes = computed(() =>
   }),
 );
 
-const live = ref(true);
-const pinned = ref<string | null>(null);
-const tour = ref(0);
-let timer: ReturnType<typeof setInterval> | undefined;
+// لا حركة دائمة: البطاقة تتحرك مرة واحدة حين تتغير محطتها بين لقطتين.
+interface Move {
+  id: string;
+  title: string;
+  to: string;
+  path: string;
+}
+const moves = ref<Move[]>([]);
+let places = new Map(props.cards.map((c) => [c.id, stationOf(c)]));
+let timer: ReturnType<typeof setTimeout> | undefined;
+onBeforeUnmount(() => clearTimeout(timer));
 
-function stopTour() {
-  if (timer !== undefined) clearInterval(timer);
-  timer = undefined;
-}
-function startTour() {
-  stopTour();
-  timer = setInterval(() => (tour.value = (tour.value + 1) % STATIONS.length), TOUR_MS);
-}
-onMounted(() => {
-  live.value = !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-  if (live.value) startTour();
-});
-onBeforeUnmount(stopTour);
-
-function toggleLive() {
-  live.value = !live.value;
-  if (live.value && pinned.value === null) startTour();
-  else stopTour();
-}
-function select(key: string) {
-  if (pinned.value === key) {
-    pinned.value = null; // نقرة ثانية تفك التثبيت وتستأنف الجولة
-    if (live.value) startTour();
-    return;
+/** أقصر طريق على خطوط الرسم؛ وإن لم يوجد (رجوع مباشر) فخط مستقيم بين المحطتين. */
+function route(from: string, to: string): string {
+  const queue: [string, string[]][] = [[from, []]];
+  const seen = new Set([from]);
+  for (const [key, parts] of queue) {
+    if (key === to) return parts.map((d, i) => (i ? d.replace("M", "L") : d)).join("");
+    for (const e of EDGES.filter((e) => e.from === key && !seen.has(e.to))) {
+      seen.add(e.to);
+      queue.push([e.to, [...parts, e.d]]);
+    }
   }
-  pinned.value = key;
-  stopTour();
+  return `M${cx(from)} ${cy(from)}L${cx(to)} ${cy(to)}`;
 }
 
-const activeKey = computed(() => pinned.value ?? STATIONS[tour.value].key);
+watch(
+  () => props.cards,
+  (cards) => {
+    const next = new Map(cards.map((c) => [c.id, stationOf(c)]));
+    const changed = cards.filter((c) => places.get(c.id) !== next.get(c.id));
+    // بطاقة جديدة على الرسم تدخل من «البطاقات»
+    moves.value = changed.map((c) => {
+      const to = next.get(c.id)!;
+      const from = places.get(c.id) ?? "backlog";
+      return { id: c.id, title: c.title, to, path: route(from, to) };
+    });
+    places = next;
+    if (!changed.length) return;
+    clearTimeout(timer);
+    timer = setTimeout(() => (moves.value = []), MOVE_MS * 2);
+  },
+);
+
+const pinned = ref<string | null>(null);
+const select = (key: string) => (pinned.value = pinned.value === key ? null : key);
+const arrived = computed(() => new Set(moves.value.map((m) => m.to)));
+
+// دون تثبيت: المحطة التي وصلتها بطاقة الآن، ثم التي تعمل، ثم أول محطة فيها بطاقات.
+const activeKey = computed(
+  () =>
+    pinned.value ??
+    moves.value[0]?.to ??
+    (nodes.value.find((n) => n.state === "run") ?? nodes.value.find((n) => n.cards.length) ?? nodes.value[0]).key,
+);
 const active = computed(() => nodes.value.find((n) => n.key === activeKey.value) ?? nodes.value[0]);
 const edges = computed(() =>
-  EDGES.map((e, order) => ({ ...e, order, hot: e.from === activeKey.value || e.to === activeKey.value })),
+  EDGES.map((e) => ({ ...e, hot: e.from === activeKey.value || e.to === activeKey.value })),
 );
 const hotNodes = computed(
   () => new Set([activeKey.value, ...edges.value.filter((e) => e.hot).flatMap((e) => [e.from, e.to])]),
@@ -167,16 +187,13 @@ const worker = computed(() => (props.pulse.warn ? "bad" : nodes.value.some((n) =
 
 <template>
   <div class="factory">
-    <div class="toolbar">
-      <button type="button" class="btn btn-primary btn-small" :aria-pressed="live" @click="toggleLive">
-        {{ live ? "إيقاف الحركة" : "تشغيل الحركة" }}
-      </button>
-      <span class="legend-note">النبضة: مسار البطاقة · المتقطع العنابي: العودة إلى الطابور · الأعداد من آخر لقطة وصلت</span>
-    </div>
+    <p class="legend-note">
+      البطاقة تتحرك على الخطوط حين تنتقل فعلًا إلى محطة أخرى، وتنبض المحطة التي يجري فيها العمل الآن. انقر محطة لتثبيت تفاصيلها.
+    </p>
 
     <section class="panel diagram" aria-label="رسم المصنع">
       <div class="diagram-scroll">
-        <svg class="flow" :class="{ live }" :viewBox="`0 0 ${W} ${H}`" role="group" aria-label="محطات المصنع">
+        <svg class="flow" :viewBox="`0 0 ${W} ${H}`" role="group" aria-label="محطات المصنع">
           <defs>
             <marker
               v-for="kind in ['flow', 'feed', 'loop']"
@@ -211,22 +228,11 @@ const worker = computed(() => (props.pulse.warn ? "bad" : nodes.value.some((n) =
             />
           </g>
 
-          <g v-if="live" class="packets" aria-hidden="true">
-            <circle
-              v-for="e in edges"
-              :key="`p-${e.from}-${e.to}`"
-              class="packet"
-              :class="`k-${e.kind}`"
-              r="5"
-              :style="`offset-path: path('${e.d}'); animation-delay: ${(e.order * 0.45).toFixed(2)}s`"
-            />
-          </g>
-
           <g
             v-for="n in nodes"
             :key="n.key"
             class="node"
-            :class="[`st-${n.state}`, n.state, { active: n.key === activeKey, dim: !hotNodes.has(n.key) }]"
+            :class="[`st-${n.state}`, n.state, { active: n.key === activeKey, dim: !hotNodes.has(n.key), arrived: arrived.has(n.key) }]"
             :data-station="n.key"
             role="button"
             tabindex="0"
@@ -248,6 +254,11 @@ const worker = computed(() => (props.pulse.warn ? "bad" : nodes.value.some((n) =
             <text class="n-state" :x="n.x - NW + 28" :y="n.y + 74" text-anchor="end">{{ n.cards.length }} · {{ TONE_LABEL[n.state] }}</text>
           </g>
 
+          <g v-for="m in moves" :key="`${m.id}-${m.to}`" class="token" :data-token="m.id" :style="`offset-path: path('${m.path}')`">
+            <rect x="-92" y="-15" width="184" height="30" rx="8" />
+            <text y="5" text-anchor="middle">{{ short(m.title, 26) }}</text>
+          </g>
+
           <g class="node worker" :class="`st-${worker}`">
             <rect class="body" :x="WORKER.x - 2 * NW - 50" :y="WORKER.y" :width="2 * NW + 50" :height="NH" />
             <text class="n-title" :x="WORKER.x - 14" :y="WORKER.y + 28" text-anchor="start">المشغّل (MathPapers-Runner)</text>
@@ -263,8 +274,7 @@ const worker = computed(() => (props.pulse.warn ? "bad" : nodes.value.some((n) =
         <h2 id="factory-detail-h">{{ active.title }}</h2>
         <span class="badge">{{ active.cards.length }} · {{ TONE_LABEL[active.state] }}</span>
         <span class="tag">{{ active.tag }}</span>
-        <span v-if="pinned === null && live" class="auto">جولة تلقائية</span>
-        <span v-else-if="pinned !== null" class="auto">مثبّتة، انقر عليها لفك التثبيت</span>
+        <span v-if="pinned !== null" class="auto">مثبّتة، انقر عليها لفك التثبيت</span>
       </header>
       <div class="cols">
         <div class="col col-in">
@@ -320,6 +330,66 @@ const worker = computed(() => (props.pulse.warn ? "bad" : nodes.value.some((n) =
 }
 .worker {
   cursor: default;
+}
+.token {
+  offset-rotate: 0deg;
+  offset-distance: 100%;
+  opacity: 0;
+  animation: card-move 2.6s var(--ease) both;
+}
+.token rect {
+  fill: var(--color-brand);
+  stroke: var(--color-accent);
+  stroke-width: 2;
+}
+.token text {
+  font-size: 12px;
+  font-weight: var(--weight-bold);
+  fill: var(--color-on-brand);
+}
+.st-run .ring {
+  animation: card-working 2.2s ease-out infinite;
+}
+.arrived .body {
+  animation: card-arrived 0.6s ease-in-out 2.4s 3 alternate;
+}
+@keyframes card-move {
+  0% {
+    offset-distance: 0%;
+    opacity: 0;
+  }
+  8%,
+  90% {
+    opacity: 1;
+  }
+  100% {
+    offset-distance: 100%;
+    opacity: 0;
+  }
+}
+@keyframes card-working {
+  0% {
+    opacity: 0.8;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.08, 1.3);
+  }
+}
+@keyframes card-arrived {
+  to {
+    stroke-width: 7;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .token {
+    display: none;
+  }
+  .st-run .ring,
+  .arrived .body {
+    animation: none;
+  }
 }
 .safeguards {
   margin-block-start: var(--space-4);
