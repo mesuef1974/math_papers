@@ -92,3 +92,30 @@ def test_flow_places_each_card_in_its_stage_for_the_live_move(tmp_path, cards):
 def test_only_local_host_names_are_served():
     assert board.local_host("127.0.0.1:8791") and board.local_host("localhost:8791")
     assert not board.local_host("evil.example:8791") and not board.local_host(None)
+
+
+def test_the_factory_places_cards_and_marks_the_running_station(tmp_path, cards):
+    usage = {"cache_read": 1_900_000, "cost_usd": 0.94}
+    cards("live", ("claimed", {"pid": 1}), ("coded", {"usage": usage}))
+    cards("pr", ("pr_opened", {"url": PR}))
+    cards("shipped", "merged", "deployed")
+    cards("waiting", "merged")
+    cards("failed", "prepush_failed")
+    data = board.snapshot(tmp_path, NOW, alive=lambda pid: True, open_prs={PR})
+    at = board.factory_view.place(data["groups"])
+    assert {key: [r["id"] for r in rows] for key, rows in at.items() if rows} == {
+        "check": ["live"],
+        "approve": ["pr"],
+        "deploy": ["waiting"],
+        "live": ["shipped"],
+        "stuck": ["failed"],
+    }
+    page = board.render(data, "")
+    assert 'class="node run"' in page and 'class="packet"' in page and "1.9م توكن · $0.94" in page
+
+
+def test_the_factory_shows_a_halted_runner(tmp_path, cards):
+    health = tmp_path / "automation" / ".health"
+    health.parent.mkdir()
+    health.write_text('{"streak": 2}', encoding="utf-8")
+    assert "runner.py --resume" in board.render(board.snapshot(tmp_path, NOW), "")

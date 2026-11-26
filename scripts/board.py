@@ -27,6 +27,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from automation import ledger  # noqa: E402
+from scripts import factory_view  # noqa: E402
 
 PORT = 8791
 REFRESH_SECONDS = 3
@@ -126,6 +127,8 @@ def card_row(card_id: str, now: datetime, alive, open_prs: set[str] | None) -> d
         "age": age(since),
         "url": url,
         "note": "",
+        "usage": next((e["usage"] for e in reversed(events) if e.get("usage")), {}),
+        "review_usage": next((e["review"] for e in reversed(events) if e.get("review")), {}),
     }
     if state in ("merged", "deployed"):
         note = "" if state == "merged" else "منشورة"
@@ -166,7 +169,12 @@ def snapshot(
     pulse = runner_pulse(root, now)
     if groups["running"]:  # السجل يُكتب عند انتهاء البطاقة، فصمته أثناء العمل ليس تعطلًا
         pulse["warn"] = False
-    return {"groups": groups, "pulse": pulse, "at": now.astimezone().strftime("%H:%M:%S")}
+    try:
+        health = json.loads((root / "automation" / ".health").read_text(encoding="utf-8"))
+        halted = int(health["streak"]) >= 2
+    except (OSError, ValueError, KeyError, TypeError):
+        halted = False
+    return {"groups": groups, "pulse": pulse, "halted": halted, "at": now.astimezone().strftime("%H:%M:%S")}
 
 
 def render_chip(row: dict) -> str:
@@ -305,9 +313,10 @@ def render(data: dict, tokens: str) -> str:
     return (
         '<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width, initial-scale=1">'
-        f"<title>بطاقات المشغّل</title><style>{tokens}{STYLE}</style></head><body><main>"
-        f'<h1>بطاقات المشغّل</h1><p class="pulse{warn}">'
-        f"{html.escape(pulse['text'])} | حُدّثت {data['at']}</p>{render_flow(data['groups'])}"
+        f"<title>بطاقات المشغّل</title><style>{tokens}{STYLE}{factory_view.STYLE}</style></head><body><main>"
+        f'<h1>مصنع البطاقات</h1><p class="pulse{warn}">'
+        f"{html.escape(pulse['text'])} | حُدّثت {data['at']}</p>"
+        f"{factory_view.render(data['groups'], pulse, data['halted'])}{render_flow(data['groups'])}"
         f"{''.join(sections)}</main><script>{SCRIPT}</script></body></html>"
     )
 
