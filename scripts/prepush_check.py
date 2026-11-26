@@ -2,7 +2,7 @@
 """الفحوص السريعة نفسها التي يشغّلها CI، محليًا قبل الدفع، فيُكتشف الخطأ في ثوانٍ لا بعد دورة CI.
 
 الفحوص: ruff check، ruff format --check، makemigrations --check، تصادم أرقام الهجرات (إن وُجد gh)،
-detect-secrets على ما تغيّر، pytest سريع (-x -q)، وبناء الواجهة اختياريًا (--frontend).
+detect-secrets على ما تغيّر، pytest متوازٍ (-n auto -x -q)، وبناء الواجهة اختياريًا (--frontend).
 
 الاستعمال:  python scripts/prepush_check.py [--base origin/main] [--frontend] [--allow-missing]
 الخروج:     0 كل ما قيس نجح، 1 فحص فشل، 3 أداة غائبة بلا --allow-missing (لا نجاح صامت).
@@ -105,7 +105,18 @@ def check_secrets(files: list[str]) -> tuple[str, str]:
 def check_tests() -> tuple[str, str]:
     return status(
         run(
-            [sys.executable, "-m", "pytest", "-x", "-q", "--no-header", "-p", "no:cacheprovider"],
+            [
+                sys.executable,
+                "-m",
+                "pytest",
+                "-n",
+                "auto",
+                "-x",
+                "-q",
+                "--no-header",
+                "-p",
+                "no:cacheprovider",
+            ],
             env=TEST_ENV,
         )
     )
