@@ -13,6 +13,7 @@ from automation import runner, schedule
 CARD = "20260101-abcdef"
 HEAD = "a" * 40
 NS = {"t": "http://schemas.microsoft.com/windows/2004/02/mit/task"}
+TOASTS: list[tuple[str, str]] = []
 
 
 class Shell:
@@ -62,6 +63,15 @@ def world(tmp_path, monkeypatch):
         runner.ledger, "append", lambda card, event, **data: events.append((card, event, data))
     )
     monkeypatch.setattr(runner.sync, "quiet", lambda *_: "")
+    monkeypatch.setattr(runner, "HEALTH", tmp_path / ".health")
+    monkeypatch.setattr(runner.ledger, "events", lambda card: [d for c, _, d in events if c == card])
+    monkeypatch.setattr(
+        runner.ledger,
+        "state",
+        lambda card: next(({"event": e} for c, e, _ in reversed(events) if c == card), None),
+    )
+    monkeypatch.setattr(runner.notify, "send", lambda title, body: TOASTS.append((title, body)))
+    TOASTS.clear()
     monkeypatch.delenv("DATABASE_URL", raising=False)
     return events
 
@@ -308,3 +318,64 @@ def test_usage_sums_every_model_and_keeps_the_text():
 @pytest.mark.parametrize("stdout", ["", "Error: x", "[1]", '{"result": "x"}', '{"modelUsage": []}'])
 def test_unreadable_output_is_logged_raw_without_usage(stdout):
     assert runner.parse_result(stdout) == (stdout, {})
+
+
+def dead_lock(monkeypatch, alive=False):
+    runner.LOCK.write_text(f"4242 {CARD}", encoding="utf-8")
+    monkeypatch.setattr(runner, "process_alive", lambda _: alive)
+
+
+def test_dead_runner_card_is_recovered_once_then_blocked(world, monkeypatch):
+    world.append((CARD, "claimed", {}))
+    dead_lock(monkeypatch)
+    assert runner.recover().endswith("استُعيدت بعد انقطاع")
+    assert world[-1][1] == "ready" and world[-1][2]["retry"] and not runner.LOCK.exists()
+    world.append((CARD, "coded", {}))
+    dead_lock(monkeypatch)
+    runner.recover()
+    assert world[-1][1] == "blocked" and runner.failure_streak() == 1
+
+
+def test_a_living_runner_and_a_manual_claim_are_left_alone(world, monkeypatch):
+    world.append((CARD, "claimed", {}))
+    assert runner.recover() == "", "بلا قفل: حجز يدوي"
+    dead_lock(monkeypatch, alive=True)
+    assert runner.recover() == "" and runner.LOCK.exists() and names(world) == ["claimed"]
+
+
+def test_process_alive_sees_a_child_without_killing_it():
+    assert runner.process_alive(runner.os.getpid())
+    child = subprocess.Popen([runner.sys.executable, "-c", "input()"], stdin=subprocess.PIPE)
+    assert runner.process_alive(child.pid) and child.poll() is None
+    child.communicate(b"\n")
+    assert not runner.process_alive(child.pid)
+
+
+def test_model_failure_is_retried_once_without_counting(world, monkeypatch):
+    monkeypatch.setattr(runner, "sh", Shell(ahead="0"))
+    monkeypatch.setattr(runner, "run_model", lambda *_: (1, {}))
+    monkeypatch.setattr(runner, "make_worktree", lambda card: (runner.WORKTREES, f"card/{card}"))
+    assert runner.main([]) == 1
+    assert names(world) == ["claimed", "coded", "ready"] and not TOASTS
+    assert runner.main([]) == 1
+    assert names(world)[-1] == "blocked" and runner.failure_streak() == 1 and len(TOASTS) == 1
+
+
+def test_two_failures_halt_the_runner_until_resumed(world, monkeypatch):
+    shell = Shell(prepush=1)
+    monkeypatch.setattr(runner, "sh", shell)
+    monkeypatch.setattr(runner, "make_worktree", lambda card: (runner.WORKTREES, f"card/{card}"))
+    runner.WORKTREES.mkdir()
+    assert runner.main([]) == 1 and runner.main([]) == 1
+    assert TOASTS[-1][0] == "المشغّل توقف"
+    calls = len(shell.calls)
+    assert runner.main([]) == 0 and len(shell.calls) == calls
+    assert runner.main(["--resume"]) == 0 and runner.failure_streak() == 0
+    assert runner.main([]) == 1 and len(shell.calls) > calls
+
+
+def test_a_success_clears_the_streak_and_notifies(world, monkeypatch):
+    monkeypatch.setattr(runner, "sh", Shell())
+    runner.HEALTH.write_text('{"streak": 1}', encoding="utf-8")
+    assert runner.main([]) == 0
+    assert runner.failure_streak() == 0 and TOASTS[0][0] == "المشغّل: طلب جاهز للمراجعة"

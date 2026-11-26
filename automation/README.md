@@ -32,6 +32,9 @@ python automation/schedule.py remove
 
 ## الجدولة والاستهلاك
 
+- الصمود: قفل صاحبه ميت يُحرَّر وتُعاد بطاقته مرة؛ وفشل النموذج قبل أي إيداع يُعاد مرة (`MAX_RETRIES`)، وفشل الفحص لا يُعاد.
+  إخفاقان متتاليان (`HALT_AFTER`) يوقفان التقاط البطاقات حتى `python automation/runner.py --resume` (العدّاد في `automation/.health`).
+  إشعار ويندوز (`notify.py`) عند فتح طلب أو فشل بطاقة أو توقف المشغّل.
 - المهمة تشغّل `runner.py` من المجلد الرئيسي للمشروع، فبعد دمج أي تغيير في `automation/` حدّث المجلد الرئيسي
   (`git merge --ff-only origin/main`) وإلا بقي المشغّل على نسخته القديمة.
 - `conhost --headless` لا يعيد رمز الخروج، فـ«Last Result» في Task Scheduler صفر دائمًا. الدليل أن المشغّل يعمل سطر لكل تشغيل

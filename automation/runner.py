@@ -14,6 +14,7 @@ prepush_check.py، والدمج بوابة CI وطابور الدمج. حارس 
 from __future__ import annotations
 
 import argparse
+import ctypes
 import json
 import os
 import shutil
@@ -26,6 +27,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 import ledger  # noqa: E402
+import notify  # noqa: E402
 import sync  # noqa: E402
 from merge_gate import ALWAYS_FORBIDDEN, path_forbidden  # noqa: E402
 
@@ -33,6 +35,10 @@ ROOT = ledger.ROOT
 WORKTREES = ROOT / ".worktrees"
 LOCK = ROOT / "automation" / ".lock"
 LOCK_STALE_SECONDS = 3 * 60 * 60
+HEALTH = ROOT / "automation" / ".health"
+MAX_RETRIES = 1  # إعادة آلية واحدة للبطاقة: انقطاع المشغّل أو فشل النموذج قبل أي إيداع
+RETRYING = 2  # رمز داخلي: الإعادة المجدولة ليست نتيجة نهائية
+HALT_AFTER = 2  # إخفاقات متتالية توقف التقاط البطاقات حتى `--resume`
 REQUIRED_TOOLS = ("claude", "git", "gh")
 HEARTBEAT_KEEP = 200
 PUSH_DISABLED = "push-disabled://runner-model"
@@ -107,7 +113,34 @@ def sh(cmd: list[str], cwd: Path = ROOT, check: bool = True, **kw) -> subprocess
     return subprocess.run(cmd, cwd=cwd, text=True, encoding="utf-8", errors="replace", check=check, **kw)
 
 
-def acquire_lock() -> bool:
+def process_alive(pid: int) -> bool:
+    """لا `os.kill(pid, 0)` على ويندوز: يُنهي العملية بدل أن يفحصها."""
+    if os.name != "nt":
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return False
+        except PermissionError:
+            return True
+        return True
+    kernel = ctypes.windll.kernel32
+    handle = kernel.OpenProcess(0x1000, False, pid)  # PROCESS_QUERY_LIMITED_INFORMATION
+    if not handle:
+        return kernel.GetLastError() == 5  # رُفض الوصول: العملية موجودة
+    code = ctypes.c_ulong()
+    ok = kernel.GetExitCodeProcess(handle, ctypes.byref(code))
+    kernel.CloseHandle(handle)
+    return not ok or code.value == 259  # STILL_ACTIVE
+
+
+def lock_owner() -> tuple[int | None, str]:
+    """(pid، البطاقة) من القفل؛ قفل قديم الصيغة أو تالف بلا بطاقة."""
+    parts = LOCK.read_text(encoding="utf-8").split()
+    pid = int(parts[0]) if parts and parts[0].isdigit() else None
+    return pid, parts[1] if len(parts) > 1 else ""
+
+
+def acquire_lock(card: str = "") -> bool:
     if LOCK.exists():
         age = time.time() - LOCK.stat().st_mtime
         if age < LOCK_STALE_SECONDS:
@@ -115,12 +148,60 @@ def acquire_lock() -> bool:
             return False
         print("قفل قديم — يُزال")
         LOCK.unlink()
-    LOCK.write_text(str(os.getpid()), encoding="utf-8")
+    LOCK.write_text(f"{os.getpid()} {card}", encoding="utf-8")
     return True
 
 
 def release_lock() -> None:
     LOCK.unlink(missing_ok=True)
+
+
+def retry(card: str, reason: str) -> bool:
+    """يعيد البطاقة إلى ready إن بقي لها رصيد؛ شجرة عملها تبقى فيُستأنف ما فيها."""
+    if sum(1 for event in ledger.events(card) if event.get("retry")) >= MAX_RETRIES:
+        return False
+    ledger.append(card, "ready", retry=True, note=reason)
+    return True
+
+
+def failure_streak() -> int:
+    try:
+        return int(json.loads(HEALTH.read_text(encoding="utf-8"))["streak"])
+    except (OSError, ValueError, KeyError, TypeError):
+        return 0
+
+
+def halted() -> bool:
+    return failure_streak() >= HALT_AFTER
+
+
+def settle(ok: bool, outcome: str) -> None:
+    """نتيجة تشغيل بطاقة: تحدّث عدّاد الإخفاق المتتالي وتُشعر المالك."""
+    streak = 0 if ok else failure_streak() + 1
+    HEALTH.parent.mkdir(parents=True, exist_ok=True)
+    HEALTH.write_text(json.dumps({"streak": streak}), encoding="utf-8")
+    notify.send("المشغّل: طلب جاهز للمراجعة" if ok else "المشغّل: فشلت بطاقة", outcome)
+    if streak == HALT_AFTER:
+        notify.send("المشغّل توقف", f"{streak} إخفاقات متتالية — runner.py --resume بعد الفحص")
+
+
+def recover() -> str:
+    """قفل صاحبه ميت = تشغيل انقطع (إطفاء الجهاز أو قتل العملية): تُحرَّر بطاقته ولا يُنتظر عمر القفل.
+    البطاقات التي حجزتها جلسة يدويًا لا قفل لها فلا تُمسّ."""
+    if not LOCK.exists():
+        return ""
+    pid, card = lock_owner()
+    if pid is None or process_alive(pid):
+        return ""
+    release_lock()
+    last = ledger.state(card) if card else None
+    if not last or last["event"] not in ("claimed", "coded", "prepush_ok"):
+        return ""
+    if retry(card, "انقطع التشغيل"):
+        return f"{card}: استُعيدت بعد انقطاع"
+    ledger.append(card, "blocked", reason="انقطع التشغيل بعد استنفاد الإعادة")
+    settle(False, f"{card}: انقطع التشغيل ولا إعادة")
+    return f"{card}: انقطعت وأُوقفت"
 
 
 def pick_card() -> str | None:
@@ -287,7 +368,10 @@ def run_card(card: str, model: str | None, max_turns: int) -> tuple[int, str]:
         rc, usage = run_model(path, card, model, max_turns)
         head = sh(["git", "rev-parse", "HEAD"], cwd=path, capture_output=True).stdout.strip()
         ledger.append(card, "coded", exit_code=rc, head=head, usage=usage)
-        if reason := unpushable(path):
+        reason = unpushable(path)
+        if reason and rc != 0 and retry(card, f"فشل النموذج (رمز {rc})"):
+            return RETRYING, f"{card}: فشل النموذج (رمز {rc}) — تُعاد مرة"
+        if reason:
             ledger.append(card, "blocked", reason=reason, head=head)
             return 1, f"{card}: لا دفع: {reason} — راجع .worktrees/{card}.log"
         checks = prepush(path, card, head)
@@ -307,29 +391,48 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--once", action="store_true", default=True)
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--resume", action="store_true", help="استئناف بعد إيقاف الإخفاقات")
     ap.add_argument("--model", default=DEFAULT_MODEL)
     ap.add_argument("--max-turns", type=int, default=40)
     args = ap.parse_args(argv)
 
-    card = pick_card()
-    if args.dry_run:
-        print(
-            f"سيُلتقط: {card} → worktree .worktrees/{card} → claude → prepush → PR"
-            if card
-            else "لا بطاقات ready"
-        )
+    stopped = "متوقف بعد إخفاقات متتالية — --resume"
+    if args.resume:
+        HEALTH.unlink(missing_ok=True)
+        print("استؤنف التقاط البطاقات")
         return 0
+    if args.dry_run:
+        card = pick_card()
+        if halted():
+            print(stopped)
+        elif card:
+            print(f"سيُلتقط: {card} → worktree .worktrees/{card} → claude → prepush → PR")
+        else:
+            print("لا بطاقات ready")
+        return 0
+    recovered = recover()
     synced = sync.quiet()
-    if not card:
+    card = None if halted() else pick_card()
+    if halted():
+        code, outcome = 0, stopped
+    elif not card:
         code, outcome = 0, "لا بطاقات ready" + (f" | مزامنة: {synced}" if synced else "")
-    elif not acquire_lock():
+    elif not acquire_lock(card):
         code, outcome = 0, "مشغّل آخر يعمل"
     else:
         try:
             code, outcome = run_card(card, args.model, args.max_turns)
         except Exception as exc:
             heartbeat(f"{card}: خطأ: {exc!r}")
+            ledger.append(card, "blocked", reason=f"خطأ في المشغّل: {type(exc).__name__}")
+            settle(False, f"{card}: خطأ في المشغّل ({type(exc).__name__})")
             raise
+        if code == RETRYING:
+            code = 1
+        else:
+            settle(code == 0, outcome)
+    if recovered:
+        outcome += f" | {recovered}"
     print(outcome)
     heartbeat(outcome)
     return code
