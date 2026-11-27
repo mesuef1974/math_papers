@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import AppIcon from "@/components/AppIcon.vue";
+import CourseSelect from "@/components/CourseSelect.vue";
 import EmptyState from "@/components/EmptyState.vue";
 import ObjectiveEditor from "@/components/ObjectiveEditor.vue";
 import PrepOverridePanel from "@/components/PrepOverridePanel.vue";
@@ -10,6 +11,7 @@ import {
   type ObjectiveDraft,
 } from "@/composables/usePrepObjectives";
 import { useAuthStore } from "@/stores/auth";
+import { useCoursesStore } from "@/stores/courses";
 import {
   periodKey,
   usePrepsStore,
@@ -27,6 +29,7 @@ import { paperRoute } from "@/utils/paperLink";
 // الهدف الذي لم تُعتمد نصوص وحدته يظهر «معلَّقًا» بوصف مختصر يكمله المعلم. حصة غير الدرس (تهيئة، اختبار قصير، مراجعة،
 // اختبار، مشروع، دعم) تحضيرها مشترك بأنشطتها وروابط أوراقها في «أوراق»، بلا أهداف ولا تعديل.
 const preps = usePrepsStore();
+const courses = useCoursesStore();
 const auth = useAuthStore();
 const route = useRoute();
 const router = useRouter();
@@ -110,15 +113,12 @@ async function openSelected() {
   editing.value = null;
   review.error.value = "";
   preps.editError = "";
-  await router.replace({ query: { lesson, k } });
+  await router.replace({ query: { course: courses.selected, lesson, k } });
   await preps.open(lesson, Number(k));
 }
 
-onMounted(async () => {
-  if (!auth.canGenerate) return;
+async function loadCourse(lesson = "", k = 0) {
   await preps.load();
-  const lesson = String(route.query.lesson ?? "");
-  const k = Number(route.query.k);
   const found =
     preps.periods.find((p) => p.lesson === lesson && p.k === k) ??
     preps.periods[0];
@@ -126,7 +126,26 @@ onMounted(async () => {
     selected.value = periodKey(found);
     await openSelected();
   }
+}
+
+let ready = false;
+onMounted(async () => {
+  if (!auth.canGenerate) return;
+  await courses.ensure(String(route.query.course ?? ""));
+  await loadCourse(String(route.query.lesson ?? ""), Number(route.query.k));
+  ready = true;
 });
+
+watch(
+  () => courses.selected,
+  async () => {
+    if (!ready) return;
+    selected.value = "";
+    editing.value = null;
+    preps.reset();
+    await loadCourse();
+  },
+);
 
 watch(selected, (value, previous) => {
   if (previous && value !== previous) void openSelected();
@@ -150,6 +169,7 @@ watch(selected, (value, previous) => {
     <p v-if="preps.error" class="alert alert-error" role="alert">
       {{ preps.error }}
     </p>
+    <CourseSelect :disabled="preps.opening || preps.saving" />
     <EmptyState v-if="preps.loaded && !preps.periods.length"
       >لا حصص في الخطة الفصلية بعد.</EmptyState
     >

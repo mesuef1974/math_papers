@@ -1,6 +1,23 @@
 import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { useCoursesStore, type Course } from "@/stores/courses";
+
+const course = (slug: string, grade: number): Course => ({
+  slug,
+  title: `الصف ${grade}`,
+  grade,
+  track: "",
+  semester: 1,
+  academic_year: "2026-2027",
+  edition: "",
+  language: "ar",
+  is_current: grade === 10,
+  lesson_count: 19,
+  has_generators: true,
+});
+const useCourses = () =>
+  useCoursesStore().$patch({ courses: [course("g10-s1", 10), course("g12-sci-s1", 12)], selected: "g10-s1" });
 import { GENERATE_PERMISSION, useAuthStore } from "@/stores/auth";
 
 // حصص الدروس كما يرسلها الخادم: الأولى مقاطعها منشورة، والثانية بلا مقاطع، والثالثة تحضيرها فاشل.
@@ -60,6 +77,7 @@ const DecksPage = (await import("./DecksPage.vue")).default;
 describe("DecksPage", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
+    useCourses();
     get.mockReset().mockResolvedValue(periods);
     post.mockReset();
     useAuthStore().user = {
@@ -98,7 +116,7 @@ describe("DecksPage", () => {
     });
     const wrapper = mount(DecksPage);
     await flushPromises();
-    await wrapper.find("select").setValue("1.1|1");
+    await wrapper.find("select.input").setValue("1.1|1");
     await wrapper.find("form").trigger("submit");
     await flushPromises();
     expect(post).toHaveBeenCalledWith("/decks/", {
@@ -124,7 +142,7 @@ describe("DecksPage", () => {
     expect(wrapper.findAll("optgroup option")[0].text()).toContain(
       "عرضك السابق قديم",
     );
-    await wrapper.find("select").setValue("1.1|1");
+    await wrapper.find("select.input").setValue("1.1|1");
     expect(wrapper.text()).toContain("ابنِ العرض من جديد ليطابق تحضيرك");
     await wrapper.find("form").trigger("submit");
     await flushPromises();
@@ -137,5 +155,21 @@ describe("DecksPage", () => {
     await flushPromises();
     expect(wrapper.find("form").exists()).toBe(false);
     expect(wrapper.text()).toContain("لم تُنشر مقاطع أمثلة أي حصة بعد");
+  });
+
+  it("اختيار الثاني عشر يعيد تحميل حصصه", async () => {
+    const wrapper = mount(DecksPage);
+    await flushPromises();
+    await wrapper.find("select.select").setValue("g12-sci-s1");
+    await flushPromises();
+    expect(get).toHaveBeenLastCalledWith("/decks/periods?course=g12-sci-s1");
+  });
+
+  it("المقاطع المنشورة وتحضيرها الفاشل لا يوصفان بأنها لم تُنشر", async () => {
+    get.mockResolvedValue([{ ...periods[2] }]);
+    const wrapper = mount(DecksPage);
+    await flushPromises();
+    expect(wrapper.text()).toContain("لم يجتز معاييره");
+    expect(wrapper.text()).not.toContain("لم تُنشر");
   });
 });

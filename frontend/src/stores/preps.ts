@@ -1,11 +1,10 @@
 import { defineStore } from "pinia";
 import { api, API_BASE, ApiError } from "@/api/client";
+import { useCoursesStore } from "@/stores/courses";
 import { accessMessage } from "@/stores/papers";
 import type { PaperLink } from "@/utils/paperLink";
 
 // تحضير الحصة: حصص الدروس بترتيب الخطة الفصلية، وتحضير الحصة المختارة بمعاييره، وتنزيله في Word بنموذج الوزارة.
-export const PREP_COURSE = "g10-s1";
-
 export type CheckStatus = "pass" | "fail" | "pending";
 
 // حصة الدرس أو نوع حصة غير الدرس (مفتاحها في `lesson`، مثل «quiz-u1»)
@@ -147,15 +146,15 @@ export interface PrepSheet {
   scope?: string[];
 }
 
-export function prepPath(lesson: string, k: number): string {
-  return `/preps/${PREP_COURSE}/${encodeURIComponent(lesson)}/${k}`;
+export function prepPath(course: string, lesson: string, k: number): string {
+  return `/preps/${course}/${encodeURIComponent(lesson)}/${k}`;
 }
 
 export const periodKey = (p: { lesson: string; k: number }) =>
   `${p.lesson}/${p.k}`;
 
-export function wordUrl(lesson: string, k: number): string {
-  return `${API_BASE}${prepPath(lesson, k)}/word`;
+export function wordUrl(course: string, lesson: string, k: number): string {
+  return `${API_BASE}${prepPath(course, lesson, k)}/word`;
 }
 
 export const usePrepsStore = defineStore("preps", {
@@ -171,14 +170,17 @@ export const usePrepsStore = defineStore("preps", {
   }),
   getters: {
     url: (state) =>
-      state.sheet ? wordUrl(state.sheet.lesson, state.sheet.k) : "",
+      state.sheet ? wordUrl(state.sheet.course, state.sheet.lesson, state.sheet.k) : "",
   },
   actions: {
     async load() {
       this.loading = true;
       this.error = "";
+      const course = useCoursesStore().selected;
       try {
-        this.periods = await api.get<PrepPeriod[]>(`/preps/${PREP_COURSE}`);
+        const periods = await api.get<PrepPeriod[]>(`/preps/${course}`);
+        if (course !== useCoursesStore().selected) return; // ردّ متأخر لمقرر تُرك
+        this.periods = periods;
         this.loaded = true;
       } catch (error) {
         this.error = accessMessage(error) ?? "تعذر تحميل حصص الخطة.";
@@ -192,7 +194,7 @@ export const usePrepsStore = defineStore("preps", {
       if (!sheet) return false;
       this.saving = true;
       this.editError = "";
-      const path = `${prepPath(sheet.lesson, sheet.k)}/override`;
+      const path = `${prepPath(sheet.course, sheet.lesson, sheet.k)}/override`;
       try {
         this.sheet = change
           ? await api.put<PrepSheet>(path, change)
@@ -209,11 +211,16 @@ export const usePrepsStore = defineStore("preps", {
         this.saving = false;
       }
     },
+    // تغيير المقرر: لا تبقى حصص المقرر السابق ولا ورقته.
+    reset() {
+      this.$reset();
+    },
     async open(lesson: string, k: number) {
       this.opening = true;
       this.error = "";
       try {
-        this.sheet = await api.get<PrepSheet>(prepPath(lesson, k));
+        const course = useCoursesStore().selected;
+        this.sheet = await api.get<PrepSheet>(prepPath(course, lesson, k));
       } catch (error) {
         this.sheet = null;
         this.error = accessMessage(error) ?? "تعذر فتح تحضير الحصة.";

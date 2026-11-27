@@ -36,7 +36,7 @@ export function usePrepObjectives() {
     busy.value = key;
     error.value = "";
     try {
-      preps.sheet = await call(prepPath(sheet.lesson, sheet.k));
+      preps.sheet = await call(prepPath(sheet.course, sheet.lesson, sheet.k));
       return true;
     } catch (caught) {
       error.value = failure(caught, fallback);

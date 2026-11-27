@@ -1,5 +1,22 @@
 import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { useCoursesStore, type Course } from "@/stores/courses";
+
+const course = (slug: string, grade: number): Course => ({
+  slug,
+  title: `الصف ${grade}`,
+  grade,
+  track: "",
+  semester: 1,
+  academic_year: "2026-2027",
+  edition: "",
+  language: "ar",
+  is_current: grade === 10,
+  lesson_count: 19,
+  has_generators: true,
+});
+const useCourses = () =>
+  useCoursesStore().$patch({ courses: [course("g10-s1", 10), course("g12-sci-s1", 12)], selected: "g10-s1" });
 import { ApiError } from "@/api/client";
 
 const calls = { get: vi.fn(), put: vi.fn(), del: vi.fn() };
@@ -20,6 +37,7 @@ const { usePrepsStore, wordUrl } = await import("@/stores/preps");
 describe("preps store", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
+    useCourses();
     calls.get.mockReset();
     calls.put.mockReset();
     calls.del.mockReset();
@@ -45,12 +63,12 @@ describe("preps store", () => {
   });
 
   it("يفتح تحضير الحصة ويعطي رابط Word بالدرس ورقم الحصة", async () => {
-    calls.get.mockResolvedValue({ lesson: "2.6", k: 2 });
+    calls.get.mockResolvedValue({ course: "g10-s1", lesson: "2.6", k: 2 });
     const store = usePrepsStore();
     await store.open("2.6", 2);
     expect(calls.get).toHaveBeenCalledWith("/preps/g10-s1/2.6/2");
     expect(store.url).toBe("/api/v1/preps/g10-s1/2.6/2/word");
-    expect(wordUrl("1.1", 1)).toBe("/api/v1/preps/g10-s1/1.1/1/word");
+    expect(wordUrl("g10-s1", "1.1", 1)).toBe("/api/v1/preps/g10-s1/1.1/1/word");
   });
 
   it("الحصة غير الموجودة تُفرغ التحضير وتعرض رسالة", async () => {
@@ -65,10 +83,11 @@ describe("preps store", () => {
   it("يحفظ تعديل الحصة المفتوحة ويسترجع المشترك، ويعرض رفض الخادم برسالته", async () => {
     const store = usePrepsStore();
     calls.get
-      .mockResolvedValueOnce({ lesson: "1.1", k: 2 })
+      .mockResolvedValueOnce({ course: "g10-s1", lesson: "1.1", k: 2 })
       .mockResolvedValue([]);
     await store.open("1.1", 2);
     calls.put.mockResolvedValue({
+      course: "g10-s1",
       lesson: "1.1",
       k: 2,
       edit: { state: "active" },
@@ -85,6 +104,7 @@ describe("preps store", () => {
     });
     expect(calls.get).toHaveBeenLastCalledWith("/preps/g10-s1");
     calls.del.mockResolvedValue({
+      course: "g10-s1",
       lesson: "1.1",
       k: 2,
       edit: { state: "none" },
@@ -99,5 +119,15 @@ describe("preps store", () => {
     );
     expect(store.editError).toBe("التعديل يُفشل معيارًا حاجبًا فلم يُحفظ");
     expect(store.sheet?.k).toBe(2);
+  });
+
+  it("المقرر المختار يحدد مسار الحصص، وإعادة الضبط تُفرغ ما سبقه", async () => {
+    calls.get.mockResolvedValue([]);
+    useCoursesStore().select("g12-sci-s1");
+    const store = usePrepsStore();
+    await store.load();
+    expect(calls.get).toHaveBeenCalledWith("/preps/g12-sci-s1");
+    store.reset();
+    expect(store.loaded).toBe(false);
   });
 });

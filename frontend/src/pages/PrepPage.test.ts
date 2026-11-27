@@ -1,6 +1,23 @@
 import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { useCoursesStore, type Course } from "@/stores/courses";
+
+const course = (slug: string, grade: number): Course => ({
+  slug,
+  title: `الصف ${grade}`,
+  grade,
+  track: "",
+  semester: 1,
+  academic_year: "2026-2027",
+  edition: "",
+  language: "ar",
+  is_current: grade === 10,
+  lesson_count: 19,
+  has_generators: true,
+});
+const useCourses = () =>
+  useCoursesStore().$patch({ courses: [course("g10-s1", 10), course("g12-sci-s1", 12)], selected: "g10-s1" });
 import { GENERATE_PERMISSION, useAuthStore } from "@/stores/auth";
 
 // تحضير حصة حقيقي من الخادم (العاشر، الدرس 1.2، الحصة 1) بأهداف معلَّقة لأن نصوص الوحدة لم تُعتمد.
@@ -289,6 +306,7 @@ const PrepPage = (await import("./PrepPage.vue")).default;
 describe("PrepPage", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
+    useCourses();
     get.mockReset();
     get.mockImplementation((url: string) => Promise.resolve(url.endsWith("/1.2/1") ? sheet : periods));
     useAuthStore().user = { id: 1, username: "t", is_staff: false, admin_url: "", permissions: [GENERATE_PERMISSION] };
@@ -298,7 +316,7 @@ describe("PrepPage", () => {
     const wrapper = mount(PrepPage);
     await flushPromises();
     expect(get).toHaveBeenCalledWith("/preps/g10-s1/1.2/1");
-    expect(wrapper.findAll("option")).toHaveLength(2);
+    expect(wrapper.findAll("select.input option")).toHaveLength(2);
     expect(wrapper.find("a.btn-primary").attributes("href")).toBe("/api/v1/preps/g10-s1/1.2/1/word");
     expect(wrapper.find(".alert-info").text()).toContain("لم تُعتمد");
     expect(wrapper.findAll(".status-pending").length).toBeGreaterThanOrEqual(sheet.objectives.length);
