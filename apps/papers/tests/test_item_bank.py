@@ -3,6 +3,7 @@
 import pytest
 
 from apps.curriculum.courses import GRADE10_SLUG
+from apps.papers.domain import item_bank
 from apps.papers.domain.answer_positions import longest_run
 from apps.papers.domain.generators import ERROR_KINDS, REGISTRY
 from apps.papers.domain.item_bank import (
@@ -82,3 +83,13 @@ def test_retrieval_cycles_variants_before_repeating():
 def test_retrieval_without_earlier_lessons_raises():
     with pytest.raises(ItemBankError):
         retrieval(COURSE, [], count=2)
+
+
+def test_exit_ticket_variant_differs_and_default_is_unchanged():
+    """التحقق التكويني (variant=1) من صيغة غير صيغة بطاقة الخروج، والافتراضي يبقى الأولى (النتائج المحفوظة)."""
+    course, lesson, example = "g10-s1", "1.1", 2
+    default = item_bank.exit_ticket(course, lesson, example, seed=5)
+    other = item_bank.exit_ticket(course, lesson, example, seed=5, variant=1)
+    assert default == item_bank.exit_ticket(course, lesson, example, seed=5, variant=0)
+    assert other.variant != default.variant
+    assert item_bank.exit_ticket(course, lesson, example, seed=5, variant=2) == default

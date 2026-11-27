@@ -25,6 +25,7 @@ from typing import Any
 from . import (
     checks,
     corrections,
+    example_text,
     examples,
     exercise_badges,
     exercise_links,
@@ -197,6 +198,12 @@ def stage_student_ocr(book: Book) -> None:
     print(json.dumps(student_ocr.summarize(result), ensure_ascii=False))
 
 
+def stage_example_text(book: Book) -> None:
+    got = example_text.run(book)
+    _write(book.output("example_text"), got)
+    print(json.dumps({"lessons": len(got), "examples": sum(map(len, got.values()))}))
+
+
 def stage_student_examples(book: Book) -> None:
     from . import llama, ocr
 
@@ -350,6 +357,7 @@ STAGES: dict[str, Callable[[Book], Any]] = {
     "student_decks": stage_student_decks,
     "student_ocr": stage_student_ocr,
     "student_examples": stage_student_examples,
+    "example_text": stage_example_text,
 }
 TARGETED = ("load", "publish")  # مراحل لها وجهة خارج مجلد الكتاب: ختمها يشمل بصمة الوجهة
 

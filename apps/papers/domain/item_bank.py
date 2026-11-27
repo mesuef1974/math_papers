@@ -136,12 +136,20 @@ def bank(course: str, lesson: str, *, per_variant: int = 3, seed: int = 0) -> li
     return _items(course, picks, seed)
 
 
-def exit_ticket(course: str, lesson: str, example: int, *, seed: int = 0) -> Item:
-    """بند بطاقة الخروج لمهارة مثال بعينه من الدرس (أول صيغة موضوعية تقيس ذلك المثال)."""
-    for fn in REGISTRY.get((course, lesson), []):
-        if usable(fn) and skill_example(course, lesson, fn.__name__) == example:
-            return _items(course, [(lesson, fn, _distinct(course, lesson, fn, seed, 1)[0])], seed)[0]
-    raise ItemBankError(f"لا صيغة موضوعية للمثال {example} في الدرس {lesson}")
+def exit_ticket(course: str, lesson: str, example: int, *, seed: int = 0, variant: int = 0) -> Item:
+    """بند بطاقة الخروج لمهارة مثال بعينه من الدرس: الصيغة رقم `variant` بين صيغه الموضوعية (دائريًّا).
+
+    الافتراضي (الأولى) لا يتغيّر: النتائج المحفوظة تعيد بناء بندها من المثال والبذرة. غيرها لبند لا يُحفظ (التحقق التكويني)
+    فلا يطابق شكل بطاقة الخروج حين يملك المثال صيغتين."""
+    pool = [
+        fn
+        for fn in REGISTRY.get((course, lesson), [])
+        if usable(fn) and skill_example(course, lesson, fn.__name__) == example
+    ]
+    if not pool:
+        raise ItemBankError(f"لا صيغة موضوعية للمثال {example} في الدرس {lesson}")
+    fn = pool[variant % len(pool)]
+    return _items(course, [(lesson, fn, _distinct(course, lesson, fn, seed, 1)[0])], seed)[0]
 
 
 def retrieval(course: str, earlier: Sequence[str], *, count: int = 3, seed: int = 0) -> list[Item]:
