@@ -11,7 +11,9 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from django.db import transaction
+from django.utils import timezone
 
+from apps.core.services import record_audit
 from apps.curriculum import services as curriculum
 from apps.curriculum.courses import GRADE12_SLUG
 from apps.curriculum.models import Course, Lesson
@@ -27,6 +29,7 @@ from .domain.contract import (
 )
 from .domain.schemas import LessonData, PedagogyData, UnitData, lesson_sort_key
 from .models import (
+    BookExerciseLink,
     ExampleObjective,
     ExampleStandard,
     ExerciseGroup,
@@ -153,6 +156,42 @@ def _load_lesson(data: LessonData, lessons: dict[str, Lesson], report: LoadRepor
     _sync_children(report, "templates", profile.templates, templates, ExerciseTemplate, **parent)
 
 
+def _sync_exercise_links(
+    data: LessonData, lesson: Lesson, provenance: dict[str, str], report: LoadReport
+) -> None:
+    """ربط تمارين الدرس بأمثلته من صفوف الملف. التمرين الذي اعتمده المشرف (بنوعه ورقمه) لا يُضاف له ولا يُحذف منه."""
+    default = "guide" if data.source == "extracted" else "ai_unreviewed"
+    rows = list(lesson.exercise_links.all())
+    reviewed = {(r.kind, r.number) for r in rows if r.reviewed_at}
+    wanted = {
+        (group.kind, number, group.example): (group.dok, provenance.get(group.kind, default))
+        for group in data.exercise_groups
+        for number in group.exercises
+        if (group.kind, number) not in reviewed
+    }
+    current = {(r.kind, r.number, r.example): r for r in rows if (r.kind, r.number) not in reviewed}
+    stale = [row.pk for key, row in current.items() if key not in wanted]
+    BookExerciseLink.objects.filter(pk__in=stale).delete()
+    new, updated = [], []
+    for key, (dok, source) in wanted.items():
+        row = current.get(key)
+        if row is None:
+            kind, number, example = key
+            new.append(
+                BookExerciseLink(
+                    lesson=lesson, kind=kind, number=number, example=example, dok=dok, provenance=source
+                )
+            )
+        elif (row.dok, row.provenance) != (dok, source):
+            row.dok, row.provenance = dok, source
+            updated.append(row)
+    BookExerciseLink.objects.bulk_create(new)
+    BookExerciseLink.objects.bulk_update(updated, ["dok", "provenance"])
+    changed = len(stale) + len(new) + len(updated)
+    if changed:
+        report.changed["exercise_links"] += changed
+
+
 def _load_unit(data: UnitData, course: Course, report: LoadReport) -> None:
     wanted = {
         "title": data.title,
@@ -239,6 +278,85 @@ def _sync_lessons(contract: CourseKnowledge, course: Course, report: LoadReport)
 BlueprintOwnerError = OwnerError  # اسم قديم: جدول مواصفات يملكه مقرر آخر
 
 
+class LinkError(ValueError):
+    """ربط لا يصح: تمرين غير معروف أو مثال ليس من أمثلة الدرس."""
+
+
+class LinkNotFoundError(LinkError):
+    pass
+
+
+@transaction.atomic
+def review_exercise_link(
+    *, course: str, lesson: str, kind: str, number: int, examples: list[int], user, request_id: str = ""
+) -> bool:
+    """يعتمد المشرف أمثلة تمرين واحد (كما هي أو مصحَّحة). idempotent: يعيد False إن كان معتمدًا بها."""
+    rows = list(
+        BookExerciseLink.objects.select_for_update().filter(
+            lesson__course__slug=course, lesson__code=lesson, kind=kind, number=number
+        )
+    )
+    if not rows:
+        raise LinkNotFoundError("لا ربط لهذا التمرين")
+    lesson_id = rows[0].lesson_id
+    wanted = sorted(set(examples))
+    known = set(WorkedExample.objects.filter(profile__lesson_id=lesson_id).values_list("number", flat=True))
+    if not wanted or not set(wanted) <= known:
+        raise LinkError("اختر مثالًا واحدًا على الأقل من أمثلة الدرس")
+    before = sorted(row.example for row in rows)
+    if before == wanted and all(row.reviewed_at for row in rows):
+        return False
+    doks = {row.example: row.dok for row in rows}
+    # مثال جديد للتمرين: عمقه عمق تمارين المثال من النوع نفسه، وإلا فعمق التمرين قبل النقل
+    depth: dict[int, int] = {}
+    siblings = BookExerciseLink.objects.filter(lesson_id=lesson_id, kind=kind, example__in=wanted)
+    for example, dok in siblings.values_list("example", "dok"):
+        depth[example] = max(depth.get(example, 0), dok)
+    BookExerciseLink.objects.filter(pk__in=[row.pk for row in rows]).delete()
+    now = timezone.now()
+    BookExerciseLink.objects.bulk_create(
+        BookExerciseLink(
+            lesson_id=lesson_id,
+            kind=kind,
+            number=number,
+            example=example,
+            dok=doks.get(example) or depth.get(example) or rows[0].dok,
+            provenance=BookExerciseLink.Provenance.TEACHER,
+            reviewed_by=user,
+            reviewed_at=now,
+        )
+        for example in wanted
+    )
+    record_audit(
+        action="knowledge.exercise_link.review",
+        actor=user,
+        target=f"{course}/{lesson}/{kind}/{number}",
+        payload={"before": before, "after": wanted},
+        request_id=request_id,
+    )
+    return True
+
+
+@transaction.atomic
+def approve_lesson_links(*, course: str, lesson: str, user, request_id: str = "") -> int:
+    """يعتمد المشرف كل ربط ينتظر الاعتماد في الدرس، كما هو. idempotent: يعيد عدد الصفوف المعتمدة الآن."""
+    waiting = BookExerciseLink.objects.filter(
+        lesson__course__slug=course, lesson__code=lesson, reviewed_at__isnull=True
+    ).exclude(provenance=BookExerciseLink.Provenance.TEACHER)
+    count = waiting.update(
+        provenance=BookExerciseLink.Provenance.TEACHER, reviewed_by=user, reviewed_at=timezone.now()
+    )
+    if count:
+        record_audit(
+            action="knowledge.exercise_link.approve_lesson",
+            actor=user,
+            target=f"{course}/{lesson}",
+            payload={"rows": count},
+            request_id=request_id,
+        )
+    return count
+
+
 def latest_release(course: Course) -> KnowledgeRelease | None:
     return course.knowledge_releases.first()
 
@@ -251,6 +369,7 @@ def load_contract(contract: CourseKnowledge) -> LoadReport:
     lessons = _sync_lessons(contract, course, report)
     for data in contract.profiles:
         _load_lesson(data, lessons, report)
+        _sync_exercise_links(data, lessons[data.lesson], contract.exercise_provenance, report)
     _load_targets(contract, lessons, report)
     for unit in contract.units:
         _load_unit(unit, course, report)
