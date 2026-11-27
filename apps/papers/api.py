@@ -553,11 +553,29 @@ class PdfIn(Schema):
 
     @model_validator(mode="after")
     def forms_or_bundle(self):
-        if self.bundle is None and len(self.papers) > MAX_FORMS:
+        if len(self.papers) > self.max_papers():
             raise ValueError("أكثر من نموذجين دون حزمة")
         if self.key_only and self.template != "school":
             raise ValueError("المفتاح المستقل لقالب المدرسة وحده")
         return self
+
+    def max_papers(self) -> int:
+        return MAX_FORMS if self.bundle is None else MAX_BUNDLE_PAPERS
+
+
+class PrintPayload(PdfIn):
+    """ما تقرؤه صفحة الطباعة: `PdfIn` ومعه أسماء حزمة الشعبة العلاجية التي يبنيها الخادم وحده. مسارا `/pdf` و`/docx`
+    يقبلان `PdfIn`، فلا يرسل العميل أسماء ولا يتجاوز بها حد النماذج."""
+
+    # اسم صاحب كل ورقة بترتيب `papers` (في ترويسة ورقته ومفتاحها)؛ فارغة لغير الحزمة العلاجية
+    students: list[Annotated[str, Field(max_length=120)]] = Field([], max_length=MAX_BUNDLE_PAPERS)
+
+    def max_papers(self) -> int:
+        if not self.students:
+            return super().max_papers()
+        if len(self.students) != len(self.papers):
+            raise ValueError("عدد الأسماء لا يطابق عدد الأوراق")
+        return MAX_BUNDLE_PAPERS
 
 
 class PdfJobOut(Schema):
@@ -598,7 +616,7 @@ def _create_document(request: HttpRequest, payload: PdfIn, fmt: str):
     return Status(202, meta)
 
 
-@router.get("/pdf/print/{token}", response=PdfIn, auth=None)
+@router.get("/pdf/print/{token}", response=PrintPayload, auth=None)
 def pdf_print_payload(request: HttpRequest, token: str):
     """حمولة صفحة الطباعة للمتصفح الخادمي: الرمز الموقّع قصير العمر هو الإذن، بلا جلسة."""
     data = pdf.payload_for_token(token)

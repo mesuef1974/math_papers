@@ -82,6 +82,18 @@ def render_pdf(url: str) -> bytes:
             browser.close()
 
 
+def render_payload(payload: dict[str, Any]) -> bytes:
+    """PDF من حمولة طباعة داخل العملية المستدعية (مهمة Celery): الحمولة في الكاش المشترك مدة الطباعة وحدها، وصفحة
+    الطباعة تقرؤها من خادم الويب. في خدمة العامل يلزم `PDF_RENDER_BASE_URL` بعنوان الويب وكاش Redis نفسه."""
+    job_id = uuid.uuid4().hex
+    cache.set(_key(job_id, "payload"), payload, TTL)
+    try:
+        token = signing.dumps({"job": job_id}, salt=TOKEN_SALT)
+        return render_pdf(f"{base_url()}/print/{token}")
+    finally:
+        cache.delete(_key(job_id, "payload"))
+
+
 _PAGE_OBJECT = re.compile(rb"/Type\s*/Page(?![A-Za-z])")
 
 

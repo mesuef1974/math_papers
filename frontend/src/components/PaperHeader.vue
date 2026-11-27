@@ -23,13 +23,14 @@ const DOTS = "....................";
     <dl class="meta">
       <div><dt>المادة</dt><dd>{{ header.subject }}</dd></div>
       <div v-if="header.grade"><dt>الصف</dt><dd>{{ header.grade.replace(/^الصف\s+/, "") }}</dd></div>
+      <div v-if="compact && header.student"><dt>الطالب</dt><dd>{{ header.student }}</dd></div>
       <div v-if="header.form"><dt>النموذج</dt><dd>{{ header.form }}</dd></div>
       <div v-if="header.minutes"><dt>زمن الاختبار</dt><dd>{{ durationLabel(header.minutes) }}</dd></div>
       <div v-if="header.totalMarks"><dt>الدرجة الكلية</dt><dd>{{ header.totalMarks }} درجة</dd></div>
       <div v-if="header.date"><dt>التاريخ</dt><dd><bdi dir="ltr">{{ header.date }}</bdi></dd></div>
     </dl>
     <div v-if="!compact" class="student">
-      <span class="grow">اسم الطالب: {{ DOTS }}{{ DOTS }}</span>
+      <span class="grow">اسم الطالب: {{ header.student || DOTS + DOTS }}</span>
       <span>الشعبة: {{ header.section || DOTS }}</span>
       <span v-if="header.totalMarks">الدرجة: ........ / {{ header.totalMarks }}</span>
     </div>

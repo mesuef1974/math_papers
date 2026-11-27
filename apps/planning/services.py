@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from collections.abc import Iterable
 from dataclasses import asdict, dataclass
@@ -9,6 +10,7 @@ from datetime import date, datetime
 from pathlib import Path
 
 from django.contrib.auth.models import AbstractBaseUser
+from django.core.cache import cache
 from django.db import transaction
 from django.utils import timezone
 from pydantic import ValidationError
@@ -21,8 +23,11 @@ from apps.curriculum.models import Lesson
 from apps.knowledge.domain.contract import COURSES_DIR
 from apps.knowledge.domain.unit_prep import PREP_DIR, UnitPrep, course_standards, unit_prep, unit_problems
 from apps.knowledge.selectors import course_index
+from apps.papers import pdf
 from apps.papers import services as papers
 from apps.papers.domain.book_source import number_list
+from apps.papers.domain.remedial import StudentError, remedial_recipe
+from apps.papers.selectors import print_profile
 
 from . import selectors
 from .domain.calendar_engine import PlanningError
@@ -58,6 +63,9 @@ from .models import (
 from .pptx_checks import check_pptx
 from .pptx_export import build_period_pptx
 
+MAX_PACK_STUDENTS = 40  # حد أوراق صفحة الطباعة (`MAX_BUNDLE_PAPERS` في papers/api.py)
+# أسئلة ورقة الطالب في الحزمة: صفحة واحدة. قيس بـ Chromium على دروس العاشر: سؤالان صفحة، وثلاثة تفيض في أغلبها
+PACK_MAX_PARTS = 2
 REMEDIAL_PER_PERIOD = 5  # أسئلة لكل حصة إعادة تدريس؛ المراجعة السريعة بلا حصة تأخذ حصة واحدة في الحساب
 
 
@@ -219,6 +227,105 @@ def record_item_results(
     return saved
 
 
+# ───── حزمة الشعبة العلاجية (M2.2): ملف PDF واحد، صفحة لكل طالب أخطأ، ثم مفاتيحهم مجمَّعة ─────
+PDF_CONTENT_TYPE = "application/pdf"
+PACK_FILE, PACK_STAMP = "pack.pdf", "digest"
+PACK_LOCK_SECONDS = 600
+
+
+def _digest(value: object) -> str:
+    canonical = json.dumps(value, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _pack_folder(owner_id: int, course: str, lesson: str, section: str) -> str:
+    """مجلد حزمة (المعلم، المقرر، الدرس، الشعبة) في التخزين: تجزئة فلا يظهر في اسم الملف أي بيان."""
+    return f"remedial/{_digest([owner_id, course, lesson, section])[:32]}"
+
+
+def class_pack_payload(
+    owner: AbstractBaseUser, course: str, lesson: str, section: str, date: str = ""
+) -> dict:
+    """حمولة طباعة الحزمة: ورقة لكل طالب أخطأ في الدرس (بترتيب رقم القيد) واسمه بجوارها لا داخلها. حتمية من مدخلاتها.
+
+    الطالب الذي لا صيغة لأي من أخطائه بلا ورقة. `PlanningError` حين لا ورقة تُبنى أو تجاوز عددها حد الملف."""
+    sheets, names = [], []
+    for student in selectors.class_errors(owner, course, lesson, section):
+        number = student["enrollment_no"]
+        seed = int(_digest([course, lesson, section, number])[:12], 16) % papers.MAX_SEED
+        errors = [StudentError(**e) for e in student["errors"]]
+        recipe = remedial_recipe(course, errors, seed, max_parts=PACK_MAX_PARTS)
+        if recipe.empty:
+            continue
+        sheets.append(papers.remedial_paper(recipe, lesson))
+        names.append(f"{student['first_name']} {student['last_name']} ({number})")
+    if not sheets:
+        raise PlanningError("لا أخطاء في هذا الدرس تُبنى منها أوراق علاجية")
+    if len(sheets) > MAX_PACK_STUDENTS:
+        raise PlanningError(f"الحزمة تتسع لـ {MAX_PACK_STUDENTS} طالبًا")
+    return {
+        "papers": sheets,
+        "students": names,
+        "profile": print_profile(owner),
+        "date": date,
+        "section": section,
+        "show_key": True,  # المفاتيح كلها بعد الأوراق: مفتاح المعلم المجمَّع
+        "bubble": False,
+    }
+
+
+def build_class_pack(
+    owner: AbstractBaseUser,
+    course: str,
+    lesson: str,
+    section: str,
+    date: str = "",
+    *,
+    storage: Storage | None = None,
+) -> str:
+    """يبني ملف الحزمة ويضعه في التخزين ويعيد مفتاحه. idempotent: تجزئة الحمولة تُحفظ بجانبه، فالمدخلات نفسها لا تعيد بناءه.
+
+    ملف واحد للشعبة في الدرس بمفتاح ثابت: تغيّر المدخلات يستبدله، وزوال ما تُبنى منه الأوراق يحذفه، ويحذفه
+    `purge_ended_results` مع النتائج. قفل في الكاش المشترك يمنع بناءين معًا للملف نفسه. سجل التدقيق عدد الأوراق وحده."""
+    storage = storage or get_storage()
+    section = _section(section)
+    scope = (owner.pk, course, lesson, section)
+    folder = _pack_folder(*scope)
+    lock = f"class-pack:{folder}"
+    if not cache.add(lock, 1, PACK_LOCK_SECONDS):
+        raise PlanningError("الحزمة قيد البناء")
+    try:
+        try:
+            payload = class_pack_payload(owner, course, lesson, section, date)
+        except PlanningError:
+            _delete_class_packs([scope], storage)  # لا ملف قديمًا بأسماء وأخطاء لم تعد قائمة
+            raise
+        key, stamp, digest = f"{folder}/{PACK_FILE}", f"{folder}/{PACK_STAMP}", _digest(payload)
+        if storage.exists(stamp) and storage.get(stamp).decode("ascii") == digest and storage.exists(key):
+            return key
+        data = pdf.render_payload(payload)
+        # البصمة تُزال قبل الملف وتُكتب بعده: موت العامل بينهما يعيد البناء ولا يترك ملفًا لا يعرفه الحذف
+        storage.delete(stamp)
+        storage.put(key, data, PDF_CONTENT_TYPE)
+        storage.put(stamp, digest.encode("ascii"), "text/plain")
+    finally:
+        cache.delete(lock)
+    record_audit(
+        action="remedial.pack.build",
+        actor=owner,
+        target=results_target(course, lesson, section),
+        payload={"sheets": len(payload["papers"])},
+    )
+    return key
+
+
+def _delete_class_packs(scopes: Iterable[tuple[int, str, str, str]], storage: Storage) -> None:
+    for scope in scopes:
+        folder = _pack_folder(*scope)
+        storage.delete(f"{folder}/{PACK_STAMP}")
+        storage.delete(f"{folder}/{PACK_FILE}")
+
+
 @dataclass(frozen=True)
 class ResultsPurged:
     years: tuple[str, ...]
@@ -240,6 +347,11 @@ def purge_ended_results(today: date | None = None, *, write: bool = True) -> Res
     leaving = SectionStudent.objects.exclude(pk__in=current.values("student_id"))
     purged = ResultsPurged(years, leaving.count(), ended.count())
     if write and (purged.students or purged.results):
+        # ملفات الحزم العلاجية تحمل أسماء الطلاب فتُحذف معها؛ فشل التخزين يُبقي الصفوف فيُعاد المحو كله
+        scopes = ended.values_list(
+            "student__owner_id", "lesson__course__slug", "lesson__code", "student__section"
+        )
+        _delete_class_packs(scopes.order_by().distinct(), get_storage())
         ended.delete()
         leaving.delete()
         record_audit(
