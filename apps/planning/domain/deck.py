@@ -17,9 +17,10 @@ from apps.papers.domain.bidi import isolate_number_ranges
 from apps.papers.domain.book_source import number_list, numbers_with_pages
 
 from .calendar_engine import PlanningError
-from .check_items import OPTION_LETTERS, PeriodItems, item_stem, option_label, period_items
+from .check_items import OPTION_LETTERS, PeriodItems, period_items
 from .prep import PeriodPrep, PrepExample, prep_digest
 from .prep_sheet import STAGE_LABELS, recall_label, split_minutes
+from .slide_math import display, isolate_outside_math
 
 REPRESENTATION_LABELS = {
     "بياني": "بياني",
@@ -59,7 +60,7 @@ class ExampleClip:
 # ---- عرض الحصة من تحضيرها ----
 
 # الإعداد: أرقام التصميم في مكان واحد (افتراضات تُراجع بعد أول تجربة في الصف)
-PERIOD_DECK_FORMAT = 8  # 8: لا يُعزل المدى داخل تعبير رياضي؛ 7:صيغ LaTeX رموزًا مقروءة في البنود (6: شريط المراحل ودقائق المرحلة على الشريحة (5: بند الاسترجاع المتباعد في شريحة التذكّر؛ 4: بنود البنك في التحقق والخروج؛ 3: تخطيطات الماستر ورقم الشريحة)
+PERIOD_DECK_FORMAT = 9  # 9: صيغ الشرائح معادلات PowerPoint أصلية؛ 8: لا يُعزل المدى داخل تعبير رياضي؛ 7:صيغ LaTeX رموزًا مقروءة في البنود (6: شريط المراحل ودقائق المرحلة على الشريحة (5: بند الاسترجاع المتباعد في شريحة التذكّر؛ 4: بنود البنك في التحقق والخروج؛ 3: تخطيطات الماستر ورقم الشريحة)
 MINUTES_PER_SLIDE = 2
 TITLE_PT, BODY_PT = 36, 28
 MIN_TITLE_PT, MIN_BODY_PT = 32, 24
@@ -162,7 +163,9 @@ class PeriodSlide:
 
     @property
     def texts(self) -> tuple[str, ...]:
-        return (self.title, *self.bullets, *((self.alt,) if self.alt else ()), *self.notes)
+        """نصوص الشريحة كما تُقرأ (النقاط تحمل `$...$` ليكتبها التصدير معادلات)."""
+        raw = (self.title, *self.bullets, *((self.alt,) if self.alt else ()), *self.notes)
+        return tuple(display(t) for t in raw)
 
 
 @dataclass(frozen=True)
@@ -294,8 +297,8 @@ def _exercise_notes(prep: PeriodPrep, exercises: Sequence[int]) -> tuple[str, ..
 def item_bullets(item) -> tuple[str, ...]:
     """السؤال وخياراته الأربعة (أ-د) على الشريحة؛ المفتاح ونوع الخطأ في الملاحظات وحدها."""
     return (
-        item_stem(item),
-        *(option_label(i, o.text) for i, o in enumerate(item.options)),
+        isolate_outside_math(item.stem),
+        *(isolate_outside_math(f"{OPTION_LETTERS[i]}) {o.text}") for i, o in enumerate(item.options)),
     )
 
 

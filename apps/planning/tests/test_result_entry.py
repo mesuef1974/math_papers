@@ -17,6 +17,7 @@ from apps.papers.domain.generators import ERROR_KINDS
 from apps.papers.domain.item_bank import exit_ticket
 from apps.planning.domain.check_items import OPTION_LETTERS, period_items
 from apps.planning.domain.deck import ExampleClip, build_period_deck
+from apps.planning.domain.slide_math import display
 from apps.planning.models import ItemResult
 from apps.planning.selectors import lesson_preps
 
@@ -84,8 +85,8 @@ def test_entry_items_match_exit_ticket(teacher_client, lesson_periods):
         assert exit_ticket(GRADE10_SLUG, lesson, item["example"], seed=item["seed"]) == ticket.exit
         # والنص هو نص شريحة الخروج: السؤال ثم الخيارات الأربعة بترتيبها
         bullets = exit_slide(prep).bullets
-        assert item["stem"] == bullets[0]
-        assert [strip_isolation(b) for b in bullets[1:]] == [
+        assert strip_isolation(item["stem"]) == strip_isolation(display(bullets[0]))
+        assert [strip_isolation(display(b)) for b in bullets[1:]] == [
             strip_isolation(f"{OPTION_LETTERS[i]}) {text}") for i, text in enumerate(item["options"])
         ]
         # لا شيء في الرد يدل على الصحيح ولا على نوع الخطأ

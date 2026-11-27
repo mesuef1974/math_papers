@@ -38,8 +38,8 @@ BLOCKING = frozenset(
 )
 NON_LESSON_BLOCKING = frozenset({"N1", "N2", "N3"})  # معايير حصص غير الدروس (`non_lesson.py`)
 WARNING = frozenset({"T9"})
-# معايير العرض (`deck_checks.py`، «معايير العرض»): S7 وS8 وS12 على ملف PPTX الناتج
-DECK_BLOCKING = frozenset({"S1", "S2", "S3b", "S3", "S4", "S6", "S7", "S8", "S9", "S10", "S12", "S13"})
+# معايير العرض (`deck_checks.py`، «معايير العرض»): S7 وS8 وS12 وS15 على ملف PPTX الناتج
+DECK_BLOCKING = frozenset({"S1", "S2", "S3b", "S3", "S4", "S6", "S7", "S8", "S9", "S10", "S12", "S13", "S15"})
 DECK_WARNING = frozenset({"S5", "S11"})
 STANDARD_CODE = re.compile(r"^\d{1,2}[A-Z]?\.\d{1,2}\.\d{1,2}$")
 ALL_VERBS = frozenset(v for verbs in VERBS_BY_DOK.values() for v in verbs)

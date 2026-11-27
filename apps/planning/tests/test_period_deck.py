@@ -33,6 +33,7 @@ from apps.planning.domain.deck_checks import (
 )
 from apps.planning.domain.prep import prep_digest
 from apps.planning.domain.prep_checks import FAIL, PASS, CheckResult
+from apps.planning.domain.slide_math import display
 from apps.planning.selectors import lesson_preps
 
 PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 16
@@ -354,4 +355,4 @@ def test_no_raw_latex_on_any_item_slide(built):
         for s in deck.slides:
             if s.kind in ("check", "exit", "recall"):
                 for text in (*s.bullets, *s.notes):
-                    assert not raw.search(text), (prep.lesson, prep.k, s.kind, text)
+                    assert not raw.search(display(text)), (prep.lesson, prep.k, s.kind, text)
