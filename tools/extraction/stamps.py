@@ -12,7 +12,7 @@ from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import Any
 
-from . import corrections, example_text, student_clips, student_examples
+from . import corrections, example_text, exercise_manual, student_clips, student_examples
 from .config import Book
 from .lesson import lessons_dir
 
@@ -45,6 +45,12 @@ INPUTS: dict[str, dict[str, Any]] = {
     "exercise_links": {
         "dirs": ("vision",),
         "after": ("layout", "examples", "exercise_badges", "exercise_try"),
+        "pdf": False,
+    },
+    # وملف اختيار المالك (يُضاف في digest، ومعه exercise_links)
+    "exercise_manual": {
+        "dirs": ("ocr", "render"),
+        "after": ("layout", "examples", "exercise_links"),
         "pdf": False,
     },
     # ومجلد سجلات الدروس (عدد التمارين؛ يُضاف في digest)
@@ -92,6 +98,8 @@ def output_path(book: Book, stage: str) -> Path:
         return book.out / "checks.json"
     if stage == "student_ocr":
         return book.output("student_pages")
+    if stage == "exercise_manual":  # ملف json بالاسم نفسه اختيار المالك لا ناتج المرحلة
+        return book.out / "exercise_manual.html"
     return book.output(stage)
 
 
@@ -104,6 +112,9 @@ def digest(book: Book, stage: str, pdf: Callable[[Book], Path] | None = None, ta
     corr = corrections.path_of(book)
     if corr.exists():
         h.update(_file_digest(corr).encode())
+    picks = exercise_manual.picks_path(book)
+    if stage in ("exercise_links", "exercise_manual") and picks.exists():
+        h.update(f"picks:{_file_digest(picks)}".encode())
     if stage == "objectives":
         h.update(_file_digest(book.lexicon_path).encode())
     keys = spec["dirs"]

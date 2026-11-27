@@ -13,6 +13,7 @@
 (`method: badges`): تمارين قسم «تمارين» لكل مثال، ومنها أمثلة بلا سطر مقروء. صفوف الشارات فيه كما قُرئت: تمرين في صفوف
 try الخام لا يُحذف منه هنا، فالتصحيح قد يُخرجه من صفوف try؛ الكاتب (`book_numbers.practice_groups`) يحذف ما في صفوف try
 النهائية. حالته `review` وتُعتمد وحدها بتصحيح مساره `[lessons, <الدرس>, practice]`؛ تصحيح صفوف الدرس يُبقيه.
+اختيار المالك في `exercise_manual.json` (`exercise_manual.py`) يغلب غلاف الشارات: `practice` بمصدر teacher وحالة ok.
 """
 
 from __future__ import annotations
@@ -20,7 +21,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from . import exercise_badges, exercise_try
+from . import exercise_badges, exercise_manual, exercise_try
 from .config import Book
 from .fields import field
 from .fusion import settings as fusion_settings
@@ -141,6 +142,7 @@ def build(book: Book, layout: dict[str, Any], examples: dict[str, Any]) -> dict[
             shared_pages=got["shared_pages"],
             method="adjacency",
         )
+    exercise_manual.apply(book, result)
     return result
 
 

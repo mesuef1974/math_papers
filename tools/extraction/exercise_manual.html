@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ربط التمارين: $title</title>
+<style>
+  body { font-family: "Segoe UI", Tahoma, sans-serif; margin: 0; padding: 16px; background: Canvas; color: CanvasText; }
+  :root { color-scheme: light dark; }
+  header { position: sticky; inset-block-start: 0; background: Canvas; padding-block: 8px; border-block-end: 1px solid; }
+  section { margin-block: 32px; }
+  .pages { display: flex; gap: 8px; overflow-x: auto; }
+  .pages img { block-size: 420px; border: 1px solid; }
+  table { border-collapse: collapse; margin-block-start: 8px; }
+  th, td { border: 1px solid; padding: 6px 12px; text-align: center; vertical-align: middle; }
+  input { font: inherit; inline-size: 18em; text-align: center; direction: ltr; }
+  input[aria-invalid="true"] { outline: 2px solid #c62828; }
+  button { font: inherit; padding: 6px 16px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>$title</h1>
+  <p>اكتب أمام كل مثال تمارينه من صفحات التمارين، مثل <bdi dir="ltr">1-8, 10</bdi>. لا تكرر تمرين «حاول». اضغط الصورة لتكبيرها.
+     ثم نزّل الملف واحفظه باسم <bdi dir="ltr">$file</bdi> في مجلد الكتاب. المسودة تبقى في هذا المتصفح.</p>
+  <button id="save" type="button">تنزيل الملف</button>
+  <span id="status" role="status"></span>
+</header>
+<main>
+$sections
+</main>
+<script type="application/json" id="book">$book</script>
+<script>
+  const book = JSON.parse(document.getElementById("book").textContent);
+  const cap = $cap;
+  const key = "exercise_manual:" + book;
+  const inputs = [...document.querySelectorAll("input[data-example]")];
+  const idOf = (input) => input.closest("section").dataset.lesson + "/" + input.dataset.example;
+
+  function parse(text) {
+    const latin = text.replace(/[٠-٩]/g, (d) => "٠١٢٣٤٥٦٧٨٩".indexOf(d)).replace(/\s*[-–—]\s*/g, "-");
+    const numbers = new Set();
+    for (const token of latin.split(/[\s,،;؛]+/).filter(Boolean)) {
+      const m = token.match(/^(\d{1,2})(?:-(\d{1,2}))?$/);
+      if (!m) return null;
+      const first = Number(m[1]);
+      const last = Number(m[2] ?? m[1]);
+      if (first < 1 || last < first || last > cap) return null;
+      for (let n = first; n <= last; n++) numbers.add(n);
+    }
+    return [...numbers].sort((a, b) => a - b);
+  }
+
+  function collect() {
+    const lessons = {};
+    let invalid = 0;
+    for (const section of document.querySelectorAll("section[data-lesson]")) {
+      const rows = [];
+      const seen = new Set();
+      const repeated = new Set();
+      for (const input of section.querySelectorAll("input[data-example]")) {
+        const exercises = parse(input.value);
+        input.setAttribute("aria-invalid", exercises === null);
+        if (exercises === null) { invalid++; continue; }
+        exercises.forEach((n) => (seen.has(n) ? repeated.add(n) : seen.add(n)));
+        if (exercises.length) rows.push({ example: Number(input.dataset.example), exercises });
+      }
+      section.querySelector(".note").textContent =
+        repeated.size ? "تنبيه: تمارين مكررة بين مثالين: " + [...repeated].join("، ") : "";
+      if (rows.length) lessons[section.dataset.lesson] = rows;
+    }
+    const status = invalid ? "خانات غير مفهومة: " + invalid : "دروس مربوطة: " + Object.keys(lessons).length;
+    document.getElementById("status").textContent = status;
+    return { data: { book, lessons }, invalid };
+  }
+
+  try {
+    const draft = JSON.parse(localStorage.getItem(key) || "{}");
+    inputs.forEach((i) => { if (idOf(i) in draft) i.value = draft[idOf(i)]; });
+  } catch (e) { /* بلا مسودة */ }
+
+  document.querySelector("main").addEventListener("input", () => {
+    try { localStorage.setItem(key, JSON.stringify(Object.fromEntries(inputs.map((i) => [idOf(i), i.value])))); } catch (e) { /* بلا مسودة */ }
+    collect();
+  });
+
+  document.getElementById("save").addEventListener("click", () => {
+    const { data, invalid } = collect();
+    if (invalid) return;
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 1)], { type: "application/json" }));
+    link.download = "$file";
+    link.click();
+    URL.revokeObjectURL(link.href);
+  });
+  collect();
+</script>
+</body>
+</html>

@@ -71,6 +71,11 @@ python -m tools.extraction <مجلد الكتاب> all          # layout ثم im
   النهائية (بعد التصحيح) يحذفه `write_book_numbers` عند الكتابة لا هذه المرحلة. والملخص يذكر دروسه في `practice_review`. حالته
   `review` (أو `missing`) ويُعتمد وحده بتصحيح مساره `[lessons, "2.1", practice]`؛ تصحيح صفوف الدرس يُبقيه كما هو.
   `write_book_numbers` يكتب المعتمد منه صفوفًا بـ `kind: "practice"`.
+- `exercise_manual` (`exercise_manual.py`): لكتاب لا يربط تمارينه بأمثلتها (كالثاني عشر). تشغّل `exercise_links` ثم تكتب
+  `exercise_manual.html` في مجلد الكتاب: لكل درس صور صفحات تمارينه من `dirs.render` وخانة لكل مثال تُكتب فيها تمارينه («1-8، 10»).
+  زر الصفحة ينزّل `exercise_manual.json` (`{book, lessons: {"1.1": [{example, exercises}]}}`)؛ يُحفظ في مجلد الكتاب ثم تُعاد
+  `exercise_links` فيصير غلاف `practice` بمصدر teacher وحالة `ok` (`method: manual`) ويغلب غلاف الشارات. الدرس الغائب من
+  الملف يبقى كما كان، والمثال أو الدرس المجهول ورقم خارج 1..`exercises.max` خطأ برمز الخروج 3.
 - `exercise_try` (`exercise_try.py`؛ بيئة guide_extract، وتُشغَّل بالاسم قبل `exercise_links`): للكتاب الذي يختم كل مثال فيه
   بسطر «حاول أن تحل التمرين N» (كالثاني عشر: الإحالة من المثال إلى التدريب، وصفحات التمارين بلا إحالة). تكتب `exercise_try.json`
   بمخطط `exercise_links.json`: في صفحات الدرس (`layout`) وبترتيب الأسطر من الأعلى في صناديق OCR تُعدّ الأمثلة من الأسطر نفسها:

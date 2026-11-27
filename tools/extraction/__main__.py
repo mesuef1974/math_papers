@@ -5,7 +5,7 @@
 (الأربع الأخيرة بعد layout؛ وtables قبل layout حين layout.anchor=analysis). وخارج `all`: printed_pages (جدول الصفحات المطبوعة من صناديق OCR؛ غير الرتيب يُرفض برمز الخروج 6)
 وexercise_try (ربط الأمثلة بتدريباتها من سطر «حاول أن تحل التمرين N»؛ ببيئة guide_extract) وexercise_badges (ربط التدريبات
 بأمثلتها من الشارات الملونة في صورة الصفحة) وexercise_links (ربط التدريبات بالأمثلة من سطر «حاول أن تحل» ثم الشارات إن قُرئت
-وإلا من الرؤية وexamples.json، للمراجعة)، وexercise_pages (صفحات تمارين كل درس في كتاب الطالب؛ بعد student_ocr)، وstudent_clips (مقاطع الأمثلة من كتاب الطالب بدقته
+وإلا من الرؤية وexamples.json، للمراجعة)، وexercise_manual (صفحة محلية يربط فيها المالك تمارين كل مثال، وتقرأ exercise_links ملفها)، وexercise_pages (صفحات تمارين كل درس في كتاب الطالب؛ بعد student_ocr)، وstudent_clips (مقاطع الأمثلة من كتاب الطالب بدقته
 الأصلية؛ مطابقة دون العتبة بلا مراجعة رمز الخروج 7) وstudent_decks (شاهدها: عروض حصص المقرر في قاعدة وتخزين مؤقتين)، وstudent_ocr
 (تصيير كتاب الطالب وصناديق PaddleOCR وجدول صفحاته المطبوعة) ثم student_examples (مقاطع الأمثلة من كتاب الطالب مباشرة وروابط
 «حاول أن تحل» منه، بتحقق نموذج الرؤية؛ ما بقي للمراجعة رمز الخروج 7، وتعذّر تشغيل الرؤية 4). المخرجات في مجلد الكتاب خارج المستودع، ويطبع كل مرحلة ملخصها العددي.
@@ -29,6 +29,7 @@ from . import (
     examples,
     exercise_badges,
     exercise_links,
+    exercise_manual,
     exercise_pages,
     exercise_try,
     fusion,
@@ -180,6 +181,16 @@ def stage_exercise_links(book: Book) -> None:
     result = exercise_links.build(book, _layout(book), known)
     _emit(book, "exercise_links", book.output("exercise_links"), result)
     print(json.dumps(exercise_links.summarize(result), ensure_ascii=False))
+
+
+def stage_exercise_manual(book: Book) -> None:
+    known = json.loads(book.output("examples").read_text(encoding="utf-8"))
+    links = json.loads(book.output("exercise_links").read_text(encoding="utf-8"))
+    text, counts = exercise_manual.page_html(book, _layout(book), known, links)
+    path = stamps.output_path(book, "exercise_manual")
+    path.write_text(text, encoding="utf-8")
+    print(json.dumps(counts, ensure_ascii=False))
+    print(path)
 
 
 def stage_exercise_pages(book: Book) -> None:
@@ -372,6 +383,7 @@ STAGES: dict[str, Callable[[Book], Any]] = {
     "exercise_badges": stage_exercise_badges,
     "exercise_try": stage_exercise_try,
     "exercise_links": stage_exercise_links,
+    "exercise_manual": stage_exercise_manual,
     "exercise_pages": stage_exercise_pages,
     "student_clips": stage_student_clips,
     "student_decks": stage_student_decks,
@@ -388,6 +400,8 @@ def run_stage(book: Book, name: str, force: bool = False) -> bool:
         _layout(book)  # ناتجها مدخل الختم: يُبنى قبل حسابه لا بعده، وإلا بطل الختم عند أول تشغيل
     if name in ("exercise_links", "exercise_badges"):
         run_stage(book, "examples")  # ناتجها مدخل المرحلة وختمها؛ تتخطى نفسها إن لم يتغير مدخلها
+    if name == "exercise_manual":
+        run_stage(book, "exercise_links")  # صفوف الأمثلة في الصفحة من روابطه
     current = stamps.digest(book, name, target=publish.target_token(name) if name in TARGETED else "")
     if not force and stamps.is_fresh(book, name, current):
         print(f"== {name}: لم يتغير مدخلها، تُخطيت")
