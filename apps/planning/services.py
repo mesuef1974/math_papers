@@ -11,6 +11,7 @@ from datetime import date, datetime
 from pathlib import Path
 
 from django.conf import settings
+from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AbstractBaseUser
 from django.core.cache import cache
 from django.db import transaction
@@ -242,6 +243,10 @@ class PackBusyError(PlanningError):
     """بناء آخر للملف نفسه جارٍ: ليس فشلًا فلا يُسجَّل في حالة الحزمة."""
 
 
+class PackBuildError(RuntimeError):
+    """فشل غير متوقع في بناء الحزمة، برسالة هي اسم نوعه وحده: رسالة الأصل قد تحمل بيانات طالب فلا تبلغ أي سجل."""
+
+
 def _digest(value: object) -> str:
     canonical = json.dumps(value, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
@@ -364,16 +369,21 @@ def fail_class_pack(owner_id: int, course: str, lesson: str, section: str, detai
     _set_pack_state((owner_id, course, lesson, section), "failed", detail)
 
 
-def run_class_pack(owner: AbstractBaseUser, course: str, lesson: str, section: str, date: str = "") -> str:
-    """`build_class_pack` وتسجيل نتيجته في حالة الحزمة؛ رسالة `PlanningError` تصل المعلم كما هي."""
-    scope = (owner.pk, course, lesson, _section(section))
+def run_class_pack(owner_id: int, course: str, lesson: str, section: str, date: str = "") -> str:
+    """`build_class_pack` وتسجيل نتيجته في حالة الحزمة؛ رسالة `PlanningError` تصل المعلم كما هي، وغيرها
+    `PackBuildError`. كل ما قد يفشل (ومنه قراءة المعلم) داخل المعالجة فلا تبقى الحالة `pending`."""
+    scope = (owner_id, course, lesson, section.strip())
     try:
+        owner = get_user_model().objects.get(pk=owner_id)
         key = build_class_pack(owner, course, lesson, section, date)
     except PackBusyError:
         raise
-    except Exception as error:
-        fail_class_pack(*scope, str(error) if isinstance(error, PlanningError) else PACK_FAILED)
+    except PlanningError as error:
+        fail_class_pack(*scope, str(error))
         raise
+    except Exception as error:
+        fail_class_pack(*scope)
+        raise PackBuildError(type(error).__name__) from None
     _set_pack_state(scope, "ready")
     return key
 
@@ -381,8 +391,9 @@ def run_class_pack(owner: AbstractBaseUser, course: str, lesson: str, section: s
 def class_pack_file(
     owner_id: int, course: str, lesson: str, section: str, storage: Storage | None = None
 ) -> bytes | None:
-    """ملف الحزمة المكتمل (بصمته بجانبه) بمفتاح يشتقه الخادم وحده؛ None حين لا ملف أو بناؤه جارٍ."""
-    if class_pack_state(owner_id, course, lesson, section)[0] == "pending":
+    """ملف الحزمة المكتمل (بصمته بجانبه) بمفتاح يشتقه الخادم وحده؛ None ما لم يكن آخر طلب `ready`: فشل إعادة البناء
+    لا يترك الملف السابق يُقدَّم."""
+    if class_pack_state(owner_id, course, lesson, section)[0] != "ready":
         return None
     storage = storage or get_storage()
     folder = _pack_folder(owner_id, course, lesson, section)

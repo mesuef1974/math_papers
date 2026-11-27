@@ -653,8 +653,10 @@ def request_class_pack(request: HttpRequest, course: str, lesson: str, payload: 
             build_class_pack_task.delay(*scope)
         except services.PackBusyError:  # الوضع الفوري: بناء آخر يمسك القفل
             pass
-        except Exception:  # الوضع الفوري يرفع هنا، أو الوسيط لا يُبلغ
-            logger.exception("فشل بناء الحزمة العلاجية")
+        except Exception as error:  # الوضع الفوري يرفع هنا، أو الوسيط لا يُبلغ
+            # النوع وحده بلا رسالة ولا أثر استدعاء: قد تحمل اسم طالب (`PackBuildError` رسالته نوع الأصل)
+            reason = error if isinstance(error, services.PackBuildError) else type(error).__name__
+            logger.error("فشل بناء الحزمة العلاجية: %s", reason)
             if services.class_pack_state(*scope)[0] == "pending":
                 services.fail_class_pack(*scope)
     return _pack_out(scope)

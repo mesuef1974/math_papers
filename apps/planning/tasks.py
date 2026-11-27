@@ -22,5 +22,4 @@ def build_class_pack_task(owner_id: int, course: str, lesson: str, section: str,
 
     تطبع في العامل صفحة الطباعة التي يقدّمها الويب، فيلزم للعامل `PDF_RENDER_BASE_URL` و`REDIS_URL`
     و`SECRET_KEY` و`ASSETS_*` كالويب."""
-    owner = get_user_model().objects.get(pk=owner_id)
-    return run_class_pack(owner, course, lesson, section, date)
+    return run_class_pack(owner_id, course, lesson, section, date)

@@ -147,11 +147,28 @@ def test_planning_errors_reach_the_teacher(teacher_client, teacher, monkeypatch)
     assert post(teacher_client).json() == {"status": "failed", "detail": message}
 
 
-def test_render_failure_is_a_generic_message(teacher_client, teacher, monkeypatch):
+def test_render_failure_is_a_generic_message(teacher_client, teacher, monkeypatch, caplog):
     enroll(teacher)
+    post(teacher_client)  # حزمة سابقة سليمة
+    SectionStudent.objects.update(first_name="سالمان")  # تغيّرت المدخلات فيعاد البناء
 
     def broken(payload):
         raise RuntimeError("سالم 1001")
 
     monkeypatch.setattr(pdf, "render_payload", broken)
     assert post(teacher_client).json() == {"status": "failed", "detail": "تعذّر بناء الحزمة"}
+    # لا تُقدَّم الحزمة السابقة بعد فشل إعادة البناء
+    assert teacher_client.get(f"{URL}/download", {"section": SECTION}).status_code == 404
+    # لا رسالة استثناء في السجل: النوع وحده
+    assert "RuntimeError" in caplog.text
+    assert not any(private in caplog.text for private in PRIVATE)
+
+
+def test_failure_before_the_build_does_not_stay_pending(teacher):
+    from apps.planning.tasks import build_class_pack_task
+
+    scope = (teacher.pk + 999, GRADE10_SLUG, "1.1", SECTION)
+    services.start_class_pack(*scope)
+    with pytest.raises(services.PackBuildError):
+        build_class_pack_task(*scope)
+    assert services.class_pack_state(*scope) == ("failed", services.PACK_FAILED)

@@ -149,7 +149,8 @@ describe("MisconceptionsPage", () => {
     expect(wrapper.find("a[download]").attributes("href")).toContain(
       "/remedial-packs/g10-s1/1.1/download?section=10%2F3",
     );
-    expect(JSON.stringify({ ...localStorage })).not.toContain("سالم");
+    for (const storage of [localStorage, sessionStorage])
+      expect(JSON.stringify({ ...storage })).not.toContain("سالم");
   });
 
   it("خادم بلا وسيط (503) يعطّل الزر ويذكر السبب", async () => {
