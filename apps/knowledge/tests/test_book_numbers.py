@@ -40,11 +40,28 @@ def _strip(lesson: dict) -> dict:
     return rest
 
 
+def _originals(courses: Path) -> Path:
+    return courses.parent / "original"
+
+
+def _without_practice(source: Path, target: Path) -> None:
+    """دروس المقرر بلا صفوف practice المودَعة: المدخل المصطنع لا يعتمد على ما كُتب من الكتاب الحقيقي."""
+    shutil.copytree(source, target)
+    for path in target.glob("lesson_*.json"):
+        lesson = _read(path)
+        rows = lesson.get("exercise_groups", [])
+        kept = [r for r in rows if r.get("kind") != "practice"]
+        if kept != rows:
+            lesson["exercise_groups"] = kept
+            path.write_text(json.dumps(lesson, ensure_ascii=False, indent=1), encoding="utf-8")
+
+
 @pytest.fixture
 def workspace(tmp_path):
     """نسخة من دروس المقرر، ومجلد كتاب مصطنع: كل مثال يبدأ في صفحة ملف مختلقة، والمطبوعة = صفحة الملف − 20."""
     courses = tmp_path / "courses"
-    shutil.copytree(LESSONS, courses / COURSE / "lessons")
+    _without_practice(LESSONS, _originals(courses))
+    shutil.copytree(_originals(courses), courses / COURSE / "lessons")
     book = tmp_path / "book"
     book.mkdir()
     examples, printed = {}, {}
@@ -113,7 +130,7 @@ def test_annotate_is_pure_and_idempotent():
 
 def test_writer_adds_pages_and_groups_and_touches_nothing_else(workspace):
     courses, book = workspace
-    original = {p.name: _read(p) for p in sorted(LESSONS.glob("lesson_*.json"))}
+    original = {p.name: _read(p) for p in sorted(_originals(courses).glob("lesson_*.json"))}
     written = {name: json.loads(raw) for name, raw in _run(courses, book).items()}
     assert written.keys() == original.keys()
     for i, (name, lesson) in enumerate(written.items()):
@@ -139,7 +156,7 @@ def test_writer_is_idempotent(workspace):
     courses, book = workspace
     first = _run(courses, book)
     assert first == _run(courses, book)
-    assert first != {p.name: p.read_bytes() for p in sorted(LESSONS.glob("lesson_*.json"))}
+    assert first != {p.name: p.read_bytes() for p in sorted(_originals(courses).glob("lesson_*.json"))}
 
 
 def test_include_review_writes_unreviewed_links(workspace):
@@ -221,7 +238,7 @@ def test_annotate_places_guide_numbers_deterministically():
 
 def test_writer_writes_guide_numbers_and_touches_no_text_pages_or_groups(workspace):
     courses, book = workspace
-    original = {p.name: _read(p) for p in sorted(LESSONS.glob("lesson_*.json"))}
+    original = {p.name: _read(p) for p in sorted(_originals(courses).glob("lesson_*.json"))}
     totals = {name: template_max(lesson["templates"]) for name, lesson in original.items()}
     assert all(totals.values())
     records = book / "lessons"
@@ -246,7 +263,9 @@ def test_writer_writes_guide_numbers_and_touches_no_text_pages_or_groups(workspa
         "exercises_total"
     )
     untouched = [name for name in written if name not in ("lesson_2_1.json", "lesson_2_2.json")]
-    assert all(first[name] == (LESSONS / name).read_bytes() for name in untouched)  # ومنها ما حالته review
+    assert all(
+        first[name] == (_originals(courses) / name).read_bytes() for name in untouched
+    )  # ومنها ما حالته review
     with pytest.raises(CommandError, match="سجلات الدروس"):
         _run(courses, book, guide_only=True, records=str(book / "none"))
 
