@@ -320,3 +320,15 @@ python -m tools.extraction.term_plan <ملف PDF> --course <المقرر> --chec
 قبل الإيداع. مقرر جديد يلزم إنشاء مجلده مرة يدويًا بـ `manage.py build_course_index <مقرر> --source <مجلد الكتاب> --title … --grade … --semester …`
 (والمسار واللغة إن وُجدا)؛ بعدها تكفي مرحلة `load`.
 
+
+## صفحات تمارين الدرس في كتاب الطالب (`exercise_pages.py`)
+
+```bash
+python -m tools.extraction <مجلد الكتاب> student_ocr      # مرة واحدة (بيئة guide_extract)
+python -m tools.extraction <مجلد الكتاب> exercise_pages
+```
+
+تكتب `exercise_pages.json` (أرقام فقط) خارج المستودع: لكل درس مديات `{first, last, page}` بالصفحة المطبوعة، من صناديق أرقام
+التمارين بعد علامة قسم التمارين (`markers.exercises` أو `student_examples.end_patterns`). تلزمها `layout` و`printed_pages`
+و`student_ocr`. الحالة `ok` حين تكتمل 1..عدد تمارين سجل الدرس (`lesson`)، وإلا `review` مع `unread`؛ التمرين غير المقروء لا تُخمَّن
+صفحته. الاعتماد تصحيح `stage: exercise_pages` و`path: [lessons, "1.1"]`. يقرؤها `build_course_index` و`write_book_numbers`.
