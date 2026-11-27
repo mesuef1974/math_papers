@@ -1,15 +1,24 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from "vue";
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  ref,
+  watch,
+} from "vue";
 import EmptyState from "@/components/EmptyState.vue";
 import { useAuthStore } from "@/stores/auth";
 import { useCoursesStore } from "@/stores/courses";
 import { useMisconceptionsStore } from "@/stores/misconceptions";
+import { useRemedialStore } from "@/stores/remedial";
 
-// لوحة سوء الفهم: المعلم يختار المقرر والدرس وشعبة من شعبه، فيرى لكل نوع خطأ عدد طلابه وأسماءهم. قراءة فقط؛
-// الإدخال في صفحة ResultsEntryPage.
+// لوحة سوء الفهم: المعلم يختار المقرر والدرس وشعبة من شعبه، فيرى لكل نوع خطأ عدد طلابه وأسماءهم. الإدخال في صفحة
+// ResultsEntryPage، ومن اللوحة تُطلب الأوراق العلاجية للشعبة وتُنزَّل.
 const auth = useAuthStore();
 const courses = useCoursesStore();
 const store = useMisconceptionsStore();
+const remedial = useRemedialStore();
 const course = ref("");
 const lesson = ref("");
 const section = ref("");
@@ -36,9 +45,19 @@ watch(course, (slug) => {
 });
 
 watch([course, lesson, section], ([c, l, s]) => {
+  remedial.reset();
   if (c && l && s) void store.load(c, l, s);
   else store.clear();
 });
+
+// حالة الحزمة تُقرأ حين تظهر لوحة فيها نتائج
+watch(
+  () => store.board,
+  (b) => {
+    if (b?.entered) void remedial.select(b.course, b.lesson, b.section);
+  },
+);
+onBeforeUnmount(() => remedial.reset());
 
 const board = computed(() => store.board);
 const examplesText = (examples: number[]) => examples.join("، ");
@@ -128,6 +147,45 @@ const examplesText = (examples: number[]) => examples.join("، ");
               <dd data-test="students">{{ board.students }}</dd>
             </div>
           </dl>
+          <div class="remedial">
+            <button
+              type="button"
+              class="btn"
+              data-test="remedial"
+              :disabled="remedial.busy || !!remedial.unavailable"
+              :aria-describedby="
+                remedial.unavailable ? 'remedial-reason' : undefined
+              "
+              @click="remedial.request()"
+            >
+              أوراق علاجية
+            </button>
+            <a
+              v-if="remedial.url"
+              class="btn btn-secondary"
+              :href="remedial.url"
+              download
+              >نزّل الحزمة (PDF)</a
+            >
+            <p
+              v-if="remedial.unavailable"
+              id="remedial-reason"
+              class="alert alert-info"
+              role="status"
+            >
+              {{ remedial.unavailable }}
+            </p>
+            <p v-else-if="remedial.busy" class="hint" role="status">
+              {{ remedial.detail || "يُطلب بناء الحزمة…" }}
+            </p>
+            <p
+              v-else-if="remedial.error || remedial.status === 'failed'"
+              class="alert alert-error"
+              role="alert"
+            >
+              {{ remedial.error || remedial.detail }}
+            </p>
+          </div>
           <p v-if="!board.kinds.length" class="alert alert-info" role="status">
             لا أخطاء مسجَّلة: كل من أُدخلت نتائجهم أجابوا صحيحًا.
           </p>
@@ -198,6 +256,17 @@ const examplesText = (examples: number[]) => examples.join("، ");
   font-size: var(--text-xl);
   font-weight: var(--weight-heading);
   color: var(--color-ink);
+}
+.remedial {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: center;
+  margin-block-end: var(--space-4);
+}
+.remedial p {
+  flex-basis: 100%;
+  margin: 0;
 }
 .kinds {
   list-style: none;

@@ -162,6 +162,11 @@ def _owned_lesson(
     return section, roster, record
 
 
+def owned_section(owner: AbstractBaseUser, course: str, lesson: str, section: str) -> str:
+    """اسم شعبة المعلم بعد التحقق من ملكيتها ووجود الدرس؛ `SectionNotOwnedError` و`ResultsNotFoundError` كاللوحة."""
+    return _owned_lesson(owner, course, lesson, section)[0]
+
+
 def misconception_board(owner: AbstractBaseUser, course: str, lesson: str, section: str) -> dict:
     """لوحة سوء الفهم لشعبة المعلم في درس: لكل نوع خطأ عدد الطلاب المختلفين الذين وقعوا فيه وقائمتهم والأمثلة التي ظهر
     فيها، تنازليًا بالعدد (والتساوي بترتيب `ERROR_KINDS`).

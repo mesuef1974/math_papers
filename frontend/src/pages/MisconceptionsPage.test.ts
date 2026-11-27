@@ -127,6 +127,42 @@ describe("MisconceptionsPage", () => {
     expect(post).not.toHaveBeenCalled(); // لا إدخال نتائج من الواجهة
   });
 
+  function withPack(pack: () => Promise<unknown>) {
+    get.mockImplementation((path: string) => {
+      if (path === "/courses") return Promise.resolve(courses);
+      if (path === "/results/sections") return Promise.resolve(sections);
+      if (path.startsWith("/lessons")) return Promise.resolve(lessons);
+      if (path.startsWith("/remedial-packs")) return pack();
+      return Promise.resolve(board);
+    });
+  }
+
+  it("زر الأوراق العلاجية يطلب حزمة الشعبة ويعرض رابط تنزيلها", async () => {
+    withPack(() => Promise.resolve({ status: "idle", detail: "" }));
+    post.mockResolvedValue({ status: "ready", detail: "" });
+    const wrapper = await choose();
+    await wrapper.find('[data-test="remedial"]').trigger("click");
+    await flushPromises();
+    expect(post).toHaveBeenCalledWith("/remedial-packs/g10-s1/1.1", {
+      section: "10/3",
+    });
+    expect(wrapper.find("a[download]").attributes("href")).toContain(
+      "/remedial-packs/g10-s1/1.1/download?section=10%2F3",
+    );
+    expect(JSON.stringify({ ...localStorage })).not.toContain("سالم");
+  });
+
+  it("خادم بلا وسيط (503) يعطّل الزر ويذكر السبب", async () => {
+    const { ApiError } = await import("@/api/client");
+    withPack(() =>
+      Promise.reject(new ApiError(503, "خدمة المهام الخلفية غير مفعّلة")),
+    );
+    const wrapper = await choose();
+    const button = wrapper.find('[data-test="remedial"]');
+    expect(button.attributes("disabled")).toBeDefined();
+    expect(wrapper.text()).toContain("خدمة المهام الخلفية غير مفعّلة");
+  });
+
   it("شعبة بلا نتائج في الدرس تظهر حالتها الفارغة بلا بطاقات", async () => {
     boardOut = { ...board, entered: 0, correct: 0, missing: 5, kinds: [] };
     const wrapper = await choose();

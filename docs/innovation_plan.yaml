@@ -114,7 +114,7 @@ initiatives:
         done_when: المعلم ينزّل الحزمة من اللوحة، والحارس البصري أخضر للصفحة.
         probes:
           - {path: frontend/src/stores/remedial.ts}
-        cards: []
+        cards: ["20261127-3e71e2"]
     kpis:
       - {key: remedial_coverage_pct, title: طلاب أخطؤوا وصدرت لهم ورقة علاجية, unit: "%", baseline: 0, target: 80}
       - {key: remedial_pack_seconds_p95, title: زمن بناء حزمة الشعبة (المئين 95), unit: ث, baseline: null, target: 60, lower_is_better: true}

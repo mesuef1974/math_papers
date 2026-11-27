@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from collections.abc import Iterable
 from dataclasses import asdict, dataclass
 from datetime import date, datetime
 from pathlib import Path
 
+from django.conf import settings
 from django.contrib.auth.models import AbstractBaseUser
 from django.core.cache import cache
 from django.db import transaction
@@ -231,6 +233,13 @@ def record_item_results(
 PDF_CONTENT_TYPE = "application/pdf"
 PACK_FILE, PACK_STAMP = "pack.pdf", "digest"
 PACK_LOCK_SECONDS = 600
+PACK_STATE_SECONDS = 3600
+PACK_BUSY = "الحزمة قيد البناء"
+PACK_FAILED = "تعذّر بناء الحزمة"
+
+
+class PackBusyError(PlanningError):
+    """بناء آخر للملف نفسه جارٍ: ليس فشلًا فلا يُسجَّل في حالة الحزمة."""
 
 
 def _digest(value: object) -> str:
@@ -293,7 +302,7 @@ def build_class_pack(
     folder = _pack_folder(*scope)
     lock = f"class-pack:{folder}"
     if not cache.add(lock, 1, PACK_LOCK_SECONDS):
-        raise PlanningError("الحزمة قيد البناء")
+        raise PackBusyError(PACK_BUSY)
     try:
         try:
             payload = class_pack_payload(owner, course, lesson, section, date)
@@ -317,6 +326,70 @@ def build_class_pack(
         payload={"sheets": len(payload["papers"])},
     )
     return key
+
+
+def class_pack_available() -> bool:
+    """هل يجوز طلب الحزمة من مسار الويب؟ التطوير والاختبار ينفّذان المهمة في مكانها؛ وما عداهما (الإنتاج) يلزمه وسيط Redis
+    ومهمة غير فورية، فلا يُشغَّل متصفح الطباعة داخل طلب الويب."""
+    # من متغير البيئة لا من `settings.SETTINGS_MODULE`: تجاوز الإعدادات يجعله None
+    if settings.DEBUG or os.environ.get("DJANGO_SETTINGS_MODULE", "").endswith(".testing"):
+        return True
+    return bool(settings.REDIS_URL) and not settings.CELERY_TASK_ALWAYS_EAGER
+
+
+def _pack_state_key(owner_id: int, course: str, lesson: str, section: str) -> str:
+    return f"class-pack-state:{_pack_folder(owner_id, course, lesson, section)}"
+
+
+def class_pack_state(owner_id: int, course: str, lesson: str, section: str) -> tuple[str, str]:
+    """آخر طلب للحزمة من الكاش المشترك بين الويب والعامل: (idle | pending | ready | failed، السبب)."""
+    return cache.get(_pack_state_key(owner_id, course, lesson, section), ("idle", ""))
+
+
+def _set_pack_state(scope: tuple[int, str, str, str], status: str, detail: str = "") -> None:
+    ttl = PACK_LOCK_SECONDS if status == "pending" else PACK_STATE_SECONDS
+    cache.set(_pack_state_key(*scope), (status, detail), ttl)
+
+
+def start_class_pack(owner_id: int, course: str, lesson: str, section: str) -> bool:
+    """يعلّم الحزمة قيد البناء؛ False حين يكون بناؤها مطلوبًا فلا تُرسل مهمة ثانية."""
+    scope = (owner_id, course, lesson, section)
+    if class_pack_state(*scope)[0] == "pending":
+        return False
+    _set_pack_state(scope, "pending")
+    return True
+
+
+def fail_class_pack(owner_id: int, course: str, lesson: str, section: str, detail: str = PACK_FAILED) -> None:
+    _set_pack_state((owner_id, course, lesson, section), "failed", detail)
+
+
+def run_class_pack(owner: AbstractBaseUser, course: str, lesson: str, section: str, date: str = "") -> str:
+    """`build_class_pack` وتسجيل نتيجته في حالة الحزمة؛ رسالة `PlanningError` تصل المعلم كما هي."""
+    scope = (owner.pk, course, lesson, _section(section))
+    try:
+        key = build_class_pack(owner, course, lesson, section, date)
+    except PackBusyError:
+        raise
+    except Exception as error:
+        fail_class_pack(*scope, str(error) if isinstance(error, PlanningError) else PACK_FAILED)
+        raise
+    _set_pack_state(scope, "ready")
+    return key
+
+
+def class_pack_file(
+    owner_id: int, course: str, lesson: str, section: str, storage: Storage | None = None
+) -> bytes | None:
+    """ملف الحزمة المكتمل (بصمته بجانبه) بمفتاح يشتقه الخادم وحده؛ None حين لا ملف أو بناؤه جارٍ."""
+    if class_pack_state(owner_id, course, lesson, section)[0] == "pending":
+        return None
+    storage = storage or get_storage()
+    folder = _pack_folder(owner_id, course, lesson, section)
+    key = f"{folder}/{PACK_FILE}"
+    if not (storage.exists(f"{folder}/{PACK_STAMP}") and storage.exists(key)):
+        return None
+    return storage.get(key)
 
 
 def _delete_class_packs(scopes: Iterable[tuple[int, str, str, str]], storage: Storage) -> None:
