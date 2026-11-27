@@ -47,6 +47,12 @@ INPUTS: dict[str, dict[str, Any]] = {
         "after": ("layout", "examples", "exercise_badges", "exercise_try"),
         "pdf": False,
     },
+    # ومجلد سجلات الدروس (عدد التمارين؛ يُضاف في digest)
+    "exercise_pages": {
+        "dirs": ("student_ocr",),
+        "after": ("layout", "printed_pages", "student_ocr"),
+        "pdf": False,
+    },
     "publish": {"dirs": (), "after": (), "pdf": False},  # ومجلد المقاطع (publish.clips) ووجهة التخزين
     # ومجلد المقاطع الحالية (student_clips.source) وملف كتاب الطالب
     "student_clips": {"dirs": (), "after": ("printed_pages",), "pdf": True},
@@ -106,7 +112,7 @@ def digest(book: Book, stage: str, pdf: Callable[[Book], Path] | None = None, ta
     roots = {key: book.dir(key) for key in keys if book.has_dir(key)}
     if stage == "publish" and (clips := book.get("publish", {}).get("clips")) and book.has_dir(clips):
         roots[clips] = book.dir(clips)
-    if stage == "load":
+    if stage in ("load", "exercise_pages"):
         roots["lessons"] = lessons_dir(book)
     if stage in ("student_clips", "student_decks"):
         key = student_clips.settings(book)["source" if stage == "student_clips" else "target"]
