@@ -1,5 +1,22 @@
 import { createPinia, setActivePinia } from "pinia";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { useCoursesStore, type Course } from "@/stores/courses";
+
+const course = (slug: string, grade: number): Course => ({
+  slug,
+  title: `الصف ${grade}`,
+  grade,
+  track: "",
+  semester: 1,
+  academic_year: "2026-2027",
+  edition: "",
+  language: "ar",
+  is_current: grade === 10,
+  lesson_count: 19,
+  has_generators: true,
+});
+const useCourses = () =>
+  useCoursesStore().$patch({ courses: [course("g10-s1", 10), course("g12-sci-s1", 12)], selected: "g10-s1" });
 import { ApiError } from "@/api/client";
 
 const calls = { get: vi.fn(), post: vi.fn() };
@@ -19,6 +36,7 @@ describe("decks store", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     setActivePinia(createPinia());
+    useCourses();
     Object.values(calls).forEach((fn) => fn.mockReset());
   });
   afterEach(() => vi.useRealTimers());

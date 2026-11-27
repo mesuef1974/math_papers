@@ -1,23 +1,40 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import AppIcon from "@/components/AppIcon.vue";
+import CourseSelect from "@/components/CourseSelect.vue";
 import EmptyState from "@/components/EmptyState.vue";
 import { useAuthStore } from "@/stores/auth";
+import { useCoursesStore } from "@/stores/courses";
 import { type DeckPeriod, useDecksStore } from "@/stores/decks";
 
 // عروض الحصص: المعلم يختار حصة من حصص الدروس، فيُبنى في الخادم عرضها من تحضيرها ومقاطع أمثلتها المنشورة، ثم ينزّل ملف PPTX.
 const decks = useDecksStore();
+const courses = useCoursesStore();
 const auth = useAuthStore();
 const choice = ref("");
 
-onMounted(() => {
-  if (auth.canGenerate) void decks.load();
+let ready = false;
+onMounted(async () => {
+  if (!auth.canGenerate) return;
+  await courses.ensure();
+  await decks.load();
+  ready = true;
 });
+watch(
+  () => courses.selected,
+  () => {
+    if (!ready) return;
+    choice.value = "";
+    decks.reset();
+    void decks.load();
+  },
+);
 onBeforeUnmount(() => decks.stop());
 
 const id = (p: DeckPeriod) => `${p.lesson}|${p.k}`;
 const buildable = (p: DeckPeriod) => p.clips && p.status !== "fail";
 const anyBuildable = computed(() => decks.periods.some(buildable));
+const anyClips = computed(() => decks.periods.some((p) => p.clips));
 const current = computed(() =>
   decks.periods.find((p) => id(p) === choice.value),
 );
@@ -72,7 +89,12 @@ async function build() {
     <p v-if="decks.error" class="alert alert-error" role="alert">
       {{ decks.error }}
     </p>
-    <EmptyState v-if="decks.loaded && !anyBuildable">
+    <CourseSelect />
+    <EmptyState v-if="decks.loaded && !anyBuildable && anyClips">
+      مقاطع الأمثلة منشورة، لكن تحضير كل حصة منها لم يجتز معاييره، فلا عروض لبنائها.
+      تظهر المعايير الفاشلة في صفحة التحضير.
+    </EmptyState>
+    <EmptyState v-else-if="decks.loaded && !anyBuildable">
       لم تُنشر مقاطع أمثلة أي حصة بعد، فلا عروض لبنائها. تُنشر من جهاز المالك بأمر
       النشر.
     </EmptyState>

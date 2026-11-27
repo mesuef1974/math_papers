@@ -69,6 +69,11 @@ export const useCoursesStore = defineStore("courses", {
         this.loading = false;
       }
     },
+    // لصفحات تحتاج المقرر قبل أول طلب: يحمّل المقررات إن لزم، ثم يختار `wanted` (من الرابط) إن صح.
+    async ensure(wanted = "") {
+      if (!this.courses.length) await this.load();
+      if (wanted) this.select(wanted);
+    },
     select(slug: string) {
       if (!this.courses.some((course) => course.slug === slug && course.has_generators)) return;
       this.selected = slug;

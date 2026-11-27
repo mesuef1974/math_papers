@@ -10,6 +10,7 @@ import PrintSettings from "@/components/PrintSettings.vue";
 import { usePaperFit } from "@/composables/usePaperFit";
 import { useAuthStore } from "@/stores/auth";
 import { useCoursesStore } from "@/stores/courses";
+import CourseSelect from "@/components/CourseSelect.vue";
 import { LEVEL_NAMES, PURPOSE_LEVEL, PURPOSE_NAMES, usePapersStore, type Level, type Purpose } from "@/stores/papers";
 import { paperPrefill, type PaperPrefill } from "@/utils/paperLink";
 import { usePdfStore, type PdfRequest } from "@/stores/pdf";
@@ -209,19 +210,7 @@ function downloadServerFile(format: "pdf" | "docx", template: "awraq" | "school"
       حسابك لا يملك صلاحية توليد الأوراق. اطلب من المشرف إضافتك إلى مجموعة المعلمين.
     </p>
     <form v-else class="panel generator" :aria-busy="store.loading || store.optionsLoading || courses.loading" @submit.prevent="generate">
-      <label v-if="courses.courses.length > 1" class="field course">
-        المقرر
-        <select
-          class="select"
-          :value="courses.selected"
-          :disabled="store.loading"
-          @change="courses.select(($event.target as HTMLSelectElement).value)"
-        >
-          <option v-for="item in courses.courses" :key="item.slug" :value="item.slug" :disabled="!item.has_generators">
-            {{ item.title }}{{ item.has_generators ? "" : " (لا مولّدات بعد)" }}
-          </option>
-        </select>
-      </label>
+      <CourseSelect :disabled="store.loading" />
       <fieldset class="mode">
         <legend class="visually-hidden">نوع الورقة</legend>
         <div class="segmented">
