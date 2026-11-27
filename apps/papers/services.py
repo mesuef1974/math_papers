@@ -24,12 +24,15 @@ from apps.knowledge import selectors as knowledge_selectors
 from .domain.answer_positions import balanced_positions
 from .domain.book_source import book_source
 from .domain.generators import (
+    ERROR_SPOTTING,
     LEVEL_NAMES,
+    ErrorSpotting,
     ExhaustedError,
     LevelUnavailableError,
     Problem,
     available_lessons,
     generate,
+    generate_error_spotting,
     generator_version,
     lesson_levels,
     skill_example,
@@ -62,6 +65,8 @@ QUIZ_SLOTS = (
     ("essay", "R", 3),
 )
 QUIZ_MAX_LESSONS = 2
+# مسألة «اكتشف الخطأ» (قرار المالك 2026-11-27): في أوراق العمل وحدها باختيار المعلم، ومستواها DOK 3
+SPOTTING_LEVEL = "R"
 
 
 class UnknownBlueprintError(LookupError):
@@ -74,6 +79,10 @@ class BlueprintNotReadyError(LookupError):
 
 class UnknownLessonError(LookupError):
     pass
+
+
+class NoErrorSpottingError(LookupError):
+    """الدرس بلا صيغة «اكتشف الخطأ»."""
 
 
 def _course_slug(course: Course | None) -> str:
@@ -164,6 +173,39 @@ def render_part(problem: Problem, slot: PartSlot, rng: random.Random) -> dict:
         "slot": {"kind": slot.kind, "level": slot.level, "needs_graph": slot.needs_graph},
         # المصدر يُضاف حين يُعرف فقط: أوراق الصيغ بلا مثال (الثاني عشر) تبقى كما كانت بايتًا ببايت (البصمات الذهبية)
         **({"source": source} if (source := _book_source(slot.course, slot.lesson, problem.variant)) else {}),
+    }
+
+
+def lessons_offering_error_spotting(course: str) -> set[str]:
+    return {lesson for registered, lesson in ERROR_SPOTTING if registered == course}
+
+
+def render_error_spotting(item: ErrorSpotting, slot: PartSlot) -> dict:
+    """جزء «اكتشف الخطأ»: خطوات الحل المعروضة وتشخيصها في `spotting`، وبلا خطوات مفتاح أو توزيع درجة."""
+    return {
+        "label": slot.label,
+        "lesson": slot.lesson,
+        "lesson_title": slot.lesson_title,
+        "marks": slot.marks,
+        "level": SPOTTING_LEVEL,
+        "stem": item.stem,
+        "options": [],
+        "answer": item.answer,
+        "answer_index": -1,
+        "steps": [],
+        "marking": [],
+        "graph": None,
+        "option_graphs": [],
+        "variant": item.variant,
+        "fingerprint": item.fingerprint,
+        "slot": {"kind": slot.kind, "level": slot.level, "needs_graph": False},
+        "spotting": {
+            "steps": list(item.steps),
+            "wrong_step": item.wrong_step,
+            "error_kind": item.error_kind,
+            "correct_step": item.correct_step,
+        },
+        **({"source": source} if (source := _book_source(slot.course, slot.lesson, item.variant)) else {}),
     }
 
 
@@ -317,20 +359,26 @@ def build_worksheet(
     form: str = "A",
     purpose: str = "",
     course: str = "",
+    spotting: bool = False,
 ) -> dict:
-    """ورقة عمل لدرس. purpose=remedial يحصرها في السهل ويسمّيها علاجية، وenrichment في مهارات العليا إثرائية."""
+    """ورقة عمل لدرس. purpose=remedial يحصرها في السهل ويسمّيها علاجية، وenrichment في مهارات العليا إثرائية.
+
+    spotting (اختيار المعلم) يضيف مسألة «اكتشف الخطأ» بعد المسائل، بمولّد أعداد خاص فلا تتغير مسائل البذرة.
+    """
     course_row = _resolve_course(course)
     lesson = selectors.lessons(course_row).filter(code=lesson_code).first()
     if lesson is None or lesson_code not in available_lessons(course_row.slug):
         raise UnknownLessonError(lesson_code)
+    if spotting and lesson_code not in lessons_offering_error_spotting(course_row.slug):
+        raise NoErrorSpottingError(lesson_code)
     seed = new_seed() if seed is None else seed
     if purpose:
         level = PURPOSES[purpose][0]
     if form == "B":
-        return build_form_b(
-            build_worksheet(lesson_code, count, seed, level, purpose=purpose, course=course_row.slug),
-            course_row.slug,
+        paper_a = build_worksheet(
+            lesson_code, count, seed, level, purpose=purpose, course=course_row.slug, spotting=spotting
         )
+        return build_form_b(paper_a, course_row.slug)
     rng = random.Random(seed)  # noqa: S311 — بذرة قابلة للإعادة، لا استعمال أمني
     used: set[str] = set()
     questions = []
@@ -348,6 +396,13 @@ def build_worksheet(
         questions.append(
             {"number": number, "kind": slot.kind, "marks": 0, "parts": [render_part(problem, slot, rng)]}
         )
+    if spotting:
+        spot_rng = random.Random(f"error-spotting-{seed}")  # noqa: S311 — حتمية لا أمنية
+        item = generate_error_spotting(lesson.code, spot_rng, course=course_row.slug)
+        kind = BlueprintItem.Kind.ESSAY
+        slot = PartSlot("", lesson.code, lesson.title, kind, 0, course=course_row.slug)
+        parts = [render_error_spotting(item, slot)]
+        questions.append({"number": len(questions) + 1, "kind": kind, "marks": 0, "parts": parts})
     return {
         **paper_meta("worksheet", course_row.slug, blueprint="", lesson_code=lesson.code),
         "title": f"{PURPOSES[purpose][1] if purpose else 'ورقة عمل'}: {lesson.title}"
@@ -433,6 +488,11 @@ def build_form_b(
                 part["slot"]["needs_graph"],
                 course,
             )
+            if part.get("spotting"):
+                item = generate_error_spotting(slot.lesson, rng, avoid, part["variant"], course)
+                avoid.add(item.fingerprint)
+                parts.append(render_error_spotting(item, slot))
+                continue
             try:
                 problem = generate(
                     slot.lesson,
@@ -478,7 +538,12 @@ def save_print_profile(user: AbstractBaseUser, data: dict[str, Any]) -> dict[str
 
 
 def replacement_part(
-    lesson_code: str, slot: PartSlot, exclude: set[str], seed: int | None = None, course: str = ""
+    lesson_code: str,
+    slot: PartSlot,
+    exclude: set[str],
+    seed: int | None = None,
+    course: str = "",
+    spotting: bool = False,
 ) -> dict:
     """جزء جديد للخانة نفسها (النوع والمستوى والرسم) يخالف بصمات ما في الورقة. البذرة تعيد الجزء نفسه."""
     course_row = _resolve_course(course)
@@ -487,6 +552,12 @@ def replacement_part(
         raise UnknownLessonError(lesson_code)
     seed = new_seed() if seed is None else seed
     rng = random.Random(seed)  # noqa: S311 — بذرة قابلة للإعادة، لا استعمال أمني
+    if spotting:
+        if lesson_code not in lessons_offering_error_spotting(course_row.slug):
+            raise NoErrorSpottingError(lesson_code)
+        item = generate_error_spotting(lesson_code, rng, exclude, course=course_row.slug)
+        place = PartSlot(slot.label, lesson.code, lesson.title, slot.kind, slot.marks, course=course_row.slug)
+        return {**render_error_spotting(item, place), "seed": seed}
     try:
         problem = generate(
             lesson_code, rng, slot.kind, exclude, slot.level or None, slot.needs_graph, course=course_row.slug

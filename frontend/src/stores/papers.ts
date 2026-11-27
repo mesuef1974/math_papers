@@ -9,6 +9,7 @@ export interface Lesson {
   examinable: boolean;
   has_generator: boolean;
   levels: Level[];
+  has_error_spotting?: boolean;
 }
 
 export type Level = "K" | "A" | "R";
@@ -58,6 +59,15 @@ export interface BookSource {
   exercises?: number[];
 }
 
+// حل «اكتشف الخطأ»: خطواته المعروضة وتشخيصه؛ diagnosis اسم نوع الخطأ يشتقه الخادم.
+export interface Spotting {
+  steps: string[];
+  wrong_step: number;
+  error_kind: string;
+  correct_step: string;
+  diagnosis: string;
+}
+
 export interface Part {
   label: string;
   lesson: string;
@@ -82,6 +92,7 @@ export interface Part {
   source_exercises?: string;
   fingerprint: string;
   slot: Slot;
+  spotting?: Spotting | null; // لأجزاء «اكتشف الخطأ» وحدها (أوراق العمل)
 }
 
 export interface Question {
@@ -135,6 +146,7 @@ export interface Recipe {
   seed: number;
   replacements: Replacement[];
   course?: string; // فارغ أو غائب في الأوراق المحفوظة قبل المقررات = المقرر الحالي في الخادم
+  spotting?: boolean; // أُضيفت مسألة «اكتشف الخطأ»
 }
 
 export interface BundleEntry {
@@ -243,12 +255,13 @@ export const usePapersStore = defineStore("papers", {
       level: Level | "" = "",
       twin = false,
       purpose: Purpose = "",
+      spotting = false,
     ) {
       // الغرض يحدد المستوى في الخادم؛ لا يُرسل مستوى معه حتى لا يتعارضا.
       const effectiveLevel = purpose ? "" : level;
       return this.fetchPaper(
-        `/papers/worksheet?${query({ lesson, count, seed, level: effectiveLevel, purpose, course: this.course })}`,
-        { kind: "worksheet", blueprint: "", lesson_code: lesson, count, level: effectiveLevel, purpose },
+        `/papers/worksheet?${query({ lesson, count, seed, level: effectiveLevel, purpose, course: this.course, spotting: spotting ? "true" : "" })}`,
+        { kind: "worksheet", blueprint: "", lesson_code: lesson, count, level: effectiveLevel, purpose, ...(spotting ? { spotting } : {}) },
         twin,
       );
     },
@@ -278,6 +291,7 @@ export const usePapersStore = defineStore("papers", {
           marks: old.marks,
           slot: old.slot,
           exclude,
+          ...(old.spotting ? { spotting: true } : {}),
           // مقرر الورقة نفسها لا المختار الآن: ورقة محفوظة من كتاب آخر تُستبدل من كتابها
           ...(this.recipe.course ? { course: this.recipe.course } : {}),
         });

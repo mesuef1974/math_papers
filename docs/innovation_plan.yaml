@@ -145,11 +145,10 @@ initiatives:
         done_when: الحل المعروض يظهر مرقَّم الخطوات في الشاشة وPDF وWord، والمفتاح يذكر رقم الخطوة ونوع الخطأ.
         probes:
           - {path: frontend/src/components/ErrorSpottingPart.vue}
-        cards: []
+        cards: ["20261127-553e87"]
     kpis:
       - {key: lessons_with_error_spotting, title: دروس ممتحَنة لها صيغة اكتشف الخطأ, unit: درس, baseline: 0, target: 14}
-    decisions:
-      - {text: مستوى DOK المعتمد لهذا النوع وهل يدخل الاختبارات أم أوراق العمل وحدها, status: open}
+    decisions: []
     risks: []
 
   - id: M4

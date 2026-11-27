@@ -35,6 +35,7 @@ const seedText = ref("");
 const level = ref<Level | "">("");
 const purpose = ref<Purpose>("");
 const twin = ref(false);
+const spotting = ref(false); // أضف مسألة «اكتشف الخطأ» إلى ورقة العمل
 const sheetWrap = ref<HTMLElement | null>(null);
 usePaperFit(sheetWrap); // الورقة بعرض A4، وتُصغَّر كلها حين تضيق الشاشة
 const forms = computed(() => (store.paper ? [store.paper, ...(store.twin ? [store.twin] : [])] : []));
@@ -59,6 +60,7 @@ const serverRequest = computed<PdfRequest | null>(() =>
 );
 
 const lessonLevels = computed(() => store.lessons.find((item) => item.code === lesson.value)?.levels ?? []);
+const lessonSpotting = computed(() => store.lessons.find((item) => item.code === lesson.value)?.has_error_spotting ?? false);
 watch(lesson, () => {
   if (level.value && !lessonLevels.value.includes(level.value)) level.value = "";
   if (purpose.value && !lessonLevels.value.includes(PURPOSE_LEVEL[purpose.value])) purpose.value = "";
@@ -174,7 +176,16 @@ async function generate() {
     store.bundle = null;
     if (mode.value === "exam") await store.generateExam(blueprint.value, seed.value, twin.value);
     else if (mode.value === "quiz") await store.generateQuiz([lesson.value, secondLesson.value], seed.value, twin.value);
-    else await store.generateWorksheet(lesson.value, count.value, seed.value, level.value, twin.value, purpose.value);
+    else
+      await store.generateWorksheet(
+        lesson.value,
+        count.value,
+        seed.value,
+        level.value,
+        twin.value,
+        purpose.value,
+        spotting.value && lessonSpotting.value,
+      );
   }
   if ((store.paper || store.bundle) && !store.error) {
     // قارئ الشاشة ولوحة المفاتيح ينتقلان إلى الورقة الجديدة بدل البقاء على زر التوليد
@@ -284,6 +295,10 @@ function downloadServerFile(format: "pdf" | "docx", template: "awraq" | "school"
         <label v-if="mode === 'worksheet'" class="field">
           عدد المسائل
           <input v-model.number="count" class="input" type="number" min="1" max="20" />
+        </label>
+        <label v-if="mode === 'worksheet' && lessonSpotting" class="check field-check">
+          <input v-model="spotting" type="checkbox" name="spotting" />
+          أضف مسألة «اكتشف الخطأ»
         </label>
         <label v-if="mode !== 'bundle'" class="check field-check">
           <input v-model="twin" type="checkbox" />

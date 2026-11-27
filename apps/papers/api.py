@@ -18,7 +18,7 @@ from . import pdf, services
 from . import selectors as paper_selectors
 from .access import TeacherAuth
 from .domain.book_source import source_cells, source_label
-from .domain.generators import ExhaustedError, available_lessons, lesson_levels
+from .domain.generators import ERROR_KINDS, ExhaustedError, available_lessons, lesson_levels
 from .domain.marking import marking
 from .models import SavedPaper
 
@@ -49,6 +49,7 @@ class LessonOut(Schema):
     examinable: bool
     has_generator: bool
     levels: list[str]
+    has_error_spotting: bool
 
 
 class BlueprintOut(Schema):
@@ -97,6 +98,25 @@ class BookSourceOut(Schema):
     exercises: list[int] = Field(default_factory=list, max_length=60)  # تدريبات الكتاب على المثال
 
 
+class SpottingOut(Schema):
+    """حل «اكتشف الخطأ» المعروض وتشخيصه؛ اسم نوع الخطأ يشتقه الخادم من مفتاحه."""
+
+    steps: list[str] = Field(min_length=1, max_length=12)
+    wrong_step: int = Field(ge=1)
+    error_kind: str
+    correct_step: str
+    diagnosis: str = ""
+
+    @model_validator(mode="after")
+    def derive_diagnosis(self):
+        if self.error_kind not in ERROR_KINDS:
+            raise ValueError("نوع خطأ غير معتمد")
+        if self.wrong_step > len(self.steps):
+            raise ValueError("رقم الخطوة الخاطئة خارج الخطوات")
+        self.diagnosis = ERROR_KINDS[self.error_kind]
+        return self
+
+
 class PartOut(Schema):
     label: str
     lesson: str
@@ -120,6 +140,7 @@ class PartOut(Schema):
     source_exercises: str = ""
     fingerprint: str
     slot: SlotOut
+    spotting: SpottingOut | None = None  # لأجزاء «اكتشف الخطأ» وحدها
 
     @model_validator(mode="after")
     def derive_marking(self):
@@ -127,7 +148,11 @@ class PartOut(Schema):
 
         ونص المصدر مشتق من أرقامه كذلك، فيطابق المفتاح على الشاشة وفي Word.
         """
-        self.marking = [MarkItemOut(**item) for item in marking(self.slot.kind, self.steps, self.marks)]
+        if self.spotting:
+            self.level = services.SPOTTING_LEVEL
+            self.marking = []
+        else:
+            self.marking = [MarkItemOut(**item) for item in marking(self.slot.kind, self.steps, self.marks)]
         source = self.source.model_dump() if self.source else None
         self.source_label = source_label(source)
         cells = source_cells(source)
@@ -168,6 +193,13 @@ class PaperOut(Schema):
     questions: list[QuestionOut]
     level: str = ""
 
+    @model_validator(mode="after")
+    def error_spotting_in_worksheets_only(self):
+        """قرار المالك 2026-11-27: «اكتشف الخطأ» لا يدخل اختبارًا ولا اختبارًا قصيرًا."""
+        if self.kind != "worksheet" and any(p.spotting for q in self.questions for p in q.parts):
+            raise ValueError("مسألة «اكتشف الخطأ» لأوراق العمل وحدها")
+        return self
+
 
 COURSE_MAX = 48  # حد معرّف المقرر؛ الفارغ هو المقرر الحالي
 
@@ -186,6 +218,7 @@ class WorksheetQuery(Schema):
     form: Form = "A"
     purpose: Literal["", "remedial", "enrichment"] = ""
     course: str = Field("", max_length=COURSE_MAX)
+    spotting: bool = False  # أضف مسألة «اكتشف الخطأ»
 
 
 class QuizQuery(Schema):
@@ -242,6 +275,7 @@ class ReplacePartIn(Schema):
     exclude: list[Annotated[str, Field(max_length=12)]] = Field([], max_length=200)
     seed: Seed | None = None
     course: str = Field("", max_length=COURSE_MAX)
+    spotting: bool = False  # الجزء المستبدَل «اكتشف الخطأ»
 
 
 class ReplacedPartOut(PartOut):
@@ -269,6 +303,7 @@ class RecipeIn(Schema):
     replacements: list[ReplacementIn] = Field([], max_length=60)
     # فارغ = المقرر الحالي؛ لا يدخل الوصفة إلا إن مُلئ فلا تتغير بصمات الأوراق المحفوظة قبل المقررات
     course: str = Field("", max_length=COURSE_MAX)
+    spotting: bool = False  # كالمقرر: لا يدخل الوصفة إلا إن اختير
 
 
 class SavePaperIn(Schema):
@@ -310,6 +345,7 @@ class SavedPaperOut(SavedSummaryOut):
 
 EXHAUSTED = "تعذر توليد مسائل مختلفة بهذا العدد. غيّر رقم النموذج أو قلّل العدد."
 REPLACE_EXHAUSTED = "تعذر إيجاد مسألة مختلفة لهذه الخانة. جرّب مرة أخرى."
+NO_SPOTTING = "لا توجد مسألة «اكتشف الخطأ» لهذا الدرس بعد."
 SAVED_LIMIT = f"بلغت الحد الأقصى ({services.MAX_SAVED_PER_USER} ورقة). احذف بعض الأوراق القديمة."
 SAVED_CONFLICT = "هذا التعديل يجعل الورقة نسخة من ورقة محفوظة أخرى."
 SAVED_COURSE = "مقرر الورقة غير موجود."
@@ -344,6 +380,7 @@ def lessons(request: HttpRequest, course: str = ""):
     except selectors.UnknownCourseError as error:
         raise HttpError(404, "المقرر غير موجود") from error
     ready = available_lessons(course_row.slug)
+    spotting = services.lessons_offering_error_spotting(course_row.slug)
     return [
         {
             "code": row.code,
@@ -352,6 +389,7 @@ def lessons(request: HttpRequest, course: str = ""):
             "examinable": row.examinable,
             "has_generator": row.code in ready,
             "levels": lesson_levels(row.code, course=course_row.slug) if row.code in ready else [],
+            "has_error_spotting": row.code in spotting,
         }
         for row in selectors.lessons(course_row)
     ]
@@ -378,8 +416,17 @@ def exam(request: HttpRequest, query: Query[ExamQuery]):
 def worksheet(request: HttpRequest, query: Query[WorksheetQuery]):
     try:
         return services.build_worksheet(
-            query.lesson, query.count, query.seed, query.level, query.form, query.purpose, query.course
+            query.lesson,
+            query.count,
+            query.seed,
+            query.level,
+            query.form,
+            query.purpose,
+            query.course,
+            query.spotting,
         )
+    except services.NoErrorSpottingError as error:
+        raise HttpError(404, NO_SPOTTING) from error
     except services.UnknownLessonError as error:
         raise HttpError(404, "الدرس غير متاح بهذا المستوى") from error
     except ExhaustedError as error:
@@ -433,8 +480,10 @@ def replace_part(request: HttpRequest, payload: ReplacePartIn):
     )
     try:
         return services.replacement_part(
-            payload.lesson, slot, set(payload.exclude), payload.seed, payload.course
+            payload.lesson, slot, set(payload.exclude), payload.seed, payload.course, payload.spotting
         )
+    except services.NoErrorSpottingError as error:
+        raise HttpError(404, NO_SPOTTING) from error
     except services.UnknownLessonError as error:
         raise HttpError(404, "الدرس غير متاح") from error
     except ExhaustedError as error:
@@ -445,6 +494,8 @@ def _recipe_dict(recipe: RecipeIn) -> dict:
     data = recipe.dict()
     if not data["course"]:
         del data["course"]  # بصمة الوصفة (recipe_hash) تبقى كما كانت للأوراق بلا مقرر
+    if not data["spotting"]:
+        del data["spotting"]
     return data
 
 
