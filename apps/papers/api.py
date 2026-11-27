@@ -150,6 +150,7 @@ class PartOut(Schema):
         """
         if self.spotting:
             self.level = services.SPOTTING_LEVEL
+            self.steps = []
             self.marking = []
         else:
             self.marking = [MarkItemOut(**item) for item in marking(self.slot.kind, self.steps, self.marks)]

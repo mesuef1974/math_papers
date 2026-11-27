@@ -48,6 +48,20 @@ def document_text(data: bytes) -> str:
     return "\n".join("".join(t.text or "" for t in p.iter(qn("w:t"))) for p in body.iter(qn("w:p")))
 
 
+def plain_pieces(text):
+    """المقاطع غير الرياضية من نص: ما يبقى نصًّا كما هو في Word."""
+    return [value.strip() for is_math, _, value in split_math(text) if not is_math and value.strip()]
+
+
+def spotting_row(data: bytes) -> str:
+    """نص صف المفتاح الذي فيه مسألة «اكتشف الخطأ» وحده."""
+    body = Document(io.BytesIO(data)).element.body
+    rows = ["".join(t.text or "" for t in row.iter(qn("w:t"))) for row in body.iter(qn("w:tr"))]
+    found = [text for text in rows if "الخطوة الخاطئة: " in text]
+    assert len(found) == 1, found
+    return found[0]
+
+
 def recipe(paper, **extra):
     return {
         "kind": paper["kind"],
@@ -105,9 +119,11 @@ def test_saving_derives_the_diagnosis_and_old_snapshots_still_open(client):
     expected = parts(paper)[-1]["spotting"]["diagnosis"]
     parts(paper)[-1]["spotting"]["diagnosis"] = "من العميل"
     parts(paper)[-1]["level"] = "K"
+    parts(paper)[-1]["steps"] = ["خطوة من العميل"]
     saved = post(client, "/api/v1/saved", {"paper": paper, "recipe": recipe(paper, spotting=True)}).json()
     last = parts(saved["paper"])[-1]
     assert last["spotting"]["diagnosis"] == expected and last["level"] == "R"
+    assert last["steps"] == []
 
     old = get_worksheet(client, seed=8)
     for part in parts(old):
@@ -140,23 +156,30 @@ def test_client_cannot_put_error_spotting_into_a_test(client, kind):
 @pytest.mark.parametrize("template", ["awraq", "school"])
 def test_word_shows_numbered_steps_and_the_key_names_step_kind_and_dok(client, template):
     paper = get_worksheet(client, spotting="true")
-    spotting = parts(paper)[-1]["spotting"]
+    part = parts(paper)[-1]
+    spotting = part["spotting"]
     payload = {"papers": [paper], "profile": PROFILE, "template": template}
     sheet = document_text(build_docx(payload))
+    # الترقيم يُفحص بعد نص المسألة الأخيرة وحده، فلا يطابقه ترقيم ما قبلها
+    stem = max(plain_pieces(part["stem"]), key=len)
+    assert stem in sheet
+    after = sheet[sheet.rindex(stem) :]
     for number in range(1, len(spotting["steps"]) + 1):
-        assert f"‏{number}‏-" in sheet
+        assert f"‏{number}‏-" in after
     assert "نوع الخطأ:" not in sheet and "الخطوة الصحيحة:" not in sheet
 
     key_options = {"key_only": True} if template == "school" else {"show_key": True}
-    key = document_text(build_docx({**payload, **key_options}))
+    row = spotting_row(build_docx({**payload, **key_options}))
     for expected in (
         f"الخطوة الخاطئة: {spotting['wrong_step']}",
         f"نوع الخطأ: {ERROR_KINDS[spotting['error_kind']]}",
         "الخطوة الصحيحة: ",
         "الجواب: ",
         "DOK 3",
+        *plain_pieces(spotting["correct_step"]),
+        *plain_pieces(part["answer"]),
     ):
-        assert expected in key, expected
+        assert expected in row, expected
 
 
 def test_every_error_spotting_formula_converts_to_word_math():
