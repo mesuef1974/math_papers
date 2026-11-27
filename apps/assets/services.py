@@ -37,12 +37,14 @@ class PublishReport:
     updated: int = 0
     repaired: int = 0  # الفهرس سليم والملف مفقود من التخزين فأُعيد رفعه
     unchanged: int = 0
+    recut: int = 0  # أصل لم يتغير ملفه وحُسبت له مواضع القص
+    uncut: list[str] = field(default_factory=list)  # مقاطع طويلة بلا فراغ آمن للقص (تُعرض كما هي)
     unmatched: list[str] = field(default_factory=list)  # ملفات PNG بأسماء لا تطابق النمط (لم تُنشر)
     orphans: int = 0  # أصول مفهرسة لم تعد في المصدر (تبقى)
 
     @property
     def changed(self) -> int:
-        return self.created + self.updated + self.repaired
+        return self.created + self.updated + self.repaired + self.recut
 
     @property
     def total(self) -> int:
@@ -101,6 +103,15 @@ def asset_key(course: Course, clip: Clip, sha256: str) -> str:
 
 
 def publish_assets(course_slug: str, source: Path, storage: Storage | None = None) -> PublishReport:
+    from apps.planning.example_clips import find_cuts  # هندسة الشريحة في التخطيط، وهو يقرأ الأصول
+
+    def cuts_of(data: bytes, name: str) -> list[int] | None:
+        cuts = find_cuts(data)
+        if cuts is None:
+            report.uncut.append(name)
+            return None
+        return list(cuts)
+
     storage = storage or get_storage()
     course = Course.objects.filter(slug=course_slug).first()
     if course is None:
@@ -131,7 +142,14 @@ def publish_assets(course_slug: str, source: Path, storage: Storage | None = Non
         if existing is not None:
             seen.add(existing.pk)
             if existing.sha256 == sha:
-                if storage.exists(existing.key):
+                cuts = existing.cuts if existing.cuts is not None else cuts_of(data, clip.path.name)
+                if cuts != existing.cuts:
+                    existing.cuts = cuts
+                    existing.save(update_fields=["cuts", "updated_at"])
+                    report.recut += 1
+                    if not storage.exists(existing.key):
+                        storage.put(existing.key, data, "image/png")
+                elif storage.exists(existing.key):
                     report.unchanged += 1
                 else:
                     storage.put(existing.key, data, "image/png")
@@ -141,6 +159,7 @@ def publish_assets(course_slug: str, source: Path, storage: Storage | None = Non
             key, data, "image/png"
         )  # الملف قبل الفهرس: فشل بينهما يترك ملفًا يتيمًا لا فهرسًا يشير إلى فراغ
         wanted = {"key": key, "sha256": sha, "size": len(data), "width": width, "height": height}
+        wanted["cuts"] = cuts_of(data, clip.path.name)
         old_key = ""
         with transaction.atomic():
             if existing is None:
@@ -165,6 +184,7 @@ def publish_assets(course_slug: str, source: Path, storage: Storage | None = Non
                 "created": report.created,
                 "updated": report.updated,
                 "repaired": report.repaired,
+                "recut": report.recut,
                 "unchanged": report.unchanged,
             },
         )

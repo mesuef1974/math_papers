@@ -45,6 +45,7 @@ class ExampleClip:
     height_px: int
     part: int = 1
     kind: str = "example"  # example | practice («حاول أن تحل» لمثال: مقطع التدريب من كتاب الطالب)
+    cuts: tuple[int, ...] = ()  # صفوف قص المقطع الطويل (`example_clips.find_cuts`)؛ فارغ: يُعرض كما هو
 
     def __post_init__(self) -> None:
         if self.kind not in ("example", "practice"):
@@ -60,7 +61,7 @@ class ExampleClip:
 # ---- عرض الحصة من تحضيرها ----
 
 # الإعداد: أرقام التصميم في مكان واحد (افتراضات تُراجع بعد أول تجربة في الصف)
-PERIOD_DECK_FORMAT = 11  # 11: سؤال التحقق من صيغة غير صيغة بطاقة الخروج؛ 10: اسم الدرس على الغلاف وبلا شريحة «حل المثال»؛ 9: صيغ الشرائح معادلات PowerPoint أصلية؛ 8: لا يُعزل المدى داخل تعبير رياضي؛ 7:صيغ LaTeX رموزًا مقروءة في البنود (6: شريط المراحل ودقائق المرحلة على الشريحة (5: بند الاسترجاع المتباعد في شريحة التذكّر؛ 4: بنود البنك في التحقق والخروج؛ 3: تخطيطات الماستر ورقم الشريحة)
+PERIOD_DECK_FORMAT = 12  # 12: المقطع الطويل يُقص عند فراغ أبيض؛ 11: سؤال التحقق من صيغة غير صيغة بطاقة الخروج؛ 10: اسم الدرس على الغلاف وبلا شريحة «حل المثال»؛ 9: صيغ الشرائح معادلات PowerPoint أصلية؛ 8: لا يُعزل المدى داخل تعبير رياضي؛ 7:صيغ LaTeX رموزًا مقروءة في البنود (6: شريط المراحل ودقائق المرحلة على الشريحة (5: بند الاسترجاع المتباعد في شريحة التذكّر؛ 4: بنود البنك في التحقق والخروج؛ 3: تخطيطات الماستر ورقم الشريحة)
 MINUTES_PER_SLIDE = 2
 TITLE_PT, BODY_PT = 36, 28
 MIN_TITLE_PT, MIN_BODY_PT = 32, 24
@@ -195,8 +196,13 @@ def deck_key_of(
     return f"decks/{prep.course}/{prep.lesson}-k{prep.k}of{prep.n}-p{prep.minutes}-{digest.hexdigest()[:16]}.pptx"
 
 
+def content_digest(sha256: str, cuts: Sequence[int] | None) -> str:
+    """تجزئة المقطع كما يُعرض: قصّه يغيّر الشرائح والملف نفسه لم يتغير، فيدخل مفتاح العرض."""
+    return f"{sha256}~{','.join(map(str, cuts))}" if cuts else sha256
+
+
 def _clip_digest(clip: ExampleClip) -> tuple[int, int, str]:
-    return clip.n, clip.part, hashlib.sha256(clip.png).hexdigest()
+    return clip.n, clip.part, content_digest(hashlib.sha256(clip.png).hexdigest(), clip.cuts)
 
 
 def period_deck_key(prep: PeriodPrep, clips: Sequence[ExampleClip]) -> str:

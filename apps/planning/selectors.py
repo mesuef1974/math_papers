@@ -26,7 +26,7 @@ from apps.papers.domain.generators import ERROR_KINDS
 
 from .domain.calendar_engine import Closure, Plan, Slot, Term, allocate, parse_terms, sessions
 from .domain.check_items import item_stem, option_text, period_items
-from .domain.deck import ExampleClip, deck_key_of
+from .domain.deck import ExampleClip, content_digest, deck_key_of
 from .domain.feedback import ClassOutcome, Decision, decide
 from .domain.non_lesson import KINDS as NON_LESSON_KINDS
 from .domain.non_lesson import NonLessonPrep, build_non_lesson, check_non_lesson
@@ -62,7 +62,7 @@ from .domain.strategies import (
     build_flow,
     load_library,
 )
-from .example_clips import merge_groups
+from .example_clips import merge_groups, piece_sizes
 from .models import (
     ClassOutcomeRecord,
     DeckBuild,
@@ -389,7 +389,7 @@ def deck_key(prep: PeriodPrep, assets: Sequence[Asset]) -> str:
     """مفتاح عرض الحصة من فهرس الأصول وحده (تجزئة كل مقطع مخزَّنة معه) فلا تُقرأ الصور لمعرفة الحالة."""
 
     def digests(kind: str):
-        return ((a.number, a.part + 1, a.sha256) for a in assets if a.kind == kind)
+        return ((a.number, a.part + 1, content_digest(a.sha256, a.cuts)) for a in assets if a.kind == kind)
 
     return deck_key_of(prep, digests(Asset.Kind.EXAMPLE), digests(Asset.Kind.PRACTICE))
 
@@ -404,6 +404,7 @@ def clips_of(assets: Sequence[Asset], storage: Storage | None = None) -> tuple[E
             height_px=a.height,
             part=a.part + 1,
             kind=a.kind,
+            cuts=tuple(a.cuts or ()),
         )
         for a in assets
     )
@@ -421,14 +422,15 @@ class PreparedPeriod:
     override: str = "none"  # none | active | invalid (تعديل محفوظ لم يعد يطابق الدرس فأُهمل)
 
 
-def _example_clips(course: str) -> dict[str, dict[int, list[tuple[int, int]]]] | None:
-    """أبعاد مقاطع كل مثال (الأصل فتتماته بترتيبها) من فهرس الأصول؛ None إن لم يُنشر للمقرر أصل بعد (فالمقطع معلَّق لا مفقود)."""
+def _example_clips(course: str) -> dict[str, dict[int, list[list[tuple[int, int]]]]] | None:
+    """لكل مثال مقاطعه (الأصل فتتماته بترتيبها)، ولكل مقطع أبعاد أجزائه بعد قصّه، من فهرس الأصول؛ None إن لم يُنشر للمقرر أصل بعد (فالمقطع معلَّق لا مفقود)."""
     rows = Asset.objects.filter(course__slug=course, kind=Asset.Kind.EXAMPLE).order_by("part")
     if not rows.exists():
         return None
-    clips: dict[str, dict[int, list[tuple[int, int]]]] = {}
-    for code, number, width, height in rows.values_list("lesson__code", "number", "width", "height"):
-        clips.setdefault(code, {}).setdefault(number, []).append((width, height))
+    clips: dict[str, dict[int, list[list[tuple[int, int]]]]] = {}
+    fields = ("lesson__code", "number", "width", "height", "cuts")
+    for code, number, width, height, cuts in rows.values_list(*fields):
+        clips.setdefault(code, {}).setdefault(number, []).append(piece_sizes(width, height, cuts))
     return clips
 
 
@@ -466,7 +468,9 @@ def lesson_preps(
             enrichment=enrichment,
             generators=generators.get(code, ()),
             clips=None if sizes is None else {n: len(parts) for n, parts in sizes.items()},
-            slides=None if sizes is None else {n: len(merge_groups(parts)) for n, parts in sizes.items()},
+            slides=None
+            if sizes is None
+            else {n: len(merge_groups([s for part in parts for s in part])) for n, parts in sizes.items()},
         )
         default_groups = allocate_examples([(e.n, e.weight) for e in examples], len(rows))
         edit, state = LessonOverride(), "none"
