@@ -23,6 +23,8 @@ class Asset(models.Model):
     width = models.PositiveSmallIntegerField()
     height = models.PositiveSmallIntegerField()
     content_type = models.CharField(max_length=40, default="image/png")
+    # صفوف قص المقطع الطويل في شرائح العرض؛ NULL لم تُحسب أو لا فراغ آمن للقص، و[] لا يحتاج قصًّا
+    cuts = models.JSONField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

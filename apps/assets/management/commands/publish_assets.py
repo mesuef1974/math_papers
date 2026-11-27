@@ -20,7 +20,9 @@ class Command(BaseCommand):
             raise CommandError(str(error)) from error
         self.stdout.write(
             f"{course}: جديد {report.created}، محدَّث {report.updated}، أُعيد رفعه {report.repaired}، "
-            f"بلا تغيير {report.unchanged} (المجموع {report.total}؛ يتيم {report.orphans})"
+            f"بلا تغيير {report.unchanged}، حُسب قصّه {report.recut} (المجموع {report.total}؛ يتيم {report.orphans})"
         )
         for name in report.unmatched:
             self.stdout.write(f"  اسم لا يطابق النمط ولم يُنشر: {name}")
+        for name in report.uncut:
+            self.stdout.write(f"  طويل بلا فراغ آمن للقص (يُعرض كما هو): {name}")

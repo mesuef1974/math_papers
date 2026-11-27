@@ -1,4 +1,4 @@
-"""ضمّ صور PNG عموديًا في صورة واحدة بلا مكتبة صور (Pillow ليست من تبعيات التشغيل).
+"""ضمّ صور PNG عموديًا في صورة واحدة وقصّها صفوفًا بلا مكتبة صور (Pillow ليست من تبعيات التشغيل).
 
 كل صورة تُفكّ إلى صفوف RGB بثمانية بتات (الشفاف فوق أبيض)، وتُرصّ الصفوف بعرض أعرضها بلا إعادة تحجيم: الأضيق يُحاذى يمينًا
 (بداية السطر في كتاب عربي) وما بقي أبيض، وبين الصورتين فاصل أبيض. يُقرأ ما تكتبه أدوات القص: رمادي وملوّن ولوحة ألوان،
@@ -169,11 +169,33 @@ def stack_png(parts: Sequence[bytes], gap: int) -> tuple[bytes, int, int]:
             lines.extend([blank] * gap)
         pad = b"\x00" + b"\xff" * (3 * (width - w))  # مرشّح السطر 0 ثم بياض يسار الأضيق
         lines.extend(pad + row for row in rows)
-    height = len(lines)
-    png = (
+    return _encode(width, lines), width, len(lines)
+
+
+def _encode(width: int, lines: Sequence[bytes]) -> bytes:
+    """PNG ملوّنة من أسطر كل منها بايت المرشّح 0 ثم صف RGB."""
+    return (
         SIGNATURE
-        + _chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0))
+        + _chunk(b"IHDR", struct.pack(">IIBBBBB", width, len(lines), 8, 2, 0, 0, 0))
         + _chunk(b"IDAT", zlib.compress(b"".join(lines)))
         + _chunk(b"IEND", b"")
     )
-    return png, width, height
+
+
+def blank_rows(png: bytes, light: int = 235, ink: float = 0.005) -> list[bool]:
+    """لكل صف: أهو فراغ أبيض؟ ما دون `light` حبر، ويُغتفر منه `ink` من الصف (خط إطار جانبي أو شائبة مسح)."""
+    width, rows = rgb_rows(png)
+    pale, limit = bytes(range(light, 256)), int(3 * width * ink)
+    return [len(row.translate(None, pale)) <= limit for row in rows]
+
+
+def slice_png(png: bytes, cuts: Sequence[int]) -> list[tuple[bytes, int, int]]:
+    """الصورة أجزاءً عند صفوف `cuts` المتزايدة (أول صف في كل جزء تالٍ): (الصورة، عرضها، ارتفاعها) لكل جزء."""
+    width, rows = rgb_rows(png)
+    edges = [0, *cuts, len(rows)]
+    if any(a >= b for a, b in zip(edges, edges[1:], strict=False)):
+        raise DeckError("مواضع قص المقطع خارج صورته أو غير متزايدة")
+    return [
+        (_encode(width, [b"\x00" + row for row in rows[a:b]]), width, b - a)
+        for a, b in zip(edges, edges[1:], strict=False)
+    ]
