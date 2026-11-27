@@ -7,7 +7,7 @@
 from __future__ import annotations
 
 from collections import Counter
-from collections.abc import Collection, Mapping, Sequence
+from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 
 from django.contrib.auth.models import AbstractBaseUser
@@ -21,6 +21,7 @@ from apps.curriculum.models import Course, Lesson
 from apps.curriculum.selectors import calendar_data, lessons, term_plan_data
 from apps.knowledge.domain.course_index import LessonIndex
 from apps.knowledge.domain.unit_prep import approved_standards, unit_prep
+from apps.knowledge.models import BookExerciseLink
 from apps.knowledge.selectors import course_index, example_numbers, lesson_index
 from apps.papers.domain.generators import ERROR_KINDS
 
@@ -28,6 +29,7 @@ from .domain.calendar_engine import Closure, Plan, Slot, Term, allocate, parse_t
 from .domain.check_items import item_stem, option_text, period_items
 from .domain.deck import ExampleClip, content_digest, deck_key_of
 from .domain.feedback import ClassOutcome, Decision, decide
+from .domain.lesson_package import LessonPackage, compose_package
 from .domain.non_lesson import KINDS as NON_LESSON_KINDS
 from .domain.non_lesson import NonLessonPrep, build_non_lesson, check_non_lesson
 from .domain.objective_text import digest as text_digest
@@ -907,4 +909,30 @@ def suggestion_review(row: ObjectiveSuggestion) -> SuggestionReview:
     view = _suggestion_view(row, shared[1:])
     return SuggestionReview(
         shared=shared, status=view["status"], stale=text_digest(shared) != row.base_digest
+    )
+
+
+def blocked_exercises(course: str, lesson: str) -> frozenset[int]:
+    """تمارين الدرس التي ربطها آلي لم يُعتمد: لا تدخل ورقة طالب (docs/hybrid_practice_plan.md، قرار 4)."""
+    rows = BookExerciseLink.objects.filter(
+        lesson__course__slug=course,
+        lesson__code=lesson,
+        provenance=BookExerciseLink.Provenance.AI_UNREVIEWED,
+        reviewed_at__isnull=True,
+    )
+    return frozenset(rows.values_list("number", flat=True))
+
+
+def period_package(item: PreparedPeriod, lesson_periods: Iterable[PreparedPeriod]) -> LessonPackage:
+    """باقة حصة من تحضيرها. `lesson_periods` حصص الدرس نفسه: منها أهداف أمثلته للحصة الأخيرة."""
+    objectives = {
+        o.example: " ".join(filter(None, (o.behavior, o.condition)))
+        for period in lesson_periods
+        for o in period.prep.objectives
+    }
+    return compose_package(
+        item.prep,
+        period_items(item.prep),
+        objectives=objectives,
+        blocked=blocked_exercises(item.prep.course, item.prep.lesson),
     )
