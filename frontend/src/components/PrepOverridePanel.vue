@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { bookRef } from "@/utils/bookRef";
 import { computed, ref, watch } from "vue";
 import type { PeriodOverride, PrepEdit } from "@/stores/preps";
 
@@ -110,7 +111,7 @@ const titleOf = (stage: PrepEdit["stages"][number], slug: string) =>
       <legend>أمثلة الحصة</legend>
       <p class="examples">
         <span v-for="example in mine" :key="example" class="chip"
-          >مثال {{ example }}</span
+          >{{ bookRef("مثال", example, edit.example_pages?.[example]) }}</span
         >
       </p>
       <div class="actions">
@@ -121,7 +122,7 @@ const titleOf = (stage: PrepEdit["stages"][number], slug: string) =>
           :disabled="!canGiveBack || saving"
           @click="moveBack"
         >
-          انقل المثال {{ mine[0] }} إلى الحصة {{ k - 1 }}
+          انقل {{ bookRef("المثال", mine[0]!, edit.example_pages?.[mine[0]!]) }} إلى الحصة {{ k - 1 }}
         </button>
         <button
           v-if="k + 1 < n"
@@ -130,7 +131,7 @@ const titleOf = (stage: PrepEdit["stages"][number], slug: string) =>
           :disabled="!canGiveForward || saving"
           @click="moveForward"
         >
-          انقل المثال {{ mine[mine.length - 1] }} إلى الحصة {{ k + 1 }}
+          انقل {{ bookRef("المثال", mine[mine.length - 1]!, edit.example_pages?.[mine[mine.length - 1]!]) }} إلى الحصة {{ k + 1 }}
         </button>
       </div>
       <p v-if="moved" class="hint">

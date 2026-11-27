@@ -155,7 +155,23 @@
     "new": 2,
     "review": 3
    },
-   "exercise_pages": []
+   "exercise_pages": [
+    {
+     "first": 1,
+     "last": 9,
+     "page": 9
+    },
+    {
+     "first": 10,
+     "last": 25,
+     "page": 10
+    },
+    {
+     "first": 26,
+     "last": 31,
+     "page": 11
+    }
+   ]
   },
   {
    "lesson": "1.2",
@@ -320,7 +336,23 @@
     "new": 1,
     "review": 3
    },
-   "exercise_pages": []
+   "exercise_pages": [
+    {
+     "first": 1,
+     "last": 9,
+     "page": 16
+    },
+    {
+     "first": 10,
+     "last": 38,
+     "page": 17
+    },
+    {
+     "first": 39,
+     "last": 44,
+     "page": 18
+    }
+   ]
   },
   {
    "lesson": "1.3",
@@ -486,7 +518,23 @@
     "new": 1,
     "review": 3
    },
-   "exercise_pages": []
+   "exercise_pages": [
+    {
+     "first": 1,
+     "last": 9,
+     "page": 23
+    },
+    {
+     "first": 10,
+     "last": 35,
+     "page": 24
+    },
+    {
+     "first": 37,
+     "last": 42,
+     "page": 25
+    }
+   ]
   },
   {
    "lesson": "1.4",
@@ -628,7 +676,23 @@
     "new": 2,
     "review": 2
    },
-   "exercise_pages": []
+   "exercise_pages": [
+    {
+     "first": 1,
+     "last": 7,
+     "page": 30
+    },
+    {
+     "first": 8,
+     "last": 23,
+     "page": 31
+    },
+    {
+     "first": 24,
+     "last": 29,
+     "page": 32
+    }
+   ]
   },
   {
    "lesson": "2.1",
@@ -752,7 +816,23 @@
     "new": 2,
     "review": 3
    },
-   "exercise_pages": []
+   "exercise_pages": [
+    {
+     "first": 1,
+     "last": 11,
+     "page": 42
+    },
+    {
+     "first": 12,
+     "last": 33,
+     "page": 43
+    },
+    {
+     "first": 34,
+     "last": 39,
+     "page": 44
+    }
+   ]
   },
   {
    "lesson": "2.2",
@@ -920,7 +1000,23 @@
     "new": 2,
     "review": 3
    },
-   "exercise_pages": []
+   "exercise_pages": [
+    {
+     "first": 1,
+     "last": 14,
+     "page": 50
+    },
+    {
+     "first": 15,
+     "last": 33,
+     "page": 51
+    },
+    {
+     "first": 35,
+     "last": 39,
+     "page": 52
+    }
+   ]
   },
   {
    "lesson": "2.3",
@@ -1087,7 +1183,23 @@
     "new": 1,
     "review": 4
    },
-   "exercise_pages": []
+   "exercise_pages": [
+    {
+     "first": 1,
+     "last": 14,
+     "page": 56
+    },
+    {
+     "first": 18,
+     "last": 47,
+     "page": 57
+    },
+    {
+     "first": 48,
+     "last": 53,
+     "page": 58
+    }
+   ]
   },
   {
    "lesson": "2.4",
@@ -1241,7 +1353,23 @@
     "new": 0,
     "review": 4
    },
-   "exercise_pages": []
+   "exercise_pages": [
+    {
+     "first": 1,
+     "last": 17,
+     "page": 63
+    },
+    {
+     "first": 18,
+     "last": 46,
+     "page": 64
+    },
+    {
+     "first": 47,
+     "last": 52,
+     "page": 65
+    }
+   ]
   },
   {
    "lesson": "2.5",
@@ -1425,7 +1553,23 @@
     "new": 1,
     "review": 3
    },
-   "exercise_pages": []
+   "exercise_pages": [
+    {
+     "first": 1,
+     "last": 14,
+     "page": 70
+    },
+    {
+     "first": 15,
+     "last": 45,
+     "page": 71
+    },
+    {
+     "first": 46,
+     "last": 51,
+     "page": 72
+    }
+   ]
   },
   {
    "lesson": "2.6",
@@ -1547,7 +1691,23 @@
     "new": 3,
     "review": 0
    },
-   "exercise_pages": []
+   "exercise_pages": [
+    {
+     "first": 1,
+     "last": 13,
+     "page": 77
+    },
+    {
+     "first": 15,
+     "last": 38,
+     "page": 78
+    },
+    {
+     "first": 39,
+     "last": 44,
+     "page": 79
+    }
+   ]
   },
   {
    "lesson": "2.7",
@@ -1713,7 +1873,23 @@
     "new": 2,
     "review": 3
    },
-   "exercise_pages": []
+   "exercise_pages": [
+    {
+     "first": 1,
+     "last": 7,
+     "page": 85
+    },
+    {
+     "first": 9,
+     "last": 25,
+     "page": 86
+    },
+    {
+     "first": 26,
+     "last": 33,
+     "page": 87
+    }
+   ]
   },
   {
    "lesson": "2.8",
@@ -1873,7 +2049,23 @@
     "new": 1,
     "review": 2
    },
-   "exercise_pages": []
+   "exercise_pages": [
+    {
+     "first": 1,
+     "last": 11,
+     "page": 92
+    },
+    {
+     "first": 12,
+     "last": 32,
+     "page": 93
+    },
+    {
+     "first": 33,
+     "last": 38,
+     "page": 94
+    }
+   ]
   },
   {
    "lesson": "2.9",
@@ -2003,7 +2195,23 @@
     "new": 2,
     "review": 4
    },
-   "exercise_pages": []
+   "exercise_pages": [
+    {
+     "first": 1,
+     "last": 14,
+     "page": 102
+    },
+    {
+     "first": 15,
+     "last": 32,
+     "page": 103
+    },
+    {
+     "first": 33,
+     "last": 39,
+     "page": 104
+    }
+   ]
   },
   {
    "lesson": "2.10",
@@ -2164,7 +2372,23 @@
     "new": 1,
     "review": 2
    },
-   "exercise_pages": []
+   "exercise_pages": [
+    {
+     "first": 1,
+     "last": 10,
+     "page": 110
+    },
+    {
+     "first": 11,
+     "last": 33,
+     "page": 111
+    },
+    {
+     "first": 34,
+     "last": 39,
+     "page": 112
+    }
+   ]
   },
   {
    "lesson": "3.1",
@@ -2341,7 +2565,23 @@
     "new": 1,
     "review": 2
    },
-   "exercise_pages": []
+   "exercise_pages": [
+    {
+     "first": 1,
+     "last": 8,
+     "page": 132
+    },
+    {
+     "first": 10,
+     "last": 23,
+     "page": 133
+    },
+    {
+     "first": 24,
+     "last": 29,
+     "page": 134
+    }
+   ]
   },
   {
    "lesson": "3.2",
@@ -2487,7 +2727,23 @@
     "new": 1,
     "review": 4
    },
-   "exercise_pages": []
+   "exercise_pages": [
+    {
+     "first": 1,
+     "last": 8,
+     "page": 139
+    },
+    {
+     "first": 9,
+     "last": 23,
+     "page": 140
+    },
+    {
+     "first": 25,
+     "last": 29,
+     "page": 141
+    }
+   ]
   },
   {
    "lesson": "3.3",
@@ -2635,7 +2891,23 @@
     "new": 0,
     "review": 1
    },
-   "exercise_pages": []
+   "exercise_pages": [
+    {
+     "first": 1,
+     "last": 7,
+     "page": 147
+    },
+    {
+     "first": 8,
+     "last": 21,
+     "page": 148
+    },
+    {
+     "first": 22,
+     "last": 27,
+     "page": 149
+    }
+   ]
   },
   {
    "lesson": "3.4",
@@ -2799,7 +3071,23 @@
     "new": 1,
     "review": 3
    },
-   "exercise_pages": []
+   "exercise_pages": [
+    {
+     "first": 1,
+     "last": 5,
+     "page": 155
+    },
+    {
+     "first": 6,
+     "last": 20,
+     "page": 156
+    },
+    {
+     "first": 21,
+     "last": 27,
+     "page": 157
+    }
+   ]
   },
   {
    "lesson": "3.5",
@@ -2957,7 +3245,23 @@
     "new": 0,
     "review": 2
    },
-   "exercise_pages": []
+   "exercise_pages": [
+    {
+     "first": 1,
+     "last": 11,
+     "page": 162
+    },
+    {
+     "first": 12,
+     "last": 25,
+     "page": 163
+    },
+    {
+     "first": 26,
+     "last": 31,
+     "page": 164
+    }
+   ]
   }
  ]
 }

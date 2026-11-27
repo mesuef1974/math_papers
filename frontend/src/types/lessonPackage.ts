@@ -20,6 +20,7 @@ export interface PackageSheet {
   title: string;
   per_page: number;
   objectives: [number, string][];
+  example_pages?: Record<number, number>;
   entries: PackageEntry[];
 }
 

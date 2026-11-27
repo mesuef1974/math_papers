@@ -398,6 +398,28 @@
    "kind": "practice"
   }
  ],
+ "exercise_pages": [
+  {
+   "first": 1,
+   "last": 13,
+   "page": 134
+  },
+  {
+   "first": 14,
+   "last": 23,
+   "page": 135
+  },
+  {
+   "first": 24,
+   "last": 42,
+   "page": 137
+  },
+  {
+   "first": 44,
+   "last": 64,
+   "page": 138
+  }
+ ],
  "examples": [
   {
    "number": 1,

@@ -400,6 +400,13 @@
    "kind": "practice"
   }
  ],
+ "exercise_pages": [
+  {
+   "first": 1,
+   "last": 25,
+   "page": 119
+  }
+ ],
  "examples": [
   {
    "number": 1,

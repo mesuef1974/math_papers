@@ -422,6 +422,7 @@ class PreparedPeriod:
     allocation: tuple[tuple[int, ...], ...] = ()  # أمثلة كل حصة من حصص الدرس كما بُني التحضير
     default_allocation: tuple[tuple[int, ...], ...] = ()  # توزيع `allocate` المشتق
     override: str = "none"  # none | active | invalid (تعديل محفوظ لم يعد يطابق الدرس فأُهمل)
+    example_pages: Mapping[int, int] = field(default_factory=dict)  # أمثلة الدرس المعروفة صفحاتها
 
 
 def _example_clips(course: str) -> dict[str, dict[int, list[list[tuple[int, int]]]]] | None:
@@ -523,7 +524,13 @@ def lesson_preps(
         )
         out += [
             PreparedPeriod(
-                period, prep, checks + lesson_checks, groups, tuple(map(tuple, default_groups)), state
+                period,
+                prep,
+                checks + lesson_checks,
+                groups,
+                tuple(map(tuple, default_groups)),
+                state,
+                {e.n: e.page for e in examples if e.page},
             )
             for period, prep, checks in built
         ]
@@ -705,6 +712,7 @@ def entry_items(owner: AbstractBaseUser, course: str, lesson: str) -> dict:
                 "k": prep.k,
                 "n": prep.n,
                 "example": prep.exit_ticket.example,
+                "page": prep.pages.get(prep.exit_ticket.example),
                 "seed": items.exit_seed,
                 "stem": item_stem(items.exit),
                 "options": [option_text(option.text) for option in items.exit.options],
@@ -787,6 +795,7 @@ def prep_edit(item: PreparedPeriod, stored: object) -> dict:
     return {
         "state": item.override,
         "allocation": [list(g) for g in item.allocation],
+        "example_pages": dict(item.example_pages),
         "default_allocation": [list(g) for g in item.default_allocation],
         "stages": [
             {

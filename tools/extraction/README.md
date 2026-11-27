@@ -335,6 +335,7 @@ python -m tools.extraction <مجلد الكتاب> exercise_pages
 
 تكتب `exercise_pages.json` (أرقام فقط) خارج المستودع: لكل درس مديات `{first, last, page}` بالصفحة المطبوعة، من صناديق أرقام
 التمارين بعد علامة قسم التمارين (`markers.exercises` أو `student_examples.end_patterns`). تلزمها `layout` و`printed_pages`
-و`student_ocr`. الحالة `ok` حين تكتمل 1..عدد تمارين سجل الدرس (`lesson`)، وإلا `review` مع `unread`؛ التمرين غير المقروء لا تُخمَّن
+و`student_ocr`. الكتاب بلا علامة تمارين (الثاني عشر) يبدأ قسمه بعد آخر مقطع لآخر أمثلته من مخرج `student_examples`.
+الحالة `ok` حين تكتمل 1..عدد تمارين سجل الدرس (`lesson`)، وإلا `review` مع `unread`؛ التمرين غير المقروء لا تُخمَّن
 صفحته. الرقم الذي يسقطه التعرّف على السطر العربي يُقرأ ثانية من صورة الصفحة (`student_render`، بيئة guide_extract).
-الاعتماد تصحيح `stage: exercise_pages` و`path: [lessons, "1.1"]`. يقرؤها `build_course_index` و`write_book_numbers`.
+الاعتماد تصحيح `stage: exercise_pages` و`path: [lessons, "1.1"]`. يقرؤها `build_course_index` و`write_book_numbers`، ويكتبان المقروء من الحالتين `ok` و`review` معًا.

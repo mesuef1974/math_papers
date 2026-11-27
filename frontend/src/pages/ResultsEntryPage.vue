@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { bookRef } from "@/utils/bookRef";
 import { computed, nextTick, onMounted, ref, watch } from "vue";
 import EmptyState from "@/components/EmptyState.vue";
 import { useAuthStore } from "@/stores/auth";
@@ -268,7 +269,7 @@ async function save() {
             <h2>
               البند {{ index + 1 }}
               <span class="badge">الحصة {{ item.k }} من {{ item.n }}</span>
-              <span class="badge">المثال {{ item.example }}</span>
+              <span class="badge">{{ bookRef("المثال", item.example, item.page) }}</span>
             </h2>
             <p class="stem">{{ item.stem }}</p>
             <ol class="options">

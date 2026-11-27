@@ -232,6 +232,7 @@ class PrepEditOut(Schema):
     state: str
     allocation: list[list[int]]
     default_allocation: list[list[int]]
+    example_pages: dict[int, int] = {}
     stages: list[StageEditOut]
     exercises: list[int]
     removed: list[int]
@@ -516,6 +517,7 @@ class EntryItemOut(Schema):
     k: int
     n: int
     example: int
+    page: int | None = None
     seed: int
     stem: str
     options: list[str]

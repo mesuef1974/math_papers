@@ -2,7 +2,7 @@
 
 تُخزَّن مديات متتالية مرتبة لا تتداخل، فالدرس بخمسين تمرينًا على أربع صفحات أربعة صفوف. المصدر مخرج مرحلة استخراج
 (`exercise_pages.json` في مجلد الكتاب خارج المستودع: لكل درس غلاف `{value, status}` قيمته المديات نفسها)، يكتبه
-`build_course_index` في `index.json` و`write_book_numbers` في ملف الدرس، والمعتمد (`ok`) وحده ما لم يُطلب غيره.
+`build_course_index` في `index.json` و`write_book_numbers` في ملف الدرس، وكل مقروء يُكتب (`ok` و`review`).
 التمرين بلا صفحة معروفة يبقى بلا صفحة: لا تخمين.
 """
 
@@ -65,7 +65,11 @@ def compress(pages: Mapping[int, int]) -> list[dict[str, int]]:
     return out
 
 
-def accepted_ranges(record: Any, accepted: Iterable[str] = ("ok",)) -> list[dict[str, int]] | None:
+# «review» هنا نقص في المقروء لا شك فيه (التمرين غير المقروء بلا صفحة أصلًا)، فالمقروء من الدرس الناقص يُكتب أيضًا
+READ_STATUSES = ("ok", "review")
+
+
+def accepted_ranges(record: Any, accepted: Iterable[str] = READ_STATUSES) -> list[dict[str, int]] | None:
     """مديات درس من غلاف المرحلة `{value, status}` إن قُبلت حالته وصحّ شكلها، وإلا None (يبقى ما في الملف)."""
     if not isinstance(record, Mapping) or record.get("status") not in tuple(accepted):
         return None

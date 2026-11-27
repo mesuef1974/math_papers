@@ -40,10 +40,11 @@ def test_ranges_must_be_ordered_disjoint_and_pages_non_decreasing():
         LessonData(lesson="1.1", exercise_pages=[RANGES[1], RANGES[0]])
 
 
-def test_accepted_ranges_takes_ok_only_unless_review_is_asked():
+def test_accepted_ranges_takes_every_read_status():
     record = {"value": RANGES, "status": "review"}
-    assert accepted_ranges(record) is None
-    assert accepted_ranges(record, ("ok", "review")) == RANGES
+    assert accepted_ranges(record) == RANGES
+    assert accepted_ranges(record, ("ok",)) is None
+    assert accepted_ranges({"value": RANGES, "status": "missing"}) is None
     assert accepted_ranges({"value": RANGES, "status": "ok"}) == RANGES
     assert (
         accepted_ranges({"value": [{"first": 3, "last": 1, "page": 2}], "status": "ok"}) is None
@@ -96,21 +97,15 @@ def _source(tmp_path, status):
     return source
 
 
-@pytest.mark.parametrize(
-    ("status", "review", "written"), [("ok", False, True), ("review", False, False), ("review", True, True)]
-)
-def test_write_book_numbers_writes_exercise_pages(tmp_path, status, review, written):
+@pytest.mark.parametrize(("status", "written"), [("ok", True), ("review", True), ("missing", False)])
+def test_write_book_numbers_writes_exercise_pages(tmp_path, status, written):
     courses, path = _lesson_file(tmp_path)
     source = _source(tmp_path, status)
-    call_command(
-        "write_book_numbers", "c1", source=str(source), courses_dir=str(courses), include_review=review
-    )
+    call_command("write_book_numbers", "c1", source=str(source), courses_dir=str(courses))
     data = json.loads(path.read_text(encoding="utf-8"))
     assert (data.get("exercise_pages") == RANGES) is written
     before = path.read_text(encoding="utf-8")
-    call_command(
-        "write_book_numbers", "c1", source=str(source), courses_dir=str(courses), include_review=review
-    )
+    call_command("write_book_numbers", "c1", source=str(source), courses_dir=str(courses))
     assert path.read_text(encoding="utf-8") == before  # idempotent
 
 

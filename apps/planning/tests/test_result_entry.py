@@ -26,7 +26,7 @@ pytestmark = [pytest.mark.django_db, pytest.mark.usefixtures("loaded_courses")]
 SECTION = "10/3"
 PASSWORD = "Rasm-Bayani-2026"  # pragma: allowlist secret
 PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 16
-PUBLIC_FIELDS = {"k", "n", "example", "seed", "stem", "options"}
+PUBLIC_FIELDS = {"k", "n", "example", "page", "seed", "stem", "options"}
 
 
 def items_url(lesson: str, course: str = GRADE10_SLUG) -> str:

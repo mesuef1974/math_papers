@@ -32,7 +32,7 @@ PRINTED_PAGES = "printed_pages.json"
 EXERCISE_PAGES = "exercise_pages.json"
 
 
-def _exercise_pages(path: Path, accepted: tuple[str, ...], required: bool) -> dict[str, list[dict]]:
+def _exercise_pages(path: Path, required: bool) -> dict[str, list[dict]]:
     """درس → مديات صفحات تمارينه المقبولة من مخرج المرحلة؛ غياب الملف غير المطلوب صراحةً لا شيء."""
     if not path.is_file():
         if required:
@@ -42,7 +42,7 @@ def _exercise_pages(path: Path, accepted: tuple[str, ...], required: bool) -> di
         lessons = json.loads(path.read_text(encoding="utf-8"))["lessons"]
     except (OSError, ValueError, KeyError, TypeError) as error:
         raise CommandError(f"ملف صفحات التمارين غير صالح: {path}") from error
-    out = {code: accepted_ranges(record, accepted) for code, record in lessons.items()}
+    out = {code: accepted_ranges(record) for code, record in lessons.items()}
     return {code: ranges for code, ranges in out.items() if ranges}
 
 
@@ -81,9 +81,6 @@ class Command(BaseCommand):
             "--exercise-pages",
             help="صفحات التمارين المطبوعة (مخرج المرحلة)؛ الافتراضي exercise_pages.json تحت المصدر إن وُجد",
         )
-        parser.add_argument(
-            "--include-review", action="store_true", help="يكتب صفحات التمارين التي حالتها review أيضًا"
-        )
         parser.add_argument("--courses-dir", default=str(COURSES_DIR), help="جذر مجلدات المقررات")
         parser.add_argument("--title", help="عنوان المقرر (لمقرر جديد)")
         parser.add_argument("--grade", type=int, help="الصف (لمقرر جديد)")
@@ -102,14 +99,12 @@ class Command(BaseCommand):
         courses_dir=None,
         printed_pages=None,
         exercise_pages=None,
-        include_review=False,
         **options,
     ):
         folder = Path(lessons_dir) if lessons_dir else Path(source) / "lessons"
         printed = _printed_pages(Path(printed_pages) if printed_pages else Path(source) / PRINTED_PAGES)
         paged = _exercise_pages(
             Path(exercise_pages) if exercise_pages else Path(source) / EXERCISE_PAGES,
-            ("ok", "review") if include_review else ("ok",),
             required=bool(exercise_pages),
         )
         files = sorted(folder.glob("lesson_*.json"))

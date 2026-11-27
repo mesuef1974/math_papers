@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { bookRef } from "@/utils/bookRef";
 import { computed, onMounted, reactive, ref, watch } from "vue";
 import EmptyState from "@/components/EmptyState.vue";
 import MathText from "@/components/MathText.vue";
@@ -95,8 +96,7 @@ function approveAll() {
     <template v-if="store.links">
       <ul class="examples">
         <li v-for="e in store.links.examples" :key="e.number">
-          <strong>مثال {{ e.number }}</strong>
-          <span v-if="e.page" class="hint">ص {{ e.page }}</span>
+          <strong>{{ bookRef("مثال", e.number, e.page) }}</strong>
           <MathText v-if="e.skill" :text="e.skill" />
         </li>
       </ul>
@@ -134,7 +134,7 @@ function approveAll() {
               <th scope="row">{{ row.number }}</th>
               <td>{{ KIND[row.kind] }}</td>
               <td>
-                <div class="picks" role="group" :aria-label="`أمثلة التمرين ${row.number}`">
+                <div class="picks" role="group" :aria-label="`أمثلة ${bookRef('التمرين', row.number)}`">
                   <label v-for="e in store.links.examples" :key="e.number" class="check">
                     <input v-model="picked[key(row)]" type="checkbox" :value="e.number" />
                     {{ e.number }}

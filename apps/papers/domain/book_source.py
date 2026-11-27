@@ -26,6 +26,12 @@ def book_source(
     return source
 
 
+def book_ref(word: str, number: int, page: int | None) -> str:
+    """المصدر الوحيد لنص الإشارة إلى مثال أو تمرين بعينه: «مثال 3 (ص 12)»؛ والصفحة المجهولة لا تُخترع. `word` «مثال»
+    أو «المثال» أو «التمرين» حسب موقعه من الجملة. نظيره في الواجهة `utils/bookRef.ts` (قرار المالك 2026-11-27)."""
+    return f"{word} {number} (ص {page})" if page else f"{word} {number}"
+
+
 def number_list(numbers: list[int]) -> str:
     """«9، 11، 16–19، 27»: الأرقام المتتالية ثلاثةً فأكثر مدى واحد."""
     runs: list[list[int]] = []

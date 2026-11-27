@@ -311,6 +311,7 @@ def allowed_words(prep: PeriodPrep) -> frozenset[str]:
         _words(
             [
                 *templates,
+                "مثال المثال التمرين ص",  # كلمات `book_ref` التي تدخل القوالب
                 *STAGE_LABELS.values(),
                 *REPRESENTATION_LABELS.values(),
                 *REPRESENTATIONS,

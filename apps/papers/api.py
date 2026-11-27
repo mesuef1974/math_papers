@@ -634,6 +634,7 @@ class PackageSheetOut(Schema):
     title: str
     per_page: int
     objectives: list[tuple[int, str]]
+    example_pages: dict[int, int] = {}
     entries: list[PackageEntryOut]
 
 
