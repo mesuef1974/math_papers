@@ -12,7 +12,7 @@ from collections.abc import Callable, Iterable
 from pathlib import Path
 from typing import Any
 
-from . import corrections, student_clips, student_examples
+from . import corrections, example_text, student_clips, student_examples
 from .config import Book
 from .lesson import lessons_dir
 
@@ -58,6 +58,8 @@ INPUTS: dict[str, dict[str, Any]] = {
         "after": ("layout", "printed_pages", "student_ocr", "exercise_try"),
         "pdf": False,
     },
+    # مقاطع الأمثلة نفسها هي المدخل (تُضاف في digest)
+    "example_text": {"dirs": (), "after": (), "pdf": False},
 }
 STUDENT_PDF = ("student_clips", "student_ocr", "student_examples")  # مراحل تقرأ ملف كتاب الطالب
 
@@ -110,6 +112,8 @@ def digest(book: Book, stage: str, pdf: Callable[[Book], Path] | None = None, ta
         key = student_clips.settings(book)["source" if stage == "student_clips" else "target"]
         if book.has_dir(key):
             roots[key] = book.dir(key)
+    if stage == "example_text":
+        roots["example_clips"] = example_text.clips_dir(book)
     for key, root in roots.items():
         for path in _files(root) if root.is_dir() else ():
             h.update(f"{key}/{path.relative_to(root).as_posix()}:{_file_digest(path)}".encode())

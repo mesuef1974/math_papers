@@ -26,6 +26,13 @@ python -m tools.extraction <مجلد الكتاب> all          # layout ثم im
 - `examples`: `max`، `jump`، `pattern`، `numbering: sequence` (حين لا يقرأ OCR أرقام الشارات)، و`dirs.vision` و`dirs.badges` مصدران اختياريان.
 - `exercises`: `max`، `jump`. `outputs.generic_<اسم>` يوجّه مخرجًا إلى ملف آخر حين تشترك أدوات قديمة في الاسم.
 
+## نص الأمثلة وفحص ربط الصيغ بها (`example_text.py`)
+
+مرحلة خارج `all` (بيئة guide_extract): `example_text` تقرأ كل مقطع مثال من كتاب الطالب (`example_text.clips`، وإلا هدف
+`student_clips`) وتكتب `example_text.json` (`{درس: {مثال: نص}}`) خارج المستودع. ثم من المستودع:
+`python manage.py check_example_skills <مقرر> --source <مجلد الكتاب>` يعلّم كل صيغة وهدف يشبه نصه مثالًا غير الموسوم به
+(أرقام ودرجات فقط)، و`--report <ملف.html>` صفحة محلية بصورتي المثالين. مؤشر يراجعه المالك لا حكم.
+
 ## جدول تحليل التمارين (`tables.py`)
 
 مرحلة `tables` (قبل `layout` في `all` حين `layout.anchor: analysis` ويوجد `dirs.tables`): تقرأ صناديق OCR لصفحة فيها `tables.title`
