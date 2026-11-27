@@ -27,6 +27,8 @@ from .domain.contract import (
 )
 from .domain.schemas import LessonData, PedagogyData, UnitData, lesson_sort_key
 from .models import (
+    ExampleObjective,
+    ExampleStandard,
     ExerciseGroup,
     ExerciseTemplate,
     KnowledgeRelease,
@@ -183,6 +185,22 @@ def _load_pedagogy(data: PedagogyData, course: Course, report: LoadReport) -> No
         report.changed["pedagogy"] += 1
 
 
+def _load_targets(contract: CourseKnowledge, lessons: dict[str, Lesson], report: LoadReport) -> None:
+    """أهداف الأمثلة ومعاييرها لكل دروس المقرر؛ درس خرج من الملفات المعتمدة تُحذف صفوفه."""
+    fields = {"example", "dok", "verb", "behavior", "condition", "criterion"}
+    codes = {code for target in contract.targets for code in target.standards}
+    standards = {code: Standard.objects.get_or_create(code=code)[0].pk for code in sorted(codes)}
+    for code, lesson in lessons.items():
+        own = [t for t in contract.targets if t.lesson == code]
+        objectives = [t.model_dump(include=fields) for t in own]
+        links = [{"example": t.example, "standard_id": standards[c]} for t in own for c in t.standards]
+        for name, manager, rows, model in (
+            ("example_objectives", lesson.example_objectives, objectives, ExampleObjective),
+            ("example_standards", lesson.example_standards, links, ExampleStandard),
+        ):
+            _sync_children(report, name, manager, rows, model, lesson=lesson)
+
+
 def _sync_course(meta: CourseMeta, report: LoadReport) -> Course:
     """ينشئ المقرر أو يحدّث بياناته. `is_current` ليس من العقد: المقرر الافتراضي قرار تشغيل لا معرفة."""
     wanted = meta.model_dump(exclude={"slug"})
@@ -233,6 +251,7 @@ def load_contract(contract: CourseKnowledge) -> LoadReport:
     lessons = _sync_lessons(contract, course, report)
     for data in contract.profiles:
         _load_lesson(data, lessons, report)
+    _load_targets(contract, lessons, report)
     for unit in contract.units:
         _load_unit(unit, course, report)
     for note in contract.pedagogy:
