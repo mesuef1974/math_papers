@@ -89,17 +89,18 @@ def test_example_slides_equal_examples_and_continuations(built):
     for prep, _, clips, deck in built:
         examples = [s for s in deck.slides if s.kind == "example"]
         assert len(examples) == sum(e.continuations or 1 for e in prep.examples) == len(clips)
-        assert sum(s.kind == "reveal" for s in deck.slides) == len(prep.examples)
+        assert not any("حل المثال" in s.title for s in deck.slides)
+        assert prep.lesson_title and deck.slides[0].bullets[0] == prep.lesson_title
 
 
 @pytest.mark.django_db
 def test_example_titles_and_title_slide_carry_book_pages(built):
-    """رقم صفحة المثال في كتاب الطالب ظاهر على شريحته وتتمته وحله، وصفحات أمثلة الحصة على شريحة العنوان."""
+    """رقم صفحة المثال في كتاب الطالب ظاهر على شريحته وتتمته، وصفحات أمثلة الحصة على شريحة العنوان."""
     paged = 0
     for prep, _, _, deck in built:
         pages = {e.n: e.page for e in prep.examples}
         for s in deck.slides:
-            if s.kind in ("example", "reveal") and pages[s.refs[0]]:
+            if s.kind == "example" and pages[s.refs[0]]:
                 paged += 1
                 assert f"ص {pages[s.refs[0]]}" in s.title, s.title
         known = sorted({p for p in pages.values() if p})

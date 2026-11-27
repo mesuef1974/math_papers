@@ -453,6 +453,7 @@ def lesson_preps(
             generators.setdefault(code, set()).add(number)
 
     order = plan.lessons()
+    titles = dict(Lesson.objects.filter(course__slug=course).values_list("code", "title"))
     out: list[PreparedPeriod] = []
     for position, code in enumerate(order):
         lesson = index[code]
@@ -500,6 +501,7 @@ def lesson_preps(
                 audience=None if unit is None else unit.audience,
                 teacher=edit.edit_for(period.k, default_groups),
             )
+            prep = replace(prep, lesson_title=titles.get(code, ""))
             if period.k == 1 and position:
                 prep = replace(prep, earlier_lessons=tuple(order[:position]))
             checks = check_prep(

@@ -82,8 +82,7 @@ def test_forty_eight_periods_build_decks_matching_their_preps(preps):
         assert services.deck_state(key) == ("ready", ""), key
         data = get_storage().get(key)
         clips = sum(e.continuations or 1 for e in prep.examples)
-        # مقاطع كل مثال وتتماته ثم شريحة كشف حله
-        assert _clip_slides(data) == clips + len(prep.examples), key
+        assert _clip_slides(data) == clips, key  # مقاطع كل مثال وتتماته بلا شريحة حل
 
 
 def test_course_decks_command_prints_one_line_and_fails_on_low_resolution_clips(preps, capsys):

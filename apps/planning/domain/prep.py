@@ -183,6 +183,8 @@ class PeriodPrep:
     exercise_pages: Mapping[int, int] = field(default_factory=dict, metadata=DIGEST_OMITS_DEFAULT)
     # دروس المقرر قبل هذا الدرس بترتيبها، للحصة الأولى وحدها: مصدر بند الاسترجاع المتباعد؛ الفارغ خارج التجزئة
     earlier_lessons: tuple[str, ...] = field(default=(), metadata=DIGEST_OMITS_DEFAULT)
+    # اسم الدرس من مقرره لغلاف العرض؛ الفارغ خارج التجزئة
+    lesson_title: str = field(default="", metadata=DIGEST_OMITS_DEFAULT)
 
     @property
     def practice_examples(self) -> tuple[PrepExample, ...]:
@@ -321,16 +323,20 @@ def lesson_examples(
 def _classwork(
     examples: Sequence[PrepExample], removed: frozenset[int] = frozenset()
 ) -> tuple[Classwork, ...]:
-    """تدريب صفي لكل مثال (غير مفاهيمي) من صف تحليله الأقل عمقًا بلا ما حذفه المعلم، مرتبًا بالعمق فرقم المثال: التدرج من
+    """تدريب صفي لكل مثال (غير مفاهيمي) من صف تحليله الأقل عمقًا بلا ما حذفه المعلم ولا ما أخذه مثال قبله، مرتبًا بالعمق فرقم المثال: التدرج من
     الأسهل. المثال الذي حُذفت تمارين صفه كلها بلا تدريب صفي، فيفشل T4 ولا يُحفظ التعديل."""
     out = []
+    taken: set[int] = set()
     for e in examples:
         if e.conceptual or not e.rows:
             continue
-        dok, exercises = min(e.rows)
-        kept = tuple(x for x in exercises if x not in removed)
+        rows = [(d, [x for x in ex if x not in removed]) for d, ex in sorted(e.rows)]
+        # أول صف فيه تمرين لم يأخذه مثال قبله؛ وإلا (كل تمارينه مأخوذة) صفه الأقل عمقًا كما هو
+        fresh = next(((d, kept) for d, ex in rows if (kept := [x for x in ex if x not in taken])), None)
+        dok, kept = fresh or rows[0]
         if kept:
-            out.append(Classwork(e.n, dok, kept[:CLASSWORK_PER_EXAMPLE]))
+            out.append(Classwork(e.n, dok, tuple(kept[:CLASSWORK_PER_EXAMPLE])))
+            taken.update(kept[:CLASSWORK_PER_EXAMPLE])
     return tuple(sorted(out, key=lambda c: (c.dok, c.example)))
 
 
@@ -367,11 +373,10 @@ def derived_paths(
 
 @dataclass(frozen=True)
 class PracticeRules:
-    """قواعد التمايز والواجب لحصة: مسارا الأساسي والمتقدم، ومن أي صفوف تُؤخذ التمارين، وترتيب المتقدم، وما يبقى واجبًا."""
+    """قواعد التمايز والواجب لحصة: مسارا الأساسي والمتقدم، ومن أي صفوف تُؤخذ التمارين، وما يبقى واجبًا."""
 
     paths: tuple[frozenset[int], frozenset[int]]
     practice_only: bool  # التمارين من صفوف `practice` وحدها
-    fresh_first: bool  # المتقدم يقدّم ما لم يأخذه الأساسي
     homework: Callable[[int, Sequence[int], Sequence[int]], bool]  # (التمرين، الأساسي، المتقدم) → من الواجب؟
 
 
@@ -380,23 +385,35 @@ def practice_rules(
 ) -> PracticeRules:
     """مع دليل المهام: المساران منه، والتمارين من صفوف الأمثلة كلها، والواجب الباقي من مسار الطالب (الأساسي) بعد التدريب
     الصفي وقائمة الدعم. وبلا دليل: المساران مشتقان من أعماق أمثلة الدرس (`derived_paths`)، والتمارين من صفوف `practice`
-    وحدها، والمساران يتقاطعان حين يكون أعلى عمق 2 فأقل أو للحصة مثال واحد فيقدّم المتقدم ما لم يأخذه الأساسي، والواجب ما
-    لم تأخذه القائمتان."""
+    وحدها، والواجب ما لم تأخذه القائمتان."""
     guide = lesson.task_guide
     if guide:
         basic_path = parse_ranges(guide.basic)
         return PracticeRules(
             paths=(basic_path, parse_ranges(guide.advanced)),
             practice_only=False,
-            fresh_first=False,
             homework=lambda x, basic, advanced: x in basic_path and x not in basic,
         )
     return PracticeRules(
         paths=derived_paths(examples, period),
         practice_only=True,
-        fresh_first=True,
         homework=lambda x, basic, advanced: x not in basic and x not in advanced,
     )
+
+
+def _differentiation(
+    pool: Sequence[tuple[int, int]], rules: PracticeRules
+) -> tuple[tuple[int, ...], tuple[int, ...], tuple[int, ...]]:
+    """المساران والواجب من `pool` ((العمق، التمرين) بعد التدريب الصفي) بلا تمرين مكرر بينها. المجمع الصغير يقصّر
+    المسارين ليبقى للواجب نصيب؛ ولا يتكرر تمرين إلا حين لا يبقى لمسارٍ غيرُ ما أخذه الآخر (فلا يفرغ)."""
+    size = min(DIFFERENTIATION_SIZE, max(1, (len({x for _, x in pool}) + 2) // 3))
+    basic_path, advanced_path = rules.paths
+    basic = tuple(x for _, x in pool if x in basic_path)[:size]
+    hardest = [x for _, x in sorted(pool, key=lambda p: (-p[0], p[1])) if x in advanced_path]
+    advanced = tuple([x for x in hardest if x not in basic] or hardest)[:size]
+    used = {*basic, *advanced}
+    rest = {x for _, x in pool if x not in used and rules.homework(x, basic, advanced)}
+    return basic, advanced, tuple(sorted(rest)[: HOMEWORK_RANGE[1]])
 
 
 def stage_options(library: Iterable[Strategy], name: str) -> tuple[Strategy, ...]:
@@ -489,16 +506,7 @@ def build_prep(
         for d, x in _exercises_by_depth(practice, practice_only=rules.practice_only)
         if x not in taken and x not in edit.removed
     ]
-    basic = tuple(x for _, x in [p for p in pool if p[1] in basic_path][:DIFFERENTIATION_SIZE])
-    advanced = tuple(
-        x
-        for _, x in sorted(
-            [p for p in pool if p[1] in advanced_path],
-            key=lambda p: (rules.fresh_first and p[1] in basic, -p[0], p[1]),
-        )[:DIFFERENTIATION_SIZE]
-    )
-    rest = {x for _, x in pool if rules.homework(x, basic, advanced)}
-    homework = tuple(sorted(rest)[: HOMEWORK_RANGE[1]])
+    basic, advanced, homework = _differentiation(pool, rules)
 
     measurable = tuple(e.n for e in practice if e.has_generator and not e.conceptual)
     exit_ticket = None

@@ -309,7 +309,7 @@ def _practice_for(prep, numbers, png: bytes = CLEAR) -> tuple[ExampleClip, ...]:
     )
 
 
-def test_practice_clip_makes_a_try_slide_between_the_solution_and_the_classwork(loaded_courses):
+def test_practice_clip_makes_a_try_slide_between_the_example_and_the_classwork(loaded_courses):
     """مقطع «حاول أن تحل» لمثال يضيف شريحة try بعد حل المثال وقبل تدريبه الصفي، بنصها البديل ومفتاح عرض جديد."""
     from apps.planning.domain.deck_checks import check_deck
     from apps.planning.domain.prep_checks import blocking_failures
@@ -325,7 +325,7 @@ def test_practice_clip_makes_a_try_slide_between_the_solution_and_the_classwork(
     assert kinds.count("try") == 1 and [s.kind for s in plain.slides].count("try") == 0
     i = kinds.index("try")
     assert (
-        kinds[i - 1] == "reveal"
+        kinds[i - 1] == "example"
         and deck.slides[i].refs == (first,)
         and deck.slides[i].clip.kind == "practice"
     )

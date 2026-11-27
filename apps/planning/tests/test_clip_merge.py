@@ -271,9 +271,9 @@ def test_deck_file_follows_the_merge(loaded_courses, continuation, example_slide
     assert services.deck_state(key) == ("ready", "")
     assert key == services.prepare_deck(GRADE10_SLUG, prep.lesson, prep.k)  # المفتاح من فهرس الأصول وحده
     text, sizes = _deck_text_and_clips(get_storage().get(key))
-    others = [FULL, FULL] * (len(prep.examples) - 1)  # مثال ثم كشف لكل مثال آخر
+    others = [FULL] * (len(prep.examples) - 1)  # شريحة لكل مثال آخر
     merged = (1600, 900 + GAP + 350)
-    mine = {SHORT: [merged, merged], FULL: [FULL, FULL, FULL], None: [FULL, FULL]}[continuation]
+    mine = {SHORT: [merged], FULL: [FULL, FULL], None: [FULL]}[continuation]
     assert sizes == [*mine, *others]
     assert (f"تابع المثال {target}" in text) == (example_slides == 2)
-    assert f"مثال {target}" in text and f"حل المثال {target}" in text
+    assert f"مثال {target}" in text and "حل المثال" not in text
