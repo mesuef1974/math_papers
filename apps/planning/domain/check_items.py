@@ -51,12 +51,12 @@ def fits_slide(item: Item) -> bool:
     )
 
 
-def _seeded_item(prep: PeriodPrep, example: int, seed: int) -> tuple[Item, int] | None:
+def _seeded_item(prep: PeriodPrep, example: int, seed: int, variant: int = 0) -> tuple[Item, int] | None:
     """أول بند يصلح للشريحة من بذور متتالية (السؤال الطويل يقصر ببذرة أخرى) مع بذرته الفعلية؛ None إن لم يصلح أيّ منها."""
     for attempt in range(SEED_TRIES):
         used = seed + attempt * 2
         try:
-            item = exit_ticket(prep.course, prep.lesson, example, seed=used)
+            item = exit_ticket(prep.course, prep.lesson, example, seed=used, variant=variant)
         except ItemBankError:
             return None
         if fits_slide(item):
@@ -65,7 +65,8 @@ def _seeded_item(prep: PeriodPrep, example: int, seed: int) -> tuple[Item, int] 
 
 
 def _item(prep: PeriodPrep, example: int, seed: int) -> Item | None:
-    found = _seeded_item(prep, example, seed)
+    """بند التحقق من صيغة المثال الثانية (غير صيغة بطاقة الخروج) إن وُجدت وصلحت، وإلا من الأولى."""
+    found = _seeded_item(prep, example, seed, variant=1) or _seeded_item(prep, example, seed)
     return None if found is None else found[0]
 
 
