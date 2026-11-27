@@ -60,7 +60,7 @@ class ExampleClip:
 # ---- عرض الحصة من تحضيرها ----
 
 # الإعداد: أرقام التصميم في مكان واحد (افتراضات تُراجع بعد أول تجربة في الصف)
-PERIOD_DECK_FORMAT = 9  # 9: صيغ الشرائح معادلات PowerPoint أصلية؛ 8: لا يُعزل المدى داخل تعبير رياضي؛ 7:صيغ LaTeX رموزًا مقروءة في البنود (6: شريط المراحل ودقائق المرحلة على الشريحة (5: بند الاسترجاع المتباعد في شريحة التذكّر؛ 4: بنود البنك في التحقق والخروج؛ 3: تخطيطات الماستر ورقم الشريحة)
+PERIOD_DECK_FORMAT = 10  # 10: اسم الدرس على الغلاف وبلا شريحة «حل المثال»؛ 9: صيغ الشرائح معادلات PowerPoint أصلية؛ 8: لا يُعزل المدى داخل تعبير رياضي؛ 7:صيغ LaTeX رموزًا مقروءة في البنود (6: شريط المراحل ودقائق المرحلة على الشريحة (5: بند الاسترجاع المتباعد في شريحة التذكّر؛ 4: بنود البنك في التحقق والخروج؛ 3: تخطيطات الماستر ورقم الشريحة)
 MINUTES_PER_SLIDE = 2
 TITLE_PT, BODY_PT = 36, 28
 MIN_TITLE_PT, MIN_BODY_PT = 32, 24
@@ -74,7 +74,6 @@ SLIDE_PHASE = {
     "recall": "warmup",
     "objectives": "objectives",
     "example": "direct",
-    "reveal": "direct",
     "try": "guided",
     "classwork": "guided",
     "differentiation": "independent",
@@ -94,7 +93,7 @@ STAGE_SHORT = {
     "closing": "الغلق",
 }
 MINUTES_BADGE = "{minutes} د"
-CLIP_KINDS = frozenset({"example", "reveal", "try"})
+CLIP_KINDS = frozenset({"example", "try"})
 
 # قوالب كل نص في العرض (الشريحة والنص البديل والملاحظات)؛ S13 يقيس كلمات العرض بكلماتها
 PERIOD_TEXT = {
@@ -108,10 +107,8 @@ PERIOD_TEXT = {
     "objective_note": "مثال {n}: الشرط: {condition} · المعيار: {criterion}",
     "example_title": "مثال {n}",
     "continued_title": "تابع المثال {n}",
-    "reveal_title": "حل المثال {n}",
     "example_title_page": "مثال {n}، ص {page}",
     "continued_title_page": "تابع المثال {n} (من ص {page})",
-    "reveal_title_page": "حل المثال {n} (من ص {page})",
     "try_title": "حاول أن تحل: مثال {n}",
     "alt": "مثال {n} من كتاب الطالب",
     "alt_page": "مثال {n} من كتاب الطالب، ص {page}",
@@ -220,8 +217,8 @@ def objective_bullet(prep: PeriodPrep, index: int) -> str:
 
 
 def example_title(kind: str, example: PrepExample) -> str:
-    """عنوان شريحة المثال برقم صفحته في كتاب الطالب حين تُعرف (قرار المالك 2026-11-20)؛ التتمة والحل «من ص» صفحة بدء
-    المثال، فقد تقع تتمته في الصفحة التالية."""
+    """عنوان شريحة المثال برقم صفحته في كتاب الطالب حين تُعرف (قرار المالك 2026-11-20)؛ التتمة «من ص» صفحة بدء
+    المثال، فقد تقع في الصفحة التالية."""
     if example.page:
         return _t(f"{kind}_title_page", n=example.n, page=example.page)
     return _t(f"{kind}_title", n=example.n)
@@ -337,7 +334,7 @@ def _draft_slides(
     practice: dict[int, tuple[ExampleClip, ...]] | None = None,
     items: PeriodItems | None = None,
 ) -> list[PeriodSlide]:
-    """الشرائح بترتيب المراحل بلا دقائق: العنوان والاستدعاء، الأهداف، ولكل مثال مقاطعه وحله وتدريبه الصفي، ثم الممارسة
+    """الشرائح بترتيب المراحل بلا دقائق: العنوان والاستدعاء، الأهداف، ولكل مثال مقاطعه وتدريبه الصفي، ثم الممارسة
     المستقلة والفحص وبطاقة الخروج واختبار الدرس والواجب."""
     bullets = [_t("period", k=prep.k, n=prep.n)]
     if prep.standards:
@@ -356,6 +353,8 @@ def _draft_slides(
             bullets=item_bullets(items.retrieval),
             notes=(recall_text, *item_notes(items.retrieval)),
         )
+    if prep.lesson_title:
+        bullets.insert(0, isolate_number_ranges(prep.lesson_title))
     slides = [_slide("title", _t("title", lesson=prep.lesson), bullets=tuple(bullets)), recall]
     if prep.objectives:
         notes = tuple(
@@ -379,9 +378,6 @@ def _draft_slides(
             title = example_title("example" if clip.part == 1 else "continued", e)
             notes = _period_example_notes(e) if clip.part == 1 else ()
             slides.append(_slide("example", title, refs=(e.n,), clip=clip, alt=example_alt(e), notes=notes))
-        slides.append(
-            _slide("reveal", example_title("reveal", e), refs=(e.n,), clip=clips[-1], alt=example_alt(e))
-        )
         for clip in (practice or {}).get(e.n, ()):
             title = _t("try_title" if clip.part == 1 else "try_continued_title", n=e.n)
             slides.append(_slide("try", title, refs=(e.n,), clip=clip, alt=try_alt(e)))

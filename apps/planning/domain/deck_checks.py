@@ -38,14 +38,13 @@ from .prep_sheet import STAGE_LABELS, recall_label
 from .slide_math import display
 
 KEY_PATTERN = re.compile(r"^decks/[\w-]+/[\w.]+-k\d+of\d+-p\d+-[0-9a-f]{16}\.pptx$")
-# رمز لكل نوع شريحة، والترتيب (S3): العنوان، الاستدعاء، الأهداف، ثم لكل مثال مقاطعه وحله و«حاول أن تحل» والتدريب الصفي،
+# رمز لكل نوع شريحة، والترتيب (S3): العنوان، الاستدعاء، الأهداف، ثم لكل مثال مقاطعه و«حاول أن تحل» والتدريب الصفي،
 # ثم الممارسة المستقلة والفحص وبطاقة الخروج واختبار الدرس والواجب
 KIND_CODE = {
     "title": "T",
     "recall": "R",
     "objectives": "O",
     "example": "E",
-    "reveal": "V",
     "try": "Y",
     "classwork": "C",
     "differentiation": "D",
@@ -54,7 +53,7 @@ KIND_CODE = {
     "quiz": "Q",
     "homework": "H",
 }
-ORDER = re.compile(r"^TR?O?(E+VY*C?)*D?K*X?Q?H?$")
+ORDER = re.compile(r"^TR?O?(E+Y*C?)*D?K*X?Q?H?$")
 TEACHER_MARKERS = ("DOK", "الطور", "الدقائق")
 WORD = re.compile(r"[^\W\d_]+")
 
@@ -142,7 +141,7 @@ def s3b_phases(deck: PeriodDeck, prep: PeriodPrep) -> CheckResult:
 
 
 def s3_order(deck: PeriodDeck, prep: PeriodPrep) -> CheckResult:
-    """الترتيب يتبع المراحل، وكتلة كل مثال (مقاطعه وحله وتدريبه) متصلة وتخصه وحده."""
+    """الترتيب يتبع المراحل، وكتلة كل مثال (مقاطعه وتدريبه) متصلة وتخصه وحده."""
     problems = []
     unknown = sorted({s.kind for s in deck.slides} - set(KIND_CODE))
     if unknown:
@@ -155,7 +154,7 @@ def s3_order(deck: PeriodDeck, prep: PeriodPrep) -> CheckResult:
         if s.kind == "example":
             if s.clip is not None and s.clip.part == 1:
                 block = s.refs[0] if s.refs else None
-        elif s.kind in ("reveal", "try", "classwork"):
+        elif s.kind in ("try", "classwork"):
             if s.refs != (block,):
                 problems.append(f"شريحة {s.kind} للمثال {s.refs} داخل كتلة المثال {block}")
         else:
@@ -317,6 +316,7 @@ def allowed_words(prep: PeriodPrep) -> frozenset[str]:
                 *REPRESENTATIONS,
                 *recalls,
                 *prep.standards,
+                prep.lesson_title,
                 *authored,
                 *bank_texts,
             ]

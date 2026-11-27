@@ -21,6 +21,7 @@ from apps.knowledge.domain.course_index import (
 from apps.knowledge.domain.unit_prep import AuthoredObjective, LessonObjectives, UnitPrep, unit_problems
 from apps.planning.domain.deck import _period_example_notes
 from apps.planning.domain.prep import (
+    DIFFERENTIATION_SIZE,
     DIGEST_OMITS_DEFAULT,
     PERIOD_MINUTES,
     STAGE_NAMES,
@@ -506,6 +507,7 @@ def _digest_before_145(prep):
         del example["practice"]
     assert not old.pop("exercise_pages")
     assert not old.pop("earlier_lessons")
+    assert not old.pop("lesson_title")
     text = json.dumps(old, default=sorted, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
@@ -544,6 +546,7 @@ def test_digest_drops_marked_fields_at_their_default_by_one_rule():
     assert {f.name for f in fields(PeriodPrep) if f.metadata.get("digest_omits_default")} == {
         "exercise_pages",
         "earlier_lessons",
+        "lesson_title",
     }
 
 
@@ -633,3 +636,20 @@ def test_classwork_from_a_practice_row_fails_t4_and_exit_depth_reads_try_rows():
     period = replace(first, examples=(deep, *first.examples[1:]), exit_ticket=ExitTicket(example.n, 3))
     assert 3 not in {d for e in period.examples for d, _ in e.rows}
     assert t7_assessment(period).status == FAIL
+
+
+@pytest.mark.django_db
+def test_no_exercise_repeats_within_a_period(loaded_courses):
+    """لا يتكرر تمرين بين التدريبات الصفية والمسارين والواجب (عيب عرض 1.1 في الإنتاج: 14 و16 و13).
+
+    الاستثناء الوحيد: مجمع لا يكفي مسارين (تمرين واحد للمتقدم أخذه الأساسي)، فيشتركان ولا يفرغ أحدهما."""
+    for row in lesson_preps(GRADE10_SLUG):
+        prep = row.prep
+        paths = {*prep.basic, *prep.advanced}
+        if set(prep.advanced) <= set(prep.basic):
+            assert len(paths) <= DIFFERENTIATION_SIZE
+        else:
+            assert not set(prep.basic) & set(prep.advanced), (prep.lesson, prep.k)
+        classwork = [x for c in prep.classwork for x in c.exercises]
+        numbers = [*classwork, *paths, *prep.homework]
+        assert len(numbers) == len(set(numbers)), (prep.lesson, prep.k, numbers)
