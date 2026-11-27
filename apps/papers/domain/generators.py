@@ -82,7 +82,11 @@ class Problem:
     @property
     def fingerprint(self) -> str:
         """بصمة قصيرة ثابتة للمسألة، تُحفظ مع الورقة ليُستبدل جزء دون تكرار ما بقي."""
-        return hashlib.sha1(self.key.encode("utf-8"), usedforsecurity=False).hexdigest()[:12]
+        return _fingerprint(self.key)
+
+
+def _fingerprint(key: str) -> str:
+    return hashlib.sha1(key.encode("utf-8"), usedforsecurity=False).hexdigest()[:12]
 
 
 @dataclass(frozen=True)
@@ -102,6 +106,16 @@ class ErrorSpotting:
     level: str
     # معادلة لكل خطوة (عبارتها = 0) ليتحقق اختبار مستقل عدديًا من أن الموسومة وحدها تغيّر الحلول
     check: dict[str, Any] = field(default_factory=dict, compare=False)
+    variant: str = field(default="", compare=False)  # اسم الصيغة التي ولّدتها؛ يضعه generate_error_spotting()
+
+    @property
+    def key(self) -> str:
+        """هوية المسألة نصها (المعطيات): المعطيات نفسها بزلّة أخرى ليست مسألة جديدة."""
+        return self.stem
+
+    @property
+    def fingerprint(self) -> str:
+        return _fingerprint(self.key)
 
     def __post_init__(self) -> None:
         if self.error_kind not in ERROR_KINDS:
@@ -297,6 +311,30 @@ def generate(
             and (level is None or problem.level == level)
         ):
             return problem
+    raise ExhaustedError(f"تعذر توليد مسألة جديدة للدرس {lesson}")
+
+
+def generate_error_spotting(
+    lesson: str,
+    rng: random.Random,
+    avoid: set[str] | None = None,
+    variant_name: str | None = None,
+    course: str = DEFAULT_COURSE,
+) -> ErrorSpotting:
+    """مسألة «اكتشف الخطأ» من سجلّها وحده، تخالف ما في avoid (مفاتيح أو بصمات)."""
+    avoid = avoid if avoid is not None else set()
+    pool = [
+        fn
+        for fn in ERROR_SPOTTING.get((course, lesson), [])
+        if variant_name is None or fn.__name__ == variant_name
+    ]
+    if not pool:
+        raise LevelUnavailableError(f"{lesson}/error_spotting/{variant_name or ''}")
+    for _ in range(MAX_ATTEMPTS):
+        fn = rng.choice(pool)
+        item = replace(fn(rng), variant=fn.__name__)
+        if item.key not in avoid and item.fingerprint not in avoid:
+            return item
     raise ExhaustedError(f"تعذر توليد مسألة جديدة للدرس {lesson}")
 
 

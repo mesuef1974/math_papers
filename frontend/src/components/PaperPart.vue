@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ErrorSpottingPart from "@/components/ErrorSpottingPart.vue";
 import GraphPlot from "@/components/GraphPlot.vue";
 import MathText from "@/components/MathText.vue";
 import type { Part } from "@/stores/papers";
@@ -44,6 +45,7 @@ function workLines(): number {
       <span v-if="part.label && !booklet" class="marks">({{ part.marks }})</span>
     </p>
     <GraphPlot v-if="part.graph" :graph="part.graph" :compact="booklet" />
+    <ErrorSpottingPart v-if="part.spotting" :steps="part.spotting.steps" />
     <ol
       v-if="part.options.length"
       class="options"

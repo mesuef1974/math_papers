@@ -102,7 +102,13 @@ const keyParts = computed(() =>
                 <bdi>{{ id }}</bdi>
               </th>
               <td class="steps-cell">
-                <p v-if="row.plain || row.final" class="answer">
+                <dl v-if="part.spotting" class="spotting-key">
+                  <div><dt>الخطوة الخاطئة:</dt><dd>{{ part.spotting.wrong_step }}</dd></div>
+                  <div><dt>نوع الخطأ:</dt><dd>{{ part.spotting.diagnosis }}</dd></div>
+                  <div><dt>الخطوة الصحيحة:</dt><dd><MathText :text="part.spotting.correct_step" /></dd></div>
+                  <div><dt>الجواب:</dt><dd><MathText :text="part.answer" /></dd></div>
+                </dl>
+                <p v-else-if="row.plain || row.final" class="answer">
                   <span v-if="row.final" class="final-label">الجواب النهائي: </span><MathText :text="part.answer" />
                 </p>
                 <ol v-if="row.steps.length" class="steps" :class="{ marked: !row.plain }" :start="row.start">
@@ -184,6 +190,19 @@ const keyParts = computed(() =>
 .answer {
   margin: 0;
   font-weight: var(--weight-medium);
+}
+.spotting-key {
+  margin: 0;
+}
+.spotting-key dt {
+  display: inline;
+  font-weight: var(--weight-bold);
+  color: var(--color-brand-strong);
+  margin-inline-end: var(--space-2);
+}
+.spotting-key dd {
+  display: inline;
+  margin: 0;
 }
 .steps {
   margin-block: var(--space-1) 0;

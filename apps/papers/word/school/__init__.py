@@ -354,7 +354,7 @@ def question(doc, item: dict) -> None:
     مربع التعليمات قبله. والأطول من صفحة (مقاليات الثاني عشر) تُنزع keepNext من صفوف أجزائه كلها: Word يربط الصف
     بما بعده إن كانت فيه فقرة واحدة تلحق بالتالي، فكان يعامل السؤال كتلة أطول من صفحة فيدفعه إلى صفحة جديدة
     ويترك التعليمات وحدها؛ فينقسم بين فروعه لا داخلها (قرار المالك 2026-11-19، مقيس في Word)."""
-    from ..builder import graph_picture, rich
+    from ..builder import graph_picture, rich, spotting_steps
 
     widths = [6.0, CONTENT_CM - 9.6, 3.6]
     parts = item["parts"]
@@ -373,6 +373,8 @@ def question(doc, item: dict) -> None:
         rich(merged, part["stem"], size=11, bold=True, first=stem, keep_next=True)
         if part.get("graph"):
             graph_picture(merged, part["graph"], compact=True, align="right")
+        if part.get("spotting"):
+            spotting_steps(merged, part)
         if part["options"]:
             _options(merged, part, inner, keep=False)
         else:

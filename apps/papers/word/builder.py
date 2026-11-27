@@ -20,6 +20,7 @@ from docx.shared import Cm, Pt
 
 from ..domain.bidi import isolate_number_ranges
 from ..domain.book_source import source_cells
+from ..domain.generators import ERROR_KINDS
 from . import ooxml as x
 from . import school
 from .graph_png import render_graph
@@ -202,6 +203,41 @@ def value_table(container, table) -> None:
                 x.add_math(par, row[c])
     x.spacer(container, 4)
     _ = letters
+
+
+def numbered_step(container, number: int, step: str, *, size: float = 9.5, **par) -> None:
+    """خطوة مرقّمة «1- ». Word يقلب «1-» إلى «-1» ما لم تُحَط الشرطة بعلامتي RLM، وRLM قبل الرقم وبعده يفصله عن خطوة
+    تبدأ بمعادلة لاتينية."""
+    paragraph = x.new_paragraph(container, after=1, indent_cm=0.0, **par)
+    x.add_text(
+        paragraph,
+        f"{x.RLM}{number}{x.RLM}-{x.RLM} ",
+        size=size,
+        bold=True,
+        color=x.SOFT,
+        force_rtl=True,
+    )
+    rich(container, step, size=size, first=paragraph, **par)
+
+
+def spotting_steps(container, part: dict) -> None:
+    """حل «اكتشف الخطأ» المعروض تحت نص السؤال، ملتصقًا بمساحة التصحيح بعده."""
+    for number, step in enumerate(part["spotting"]["steps"], start=1):
+        numbered_step(container, number, step, size=11, keep_next=True)
+
+
+def spotting_key(cell, part: dict) -> None:
+    """خلية المفتاح: رقم الخطوة الخاطئة ونوع الخطأ (مشتق من مفتاحه) والخطوة الصحيحة والجواب."""
+    spotting = part["spotting"]
+    for label, text in (
+        ("الخطوة الخاطئة", str(spotting["wrong_step"])),
+        ("نوع الخطأ", ERROR_KINDS[spotting["error_kind"]]),
+        ("الخطوة الصحيحة", spotting["correct_step"]),
+        ("الجواب", part["answer"]),
+    ):
+        paragraph = x.new_paragraph(cell, after=1)
+        x.add_text(paragraph, f"{label}: ", size=10.5, bold=True, color=x.BRAND_STRONG)
+        rich(cell, text, size=10.5, first=paragraph)
 
 
 # ---------- الرسوم ----------
@@ -654,6 +690,8 @@ def question_block(
                     doc, rtl=False, align="center", after=3, keep_next=bool(part["options"])
                 )
                 x.add_math(caption, f"y={part['graph']['label']}(x)")
+        if part.get("spotting"):
+            spotting_steps(doc, part)
         if part["options"]:
             options_block(doc, part, booklet, keep=bind)
         else:
@@ -990,25 +1028,16 @@ def key_pages(
                         valign="top" if c == col["answer"] else "center",
                         vmerge="" if c in per_item else merge,
                     )
-                if entry["plain"] or entry["final"]:
+                if part.get("spotting"):
+                    spotting_key(cells[1], part)
+                elif entry["plain"] or entry["final"]:
                     first = None
                     if entry["final"]:
                         first = x.new_paragraph(cells[1], after=1)
                         x.add_text(first, "الجواب النهائي: ", size=10.5, bold=True, color=x.BRAND_STRONG)
                     rich(cells[1], part["answer"], size=10.5, bold=True, after=2, first=first)
                 for number, step in enumerate(entry["steps"], start=entry["start"]):
-                    par = x.new_paragraph(cells[1], after=1, indent_cm=0.0)
-                    # «1- » بترتيب القراءة العربية: Word يقلب «1-» إلى «-1» ما لم تُحَط الشرطة بعلامتي RLM،
-                    # وRLM قبل الرقم وبعده يفصله عن خطوة تبدأ بمعادلة لاتينية
-                    x.add_text(
-                        par,
-                        f"{x.RLM}{number}{x.RLM}-{x.RLM} ",
-                        size=9.5,
-                        bold=True,
-                        color=x.SOFT,
-                        force_rtl=True,
-                    )
-                    rich(cells[1], step, size=9.5, first=par)
+                    numbered_step(cells[1], number, step)
                 if has_marks:
                     x.add_text(
                         x.new_paragraph(cells[col["mark"]], align="center", after=0, rtl=False),
