@@ -14,6 +14,7 @@ from io import BytesIO
 from xml.etree import ElementTree as ET
 
 from .domain.prep_checks import CheckResult, _result
+from .domain.slide_math import segments
 from .pptx_export import (
     BRAND,
     CLIP_PREFIX,
@@ -34,6 +35,7 @@ P = "http://schemas.openxmlformats.org/presentationml/2006/main"
 R = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 PKG = "http://schemas.openxmlformats.org/package/2006/relationships"
 CT = "http://schemas.openxmlformats.org/package/2006/content-types"
+MC = "http://schemas.openxmlformats.org/markup-compatibility/2006"
 NS = {"a": A, "p": P, "r": R}
 
 
@@ -226,6 +228,22 @@ def s12_package(data: bytes, rebuilt: bytes) -> CheckResult:
     return _result("S12", problems)
 
 
+def s15_native_math(data: bytes) -> CheckResult:
+    """لا صيغة مكتوبة نصًّا على شريحة: كل متغير ورمز وأمر داخل معادلة أصلية (بديل `mc:Fallback` خارج الفحص)."""
+    problems = []
+    with zipfile.ZipFile(BytesIO(data)) as z:
+        for k, name in enumerate(_slide_names(z), 1):
+            root = _xml(z.read(name))
+            for parent in list(root.iter()):
+                for child in parent.findall(f"{{{MC}}}Fallback"):
+                    parent.remove(child)
+            for t in root.iter(f"{{{A}}}t"):
+                text = t.text or ""
+                if "$" in text or "\\" in text or any(is_math for is_math, _ in segments(text)):
+                    problems.append(f"الشريحة {k}: صيغة نصية لا معادلة: {text}")
+    return _result("S15", problems)
+
+
 def check_pptx(data: bytes, rebuilt: bytes) -> tuple[CheckResult, ...]:
     """معايير الملف بترتيب رموزها."""
-    return (s7_clip_clarity(data), s8_identity(data), s12_package(data, rebuilt))
+    return (s7_clip_clarity(data), s8_identity(data), s12_package(data, rebuilt), s15_native_math(data))

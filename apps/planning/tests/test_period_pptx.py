@@ -79,7 +79,7 @@ def test_forty_eight_files_pass_file_checks_and_mirror_the_model(decks):
     assert len(decks) == 48
     for deck in decks:
         data = build_period_pptx(deck)
-        assert [r.status for r in check_pptx(data, build_period_pptx(deck))] == [PASS, PASS, PASS], deck.key
+        assert [r.status for r in check_pptx(data, build_period_pptx(deck))] == [PASS] * 4, deck.key
         parts = _parts(data)
         slides = _slides(parts)
         assert len(slides) == len(deck.slides)
@@ -331,7 +331,7 @@ def test_practice_clip_makes_a_try_slide_between_the_solution_and_the_classwork(
     )
     assert deck.slides[i].alt.startswith("حاول أن تحل") and deck.slides[i].title.startswith("حاول أن تحل")
     data = build_period_pptx(deck)
-    assert [r.status for r in check_pptx(data, build_period_pptx(deck))] == [PASS, PASS, PASS]
+    assert [r.status for r in check_pptx(data, build_period_pptx(deck))] == [PASS] * 4
     results = check_deck(deck, prep, clips, row.checks)
     assert not blocking_failures(results), [r for r in results if r.status == FAIL]
 

@@ -15,8 +15,10 @@ from pathlib import Path
 from xml.sax.saxutils import escape
 
 from apps.papers.domain.bidi import isolate_number_ranges
+from apps.papers.word.omml import M_NS, MATH_FONT, W_NS, WORD_RUN_PROPS, to_omml
 
 from .domain.deck import MINUTES_BADGE, STAGE_SHORT, PeriodDeck, PeriodSlide
+from .domain.slide_math import display, segments
 
 WIDTH, HEIGHT = 12192000, 6858000  # 13.333in × 7.5in
 EMU_PER_INCH = 914400
@@ -44,7 +46,10 @@ CLIP_PREFIX = "مقطع"  # اسم شكل صورة المثال، يميّزه �
 NS = (
     'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" '
     'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" '
-    'xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"'
+    'xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" '
+    'xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" '
+    'xmlns:a14="http://schemas.microsoft.com/office/drawing/2010/main" '
+    f'xmlns:m="{M_NS}"'
 )
 XML = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
 REL = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
@@ -72,11 +77,30 @@ def fit(width_px: int, height_px: int, box_cx: int, box_cy: int) -> tuple[int, i
     return max(1, round(width_px * scale)), max(1, round(height_px * scale))
 
 
-def _run(text: str, pt: int, color: str, bold: bool = False, font: str = FONT) -> str:
+def _props(tag: str, pt: int, color: str, bold: bool, font: str, lang: str = "ar-SA", extra: str = "") -> str:
     return (
-        f'<a:r><a:rPr lang="ar-SA" sz="{pt * 100}" b="{int(bold)}" dirty="0"><a:solidFill><a:srgbClr val="{color}"/>'
-        f'</a:solidFill><a:latin typeface="{font}"/><a:cs typeface="{font}"/></a:rPr><a:t>{escape(text)}</a:t></a:r>'
+        f'<{tag} lang="{lang}" sz="{pt * 100}" b="{int(bold)}"{extra} dirty="0"><a:solidFill><a:srgbClr val="{color}"/>'
+        f'</a:solidFill><a:latin typeface="{font}"/><a:cs typeface="{font}"/></{tag}>'
     )
+
+
+def _run(text: str, pt: int, color: str, bold: bool = False, font: str = FONT) -> str:
+    return f"<a:r>{_props('a:rPr', pt, color, bold, font)}<a:t>{escape(text)}</a:t></a:r>"
+
+
+def _math(latex: str, pt: int, color: str, bold: bool) -> str:
+    """معادلة PowerPoint أصلية (`a14:m`): شجرة OMML نفسها التي في Word بخصائص تشغيلة DrawingML."""
+    props = _props("a:rPr", pt, color, bold, MATH_FONT, lang="en-US", extra=' i="0"')
+    omml = to_omml(latex).replace(f' xmlns:m="{M_NS}" xmlns:w="{W_NS}"', "").replace(WORD_RUN_PROPS, props)
+    return f"<a14:m>{omml}</a14:m>"
+
+
+@dataclass(frozen=True)
+class _Para:
+    """فقرة بصيغتين: `native` بمعادلاتها الأصلية، و`fallback` نصًّا لقارئ لا يعرف `a14`."""
+
+    native: str
+    fallback: str
 
 
 def _para(
@@ -87,7 +111,7 @@ def _para(
     algn: str = "r",
     bullet: bool = False,
     font: str = FONT,
-) -> str:
+) -> _Para:
     if bullet:
         ppr = (
             f'<a:pPr marL="457200" indent="-342900" algn="{algn}" rtl="1"><a:spcBef><a:spcPts val="900"/></a:spcBef>'
@@ -95,7 +119,11 @@ def _para(
         )
     else:
         ppr = f'<a:pPr algn="{algn}" rtl="1"><a:buNone/></a:pPr>'
-    return f"<a:p>{ppr}{_run(text, pt, color, bold, font)}</a:p>"
+    native = "".join(
+        _math(part, pt, color, bold) if is_math else _run(part, pt, color, bold, font)
+        for is_math, part in segments(text)
+    )
+    return _Para(f"<a:p>{ppr}{native}</a:p>", f"<a:p>{ppr}{_run(display(text), pt, color, bold, font)}</a:p>")
 
 
 @dataclass
@@ -120,14 +148,26 @@ class _Canvas:
         )
 
     def text(
-        self, x: int, y: int, cx: int, cy: int, paragraphs: list[str], anchor: str = "t", name: str = "نص"
+        self, x: int, y: int, cx: int, cy: int, paragraphs: list[_Para], anchor: str = "t", name: str = "نص"
     ) -> None:
+        """مربع نص؛ وإن حمل معادلة غُلِّف في `mc:AlternateContent` ببديل نصي."""
         i = self._id()
+
+        def shape(body: str) -> str:
+            return (
+                f'<p:sp><p:nvSpPr><p:cNvPr id="{i}" name="{name} {i}"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr>'
+                f'<a:xfrm><a:off x="{x}" y="{y}"/><a:ext cx="{cx}" cy="{cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom>'
+                f'<a:noFill/></p:spPr><p:txBody><a:bodyPr wrap="square" lIns="91440" rIns="91440" rtlCol="1" anchor="{anchor}">'
+                f"<a:normAutofit/></a:bodyPr><a:lstStyle/>{body}</p:txBody></p:sp>"
+            )
+
+        native = "".join(p.native for p in paragraphs)
+        if "<a14:m>" not in native:
+            self.shapes.append(shape(native))
+            return
         self.shapes.append(
-            f'<p:sp><p:nvSpPr><p:cNvPr id="{i}" name="{name} {i}"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr>'
-            f'<a:xfrm><a:off x="{x}" y="{y}"/><a:ext cx="{cx}" cy="{cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom>'
-            f'<a:noFill/></p:spPr><p:txBody><a:bodyPr wrap="square" lIns="91440" rIns="91440" rtlCol="1" anchor="{anchor}">'
-            f"<a:normAutofit/></a:bodyPr><a:lstStyle/>{''.join(paragraphs)}</p:txBody></p:sp>"
+            f'<mc:AlternateContent><mc:Choice Requires="a14">{shape(native)}</mc:Choice>'
+            f"<mc:Fallback>{shape(''.join(p.fallback for p in paragraphs))}</mc:Fallback></mc:AlternateContent>"
         )
 
     def picture(self, png: bytes, x: int, y: int, cx: int, cy: int, descr: str, name: str = "صورة") -> None:
@@ -265,7 +305,7 @@ def _render(slide: PeriodSlide, lockup: bytes, k: int, n: int, phases: tuple[str
 
 
 def _notes(k: int, notes: tuple[str, ...]) -> str:
-    body = "".join(_para(n, 12, INK) for n in notes) or "<a:p/>"
+    body = "".join(_para(n, 12, INK).fallback for n in notes) or "<a:p/>"
     return (
         f'{XML}<p:notes {NS}><p:cSld><p:spTree>{GROUP}<p:sp><p:nvSpPr><p:cNvPr id="2" name="ملاحظات {k}"/>'
         '<p:cNvSpPr><a:spLocks noGrp="1"/></p:cNvSpPr><p:nvPr><p:ph type="body" idx="1"/></p:nvPr></p:nvSpPr><p:spPr/>'

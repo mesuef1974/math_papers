@@ -35,6 +35,7 @@ from .deck import (
 from .prep import STAGE_NAMES, PeriodPrep, Recall
 from .prep_checks import PASS, CheckResult, _result, blocking_failures
 from .prep_sheet import STAGE_LABELS, recall_label
+from .slide_math import display
 
 KEY_PATTERN = re.compile(r"^decks/[\w-]+/[\w.]+-k\d+of\d+-p\d+-[0-9a-f]{16}\.pptx$")
 # رمز لكل نوع شريحة، والترتيب (S3): العنوان، الاستدعاء، الأهداف، ثم لكل مثال مقاطعه وحله و«حاول أن تحل» والتدريب الصفي،
@@ -206,7 +207,7 @@ def s5_pace(deck: PeriodDeck, prep: PeriodPrep) -> CheckResult:
 
 
 def _lines(text: str) -> int:
-    return math.ceil(len(strip_isolation(text)) / LINE_CHARS)
+    return math.ceil(len(strip_isolation(display(text))) / LINE_CHARS)
 
 
 def s6_density(deck: PeriodDeck) -> CheckResult:

@@ -14,6 +14,8 @@ from xml.sax.saxutils import escape, quoteattr
 M_NS = "http://schemas.openxmlformats.org/officeDocument/2006/math"
 W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 MATH_FONT = "Cambria Math"
+# خصائص خط Word لكل تشغيلة؛ كاتب PPTX يبدلها بخصائص DrawingML
+WORD_RUN_PROPS = f'<w:rPr><w:rFonts w:ascii="{MATH_FONT}" w:hAnsi="{MATH_FONT}"/></w:rPr>'
 
 SYMBOLS = {
     "infty": "∞",
@@ -90,12 +92,14 @@ TOKEN = re.compile(r"\\[a-zA-Z]+|\\.|[{}^_&]|\s+|.", re.S)
 class Run:
     text: str
     plain: bool = False
+    normal: bool = False  # نص عادي داخل المعادلة: لا مسافات عملية حوله
 
 
 def _run_xml(run: Run) -> str:
     props = '<m:rPr><m:sty m:val="p"/></m:rPr>' if run.plain else ""
-    font = f'<w:rPr><w:rFonts w:ascii="{MATH_FONT}" w:hAnsi="{MATH_FONT}"/></w:rPr>'
-    return f'<m:r>{props}{font}<m:t xml:space="preserve">{escape(run.text)}</m:t></m:r>'
+    if run.normal:
+        props = "<m:rPr><m:nor/></m:rPr>"
+    return f'<m:r>{props}{WORD_RUN_PROPS}<m:t xml:space="preserve">{escape(run.text)}</m:t></m:r>'
 
 
 def _xml(nodes: list) -> str:
@@ -106,9 +110,9 @@ def _xml(nodes: list) -> str:
             isinstance(node, Run)
             and merged
             and isinstance(merged[-1], Run)
-            and merged[-1].plain == node.plain
+            and (merged[-1].plain, merged[-1].normal) == (node.plain, node.normal)
         ):
-            merged[-1] = Run(merged[-1].text + node.text, node.plain)
+            merged[-1] = Run(merged[-1].text + node.text, node.plain, node.normal)
         else:
             merged.append(node)
     return "".join(_run_xml(n) if isinstance(n, Run) else n for n in merged)
@@ -191,7 +195,9 @@ class _Parser:
         if token.startswith("\\") and len(token) > 1:
             return self.command(token[1:])
         if token == "-":
-            return Run("−")
+            # بعد فاصلة الزوج المرتب إشارة لا طرح: النص العادي يمنع مسافتي العملية «(5, − 1)»
+            before = next((t for t in reversed(self.tokens[: self.pos - 1]) if not t.isspace()), "")
+            return Run("−", normal=before == ",")
         return Run(token)
 
     def command(self, name: str):
@@ -206,10 +212,12 @@ class _Parser:
             return self.limit()
         if name in SILENT:
             return None
-        if name in ("text", "mbox", "mathrm", "operatorname"):
+        if name in ("text", "mbox", "mathrm", "mathbf", "operatorname"):
             return Run("".join(self.text_group()), plain=True)
         if name == "mathbb":
             return Run("".join(BLACKBOARD.get(c, c) for c in self.text_group()))
+        if name == "overline":
+            return f'<m:bar><m:barPr><m:pos m:val="top"/></m:barPr><m:e>{_xml(self.group())}</m:e></m:bar>'
         if name == "begin":
             return self.environment()
         if name in FUNCTIONS:
