@@ -22,6 +22,12 @@ export const router = createRouter({
       meta: { title: "إدخال نتائج الطلاب" },
     },
     {
+      path: "/exercise-links",
+      name: "exercise-links",
+      component: () => import("@/pages/ExerciseLinksPage.vue"),
+      meta: { title: "تمارين الكتاب وأمثلتها" },
+    },
+    {
       path: "/automation",
       name: "automation",
       component: () => import("@/pages/AutomationPage.vue"),

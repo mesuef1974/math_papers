@@ -4,14 +4,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from django.db.models import Sum
+from django.db.models import Count, Q, Sum
 
 from apps.curriculum.courses import GRADE12_SLUG
 
 from .domain.contract import SCHEMA_VERSION, source_hash, source_slugs
 from .domain.course_index import CourseIndex, LessonIndex
 from .domain.schemas import lesson_sort_key
-from .models import ExerciseGroup, ExerciseTemplate, LessonProfile, WorkedExample
+from .models import BookExerciseLink, ExerciseGroup, ExerciseTemplate, LessonProfile, WorkedExample
 
 
 @dataclass(frozen=True)
@@ -93,13 +93,70 @@ def example_exercises(course: str, lesson: str, number: int) -> list[int]:
     """أرقام تدريبات الكتاب التي تتدرّب على المثال (جدول «تحليل التمارين» كما حمّله المحمِّل)؛ فارغة إن لم تُعرف.
 
     صفوف `try` وحدها: تمارين قسم «تمارين» (`practice`) للتحضير، ولا تدخل مصدر الجزء في الأوراق."""
-    groups = ExerciseGroup.objects.filter(
-        profile__lesson__course__slug=course,
-        profile__lesson__code=lesson,
+    numbers = BookExerciseLink.objects.filter(
+        lesson__course__slug=course,
+        lesson__code=lesson,
         example=number,
         kind=ExerciseGroup.Kind.TRY,
-    ).values_list("exercises", flat=True)
-    return sorted({n for group in groups for n in group})
+    ).values_list("number", flat=True)
+    return sorted(set(numbers))
+
+
+def _analysis(links) -> list[dict]:
+    """صفوف «تحليل التمارين» من الربط: صف لكل (نوع، مثال، عمق)، تمرين المثال أولًا."""
+    rows: dict[tuple[bool, int, int], dict] = {}
+    for link in links:
+        key = (link.kind != ExerciseGroup.Kind.TRY, link.example, link.dok)
+        row = rows.setdefault(
+            key, {"example": link.example, "dok": link.dok, "exercises": [], "kind": link.kind}
+        )
+        row["exercises"].append(link.number)
+    return [{**rows[key], "exercises": sorted(rows[key]["exercises"])} for key in sorted(rows)]
+
+
+def link_lessons(course: str) -> list[dict]:
+    """دروس المقرر ذات الربط بعدد روابطها وما ينتظر اعتمادًا منها (لم يُعتمد ومصدره ليس معلمًا)، بترتيب الكتاب."""
+    waiting = Q(reviewed_at__isnull=True) & ~Q(provenance=BookExerciseLink.Provenance.TEACHER)
+    rows = (
+        BookExerciseLink.objects.filter(lesson__course__slug=course)
+        .values("lesson__code", "lesson__title")
+        .annotate(total=Count("pk"), pending=Count("pk", filter=waiting))
+        .order_by()
+    )
+    return [
+        {"code": r["lesson__code"], "title": r["lesson__title"], "total": r["total"], "pending": r["pending"]}
+        for r in sorted(rows, key=lambda r: lesson_sort_key(r["lesson__code"]))
+    ]
+
+
+def lesson_links(course: str, lesson: str) -> dict | None:
+    """أمثلة الدرس وتمارينه المربوطة بمصدر ربطها، لشاشة المراجعة؛ None لدرس بلا ربط."""
+    links = BookExerciseLink.objects.filter(lesson__course__slug=course, lesson__code=lesson).order_by(
+        "-kind", "number", "example"
+    )
+    exercises: dict[tuple[str, int], dict] = {}
+    for link in links:
+        row = exercises.setdefault(
+            (link.kind, link.number),
+            {
+                "kind": link.kind,
+                "number": link.number,
+                "examples": [],
+                "provenance": link.provenance,
+                "reviewed": link.reviewed_at is not None
+                or link.provenance == BookExerciseLink.Provenance.TEACHER,
+            },
+        )
+        row["examples"].append(link.example)
+    if not exercises:
+        return None
+    examples = WorkedExample.objects.filter(
+        profile__lesson__course__slug=course, profile__lesson__code=lesson
+    ).order_by("number")
+    return {
+        "examples": list(examples.values("number", "page", "skill")),
+        "exercises": list(exercises.values()),
+    }
 
 
 def course_index_from_tables(course: str) -> CourseIndex:
@@ -107,7 +164,7 @@ def course_index_from_tables(course: str) -> CourseIndex:
     profiles = (
         LessonProfile.objects.filter(lesson__course__slug=course)
         .select_related("lesson")
-        .prefetch_related("standards", "practices", "objectives", "examples", "exercise_groups")
+        .prefetch_related("standards", "practices", "objectives", "examples", "lesson__exercise_links")
     )
     lessons = []
     for profile in sorted(profiles, key=lambda p: lesson_sort_key(p.lesson.code)):
@@ -122,10 +179,7 @@ def course_index_from_tables(course: str) -> CourseIndex:
                     {"n": e.number, "page": e.page, "representations": e.representations}
                     for e in profile.examples.all()
                 ],
-                "analysis": [
-                    {"example": g.example, "dok": g.dok, "exercises": g.exercises, "kind": g.kind}
-                    for g in profile.exercise_groups.all()
-                ],
+                "analysis": _analysis(profile.lesson.exercise_links.all()),
                 "exercises_total": profile.exercises_total or 0,
                 "task_guide": (
                     {"basic": profile.task_basic, "advanced": profile.task_advanced}

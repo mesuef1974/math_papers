@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+from django.conf import settings
 from django.db import models
 
 from apps.curriculum.models import Course, Lesson
@@ -167,6 +168,40 @@ class ExerciseGroup(models.Model):
 
     def __str__(self) -> str:
         return f"{self.profile_id} مثال {self.example} عمق {self.dok}"
+
+
+class BookExerciseLink(models.Model):
+    """تمرين من كتاب الطالب ومثاله ومصدر هذا الربط (أرقام فقط). المثال برقمه لأن صفوف `WorkedExample` يعاد إنشاؤها.
+
+    التمرين الواحد قد يتبع مثالين، فالفريد على الأربعة. صف له `reviewed_at` اعتمده المشرف فلا يمسّه المحمِّل."""
+
+    class Provenance(models.TextChoices):
+        TEACHER = "teacher", "معتمد من معلم"
+        AI_UNREVIEWED = "ai_unreviewed", "آلي لم يُراجَع"
+        DERIVED = "derived", "مشتق"
+        GUIDE = "guide", "دليل المعلم"
+
+    lesson = models.ForeignKey(Lesson, on_delete=models.CASCADE, related_name="exercise_links")
+    kind = models.CharField(max_length=10, choices=ExerciseGroup.Kind.choices)
+    number = models.PositiveSmallIntegerField()
+    example = models.PositiveSmallIntegerField()
+    dok = models.PositiveSmallIntegerField()
+    provenance = models.CharField(max_length=16, choices=Provenance.choices)
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["lesson_id", "kind", "number", "example"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["lesson", "kind", "number", "example"], name="unique_exercise_link"
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"تمرين {self.number} لمثال {self.example} في {self.lesson_id}"
 
 
 class Term(models.Model):

@@ -29,6 +29,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from .course_index import CourseIndex, LessonIndex
 from .schemas import (
+    GROUP_KINDS,
     LESSON_CODE,
     MAX_UNIT,
     ExampleData,
@@ -62,8 +63,9 @@ TERM_PLAN = "term_plan.json"
 PAST_EXAMS = "past_exams.json"
 COVERAGE = "coverage.json"
 # أقسام العقد الاختيارية: الفارغ منها خارج التجزئة، فدخول قسم جديد العقدَ لا يُصدر إصدارًا لمقرر لا يملكه
-OPTIONAL = ("blueprints", "sources", "term_plan", "past_exams", "coverage", "targets")
+OPTIONAL = ("blueprints", "sources", "term_plan", "past_exams", "coverage", "targets", "exercise_provenance")
 LANGUAGES = ("ar", "en")
+PROVENANCES = ("teacher", "ai_unreviewed", "derived", "guide")
 SLUG = r"^[a-z0-9]+(?:-[a-z0-9]+)*$"
 
 
@@ -148,6 +150,8 @@ class CourseKnowledge(_Strict):
     past_exams: list[PastExamData] = Field(default_factory=list)
     coverage: list[CoverageData] = Field(default_factory=list)
     targets: list[ExampleTargetData] = Field(default_factory=list)
+    # مصدر ربط تمارين الكتاب بأمثلتها لكل نوع؛ غير المذكور: الفهرس المشتق من الدليل، وسواه آلي لم يُراجَع
+    exercise_provenance: dict[Literal[*GROUP_KINDS], Literal[*PROVENANCES]] = Field(default_factory=dict)  # type: ignore[valid-type]
 
     def model_post_init(self, __context: object) -> None:
         codes = [lesson.code for lesson in self.lessons]
@@ -351,6 +355,7 @@ def read_course_dir(directory: Path) -> CourseKnowledge:
         past_exams=[PastExamData(**x) for x in optional.get(PAST_EXAMS, [])],
         coverage=[CoverageData(**x) for x in optional.get(COVERAGE, [])],
         targets=_read_targets(directory),
+        exercise_provenance=manifest.get("exercise_provenance", {}),
     )
     if knowledge.course.slug != directory.name:
         raise ValueError(f"اسم المجلد {directory.name} لا يطابق معرّف المقرر {knowledge.course.slug}")

@@ -1,5 +1,8 @@
 {
   "schema_version": 1,
+  "exercise_provenance": {
+    "try": "teacher"
+  },
   "course": {
     "slug": "g12-sci-s1",
     "title": "الرياضيات: الثاني عشر العلمي والتكنولوجي، الفصل الأول",

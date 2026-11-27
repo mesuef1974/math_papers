@@ -35,7 +35,10 @@ const navItems = computed(() => {
     items.push({ to: "/misconceptions", label: "سوء الفهم", icon: "problem" });
     items.push({ to: "/copilot", label: "المعاون", icon: "curriculum" });
   }
-  if (auth.user?.is_superuser) items.push({ to: "/automation", label: "البث الحي", icon: "generate" });
+  if (auth.user?.is_superuser) {
+    items.push({ to: "/exercise-links", label: "ربط التمارين", icon: "curriculum" });
+    items.push({ to: "/automation", label: "البث الحي", icon: "generate" });
+  }
   items.push({ to: "/about", label: "عن المنصة", icon: "teacher" });
   return items;
 });

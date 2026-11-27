@@ -45,8 +45,8 @@
 المعتمد وحده؛ الملف مصدر الحقيقة، و`ObjectiveOverride` و`ObjectiveSuggestion` تبقى كما هي.
 
 `BookExerciseLink` (knowledge): `lesson`، `number`، `example`، `kind` (`try`/`practice`)، `provenance`
-(`teacher`/`ai_unreviewed`/`derived`/`guide`)، `reviewed_by`، `reviewed_at`. فريد على `(lesson, number, kind)`.
-يحل محل قائمة `ExerciseGroup.exercises` بهجرة expand/contract. ربط الثاني عشر المعتمد دون مراجعة (طلب الدمج 203) يُحمَّل
+(`teacher`/`ai_unreviewed`/`derived`/`guide`)، `reviewed_by`، `reviewed_at`. فريد على `(lesson, kind, number, example)` لأن التمرين الواحد في العاشر يتبع أحيانًا مثالين، ومعه `dok`.
+يحل محل قائمة `ExerciseGroup.exercises` بهجرة expand/contract (القراءة منه، و`ExerciseGroup` باقٍ إلى هجرة الإزالة). ربط الثاني عشر المعتمد دون مراجعة (طلب الدمج 203) يُحمَّل
 `ai_unreviewed` لا `teacher`.
 
 `GeneratorForm` (papers): `course`، `lesson_code`، `name`، `example`، `level`، `has_item`، `active`. فهرس يُزامَن من الشيفرة
@@ -68,6 +68,8 @@
    منجزة (2026-11-27): الوحدة 1 من العاشر (14 مثالًا) بجدول اعتمده المالك؛ المعيار من معايير درس المثال وحدها.
 2. تمارين الكتاب بمصدرها. `BookExerciseLink` وتعبئته من `ExerciseGroup`، وشاشة مراجعة داخل التطبيق.
    تنتهي حين: تطابق القراءةُ الجديدة القديمةَ لكل دروس المقررين، ويستطيع المالك تصحيح ربط واعتماده.
+   منجزة (2026-11-27): الشاشة `/exercise-links` للمشرف العام؛ مصدر كل نوع من `exercise_provenance` في `course.json`،
+   وما مصدره معلم لا ينتظر اعتمادًا. إزالة `ExerciseGroup` بطلب لاحق.
 3. فهرس الصيغ وتقرير الفجوات. `GeneratorForm` وأمر مزامنة وتقرير الأمثلة بلا صيغة أو بصيغة واحدة.
    تنتهي حين: كل مثال أساسي في الوحدة له صيغتان على الأقل، لكل منهما فحص عددي مستقل.
 4. مُركِّب الواجب الهجين. منطق نقي حتمي، ثم `Assignment`، ثم ورقة الطالب والمفتاح.
