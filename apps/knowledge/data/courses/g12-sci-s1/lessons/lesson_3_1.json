@@ -353,6 +353,67 @@
    "exercises": [
     8
    ]
+  },
+  {
+   "example": 1,
+   "dok": 1,
+   "exercises": [
+    2,
+    3,
+    4,
+    5,
+    29
+   ],
+   "kind": "practice"
+  },
+  {
+   "example": 2,
+   "dok": 2,
+   "exercises": [
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    34,
+    36,
+    37
+   ],
+   "kind": "practice"
+  },
+  {
+   "example": 3,
+   "dok": 2,
+   "exercises": [
+    17,
+    18,
+    19,
+    20,
+    23,
+    24,
+    25,
+    26,
+    27,
+    28,
+    35,
+    43,
+    44
+   ],
+   "kind": "practice"
+  },
+  {
+   "example": 4,
+   "dok": 2,
+   "exercises": [
+    15,
+    16,
+    21,
+    22,
+    38,
+    39
+   ],
+   "kind": "practice"
   }
  ],
  "examples": [

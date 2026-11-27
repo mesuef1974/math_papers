@@ -301,6 +301,37 @@
    "exercises": [
     10
    ]
+  },
+  {
+   "example": 1,
+   "dok": 2,
+   "exercises": [
+    1,
+    2,
+    3
+   ],
+   "kind": "practice"
+  },
+  {
+   "example": 2,
+   "dok": 2,
+   "exercises": [
+    6,
+    7,
+    8,
+    9
+   ],
+   "kind": "practice"
+  },
+  {
+   "example": 3,
+   "dok": 2,
+   "exercises": [
+    11,
+    12,
+    13
+   ],
+   "kind": "practice"
   }
  ],
  "examples": [
