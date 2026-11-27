@@ -15,7 +15,11 @@ KIND_NAMES = {"example": "مثال", "practice": "تدريب"}
 
 
 def book_source(
-    number: int | None, page: int | None, kind: str = "example", exercises: list[int] | None = None
+    number: int | None,
+    page: int | None,
+    kind: str = "example",
+    exercises: list[int] | None = None,
+    exercise_pages: Mapping[int, int] | None = None,
 ) -> dict[str, Any] | None:
     """المفتاح «exercises» يُضاف حين تُعرف تدريبات المثال فقط، فالمصدر بلا تدريبات يبقى كما كان."""
     if number is None:
@@ -23,6 +27,8 @@ def book_source(
     source: dict[str, Any] = {"kind": kind, "number": number, "page": page}
     if exercises:
         source["exercises"] = sorted(set(exercises))
+        if known := {n: exercise_pages[n] for n in source["exercises"] if n in (exercise_pages or {})}:
+            source["exercise_pages"] = known
     return source
 
 
@@ -58,6 +64,12 @@ def numbers_with_pages(numbers: list[int], pages: Mapping[int, int]) -> str:
     )
 
 
+def _exercise_list(source: Mapping[str, Any]) -> str:
+    """تدريبات المثال بصفحاتها المطبوعة؛ مفاتيح الصفحات نصوص حين تُقرأ من JSON المحفوظ."""
+    pages = {int(n): page for n, page in (source.get("exercise_pages") or {}).items()}
+    return numbers_with_pages(list(source["exercises"]), pages)
+
+
 def source_cells(source: Mapping[str, Any] | None) -> dict[str, str]:
     """خلايا المصدر في أعمدة المفتاح الثلاثة «الصفحة» و«المثال» و«التدريب» (قرار المالك 2026-11-19)، مشتقة من
     أرقام المصدر وحدها في الخادم وWord، فلا تغيب حين لا يصل نص مشتق مع الجزء. الخانة المجهولة فارغة لا مخترعة.
@@ -70,7 +82,7 @@ def source_cells(source: Mapping[str, Any] | None) -> dict[str, str]:
     return {
         "page": page,
         "example": str(source["number"]),
-        "exercises": number_list(source["exercises"]) if source.get("exercises") else "",
+        "exercises": _exercise_list(source) if source.get("exercises") else "",
     }
 
 
@@ -80,5 +92,5 @@ def source_label(source: Mapping[str, Any] | None) -> str:
     item = f"{KIND_NAMES[source['kind']]} {source['number']}"
     label = f"ص {source['page']}، {item}" if source.get("page") else item
     if source.get("exercises"):
-        label += f"، تدريب {number_list(source['exercises'])}"
+        label += f"، تدريب {_exercise_list(source)}"
     return label

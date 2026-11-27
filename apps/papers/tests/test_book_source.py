@@ -1,5 +1,6 @@
 """مصدر فكرة السؤال في كتاب الطالب: رقم الصفحة المطبوعة ورقم المثال، مشتقًّا من مثال الصيغة وفهرس المقرر، أرقامًا فقط."""
 
+import json
 import re
 
 import pytest
@@ -14,7 +15,9 @@ from apps.papers.domain.generators import REGISTRY, SKILL_EXAMPLES, out_of_scope
 
 FINAL = "g10-s1-2026-27-final"
 G12_FORECAST = "g12-sci-s1-2026-27-forecast"
-LABEL = re.compile(r"^ص \d{1,3}، مثال \d{1,2}(، تدريب \d+(?:–\d+)?(?:، \d+(?:–\d+)?)*)?$")
+LABEL = re.compile(
+    r"^ص \d{1,3}، مثال \d{1,2}(، تدريب \d+(?:–\d+)?(?:، \d+(?:–\d+)?)*(?: \(ص \d+\))?(?:؛ \d+(?:–\d+)?(?:، \d+(?:–\d+)?)*(?: \(ص \d+\))?)*)?$"
+)
 
 
 def test_label_is_page_then_item_and_numbers_only():
@@ -57,7 +60,7 @@ def test_every_part_of_the_grade10_exam_carries_its_book_source(form):
         expected = {"kind": "example", "number": number, "page": pages[(part["lesson"], number)]}
         if exercises.get((part["lesson"], number)):
             expected["exercises"] = sorted(exercises[(part["lesson"], number)])
-        assert part["source"] == expected
+        assert {k: v for k, v in part["source"].items() if k != "exercise_pages"} == expected
         label = PartOut.model_validate(part).source_label
         assert LABEL.match(label) and re.search(f"مثال {number}(،|$)", label), label
 
@@ -122,3 +125,10 @@ def test_source_cells_are_derived_and_not_taken_from_the_client():
     )
     old = PartOut.model_validate({key: value for key, value in part.items() if key != "source"})
     assert (old.source_page, old.source_example, old.source_exercises) == ("", "", "")
+
+
+def test_exercise_pages_travel_with_the_source_and_survive_json():
+    source = book_source(1, 26, exercises=[20, 21, 30], exercise_pages={20: 28, 21: 28, 30: 29})
+    expected = "ص 26، مثال 1، تدريب 20، 21 (ص 28)؛ 30 (ص 29)"
+    assert source_label(source) == expected
+    assert source_label(json.loads(json.dumps(source))) == expected
