@@ -183,14 +183,19 @@ def stage_exercise_links(book: Book) -> None:
 
 
 def stage_exercise_pages(book: Book) -> None:
-    student_examples.need_dirs(book, "student_ocr")
+    from . import ocr
+
+    student_examples.need_dirs(book, "student_render", "student_ocr")
     result = exercise_pages.build(
         book,
         _layout(book),
         student_clips.load_table(book),
         student_examples.load_pages(book),
         student_examples.boxes_of(book),
+        _page_image(book, "student_render"),
+        ocr.read_scored,
     )
+    ocr.release()
     _emit(book, "exercise_pages", book.output("exercise_pages"), result)
     print(json.dumps(exercise_pages.summarize(result), ensure_ascii=False))
 
