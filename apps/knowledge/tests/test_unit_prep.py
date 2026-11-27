@@ -59,7 +59,7 @@ def test_every_unit_file_matches_its_course_index(loaded_courses):
 
 def test_unit_one_of_grade_ten_is_approved_with_fourteen_objectives():
     data = unit_prep(GRADE10_SLUG, 1)
-    assert data.status == "approved" and data.approval.endswith("2026-11-19")
+    assert data.status == "approved" and data.approval.endswith("2026-11-27")
     assert [entry.lesson for entry in data.lessons] == ["1.1", "1.2", "1.3"]  # 1.4 إثرائي
     assert sum(len(entry.objectives) for entry in data.lessons) == 14
 

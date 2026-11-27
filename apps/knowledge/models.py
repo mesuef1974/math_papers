@@ -295,3 +295,39 @@ class KnowledgeRelease(models.Model):
 
     def __str__(self) -> str:
         return f"{self.course_id} {self.content_hash[:8]}"
+
+
+class ExampleObjective(models.Model):
+    """هدف مثال من ملف وحدة معتمد. المثال بمفتاح (الدرس، رقمه) لأن صفوف `WorkedExample` يعاد إنشاؤها عند التحميل."""
+
+    lesson = models.ForeignKey(Lesson, on_delete=models.CASCADE, related_name="example_objectives")
+    example = models.PositiveSmallIntegerField()
+    dok = models.PositiveSmallIntegerField()
+    verb = models.CharField(max_length=16)
+    behavior = models.CharField(max_length=240)
+    condition = models.CharField(max_length=240)
+    criterion = models.CharField(max_length=240)
+
+    class Meta:
+        ordering = ["lesson_id", "example"]
+        constraints = [models.UniqueConstraint(fields=["lesson", "example"], name="unique_example_objective")]
+
+    def __str__(self) -> str:
+        return f"هدف مثال {self.example} في {self.lesson_id}"
+
+
+class ExampleStandard(models.Model):
+    """معيار يقيسه مثال، بمفتاح المثال نفسه."""
+
+    lesson = models.ForeignKey(Lesson, on_delete=models.CASCADE, related_name="example_standards")
+    example = models.PositiveSmallIntegerField()
+    standard = models.ForeignKey(Standard, on_delete=models.PROTECT, related_name="example_links")
+
+    class Meta:
+        ordering = ["lesson_id", "example", "standard_id"]
+        constraints = [
+            models.UniqueConstraint(fields=["lesson", "example", "standard"], name="unique_example_standard")
+        ]
+
+    def __str__(self) -> str:
+        return f"معيار {self.standard_id} لمثال {self.example} في {self.lesson_id}"

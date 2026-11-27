@@ -62,7 +62,7 @@ TERM_PLAN = "term_plan.json"
 PAST_EXAMS = "past_exams.json"
 COVERAGE = "coverage.json"
 # أقسام العقد الاختيارية: الفارغ منها خارج التجزئة، فدخول قسم جديد العقدَ لا يُصدر إصدارًا لمقرر لا يملكه
-OPTIONAL = ("blueprints", "sources", "term_plan", "past_exams", "coverage")
+OPTIONAL = ("blueprints", "sources", "term_plan", "past_exams", "coverage", "targets")
 LANGUAGES = ("ar", "en")
 SLUG = r"^[a-z0-9]+(?:-[a-z0-9]+)*$"
 
@@ -122,6 +122,19 @@ class BlueprintData(_Strict):
             raise ValueError(f"درجات بنود الجدول {self.slug} مجموعها {total} والمعلن {self.total_marks}")
 
 
+class ExampleTargetData(_Strict):
+    """هدف مثال ومعاييره من ملف وحدة معتمد (`prep/unit-<n>.json`، والملف مصدر الحقيقة)."""
+
+    lesson: str = Field(pattern=LESSON_CODE)
+    example: int = Field(ge=1, le=40)
+    dok: int = Field(ge=1, le=4)
+    verb: str
+    behavior: str
+    condition: str
+    criterion: str
+    standards: list[str] = Field(default_factory=list)
+
+
 class CourseKnowledge(_Strict):
     schema_version: Literal[1] = SCHEMA_VERSION
     course: CourseMeta
@@ -134,6 +147,7 @@ class CourseKnowledge(_Strict):
     term_plan: TermPlanData | None = None
     past_exams: list[PastExamData] = Field(default_factory=list)
     coverage: list[CoverageData] = Field(default_factory=list)
+    targets: list[ExampleTargetData] = Field(default_factory=list)
 
     def model_post_init(self, __context: object) -> None:
         codes = [lesson.code for lesson in self.lessons]
@@ -158,6 +172,23 @@ class CourseKnowledge(_Strict):
         self._check_sources()
         self._check_term_plan()
         self._check_evidence()
+        self._check_targets()
+
+    def _check_targets(self) -> None:
+        """هدف المثال لمثال من أمثلة درسه، ومعاييره من معايير الدرس."""
+        profiles = {p.lesson: p for p in self.profiles}
+        seen = set()
+        for target in self.targets:
+            where = f"هدف المثال {target.example} في الدرس {target.lesson}"
+            profile = profiles.get(target.lesson)
+            if profile is None or target.example not in {e.number for e in profile.examples}:
+                raise ValueError(f"{where}: لا مثال بهذا الرقم")
+            if (target.lesson, target.example) in seen:
+                raise ValueError(f"{where}: مكرر")
+            seen.add((target.lesson, target.example))
+            outside = sorted(set(target.standards) - set(profile.standards))
+            if outside:
+                raise ValueError(f"{where}: معيار ليس من معايير الدرس {outside}")
 
     def _check_blueprints(self) -> None:
         """بند الجدول لدرس من المقرر يدخل الاختبار: الدرس الإثرائي (`examinable: false`) لا يُسأل عنه."""
@@ -276,6 +307,23 @@ def read_index(directory: Path) -> CourseIndex | None:
     return CourseIndex(**_read(path)) if path.is_file() else None
 
 
+def _read_targets(directory: Path) -> list[ExampleTargetData]:
+    """أهداف الأمثلة من ملفات الوحدات المعتمدة وحدها؛ المسودة لا تدخل القاعدة."""
+    from .unit_prep import PREP_DIR, UnitPrep  # يستورد COURSES_DIR من هذا الملف
+
+    targets = []
+    for path in sorted((directory / PREP_DIR).glob("unit-*.json")):
+        unit = UnitPrep.model_validate(_read(path))
+        if unit.status != "approved":
+            continue
+        targets += [
+            ExampleTargetData(lesson=entry.lesson, **objective.model_dump(mode="json"))
+            for entry in unit.lessons
+            for objective in entry.objectives
+        ]
+    return targets
+
+
 def read_course_dir(directory: Path) -> CourseKnowledge:
     manifest = _read(directory / MANIFEST)
     profiles = [LessonData(**_read(p)) for p in sorted((directory / "lessons").glob("lesson_*.json"))]
@@ -302,6 +350,7 @@ def read_course_dir(directory: Path) -> CourseKnowledge:
         term_plan=TermPlanData(**optional[TERM_PLAN]) if TERM_PLAN in optional else None,
         past_exams=[PastExamData(**x) for x in optional.get(PAST_EXAMS, [])],
         coverage=[CoverageData(**x) for x in optional.get(COVERAGE, [])],
+        targets=_read_targets(directory),
     )
     if knowledge.course.slug != directory.name:
         raise ValueError(f"اسم المجلد {directory.name} لا يطابق معرّف المقرر {knowledge.course.slug}")

@@ -42,8 +42,13 @@ class AuthoredObjective(_Strict):
     behavior: str = Field(**TEXT)
     condition: str = Field(**TEXT)
     criterion: str = Field(**TEXT)
+    # معايير المثال (من معايير درسه)؛ فارغة لوحدة لم تُربط بعد
+    standards: tuple[str, ...] = ()
 
     def model_post_init(self, __context: object) -> None:
+        bad = [code for code in self.standards if not re.match(STANDARD_CODE, code)]
+        if bad or list(self.standards) != sorted(set(self.standards)):
+            raise ValueError(f"المثال {self.example}: معايير غير صالحة أو مكررة أو غير مرتبة")
         if self.behavior.split()[0] != self.verb:
             raise ValueError(f"المثال {self.example}: السلوك لا يبدأ بفعله «{self.verb}»")
 
@@ -174,6 +179,13 @@ def unit_problems(
             if objective.dok != max(depth.get(n, 1), 1):
                 problems.append(f"الدرس {lesson.lesson} مثال {n}: العمق {objective.dok} لا يطابق الفهرس")
         codes = set(lesson.standards)
+        linked = any(o.standards for entry in data.lessons for o in entry.objectives)
+        for n, objective in objectives.items():
+            if linked and not objective.standards:
+                problems.append(f"الدرس {lesson.lesson} مثال {n}: بلا معيار")
+            outside = sorted(set(objective.standards) - codes)
+            if outside:
+                problems.append(f"الدرس {lesson.lesson} مثال {n}: معيار ليس من معايير الدرس {outside}")
         missing = sorted(codes - set(standards.standards if standards else ()))
         problems += [f"الدرس {lesson.lesson}: معيار بلا وصف {code}" for code in missing]
     return problems
