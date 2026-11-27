@@ -1,4 +1,4 @@
-"""نموذج نحيل: إعدادات ترويسة الطباعة لكل معلم. المنطق في services.py."""
+"""نماذج نحيلة: ترويسة الطباعة، والأوراق المحفوظة، وفهرس صيغ المولّدات. المنطق في services.py."""
 
 from __future__ import annotations
 
@@ -73,3 +73,26 @@ class SavedPaper(TimeStampedModel):
 
     def __str__(self) -> str:
         return self.title
+
+
+class GeneratorForm(TimeStampedModel):
+    """صيغة مولّد في الفهرس. الشيفرة مصدر الحقيقة (`sync_generator_forms`)، والمحذوفة منها تُعطَّل ولا تُحذف."""
+
+    course = models.ForeignKey("curriculum.Course", on_delete=models.PROTECT, related_name="generator_forms")
+    lesson_code = models.CharField(max_length=10)
+    name = models.CharField(max_length=80)
+    example = models.PositiveSmallIntegerField(null=True, blank=True)  # فارغ لصيغة لم تصرّح بمثالها
+    level = models.CharField(max_length=3)
+    has_item = models.BooleanField()
+    active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["course_id", "lesson_code", "name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["course", "lesson_code", "name"], name="papers_generatorform_uniq"
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.lesson_code}:{self.name}"

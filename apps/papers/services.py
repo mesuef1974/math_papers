@@ -14,6 +14,7 @@ from typing import Any
 from django.contrib.auth.models import AbstractBaseUser
 from django.core.cache import cache
 from django.db import transaction
+from django.utils import timezone
 
 from apps.core.services import record_audit
 from apps.curriculum import selectors
@@ -23,6 +24,7 @@ from apps.knowledge import selectors as knowledge_selectors
 
 from .domain.answer_positions import balanced_positions
 from .domain.book_source import book_source
+from .domain.form_catalog import declared_forms
 from .domain.generators import (
     ERROR_SPOTTING,
     LEVEL_NAMES,
@@ -42,7 +44,7 @@ from .domain.marking import marking
 from .domain.remedial import MAX_PARTS as MAX_REMEDIAL_PARTS
 from .domain.remedial import RemedialRecipe, StudentError, remedial_recipe
 from .domain.rotation import RotationSlot, rotate
-from .models import PrintProfile, SavedPaper
+from .models import GeneratorForm, PrintProfile, SavedPaper
 from .selectors import PROFILE_FIELDS, print_profile, saved_paper
 
 logger = logging.getLogger(__name__)
@@ -830,3 +832,39 @@ def build_remedial_recipe(
     rows = student_errors(owner, course, section, enrollment_no, lesson)
     errors = [StudentError(row["lesson"], row["example"], row["error_kind"], row["seed"]) for row in rows]
     return remedial_recipe(course, errors, new_seed() if seed is None else seed, max_parts=max_parts)
+
+
+@transaction.atomic
+def sync_generator_forms() -> dict[str, Any]:
+    """يطابق `GeneratorForm` بالشيفرة. idempotent: التشغيل الثاني لا يكتب شيئًا. صيغ مقرر لم يُحمَّل تُتخطّى."""
+    courses = {course.slug: course for course in Course.objects.all()}
+    rows = {
+        (row.course_id, row.lesson_code, row.name): row for row in GeneratorForm.objects.select_for_update()
+    }
+    counts = {"created": 0, "updated": 0, "deactivated": 0, "unchanged": 0}
+    skipped: set[str] = set()
+    seen = set()
+    for spec in declared_forms():
+        course = courses.get(spec.course)
+        if course is None:
+            skipped.add(spec.course)
+            continue
+        key = (course.pk, spec.lesson, spec.name)
+        seen.add(key)
+        values = {"example": spec.example, "level": spec.level, "has_item": spec.has_item, "active": True}
+        row = rows.get(key)
+        if row is None:
+            GeneratorForm.objects.create(course=course, lesson_code=spec.lesson, name=spec.name, **values)
+            counts["created"] += 1
+        elif any(getattr(row, field) != value for field, value in values.items()):
+            for field, value in values.items():
+                setattr(row, field, value)
+            row.save(update_fields=[*values, "updated_at"])
+            counts["updated"] += 1
+        else:
+            counts["unchanged"] += 1
+    stale = [row.pk for key, row in rows.items() if key not in seen and row.active]
+    counts["deactivated"] = GeneratorForm.objects.filter(pk__in=stale).update(
+        active=False, updated_at=timezone.now()
+    )
+    return {**counts, "skipped_courses": sorted(skipped)}

@@ -9,7 +9,10 @@ from django.contrib.auth.models import AbstractBaseUser
 from django.db.models import QuerySet
 
 from apps.curriculum.courses import GRADE10_SLUG
+from apps.curriculum.selectors import term_plan_data
+from apps.knowledge.selectors import course_index
 
+from .domain.form_catalog import Gap, form_gaps
 from .domain.generators import ERROR_SPOTTING, REGISTRY
 from .models import (
     DEFAULT_EXAM_INSTRUCTIONS,
@@ -17,6 +20,7 @@ from .models import (
     DEFAULT_GRADE,
     DEFAULT_SUBJECT,
     DEFAULT_WORKSHEET_INSTRUCTIONS,
+    GeneratorForm,
     PrintProfile,
     SavedPaper,
 )
@@ -78,3 +82,29 @@ def saved_papers(user: AbstractBaseUser) -> QuerySet[SavedPaper]:
 
 def saved_paper(user: AbstractBaseUser, pk: int) -> SavedPaper | None:
     return SavedPaper.objects.filter(owner=user, pk=pk).select_related("course").first()
+
+
+def core_examples(course: str, unit: int) -> list[tuple[str, int]]:
+    """أمثلة الوحدة الأساسية (درس، رقم): فهرس المقرر دون دروس خطته الفصلية وأمثلتها الإثرائية.
+
+    `KeyError` لمقرر لم يُحمَّل فهرسه أو خطته."""
+    plan = term_plan_data(course)[1]
+    skip = set(plan["enrichment_lessons"])
+    extra = plan["enrichment_examples"]
+    return [
+        (lesson.lesson, example.n)
+        for lesson in course_index(course).lessons
+        if lesson.unit == unit and lesson.lesson not in skip
+        for example in lesson.examples
+        if example.n not in extra.get(lesson.lesson, ())
+    ]
+
+
+def generator_form_gaps(course: str, unit: int) -> tuple[int, list[Gap]]:
+    """(عدد الأمثلة الأساسية، ما دون صيغتين منها) من الفهرس المزامَن: الصيغ النشطة وحدها."""
+    forms: dict[tuple[str, int], list[str]] = {}
+    rows = GeneratorForm.objects.filter(course__slug=course, active=True, example__isnull=False)
+    for code, example, name in rows.values_list("lesson_code", "example", "name"):
+        forms.setdefault((code, example), []).append(name)
+    examples = core_examples(course, unit)
+    return len(examples), form_gaps(examples, forms)
