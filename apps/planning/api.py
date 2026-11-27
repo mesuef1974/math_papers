@@ -17,6 +17,9 @@
 - GET  /results/sections              شعب المعلم (ما له فيه طلاب)
 - GET  /results/<مقرر>/<درس>/items    بنود بطاقات الخروج المعروضة في حصص الدرس (المثال والبذرة والنص) بلا الصحيح
 - GET  /misconceptions/<مقرر>/<درس>?section=  لوحة سوء الفهم: طلاب كل نوع خطأ في شعبة المعلم؛ 403 لشعبة ليست له
+- POST /remedial-packs/<مقرر>/<درس>             يطلب الحزمة العلاجية لشعبة المعلم (مهمة خلفية)؛ 503 بلا وسيط في الإنتاج
+- GET  /remedial-packs/<مقرر>/<درس>?section=    حالتها: idle | pending | ready | failed
+- GET  /remedial-packs/<مقرر>/<درس>/download?section=  ملف PDF من التطبيق، بمفتاح يشتقه الخادم
 """
 
 from __future__ import annotations
@@ -44,7 +47,7 @@ from .domain.item_results import MAX_ENTRIES, MAX_EXAMPLE, MAX_SEED, Entry, Resu
 from .domain.objective_text import ObjectiveLockedError, ObjectiveNotFoundError, ObjectiveTextError
 from .domain.prep_override import OverrideError
 from .prep_word import DOCX_CONTENT_TYPE, prep_docx, prep_filename
-from .tasks import build_period_deck_task
+from .tasks import build_class_pack_task, build_period_deck_task
 
 logger = logging.getLogger(__name__)
 router = Router(tags=["العروض"], auth=TeacherAuth(), throttle=[UserRateThrottle()])
@@ -592,6 +595,100 @@ def misconception_board(request: HttpRequest, response: HttpResponse, course: st
         lesson,
         section,
     )
+
+
+# ───── الحزمة العلاجية للشعبة (M2.3) ─────
+
+PACK_UNAVAILABLE = "الأوراق العلاجية غير متاحة الآن: خدمة المهام الخلفية (Redis) غير مفعّلة على الخادم"
+
+
+class PackIn(Schema):
+    section: str = Field(max_length=40)
+
+
+class PackOut(Schema):
+    status: str
+    detail: str = ""
+
+
+def _pack_section(request: HttpRequest, course: str, lesson: str, section: str) -> str:
+    """شعبة المعلم وحده: 403 لغيرها (ويُسجَّل) و404 لدرس مجهول."""
+    try:
+        return selectors.owned_section(request.user, course, lesson, section)
+    except selectors.SectionNotOwnedError as error:
+        record_audit(
+            action="remedial.pack.denied",
+            actor=request.user,
+            target=services.results_target(course, lesson, section.strip()[:40]),
+            request_id=request_id_of(request),
+        )
+        raise HttpError(403, "الشعبة ليست من شعبك") from error
+    except selectors.ResultsNotFoundError as error:
+        raise HttpError(404, str(error)) from error
+
+
+def _require_worker() -> None:
+    if not services.class_pack_available():
+        raise HttpError(503, PACK_UNAVAILABLE)
+
+
+def _pack_out(scope: tuple[int, str, str, str]) -> dict:
+    state, detail = services.class_pack_state(*scope)
+    return {"status": state, "detail": detail or (services.PACK_BUSY if state == "pending" else "")}
+
+
+@router.post("remedial-packs/{course}/{lesson}", response=PackOut)
+def request_class_pack(request: HttpRequest, course: str, lesson: str, payload: PackIn):
+    section = _pack_section(request, course, lesson, payload.section)
+    _require_worker()
+    scope = (request.user.pk, course, lesson, section)
+    record_audit(
+        action="remedial.pack.request",
+        actor=request.user,
+        target=services.results_target(course, lesson, section),
+        request_id=request_id_of(request),
+    )
+    if services.start_class_pack(*scope):
+        try:
+            build_class_pack_task.delay(*scope)
+        except services.PackBusyError:  # الوضع الفوري: بناء آخر يمسك القفل
+            pass
+        except Exception as error:  # الوضع الفوري يرفع هنا، أو الوسيط لا يُبلغ
+            # النوع وحده بلا رسالة ولا أثر استدعاء: قد تحمل اسم طالب (`PackBuildError` رسالته نوع الأصل)
+            reason = error if isinstance(error, services.PackBuildError) else type(error).__name__
+            logger.error("فشل بناء الحزمة العلاجية: %s", reason)
+            if services.class_pack_state(*scope)[0] == "pending":
+                services.fail_class_pack(*scope)
+    return _pack_out(scope)
+
+
+@router.get("remedial-packs/{course}/{lesson}", response=PackOut)
+def class_pack_status(request: HttpRequest, course: str, lesson: str, section: str):
+    section = _pack_section(request, course, lesson, section)
+    _require_worker()
+    return _pack_out((request.user.pk, course, lesson, section))
+
+
+@router.get("remedial-packs/{course}/{lesson}/download")
+def download_class_pack(request: HttpRequest, course: str, lesson: str, section: str):
+    section = _pack_section(request, course, lesson, section)
+    try:
+        data = services.class_pack_file(request.user.pk, course, lesson, section)
+    except StorageError as error:
+        raise HttpError(404, "تعذّرت قراءة الحزمة: أعد طلبها") from error
+    if data is None:
+        raise HttpError(404, "الحزمة غير جاهزة: اطلبها أولًا")
+    record_audit(
+        action="remedial.pack.download",
+        actor=request.user,
+        target=services.results_target(course, lesson, section),
+        request_id=request_id_of(request),
+    )
+    response = HttpResponse(data, content_type=services.PDF_CONTENT_TYPE)
+    response["Content-Disposition"] = f'attachment; filename="remedial-{course}-{lesson}.pdf"'
+    response["Cache-Control"] = "private, no-store"
+    response["X-Content-Type-Options"] = "nosniff"
+    return response
 
 
 @router.get("preps/{course}/{lesson}/{k}/word")
