@@ -114,6 +114,22 @@ describe("PrintPage: صفحة الطباعة للمتصفح الخادمي", () 
     expect(document.documentElement.dataset.printReady).toBe("1");
   });
 
+  it("حزمة الشعبة العلاجية: اسم كل طالب في ورقته ومفتاحه بلا رقم نموذج", async () => {
+    const sheet: Paper = { ...paper, kind: "worksheet", title: "ورقة علاجية: مفهوم النهاية" };
+    const students = ["طالب أول (1001)", "طالب ثان (1002)", "طالب ثالث (1003)"];
+    get.mockResolvedValue({ ...payload, papers: [sheet, sheet, sheet], students, bubble: false });
+    const wrapper = mount(PrintPage, { global: { stubs: { MathText: true, GraphPlot: true } } });
+    await flushPromises();
+    const lines = wrapper.findAll(".paper-header .student").map((line) => line.text());
+    expect(lines).toHaveLength(3);
+    students.forEach((name, i) => expect(lines[i]).toContain(name));
+    const keys = wrapper.findAll(".answer-key");
+    expect(keys).toHaveLength(3);
+    students.forEach((name, i) => expect(keys[i].text()).toContain(name));
+    expect(wrapper.text()).not.toContain("النموذج:");
+    expect(wrapper.findAll(".paper-header dt").map((dt) => dt.text())).not.toContain("النموذج");
+  });
+
   it("رمز غير صالح: رسالة وإشارة خطأ حتى لا ينتظر الخادم المهلة كاملة", async () => {
     get.mockRejectedValue(new ApiError(404, "صفحة الطباعة غير متاحة"));
     const wrapper = mount(PrintPage);

@@ -713,6 +713,32 @@ def build_bundle_item(slug: str, lesson_code: str, bundle_seed: int) -> dict:
     return paper
 
 
+def remedial_paper(recipe: RemedialRecipe, lesson_code: str) -> dict:
+    """ورقة الطباعة من وصفة علاجية لطالب في درس: سؤال لكل جزء بلا درجات، حتمية من الوصفة، وبلا أي بيان للطالب."""
+    course_row = _resolve_course(recipe.course)
+    lesson = selectors.lessons(course_row).filter(code=lesson_code).first()
+    if lesson is None:
+        raise UnknownLessonError(lesson_code)
+    rng = random.Random(f"remedial-paper-{recipe.seed}")  # noqa: S311 — حتمية لا أمنية
+    kind = BlueprintItem.Kind.ESSAY
+    slot = PartSlot("", lesson.code, lesson.title, kind, 0, course=course_row.slug)
+    questions = [
+        {"number": number, "kind": kind, "marks": 0, "parts": [render_part(part.problem, slot, rng)]}
+        for number, part in enumerate(recipe.parts, start=1)
+    ]
+    return {
+        **paper_meta("worksheet", course_row.slug, blueprint="", lesson_code=lesson.code),
+        "title": f"{PURPOSES['remedial'][1]}: {lesson.title}",
+        "form": "A",
+        "seed": recipe.seed,
+        "total_marks": 0,
+        "is_forecast": False,
+        "level_marks": {},
+        "questions": questions,
+        "level": "",
+    }
+
+
 def build_remedial_recipe(
     owner: AbstractBaseUser,
     course: str,

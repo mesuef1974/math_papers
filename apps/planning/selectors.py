@@ -303,6 +303,33 @@ def student_errors(
     ]
 
 
+def class_errors(owner: AbstractBaseUser, course: str, lesson: str, section: str) -> list[dict]:
+    """أخطاء كل طالب أخطأ في بنود درس من شعبة المعلم، بترتيب رقم القيد واستعلام واحد للأخطاء: هويته (رقم القيد والاسم)
+    وأخطاؤه بشكل `student_errors`. للحزمة العلاجية وحدها؛ `SectionNotOwnedError` و`ResultsNotFoundError` كاللوحة."""
+    _, roster, record = _owned_lesson(owner, course, lesson, section)
+    rows = (
+        ItemResult.objects.filter(student__in=roster, lesson=record, correct=False)
+        .order_by("student__enrollment_no", "example", "seed")
+        .values_list(
+            "student__enrollment_no",
+            "student__first_name",
+            "student__last_name",
+            "example",
+            "error_kind",
+            "seed",
+        )
+    )
+    students: dict[str, dict] = {}
+    for number, first, last, example, kind, seed in rows:
+        student = students.setdefault(
+            number, {"enrollment_no": number, "first_name": first, "last_name": last, "errors": []}
+        )
+        student["errors"].append(
+            {"lesson": record.code, "example": example, "error_kind": kind, "seed": seed}
+        )
+    return list(students.values())
+
+
 def _course_plan(course: str) -> tuple[Course, TermPlan]:
     row, raw = term_plan_data(course)
     plan = parse_term_plan(raw, row.semester)

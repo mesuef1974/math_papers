@@ -2,13 +2,17 @@
 حتمية بالبذرة، وبحدّ أعلى يُقدَّم فيه المثال الأكثر خطأً. والخدمة تقرأ الأخطاء من قارئ التخطيط لشعب المعلم وحدها."""
 
 from collections import Counter
+from datetime import date
 
 import pytest
 
+from apps.assets.storage import LocalStorage
+from apps.core.models import AuditLog
 from apps.curriculum.courses import GRADE10_SLUG
 from apps.curriculum.models import Lesson
-from apps.papers import services
+from apps.papers import pdf, services
 from apps.papers.access import ensure_teacher
+from apps.papers.api import PdfIn
 from apps.papers.domain.generators import REGISTRY, SKILL_EXAMPLES
 from apps.papers.domain.item_bank import exit_ticket, usable
 from apps.papers.domain.remedial import (
@@ -18,6 +22,7 @@ from apps.papers.domain.remedial import (
     allocation,
     remedial_recipe,
 )
+from apps.planning import services as planning
 from apps.planning.models import ItemResult, SectionStudent
 from apps.planning.selectors import SectionNotOwnedError, StudentNotFoundError
 
@@ -223,3 +228,69 @@ def test_service_reads_only_the_teachers_own_sections(teacher, answers):
         services.build_remedial_recipe(other, COURSE, SECTION, "1001", seed=1)
     with pytest.raises(StudentNotFoundError):
         services.build_remedial_recipe(teacher, COURSE, SECTION, "9999", seed=1)
+
+
+# ───── حزمة الشعبة (M2.2) ─────
+
+
+@pytest.mark.django_db
+@pytest.mark.usefixtures("loaded_courses")
+def test_class_pack_is_idempotent(teacher, tmp_path, monkeypatch):
+    from apps.planning.tasks import build_class_pack_task
+
+    wrong = ticket_examples("1.1")[:3]
+    for n in range(30):
+        enroll(teacher, str(2000 + n), sat("1.1", set(wrong)))
+    enroll(teacher, "3000", sat("1.1", set()))  # بلا خطأ: بلا ورقة
+
+    rendered: list[dict] = []
+
+    def render(payload):
+        rendered.append(PdfIn.model_validate(payload).model_dump())  # ما يقبله مسار صفحة الطباعة
+        return b"%PDF-1.7"
+
+    monkeypatch.setattr(pdf, "render_payload", render)
+    monkeypatch.setattr(planning, "get_storage", lambda: LocalStorage(tmp_path))
+
+    def files() -> list[str]:
+        return [p.name for p in tmp_path.rglob("*.pdf")]
+
+    key = build_class_pack_task.delay(teacher.pk, COURSE, "1.1", SECTION).get()
+    assert build_class_pack_task.delay(teacher.pk, COURSE, "1.1", SECTION).get() == key
+    assert len(rendered) == 1 and len(files()) == 1
+
+    payload = rendered[0]
+    assert len(payload["papers"]) == len(payload["students"]) == 30
+    assert payload["show_key"] is True
+    assert payload["students"][0] == "سالم المري (2000)"
+    # ثلاثة أخطاء وسؤالان: الحد الذي تتسع له صفحة الطالب الواحدة
+    assert all(len(p["questions"]) == planning.PACK_MAX_PARTS == 2 for p in payload["papers"])
+    assert "المري" not in str(payload["papers"])  # الاسم بجوار الورقة لا في عنوانها (التذييل الجاري مشترك)
+    assert len({p["seed"] for p in payload["papers"]}) == 30
+
+    log = AuditLog.objects.get(action="remedial.pack.build")
+    assert log.payload == {"sheets": 30}
+    assert log.target == planning.results_target(COURSE, "1.1", SECTION)
+    folder, name = key.rsplit("/", 1)
+    assert set(folder.removeprefix("remedial/") + name.removesuffix(".pdf")) <= set("0123456789abcdef")
+
+    # نتيجة صُحِّحت: ملف جديد يحل محل السابق
+    ItemResult.objects.filter(student__enrollment_no="2000").delete()
+    changed = planning.build_class_pack(teacher, COURSE, "1.1", SECTION)
+    assert changed != key
+    assert files() == [changed.rsplit("/", 1)[1]]
+
+    # انتهاء السنة يحذف الملف مع النتائج
+    assert planning.purge_ended_results(date(2100, 1, 1)).results
+    assert not [p for p in tmp_path.rglob("*") if p.is_file()]
+
+
+@pytest.mark.django_db
+@pytest.mark.usefixtures("loaded_courses")
+def test_class_pack_needs_errors_and_own_section(teacher):
+    enroll(teacher, "3000", sat("1.1", set()))
+    with pytest.raises(planning.PlanningError):
+        planning.build_class_pack(teacher, COURSE, "1.1", SECTION)
+    other = ensure_teacher("teacher2", PASSWORD)[0]
+    with pytest.raises(SectionNotOwnedError):
+        planning.build_class_pack(other, COURSE, "1.1", SECTION)

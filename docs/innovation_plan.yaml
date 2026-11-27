@@ -108,7 +108,7 @@ initiatives:
         done_when: شعبة من 30 طالبًا تُبنى بمهمة idempotent، وإعادتها لا تنشئ ملفًا ثانيًا.
         probes:
           - {path: apps/papers/tests/test_remedial.py, has: test_class_pack_is_idempotent}
-        cards: []
+        cards: ["20261126-332353"]
       - id: M2.3
         title: زر «أوراق علاجية» في لوحة سوء الفهم
         done_when: المعلم ينزّل الحزمة من اللوحة، والحارس البصري أخضر للصفحة.

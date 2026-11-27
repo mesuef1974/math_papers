@@ -15,6 +15,7 @@ const route = useRoute();
 const print = usePrintStore();
 const papers = ref<Paper[]>([]);
 const bundle = ref<{ plan: BundleEntry[]; seed: number } | null>(null);
+const students = ref<string[]>([]);
 const error = ref("");
 
 function signal(state: "1" | "error") {
@@ -24,13 +25,14 @@ function signal(state: "1" | "error") {
 onMounted(async () => {
   try {
     const token = String(route.params.token ?? "");
-    const payload = await api.get<PdfRequest>(`/pdf/print/${encodeURIComponent(token)}`);
+    const payload = await api.get<PdfRequest & { students?: string[] }>(`/pdf/print/${encodeURIComponent(token)}`);
     print.profile = payload.profile;
     print.date = payload.date;
     print.section = payload.section;
     print.showKey = payload.show_key;
     print.bubble = payload.bubble;
     bundle.value = payload.bundle ?? null;
+    students.value = payload.students ?? [];
     papers.value = payload.papers;
     await nextTick();
     await ensurePrintFonts();
@@ -60,5 +62,6 @@ const hasMcq = () => papers.value.some((paper) => paper.questions.some((q) => q.
     :header="print.header"
     :show-key="print.showKey"
     :bubble="print.bubble && hasMcq()"
+    :students="students"
   />
 </template>

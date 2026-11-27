@@ -546,6 +546,8 @@ class PdfIn(Schema):
     show_key: bool = False
     bubble: bool = False
     bundle: BundleIn | None = None
+    # حزمة الشعبة العلاجية: اسم صاحب كل ورقة بترتيب `papers` (في ترويسة ورقته ومفتاحها)؛ فارغة لغيرها
+    students: list[Annotated[str, Field(max_length=120)]] = Field([], max_length=MAX_BUNDLE_PAPERS)
     # قالب Word: «awraq» إخراج الهوية، و«school» قالب المدرسة للاختبار وورقة العمل والحزمة؛ لا أثر له في PDF
     template: Literal["awraq", "school"] = "awraq"
     # مفتاح الحل وحده في ملف Word مستقل بترويسة قالب المدرسة؛ ملف الأسئلة بقالب المدرسة لا يحمل المفتاح
@@ -553,7 +555,9 @@ class PdfIn(Schema):
 
     @model_validator(mode="after")
     def forms_or_bundle(self):
-        if self.bundle is None and len(self.papers) > MAX_FORMS:
+        if self.students and len(self.students) != len(self.papers):
+            raise ValueError("عدد الأسماء لا يطابق عدد الأوراق")
+        if self.bundle is None and not self.students and len(self.papers) > MAX_FORMS:
             raise ValueError("أكثر من نموذجين دون حزمة")
         if self.key_only and self.template != "school":
             raise ValueError("المفتاح المستقل لقالب المدرسة وحده")

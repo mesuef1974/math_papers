@@ -27,6 +27,7 @@ export interface PaperHeaderData {
   instructions: string;
   seed: number;
   form?: string; // «أ» أو «ب» عند طباعة نموذجين
+  student?: string; // صاحب الورقة في حزمة الشعبة العلاجية
 }
 
 // الاختبار القصير بزمن ثابت كأوراق الحصة؛ ويأخذ تعليمات الاختبار لا ورقة العمل.
