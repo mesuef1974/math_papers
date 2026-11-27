@@ -22,6 +22,7 @@ from apps.assets.models import Asset
 from apps.assets.storage import Storage, get_storage
 from apps.core.services import record_audit
 from apps.curriculum import selectors as curriculum
+from apps.curriculum.courses import grade_label
 from apps.curriculum.models import Lesson
 from apps.knowledge.domain.contract import COURSES_DIR
 from apps.knowledge.domain.unit_prep import PREP_DIR, UnitPrep, course_standards, unit_prep, unit_problems
@@ -47,12 +48,15 @@ from .domain.objective_text import (
     clean_part,
     shared_digest,
 )
-from .domain.prep import Objective
+from .domain.package_print import entry_snapshot
+from .domain.prep import Objective, prep_digest
 from .domain.prep_checks import CheckResult, blocking_failures
 from .domain.prep_override import OverrideError, dump_override, parse_override, unknown_removed
 from .domain.suggestion_apply import AcceptedSuggestion, ApplyResult, apply_accepted
 from .example_clips import merge_short_continuations
 from .models import (
+    Assignment,
+    AssignmentItem,
     ClassOutcomeRecord,
     DeckBuild,
     ItemResult,
@@ -841,3 +845,80 @@ def apply_objective_suggestions(
             payload={"suggestions": [item.suggestion for item in result.applied]},
         )
     return result
+
+
+# ───── باقة الحصة: لقطة أوراقها وملف طباعتها (المرحلة 2 من docs/lesson_package_plan.md) ─────
+
+
+@transaction.atomic
+def save_lesson_package(owner: AbstractBaseUser, course: str, lesson: str, k: int) -> list[Assignment]:
+    """يحفظ أوراق باقة الحصة من تحضير المعلم. idempotent: البصمة نفسها لا تكتب شيئًا (فتبقى اللقطة كما سُلّمت)،
+    وتغيّر التحضير يستبدل أوراق الحصة كلها. `PrepNotFoundError` لحصة مجهولة."""
+    item = selectors.period_item(course, lesson, k, owner)
+    digest = prep_digest(item.prep)
+    row = Lesson.objects.select_for_update().get(course__slug=course, code=lesson)
+    saved = Assignment.objects.filter(owner=owner, lesson=row, period=k)
+    existing = list(saved.order_by("order"))
+    if existing and all(a.prep_digest == digest for a in existing):
+        return existing
+    siblings = [p for p in selectors.owner_preps(course, owner) if p.prep.lesson == lesson]
+    package = selectors.period_package(item, siblings)
+    saved.delete()
+    out = []
+    for order, sheet in enumerate(package.sheets, start=1):
+        assignment = Assignment.objects.create(
+            owner=owner,
+            lesson=row,
+            period=k,
+            kind=sheet.kind,
+            order=order,
+            prep_digest=digest,
+            recipe={
+                "title": sheet.title,
+                "per_page": sheet.per_page,
+                "objectives": [list(pair) for pair in sheet.objectives],
+            },
+        )
+        AssignmentItem.objects.bulk_create(
+            AssignmentItem(assignment=assignment, order=i, snapshot=entry_snapshot(entry))
+            for i, entry in enumerate(sheet.entries, start=1)
+        )
+        out.append(assignment)
+    record_audit(
+        action="package.save", actor=owner, target=f"{course}/{lesson}/{k}", payload={"sheets": len(out)}
+    )
+    return out
+
+
+def lesson_package_payload(
+    owner: AbstractBaseUser, course: str, lesson: str, k: int, date: str = "", section: str = ""
+) -> dict:
+    """حمولة صفحة الطباعة من لقطات الباقة المحفوظة (تُحفظ أولًا إن غابت أو قدمت): الأوراق ثم مفتاحها."""
+    sheets = save_lesson_package(owner, course, lesson, k)
+    if not sheets:
+        raise PlanningError("لا أوراق في باقة هذه الحصة")
+    row = sheets[0].lesson
+    return {
+        "papers": [],
+        "package": {
+            "lesson": lesson,
+            "lesson_title": row.title,
+            "grade": grade_label(row.course.grade, row.course.track),
+            "k": k,
+            "sheets": [
+                {
+                    "kind": a.kind,
+                    "title": a.recipe["title"],
+                    "per_page": a.recipe["per_page"],
+                    "objectives": a.recipe["objectives"],
+                    "entries": [i.snapshot for i in a.items.order_by("order")],
+                }
+                for a in sheets
+            ],
+        },
+        "profile": print_profile(owner),
+        "date": date,
+        "section": section,
+        "show_key": True,
+        "bubble": False,
+    }

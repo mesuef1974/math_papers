@@ -262,3 +262,41 @@ class ItemResult(TimeStampedModel):
 
     def __str__(self) -> str:
         return f"{self.student_id} · {self.lesson_id} مثال {self.example}: {self.choice}"
+
+
+class Assignment(TimeStampedModel):
+    """ورقة من باقة حصة كما سُلّمت للمعلم: بنودها لقطات، وتُعاد حين تتغير بصمة تحضيرها (`prep_digest`) وحدها."""
+
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="assignments")
+    lesson = models.ForeignKey("curriculum.Lesson", on_delete=models.PROTECT, related_name="assignments")
+    period = models.PositiveSmallIntegerField()
+    kind = models.CharField(max_length=12)  # مفاتيح `lesson_package.TITLES`
+    order = models.PositiveSmallIntegerField()
+    prep_digest = models.CharField(max_length=64)
+    recipe = models.JSONField()  # العنوان وعدد النسخ في الصفحة وأهداف أمثلة الورقة
+
+    class Meta:
+        ordering = ["owner_id", "lesson_id", "period", "order"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["owner", "lesson", "period", "kind"], name="planning_assignment_one_per_sheet"
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.lesson_id}/{self.period}: {self.kind}"
+
+
+class AssignmentItem(models.Model):
+    assignment = models.ForeignKey(Assignment, on_delete=models.CASCADE, related_name="items")
+    order = models.PositiveSmallIntegerField()
+    snapshot = models.JSONField()  # `package_print.entry_snapshot`
+
+    class Meta:
+        ordering = ["assignment_id", "order"]
+        constraints = [
+            models.UniqueConstraint(fields=["assignment", "order"], name="planning_assignment_item_order")
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.assignment_id}#{self.order}"
