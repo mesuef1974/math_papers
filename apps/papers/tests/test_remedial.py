@@ -5,6 +5,7 @@ from collections import Counter
 from datetime import date
 
 import pytest
+from django.core.cache import cache
 
 from apps.assets.storage import LocalStorage
 from apps.core.models import AuditLog
@@ -12,7 +13,7 @@ from apps.curriculum.courses import GRADE10_SLUG
 from apps.curriculum.models import Lesson
 from apps.papers import pdf, services
 from apps.papers.access import ensure_teacher
-from apps.papers.api import PdfIn
+from apps.papers.api import PdfIn, PrintPayload
 from apps.papers.domain.generators import REGISTRY, SKILL_EXAMPLES
 from apps.papers.domain.item_bank import exit_ticket, usable
 from apps.papers.domain.remedial import (
@@ -246,7 +247,7 @@ def test_class_pack_is_idempotent(teacher, tmp_path, monkeypatch):
     rendered: list[dict] = []
 
     def render(payload):
-        rendered.append(PdfIn.model_validate(payload).model_dump())  # ما يقبله مسار صفحة الطباعة
+        rendered.append(PrintPayload.model_validate(payload).model_dump())  # ما يقبله مسار صفحة الطباعة
         return b"%PDF-1.7"
 
     monkeypatch.setattr(pdf, "render_payload", render)
@@ -260,6 +261,9 @@ def test_class_pack_is_idempotent(teacher, tmp_path, monkeypatch):
     assert len(rendered) == 1 and len(files()) == 1
 
     payload = rendered[0]
+    # المساران العامّان لا يقبلان الأسماء ولا أكثر من نموذجين بها
+    with pytest.raises(ValueError, match="أكثر من نموذجين"):
+        PdfIn.model_validate(payload)
     assert len(payload["papers"]) == len(payload["students"]) == 30
     assert payload["show_key"] is True
     assert payload["students"][0] == "سالم المري (2000)"
@@ -272,13 +276,29 @@ def test_class_pack_is_idempotent(teacher, tmp_path, monkeypatch):
     assert log.payload == {"sheets": 30}
     assert log.target == planning.results_target(COURSE, "1.1", SECTION)
     folder, name = key.rsplit("/", 1)
-    assert set(folder.removeprefix("remedial/") + name.removesuffix(".pdf")) <= set("0123456789abcdef")
+    assert name == "pack.pdf" and set(folder.removeprefix("remedial/")) <= set("0123456789abcdef")
 
     # نتيجة صُحِّحت: ملف جديد يحل محل السابق
     ItemResult.objects.filter(student__enrollment_no="2000").delete()
-    changed = planning.build_class_pack(teacher, COURSE, "1.1", SECTION)
-    assert changed != key
-    assert files() == [changed.rsplit("/", 1)[1]]
+    assert planning.build_class_pack(teacher, COURSE, "1.1", SECTION) == key
+    assert len(rendered) == 2 and len(rendered[1]["papers"]) == 29
+    assert files() == ["pack.pdf"]
+
+    # بناء جارٍ للملف نفسه: لا بناء ثانيًا معه
+    lock = f"class-pack:{key.rsplit('/', 1)[0]}"
+    cache.add(lock, 1)
+    with pytest.raises(planning.PlanningError):
+        planning.build_class_pack(teacher, COURSE, "1.1", SECTION)
+    cache.delete(lock)
+
+    # صُحِّحت نتائج الشعبة كلها: لا يبقى ملف بأسمائهم
+    saved = list(ItemResult.objects.filter(correct=False))
+    ItemResult.objects.filter(correct=False).delete()
+    with pytest.raises(planning.PlanningError):
+        planning.build_class_pack(teacher, COURSE, "1.1", SECTION)
+    assert not [p for p in tmp_path.rglob("*") if p.is_file()]
+    ItemResult.objects.bulk_create(saved)
+    planning.build_class_pack(teacher, COURSE, "1.1", SECTION)
 
     # انتهاء السنة يحذف الملف مع النتائج
     assert planning.purge_ended_results(date(2100, 1, 1)).results

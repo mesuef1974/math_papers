@@ -10,6 +10,7 @@ from datetime import date, datetime
 from pathlib import Path
 
 from django.contrib.auth.models import AbstractBaseUser
+from django.core.cache import cache
 from django.db import transaction
 from django.utils import timezone
 from pydantic import ValidationError
@@ -228,6 +229,8 @@ def record_item_results(
 
 # ───── حزمة الشعبة العلاجية (M2.2): ملف PDF واحد، صفحة لكل طالب أخطأ، ثم مفاتيحهم مجمَّعة ─────
 PDF_CONTENT_TYPE = "application/pdf"
+PACK_FILE, PACK_STAMP = "pack.pdf", "digest"
+PACK_LOCK_SECONDS = 600
 
 
 def _digest(value: object) -> str:
@@ -280,25 +283,33 @@ def build_class_pack(
     *,
     storage: Storage | None = None,
 ) -> str:
-    """يبني ملف الحزمة ويضعه في التخزين ويعيد مفتاحه. idempotent: المفتاح تجزئة الحمولة، فالملف الموجود لا يُعاد بناؤه.
+    """يبني ملف الحزمة ويضعه في التخزين ويعيد مفتاحه. idempotent: تجزئة الحمولة تُحفظ بجانبه، فالمدخلات نفسها لا تعيد بناءه.
 
-    تغيّر المدخلات (نتيجة صُحِّحت مثلًا) يبني ملفًا جديدًا ويحذف السابق: ملف واحد للشعبة في الدرس، يشير إليه `current`
-    فيحذفه `purge_ended_results` مع النتائج. سجل التدقيق عدد الأوراق وحده."""
+    ملف واحد للشعبة في الدرس بمفتاح ثابت: تغيّر المدخلات يستبدله، وزوال ما تُبنى منه الأوراق يحذفه، ويحذفه
+    `purge_ended_results` مع النتائج. قفل في الكاش المشترك يمنع بناءين معًا للملف نفسه. سجل التدقيق عدد الأوراق وحده."""
     storage = storage or get_storage()
     section = _section(section)
-    payload = class_pack_payload(owner, course, lesson, section, date)
-    folder = _pack_folder(owner.pk, course, lesson, section)
-    key = f"{folder}/{_digest(payload)}.pdf"
-    pointer = f"{folder}/current"
-    previous = storage.get(pointer).decode("ascii") if storage.exists(pointer) else ""
-    if previous == key and storage.exists(key):
-        return key
-    data = pdf.render_payload(payload)
-    if previous and previous != key:
-        storage.delete(previous)
-    # المؤشر قبل الملف: موت العامل بينهما لا يترك ملفًا لا يعرفه الحذف
-    storage.put(pointer, key.encode("ascii"), "text/plain")
-    storage.put(key, data, PDF_CONTENT_TYPE)
+    scope = (owner.pk, course, lesson, section)
+    folder = _pack_folder(*scope)
+    lock = f"class-pack:{folder}"
+    if not cache.add(lock, 1, PACK_LOCK_SECONDS):
+        raise PlanningError("الحزمة قيد البناء")
+    try:
+        try:
+            payload = class_pack_payload(owner, course, lesson, section, date)
+        except PlanningError:
+            _delete_class_packs([scope], storage)  # لا ملف قديمًا بأسماء وأخطاء لم تعد قائمة
+            raise
+        key, stamp, digest = f"{folder}/{PACK_FILE}", f"{folder}/{PACK_STAMP}", _digest(payload)
+        if storage.exists(stamp) and storage.get(stamp).decode("ascii") == digest and storage.exists(key):
+            return key
+        data = pdf.render_payload(payload)
+        # البصمة تُزال قبل الملف وتُكتب بعده: موت العامل بينهما يعيد البناء ولا يترك ملفًا لا يعرفه الحذف
+        storage.delete(stamp)
+        storage.put(key, data, PDF_CONTENT_TYPE)
+        storage.put(stamp, digest.encode("ascii"), "text/plain")
+    finally:
+        cache.delete(lock)
     record_audit(
         action="remedial.pack.build",
         actor=owner,
@@ -310,10 +321,9 @@ def build_class_pack(
 
 def _delete_class_packs(scopes: Iterable[tuple[int, str, str, str]], storage: Storage) -> None:
     for scope in scopes:
-        pointer = f"{_pack_folder(*scope)}/current"
-        if storage.exists(pointer):
-            storage.delete(storage.get(pointer).decode("ascii"))
-            storage.delete(pointer)
+        folder = _pack_folder(*scope)
+        storage.delete(f"{folder}/{PACK_STAMP}")
+        storage.delete(f"{folder}/{PACK_FILE}")
 
 
 @dataclass(frozen=True)
