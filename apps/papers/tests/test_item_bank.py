@@ -86,7 +86,7 @@ def test_retrieval_without_earlier_lessons_raises():
 
 
 def test_exit_ticket_variant_differs_and_default_is_unchanged():
-    """التحقق التكويني (variant=1) من صيغة غير صيغة بطاقة الخروج، والافتراضي يبقى الأولى (النتائج المحفوظة)."""
+    """التقييم البنائي (variant=1) من صيغة غير صيغة بطاقة الخروج، والافتراضي يبقى الأولى (النتائج المحفوظة)."""
     course, lesson, example = "g10-s1", "1.1", 2
     default = item_bank.exit_ticket(course, lesson, example, seed=5)
     other = item_bank.exit_ticket(course, lesson, example, seed=5, variant=1)

@@ -174,7 +174,7 @@ const sheet = {
     },
     {
       "code": "T7",
-      "title": "التقويم التكويني",
+      "title": "التقييم البنائي",
       "status": "pass",
       "kind": "blocking",
       "details": []
