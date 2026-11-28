@@ -102,7 +102,7 @@ class _Composer:
         self.prep, self.items, self.blocked = prep, items, frozenset(blocked)
         self.notes: list[Note] = []
         self.by_n = {e.n: e for e in prep.practice_examples}
-        shown = [*items.formative.values(), *([items.exit] if items.exit else [])]
+        shown = [*items.formative.values(), *items.warmup, *([items.exit] if items.exit else [])]
         self.used = {item.fingerprint for item in shown}  # لا تكرر ورقةٌ بندًا معروضًا ولا مسألة ورقة أخرى
         self.seed = items_seed(prep)
 

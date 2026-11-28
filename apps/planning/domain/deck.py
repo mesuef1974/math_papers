@@ -61,7 +61,7 @@ class ExampleClip:
 # ---- عرض الحصة من تحضيرها ----
 
 # الإعداد: أرقام التصميم في مكان واحد (افتراضات تُراجع بعد أول تجربة في الصف)
-PERIOD_DECK_FORMAT = 12  # 12: المقطع الطويل يُقص عند فراغ أبيض؛ 11: سؤال التحقق من صيغة غير صيغة بطاقة الخروج؛ 10: اسم الدرس على الغلاف وبلا شريحة «حل المثال»؛ 9: صيغ الشرائح معادلات PowerPoint أصلية؛ 8: لا يُعزل المدى داخل تعبير رياضي؛ 7:صيغ LaTeX رموزًا مقروءة في البنود (6: شريط المراحل ودقائق المرحلة على الشريحة (5: بند الاسترجاع المتباعد في شريحة التذكّر؛ 4: بنود البنك في التحقق والخروج؛ 3: تخطيطات الماستر ورقم الشريحة)
+PERIOD_DECK_FORMAT = 13  # 13: سؤالا تهيئة بشريحتين؛ 12: المقطع الطويل يُقص عند فراغ أبيض؛ 11: سؤال التحقق من صيغة غير صيغة بطاقة الخروج؛ 10: اسم الدرس على الغلاف وبلا شريحة «حل المثال»؛ 9: صيغ الشرائح معادلات PowerPoint أصلية؛ 8: لا يُعزل المدى داخل تعبير رياضي؛ 7:صيغ LaTeX رموزًا مقروءة في البنود (6: شريط المراحل ودقائق المرحلة على الشريحة (5: بند الاسترجاع المتباعد في شريحة التذكّر؛ 4: بنود البنك في التحقق والخروج؛ 3: تخطيطات الماستر ورقم الشريحة)
 MINUTES_PER_SLIDE = 2
 TITLE_PT, BODY_PT = 36, 28
 MIN_TITLE_PT, MIN_BODY_PT = 32, 24
@@ -346,18 +346,18 @@ def _draft_slides(
         bullets.append(_t("book_pages", pages=number_list(pages)))
     items = items or period_items(prep)
     recall_text = isolate_number_ranges(recall_label(prep.recall))
-    if items.retrieval is None:
-        recall = _slide("recall", _t("recall_title"), bullets=(recall_text,))
-    else:  # الاسترجاع المتباعد: بند من درس سابق، وسياق الاستدعاء في الملاحظات
-        recall = _slide(
+    recalls = [
+        _slide(
             "recall",
             _t("recall_title"),
-            bullets=item_bullets(items.retrieval),
-            notes=(recall_text, *item_notes(items.retrieval)),
+            bullets=item_bullets(item),
+            notes=(*((recall_text,) if i == 0 else ()), *item_notes(item)),
         )
+        for i, item in enumerate(items.warmup)
+    ] or [_slide("recall", _t("recall_title"), bullets=(recall_text,))]
     if prep.lesson_title:
         bullets.insert(0, isolate_number_ranges(prep.lesson_title))
-    slides = [_slide("title", _t("title", lesson=prep.lesson), bullets=tuple(bullets)), recall]
+    slides = [_slide("title", _t("title", lesson=prep.lesson), bullets=tuple(bullets)), *recalls]
     if prep.objectives:
         notes = tuple(
             _t(

@@ -167,9 +167,9 @@ def test_saving_is_idempotent_and_the_no_op_edit_deletes_the_record(teacher_clie
 
 
 def test_reset_restores_the_shared_prep(teacher_client):
-    stage = sheet(teacher_client, 2)["edit"]["stages"][0]
+    stage = sheet(teacher_client, 2)["edit"]["stages"][1]
     put(teacher_client, {"strategies": {stage["name"]: alternative(stage)}}, k=2)
-    assert sheet(teacher_client, 2)["edit"]["stages"][0]["chosen"] == alternative(stage)
+    assert sheet(teacher_client, 2)["edit"]["stages"][1]["chosen"] == alternative(stage)
     response = teacher_client.delete(f"{API}/{LESSON}/2/override")
     assert response.status_code == 200 and response.json()["edit"]["state"] == "none"
     assert not PeriodPrepOverride.objects.exists()
@@ -226,7 +226,7 @@ def test_saved_edit_marks_the_last_requested_deck_stale(teacher_client, local_st
         return next(p for p in periods if p["lesson"] == LESSON and p["k"] == 1)
 
     assert row()["stale"] is False
-    stage = sheet(teacher_client)["edit"]["stages"][0]
+    stage = sheet(teacher_client)["edit"]["stages"][1]
     assert put(teacher_client, {"strategies": {stage["name"]: alternative(stage)}}).status_code == 200
     assert row()["stale"] is True and row()["customized"] is True
     # العرض الجديد يُبنى من تحضير المعلم بمفتاح جديد، فيعود غير قديم
@@ -239,12 +239,12 @@ def test_saved_edit_marks_the_last_requested_deck_stale(teacher_client, local_st
 
 def test_period_edits_merge_and_keep_other_periods(teacher_client):
     first, second = (
-        sheet(teacher_client, 1)["edit"]["stages"][0],
-        sheet(teacher_client, 2)["edit"]["stages"][0],
+        sheet(teacher_client, 1)["edit"]["stages"][1],
+        sheet(teacher_client, 2)["edit"]["stages"][1],
     )
     put(teacher_client, {"strategies": {first["name"]: alternative(first)}}, k=1)
     put(teacher_client, {"strategies": {second["name"]: alternative(second)}}, k=2)
-    assert sheet(teacher_client, 1)["edit"]["stages"][0]["chosen"] == alternative(first)
+    assert sheet(teacher_client, 1)["edit"]["stages"][1]["chosen"] == alternative(first)
     put(teacher_client, {"strategies": {}}, k=1)
-    assert sheet(teacher_client, 1)["edit"]["stages"][0]["chosen"] is None
-    assert sheet(teacher_client, 2)["edit"]["stages"][0]["chosen"] == alternative(second)
+    assert sheet(teacher_client, 1)["edit"]["stages"][1]["chosen"] is None
+    assert sheet(teacher_client, 2)["edit"]["stages"][1]["chosen"] == alternative(second)
