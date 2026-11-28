@@ -95,6 +95,7 @@ export interface PrepEdit {
   exercises: number[];
   removed: number[];
   example_pages?: Record<number, number>;
+  exercise_pages?: Record<number, number>;
 }
 
 export interface PeriodOverride {

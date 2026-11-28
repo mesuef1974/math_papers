@@ -146,12 +146,14 @@ def lesson_links(course: str, lesson: str) -> dict | None:
         "-kind", "number", "example"
     )
     exercises: dict[tuple[str, int], dict] = {}
+    pages = lesson_exercise_pages(course, lesson)
     for link in links:
         row = exercises.setdefault(
             (link.kind, link.number),
             {
                 "kind": link.kind,
                 "number": link.number,
+                "page": pages.get(link.number),
                 "examples": [],
                 "provenance": link.provenance,
                 "reviewed": link.reviewed_at is not None

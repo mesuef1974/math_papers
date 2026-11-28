@@ -138,6 +138,7 @@ def test_sheet_offers_the_edit_with_the_derived_allocation(teacher_client):
     edit = sheet(teacher_client)["edit"]
     assert edit["state"] == "none" and edit["allocation"] == edit["default_allocation"] == DEFAULT
     assert edit["removed"] == [] and edit["exercises"]
+    assert edit["exercise_pages"] and set(map(int, edit["exercise_pages"])) <= set(edit["exercises"])
     assert all(s["chosen"] is None and len(s["options"]) >= 1 for s in edit["stages"])
 
 

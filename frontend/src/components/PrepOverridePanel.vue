@@ -186,7 +186,9 @@ const titleOf = (stage: PrepEdit["stages"][number], slug: string) =>
               toggle(exercise, ($event.target as HTMLInputElement).checked)
             "
           />
-          <bdi dir="ltr">{{ exercise }}</bdi>
+          <span>{{
+            bookRef("تمرين", exercise, edit.exercise_pages?.[exercise])
+          }}</span>
         </label>
       </div>
     </fieldset>

@@ -39,6 +39,7 @@ class LinkExampleOut(Schema):
 class LinkExerciseOut(Schema):
     kind: str
     number: int
+    page: int | None
     examples: list[int]
     provenance: str
     reviewed: bool

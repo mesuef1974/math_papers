@@ -20,6 +20,7 @@ from apps.curriculum.courses import GRADE10_SLUG, grade_label
 from apps.curriculum.models import Course, Lesson
 from apps.curriculum.selectors import calendar_data, lessons, term_plan_data
 from apps.knowledge.domain.course_index import LessonIndex
+from apps.knowledge.domain.exercise_pages import page_map
 from apps.knowledge.domain.unit_prep import approved_standards, unit_prep
 from apps.knowledge.models import BookExerciseLink
 from apps.knowledge.selectors import course_index, example_numbers, lesson_index
@@ -423,6 +424,7 @@ class PreparedPeriod:
     default_allocation: tuple[tuple[int, ...], ...] = ()  # توزيع `allocate` المشتق
     override: str = "none"  # none | active | invalid (تعديل محفوظ لم يعد يطابق الدرس فأُهمل)
     example_pages: Mapping[int, int] = field(default_factory=dict)  # أمثلة الدرس المعروفة صفحاتها
+    exercise_pages: Mapping[int, int] = field(default_factory=dict)  # تمارين الدرس كلها، ومنها المحذوفة
 
 
 def _example_clips(course: str) -> dict[str, dict[int, list[list[tuple[int, int]]]]] | None:
@@ -531,6 +533,7 @@ def lesson_preps(
                 tuple(map(tuple, default_groups)),
                 state,
                 {e.n: e.page for e in examples if e.page},
+                page_map(lesson.exercise_pages),
             )
             for period, prep, checks in built
         ]
@@ -792,6 +795,7 @@ def prep_edit(item: PreparedPeriod, stored: object) -> dict:
     period = {}
     if item.override == "active" and isinstance(stored, dict):
         period = stored.get("periods", {}).get(str(item.prep.k), {})
+    exercises = sorted({x for e in item.prep.practice_examples for _, ex in e.all_rows for x in ex})
     return {
         "state": item.override,
         "allocation": [list(g) for g in item.allocation],
@@ -807,7 +811,8 @@ def prep_edit(item: PreparedPeriod, stored: object) -> dict:
             for stage in item.prep.stages
             if stage.strategy is not None
         ],
-        "exercises": sorted({x for e in item.prep.practice_examples for _, ex in e.all_rows for x in ex}),
+        "exercises": exercises,
+        "exercise_pages": {x: item.exercise_pages[x] for x in exercises if x in item.exercise_pages},
         "removed": sorted(period.get("removed", [])),
     }
 
