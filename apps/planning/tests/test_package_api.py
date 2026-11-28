@@ -44,6 +44,7 @@ def test_teacher_builds_and_downloads_the_package(teacher_client, rendered, monk
     assert package_build.INDEX_NAME in names and package_build.KEY_NAME in names
     assert sum(n.endswith(".pdf") for n in names) == len(before["sheets"]) + 1
     assert any(n.endswith(".docx") for n in names)
+    assert not [n for n in names if set(n) & set('<>:"/\\|?*')]
     parts = [call["package"]["part"] for call in rendered]
     assert parts == ["sheets"] * len(before["sheets"]) + ["key"]
     assert Assignment.objects.count() == len(before["sheets"])
