@@ -1,0 +1,343 @@
+{
+ "schema_version": 1,
+ "lessons": {
+  "1.1": [
+   {
+    "ar": "محور تناظر",
+    "en": "axis of symmetry"
+   },
+   {
+    "ar": "دالة تربيعية",
+    "en": "quadratic function"
+   },
+   {
+    "ar": "رأس",
+    "en": "vertex"
+   },
+   {
+    "ar": "دالة تربيعية رئيسة",
+    "en": "quadratic parent function"
+   },
+   {
+    "ar": "قطع مكافئ",
+    "en": "parabola"
+   }
+  ],
+  "1.2": [
+   {
+    "ar": "محور تناظر",
+    "en": "axis of symmetry"
+   },
+   {
+    "ar": "دالة تربيعية",
+    "en": "quadratic function"
+   },
+   {
+    "ar": "رأس",
+    "en": "vertex"
+   },
+   {
+    "ar": "صيغة الرأس للدالة التربيعية",
+    "en": "vertex form of a quadratic function"
+   }
+  ],
+  "1.3": [
+   {
+    "ar": "محور تناظر",
+    "en": "axis of symmetry"
+   },
+   {
+    "ar": "دالة تربيعية",
+    "en": "quadratic function"
+   },
+   {
+    "ar": "رأس",
+    "en": "vertex"
+   },
+   {
+    "ar": "الصيغة القياسية للدالة التربيعية",
+    "en": "standard form of a quadratic function"
+   }
+  ],
+  "1.4": [
+   {
+    "ar": "دالة تربيعية",
+    "en": "quadratic function"
+   },
+   {
+    "ar": "القيمة المتبقية",
+    "en": "residual"
+   },
+   {
+    "ar": "الانحدار التربيعي",
+    "en": "quadratic regression"
+   },
+   {
+    "ar": "نموذج الحركة الرأسية",
+    "en": "vertical motion model"
+   }
+  ],
+  "2.1": [
+   {
+    "ar": "درجة",
+    "en": "degree"
+   },
+   {
+    "ar": "مقطع",
+    "en": "intercept"
+   },
+   {
+    "ar": "حل",
+    "en": "solution"
+   },
+   {
+    "ar": "معادلة تربيعية",
+    "en": "quadratic equation"
+   },
+   {
+    "ar": "أصفار الدالة",
+    "en": "zeros of a function"
+   }
+  ],
+  "2.2": [
+   {
+    "ar": "الصيغة التحليلية",
+    "en": "factored form"
+   },
+   {
+    "ar": "قطع مكافئ",
+    "en": "parabola"
+   },
+   {
+    "ar": "رأس القطع المكافىء",
+    "en": "vertex"
+   },
+   {
+    "ar": "الصيغة القياسية للدالة التربيعية",
+    "en": "standard form of a quadratic function"
+   },
+   {
+    "ar": "خاصية ناتج الضرب الصفرى",
+    "en": "zero product property"
+   }
+  ],
+  "2.3": [
+   {
+    "ar": "عامل مربع كامل",
+    "en": "perfect square factor"
+   },
+   {
+    "ar": "رمز الجذر",
+    "en": "radical"
+   },
+   {
+    "ar": "مقدار جذري",
+    "en": "radical expression"
+   },
+   {
+    "ar": "مجدور",
+    "en": "radicand"
+   },
+   {
+    "ar": "خاصية ناتج ضرب الجذور التربيعية",
+    "en": "product property of square roots"
+   }
+  ],
+  "2.4": [
+   {
+    "ar": "عزل المتغير",
+    "en": "isolate variable"
+   },
+   {
+    "ar": "معادلة خطية",
+    "en": "linear equation"
+   },
+   {
+    "ar": "خواص المساواة",
+    "en": "properties of equality"
+   },
+   {
+    "ar": "معادلة تربيعية",
+    "en": "quadratic equation"
+   }
+  ],
+  "2.5": [
+   {
+    "ar": "عامل ثنائي الحد",
+    "en": "binomial factor"
+   },
+   {
+    "ar": "ثلاثية حدود في صورة مربع كامل",
+    "en": "perfect square trinomial"
+   },
+   {
+    "ar": "صيغة الرأس",
+    "en": "vertex form"
+   },
+   {
+    "ar": "إكمال المربع",
+    "en": "completing the square"
+   }
+  ],
+  "2.6": [
+   {
+    "ar": "مميز",
+    "en": "discriminant"
+   },
+   {
+    "ar": "القانون العام",
+    "en": "quadratic formula"
+   },
+   {
+    "ar": "جذر",
+    "en": "root"
+   }
+  ],
+  "2.7": [
+   {
+    "ar": "مجال",
+    "en": "domain"
+   },
+   {
+    "ar": "مقدار نسبي",
+    "en": "rational expression"
+   },
+   {
+    "ar": "غير معرّف",
+    "en": "undefined"
+   },
+   {
+    "ar": "حل غير مقبول",
+    "en": "extraneous solution"
+   },
+   {
+    "ar": "معادلة نسبية",
+    "en": "rational equation"
+   }
+  ],
+  "2.8": [
+   {
+    "ar": "طريقة الحذف",
+    "en": "elimination method"
+   },
+   {
+    "ar": "طريقة التعويض",
+    "en": "substitution method"
+   },
+   {
+    "ar": "نظام خطى-تريعي",
+    "en": "linear quadratic system"
+   }
+  ],
+  "2.9": [
+   {
+    "ar": "معادلة تربيعية",
+    "en": "quadratic equation"
+   },
+   {
+    "ar": "دالة تربيعية",
+    "en": "quadratic function"
+   },
+   {
+    "ar": "جذر",
+    "en": "root"
+   },
+   {
+    "ar": "القانون العام",
+    "en": "quadratic formula"
+   },
+   {
+    "ar": "متباينة تربيعية",
+    "en": "quadratic inequality"
+   },
+   {
+    "ar": "فترة",
+    "en": "interval"
+   }
+  ],
+  "2.10": [
+   {
+    "ar": "مركز الدائرة",
+    "en": "center of a circle"
+   },
+   {
+    "ar": "نصف قطر الدائرة",
+    "en": "radius"
+   },
+   {
+    "ar": "الصيغة القياسية لمعادلة الدائرة",
+    "en": "standard form of the equation of a circle"
+   }
+  ],
+  "3.1": [
+   {
+    "ar": "التمدد",
+    "en": "dilation"
+   },
+   {
+    "ar": "معامل القياس",
+    "en": "scale factor"
+   },
+   {
+    "ar": "مركز التمدد",
+    "en": "center of dilation"
+   }
+  ],
+  "3.2": [
+   {
+    "ar": "تمدد",
+    "en": "dilation"
+   },
+   {
+    "ar": "انعكاس",
+    "en": "reflection"
+   },
+   {
+    "ar": "الدوران",
+    "en": "rotation"
+   },
+   {
+    "ar": "إزاحة",
+    "en": "translation"
+   },
+   {
+    "ar": "تحويل تشابه",
+    "en": "similarity transformation"
+   }
+  ],
+  "3.3": [
+   {
+    "ar": "تشابه",
+    "en": "similar"
+   }
+  ],
+  "3.4": [
+   {
+    "ar": "وتر",
+    "en": "hypotenuse"
+   },
+   {
+    "ar": "أضلاع القائمة",
+    "en": "legs"
+   },
+   {
+    "ar": "مثلث قائم",
+    "en": "right triangle"
+   },
+   {
+    "ar": "متوسط هندسي",
+    "en": "geometric mean"
+   }
+  ],
+  "3.5": [
+   {
+    "ar": "زوايا متناظرة",
+    "en": "corresponding angles"
+   },
+   {
+    "ar": "قاطع",
+    "en": "transversal"
+   }
+  ]
+ }
+}

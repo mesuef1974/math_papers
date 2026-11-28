@@ -268,6 +268,7 @@ class PrepOut(Schema):
     outcomes: str
     main_sources: str
     support_sources: str
+    terms: list[tuple[str, str]] = []
     warmup: str
     warmup_minutes: int
     objectives: list[ObjectiveOut]

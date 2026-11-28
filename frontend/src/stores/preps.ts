@@ -129,6 +129,7 @@ export interface PrepSheet {
   main_sources: string;
   support_sources: string;
   warmup: string;
+  terms?: [string, string][];
   warmup_minutes: number;
   objectives: PrepObjective[];
   closing: string;

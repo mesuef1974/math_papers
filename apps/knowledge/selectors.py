@@ -12,7 +12,7 @@ from .domain.contract import SCHEMA_VERSION, source_hash, source_slugs
 from .domain.course_index import CourseIndex, LessonIndex
 from .domain.exercise_pages import page_map
 from .domain.schemas import lesson_sort_key
-from .models import BookExerciseLink, ExerciseGroup, ExerciseTemplate, LessonProfile, WorkedExample
+from .models import BookExerciseLink, ExerciseGroup, ExerciseTemplate, LessonProfile, Term, WorkedExample
 
 
 @dataclass(frozen=True)
@@ -205,6 +205,15 @@ def course_index_from_tables(course: str) -> CourseIndex:
             }
         )
     return CourseIndex(lessons=lessons)
+
+
+def lesson_terms(course: str) -> dict[str, tuple[tuple[str, str], ...]]:
+    """رمز الدرس → مصطلحاته (العربية، الإنجليزية) من جداول المقرر المحمَّلة."""
+    found: dict[str, list[tuple[str, str]]] = {}
+    rows = Term.objects.filter(profile__lesson__course__slug=course).order_by("profile_id", "ar")
+    for code, ar, en in rows.values_list("profile__lesson__code", "ar", "en"):
+        found.setdefault(code, []).append((ar, en))
+    return {code: tuple(terms) for code, terms in found.items()}
 
 
 def knowledge_state() -> dict[str, str]:

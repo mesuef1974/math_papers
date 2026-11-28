@@ -224,6 +224,14 @@ watch(selected, (value, previous) => {
 
     <dl class="facts">
       <div v-if="isLesson">
+        <template v-if="sheet.terms?.length">
+          <dt>المصطلحات والمفاهيم الرئيسة</dt>
+          <dd>
+            <span v-for="[ar, en] in sheet.terms" :key="ar" class="term">
+              {{ ar }} <bdi v-if="en" dir="ltr">({{ en }})</bdi>
+            </span>
+          </dd>
+        </template>
         <dt>نتاجات التعلم</dt>
         <dd>{{ sheet.outcomes || "—" }}</dd>
       </div>
@@ -454,6 +462,10 @@ watch(selected, (value, previous) => {
 </template>
 
 <style scoped>
+.term {
+  display: inline-block;
+  margin-inline-end: 1rem;
+}
 /* النشاط ودور المعلم ودور الطالب كلٌّ في سطر */
 .activity {
   white-space: pre-line;
