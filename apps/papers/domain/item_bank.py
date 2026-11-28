@@ -20,6 +20,8 @@ from .generators import (
     skill_example,
     variant_profile,
 )
+from .prerequisites import LESSON as PREREQUISITE_LESSON
+from .prerequisites import PREREQUISITES
 
 OPTION_COUNT = 4  # الصحيح وثلاثة مشتتات
 
@@ -150,6 +152,25 @@ def exit_ticket(course: str, lesson: str, example: int, *, seed: int = 0, varian
         raise ItemBankError(f"لا صيغة موضوعية للمثال {example} في الدرس {lesson}")
     fn = pool[variant % len(pool)]
     return _items(course, [(lesson, fn, _distinct(course, lesson, fn, seed, 1)[0])], seed)[0]
+
+
+def skill_examples(course: str, lesson: str) -> list[int]:
+    """أمثلة الدرس ذات الصيغ الموضوعية من الأخير إلى الأول (الأخير مهارة بطاقة خروجه)."""
+    found = {
+        skill_example(course, lesson, fn.__name__) for fn in REGISTRY.get((course, lesson), []) if usable(fn)
+    }
+    return sorted((n for n in found if n is not None), reverse=True)
+
+
+def prerequisite(course: str, index: int, *, seed: int = 0) -> Item:
+    """بند المتطلب السابق رقم `index` للمقرر (دائريًّا)."""
+    pool = PREREQUISITES.get(course)
+    if not pool:
+        raise ItemBankError(f"لا متطلب سابق للمقرر {course}")
+    fn = pool[index % len(pool)]
+    rng = _rng(course, PREREQUISITE_LESSON, fn.__name__, seed, index)
+    problem = replace(fn(rng), variant=fn.__name__)
+    return build_item(problem, course=course, example=None, position=rng.randrange(OPTION_COUNT), rng=rng)
 
 
 def retrieval(course: str, earlier: Sequence[str], *, count: int = 3, seed: int = 0) -> list[Item]:

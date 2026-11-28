@@ -12,7 +12,7 @@ from dataclasses import dataclass
 
 from apps.papers.domain.book_source import book_ref, numbers_with_pages
 
-from .check_items import period_items
+from .check_items import item_stem, option_text, period_items
 from .non_lesson import NonLessonPrep, PaperLink
 from .plain_math import plain_math
 from .prep import PeriodPrep, PrepExample, Recall
@@ -239,10 +239,12 @@ def _objective_rows(prep: PeriodPrep, library: Mapping[str, Strategy]) -> tuple[
     return tuple(rows)
 
 
-def _retrieval_tail(prep: PeriodPrep) -> str:
-    """سؤال الاسترجاع المتباعد من البنك (شريحة التذكّر نفسها) حين يوجد، ومفتاحه في ملاحظات العرض."""
-    item = period_items(prep).retrieval
-    return f" — استرجاع متباعد: {plain_math(item.stem)}" if item is not None else ""
+def _warmup_questions(prep: PeriodPrep) -> str:
+    """سؤالا التهيئة بإجابتيهما (بندا شريحتي التذكّر نفسهما)."""
+    return "".join(
+        f" — السؤال {i}: {item_stem(item)} (الإجابة: {option_text(item.options[item.answer_index].text)})"
+        for i, item in enumerate(period_items(prep).warmup, 1)
+    )
 
 
 def _closing(prep: PeriodPrep, strategy: Strategy | None) -> str:
@@ -313,7 +315,7 @@ def prep_sheet(
         main_sources="كتاب الطالب: " + "، ".join(pages) if pages else "كتاب الطالب",
         support_sources=SUPPORT_SOURCES,
         warmup=_activity(
-            f"{titles.get(stages['warmup'].strategy or '', '')}: {recall_label(prep.recall)}{_retrieval_tail(prep)}",
+            f"{titles.get(stages['warmup'].strategy or '', '')}: {recall_label(prep.recall)}{_warmup_questions(prep)}",
             library.get(stages["warmup"].strategy or ""),
         ),
         warmup_minutes=stages["warmup"].minutes,

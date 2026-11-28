@@ -118,7 +118,7 @@ def test_last_period_has_no_example_and_carries_quiz(built):
             assert "example" not in kinds and "objectives" not in kinds
             assert ("quiz" in kinds) == bool(prep.quiz)
         else:
-            assert kinds[:3] == ["title", "recall", "objectives"]
+            assert kinds[:4] == ["title", "recall", "recall", "objectives"]
 
 
 @pytest.mark.django_db
@@ -314,35 +314,46 @@ def test_every_deck_with_items_passes_density_and_words(built):
             assert not _fails(result), (prep.lesson, prep.k, result)
 
 
-# ---- الاسترجاع المتباعد في شريحة التذكّر ----
+# ---- سؤالا التهيئة: لا حصة بتهيئة بلا سؤال محدد (المقرران) ----
 
 
-def _recall(deck):
-    return next(s for s in deck.slides if s.kind == "recall")
+@pytest.fixture(params=["g10-s1", "g12-sci-s1"])
+def course_built(request, loaded_courses):
+    """(التحضير، العرض) لكل حصة دروس في المقرر."""
+    rows = lesson_preps(request.param)
+    return [(r.prep, build_period_deck(r.prep, fake_clips(r.prep))) for r in rows]
 
 
-def test_first_period_of_a_later_lesson_recalls_a_bank_item_from_an_earlier_lesson(built):
-    shown = [b for b in built if b[0].k == 1 and b[0].earlier_lessons and len(_recall(b[3]).bullets) == 5]
-    assert shown, "لا حصة أولى بشريحة استرجاع من البنك"
-    for prep, _, _, deck in shown:
-        slide = _recall(deck)
-        assert prep.lesson not in prep.earlier_lessons
-        assert [b[:2] for b in slide.bullets[1:]] == ["أ)", "ب)", "ج)", "د)"]
-        assert "الإجابة الصحيحة" in " ".join(slide.notes)
-
-
-def test_retrieval_is_absent_outside_first_periods_and_first_lesson(built):
-    for prep, _, _, deck in built:
-        if prep.k > 1 or not prep.earlier_lessons:
-            assert prep.earlier_lessons == () or prep.k == 1
-            assert len(_recall(deck).bullets) == 1, (prep.lesson, prep.k)
-
-
-def test_retrieval_item_is_deterministic(built):
+def test_every_period_opens_with_two_concrete_questions_and_answers(course_built):
     from apps.planning.domain.check_items import period_items
 
-    prep = next(b[0] for b in built if b[0].k == 1 and b[0].earlier_lessons)
-    assert period_items(prep).retrieval == period_items(prep).retrieval
+    assert course_built
+    for prep, deck in course_built:
+        where = (prep.course, prep.lesson, prep.k)
+        items = period_items(prep).warmup
+        assert len(items) == 2 and items[0].stem != items[1].stem, where
+        assert items == period_items(prep).warmup, where
+        warmup = next(s for s in prep.stages if s.name == "warmup")
+        assert warmup.strategy == "opening-warmup-question", where
+        slides = [s for s in deck.slides if s.kind == "recall"]
+        assert len(slides) == 2, where
+        for slide in slides:
+            assert [b[:2] for b in slide.bullets[1:]] == ["أ)", "ب)", "ج)", "د)"], where
+            assert "الإجابة الصحيحة" in " ".join(slide.notes), where
+
+
+def test_warmup_questions_come_from_earlier_content(course_built):
+    from apps.papers.domain.prerequisites import LESSON
+    from apps.planning.domain.check_items import period_items
+
+    for prep, _ in course_built:
+        first, second = period_items(prep).warmup
+        where = (prep.course, prep.lesson, prep.k)
+        allowed = {*prep.earlier_lessons, LESSON}
+        assert first.lesson in allowed | ({prep.lesson} if prep.k > 1 else set()), where
+        assert second.lesson in allowed, where
+        if first.lesson == prep.lesson:
+            assert first.example in prep.previous_examples, where
 
 
 # ---- صيغ LaTeX رموز مقروءة على شرائح البنود ----

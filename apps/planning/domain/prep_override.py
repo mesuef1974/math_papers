@@ -68,6 +68,8 @@ def _period(value: object, k: int, library: Sequence[Strategy]) -> TeacherEdit:
     chosen = value.get("strategies", {})
     if not isinstance(chosen, dict):
         raise OverrideError(f"الحصة {k}: الاستراتيجيات قاموس مرحلة → استراتيجية")
+    # التهيئة استراتيجية واحدة: اختيار قديم لها يُهمل ولا يُبطل بقية تعديل المعلم
+    chosen = {stage: slug for stage, slug in chosen.items() if stage != "warmup"}
     for stage, slug in chosen.items():
         if stage not in STAGE_NAMES:
             raise OverrideError(f"الحصة {k}: مرحلة غير معروفة {stage}")

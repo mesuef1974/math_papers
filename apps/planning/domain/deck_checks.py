@@ -53,7 +53,7 @@ KIND_CODE = {
     "quiz": "Q",
     "homework": "H",
 }
-ORDER = re.compile(r"^TR?O?(E+Y*C?)*D?K*X?Q?H?$")
+ORDER = re.compile(r"^TR{1,2}O?(E+Y*C?)*D?K*X?Q?H?$")
 TEACHER_MARKERS = ("DOK", "الطور", "الدقائق")
 WORD = re.compile(r"[^\W\d_]+")
 
@@ -304,7 +304,7 @@ def allowed_words(prep: PeriodPrep) -> frozenset[str]:
     shown = (
         *items.formative.values(),
         *([items.exit] if items.exit else []),
-        *([items.retrieval] if items.retrieval else []),
+        *items.warmup,
     )
     bank_texts = [t for item in shown for t in item_words_source(item)]
     return frozenset(

@@ -44,6 +44,9 @@ STAGE_BOUNDS = {s[0]: (s[2], s[3]) for s in STAGES}
 # عمق أعلى: تعليم مباشر وممارسة موجهة أطول على حساب المستقلة، والمجموع ثابت
 DEPTH_SHIFT = {1: 0, 2: 0, 3: 1, 4: 2}
 
+# استراتيجية التهيئة واحدة: سؤالا بداية محددان بإجابتيهما (قرار المالك 2026-11-28)
+WARMUP_STRATEGY = "opening-warmup-question"
+
 # أفعال الأهداف بعمق DOK (بصياغتنا)، والمرفوضة لأنها لا تُقاس
 VERBS_BY_DOK: dict[int, tuple[str, ...]] = {
     1: ("يحسب", "يحدد", "يسمّي", "يقرأ", "يكتب"),
@@ -181,8 +184,10 @@ class PeriodPrep:
     sources: Mapping[str, str] = field(default_factory=dict)
     # صفحة كل تمرين في الحصة (الصفي والمساران والواجب) في كتاب الطالب حين تُعرف؛ الفارغ خارج التجزئة
     exercise_pages: Mapping[int, int] = field(default_factory=dict, metadata=DIGEST_OMITS_DEFAULT)
-    # دروس المقرر قبل هذا الدرس بترتيبها، للحصة الأولى وحدها: مصدر بند الاسترجاع المتباعد؛ الفارغ خارج التجزئة
+    # دروس المقرر قبل هذا الدرس بترتيبها، مصدر سؤالي التهيئة؛ الفارغ خارج التجزئة
     earlier_lessons: tuple[str, ...] = field(default=(), metadata=DIGEST_OMITS_DEFAULT)
+    # أمثلة الحصة السابقة المقيسة في هذا الدرس: مصدر سؤال التهيئة الأول؛ الفارغ خارج التجزئة
+    previous_examples: tuple[int, ...] = field(default=(), metadata=DIGEST_OMITS_DEFAULT)
     # اسم الدرس من مقرره لغلاف العرض؛ الفارغ خارج التجزئة
     lesson_title: str = field(default="", metadata=DIGEST_OMITS_DEFAULT)
 
@@ -424,7 +429,14 @@ def _differentiation(
 def stage_options(library: Iterable[Strategy], name: str) -> tuple[Strategy, ...]:
     """الاستراتيجيات الصالحة لمرحلة: من أطوارها، بلا موارد، وحدّاها يتقاطعان مع حدّي المرحلة. مصدر واحد للاشتقاق وتعديل المعلم."""
     _, _, lo, hi, phases = next(s for s in STAGES if s[0] == name)
-    return tuple(s for s in library if s.phase in phases and not s.needs and max(s.min, lo) <= min(s.max, hi))
+    return tuple(
+        s
+        for s in library
+        if s.phase in phases
+        and not s.needs
+        and max(s.min, lo) <= min(s.max, hi)
+        and (name != "warmup" or s.slug == WARMUP_STRATEGY)
+    )
 
 
 def lesson_blooms(lesson: LessonIndex) -> frozenset[str]:
@@ -542,6 +554,9 @@ def build_prep(
         advanced=advanced,
         homework=homework,
         formative=measurable,
+        previous_examples=tuple(
+            i for i in (groups[k - 2] if k > 1 else ()) if by_n[i].has_generator and not by_n[i].conceptual
+        ),
         exit_ticket=exit_ticket,
         quiz=lesson_quiz_depths(lesson, examples) if last else (),
         recall=recall,

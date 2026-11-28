@@ -511,7 +511,7 @@ def lesson_preps(
                 teacher=edit.edit_for(period.k, default_groups),
             )
             prep = replace(prep, lesson_title=titles.get(code, ""))
-            if period.k == 1 and position:
+            if position:
                 prep = replace(prep, earlier_lessons=tuple(order[:position]))
             checks = check_prep(
                 prep,
