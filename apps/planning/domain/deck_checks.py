@@ -32,6 +32,7 @@ from .deck import (
     period_deck_key,
     try_alt,
 )
+from .plain_math import plain_math
 from .prep import STAGE_NAMES, PeriodPrep, Recall
 from .prep_checks import PASS, CheckResult, _result, blocking_failures
 from .prep_sheet import STAGE_LABELS, recall_label
@@ -307,6 +308,8 @@ def allowed_words(prep: PeriodPrep) -> frozenset[str]:
         *items.warmup,
     )
     bank_texts = [t for item in shown for t in item_words_source(item)]
+    opened = [*items.open.values(), *([items.exit_open] if items.exit_open else [])]
+    bank_texts += [plain_math(t) for q in opened for t in (q.problem.stem, q.problem.answer)]
     return frozenset(
         _words(
             [

@@ -57,8 +57,8 @@ def test_package_is_deterministic_and_never_repeats_a_problem(unit_one):
         assert len(prints) == len(set(prints))
         if period_items(period.prep).exit:
             assert package.sheet(EXIT).per_page == 4
-        elif period.prep.exit_ticket:
-            assert any(n.code == "text_question" for n in package.notes)
+        elif period.prep.exit_ticket:  # لا بند موضوعي: البطاقة بسؤال الشريحة المقالي أو تمرين الكتاب
+            assert package.sheet(EXIT).entries
 
 
 @pytest.mark.django_db

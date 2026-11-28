@@ -11,10 +11,19 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
 from apps.papers.domain.book_source import book_ref, numbers_with_pages
+from apps.papers.domain.item_bank import Item
 
-from .check_items import item_stem, option_text, period_items
+from .check_items import (
+    OpenQuestion,
+    PeriodItems,
+    book_exercise,
+    item_stem,
+    option_label,
+    option_text,
+    period_items,
+    split_check_questions,
+)
 from .non_lesson import NonLessonPrep, PaperLink
-from .plain_math import plain_math
 from .prep import PeriodPrep, PrepExample, Recall
 from .prep_checks import BLOCKING, NON_LESSON_BLOCKING, WARNING, CheckResult
 from .strategies import Strategy, with_roles
@@ -164,14 +173,42 @@ def _outcomes(codes: Sequence[str], texts: Mapping[str, str]) -> str:
     return "؛ ".join(f"{code}: {texts[code].rstrip('.')}" if code in texts else code for code in codes)
 
 
+def _item_question(item: Item) -> str:
+    options = "، ".join(option_label(i, o.text) for i, o in enumerate(item.options))
+    return f"{item_stem(item)} [{options}] (الإجابة: {option_text(item.options[item.answer_index].text)})"
+
+
+def _open_question(question: OpenQuestion) -> str:
+    return f"{item_stem(question.problem)} (الإجابة: {option_text(question.problem.answer)})"
+
+
+def _book_question(prep: PeriodPrep, n: int) -> str:
+    number = book_exercise(prep, n)
+    if number is None:
+        return ""
+    return f"{book_ref('التمرين', number, prep.exercise_pages.get(number))} من كتاب الطالب"
+
+
+def _formative_question(prep: PeriodPrep, items: PeriodItems, n: int) -> str:
+    """سؤال المثال كما على شريحته: بنده الموضوعي إن كانت له شريحة، وإلا سؤاله المقالي؛ الفارغ لمقرر بلا صيغة."""
+    with_item, _ = split_check_questions(prep, items)
+    if n in with_item:
+        return _item_question(items.formative[n])
+    return _open_question(items.open[n]) if n in items.open else _book_question(prep, n)
+
+
 def _assessment(prep: PeriodPrep, example: PrepExample) -> str:
     if example.conceptual:
         return "أسئلة شفهية عن الاشتقاق (مثال مفاهيمي بلا سؤال خروج)"
     if not example.has_generator:
         return f"سؤال الخروج {PENDING_MARK}: لا صيغة لمهارة {_the_ref(example)} بعد"
+    items = period_items(prep)
+    question = _formative_question(prep, items, example.n) if example.n in prep.formative else ""
+    asked = f"تقييم بنائي على {_the_ref(example)}: {question}" if question else ""
     if prep.exit_ticket and prep.exit_ticket.example == example.n:
-        return f"بطاقة خروج من مهارة {_the_ref(example)}، عمق {prep.exit_ticket.dok}"
-    return f"تقييم بنائي: سؤال مولَّد من مهارة {_the_ref(example)}"
+        ticket = f"بطاقة خروج من مهارة {_the_ref(example)}، عمق {prep.exit_ticket.dok}"
+        return f"{asked}؛ {ticket}" if asked else ticket
+    return asked or f"تقييم بنائي: سؤال مولَّد من مهارة {_the_ref(example)}"
 
 
 def _activity(head: str, strategy: Strategy | None) -> str:
@@ -254,9 +291,13 @@ def _closing(prep: PeriodPrep, strategy: Strategy | None) -> str:
     elif prep.exit_ticket:
         n = prep.exit_ticket.example
         head = f"{title}: بطاقة خروج من مهارة {book_ref('المثال', n, prep.pages.get(n))}"
-        item = period_items(prep).exit
-        if item is not None:  # بند البنك نفسه الذي في شريحة الخروج، ومفتاحه عند المعلم في ملاحظات العرض
-            head += f" — {plain_math(item.stem)}"
+        items = period_items(prep)
+        if items.exit is not None:  # سؤال شريحة الخروج نفسه بإجابته
+            head += f" — {_item_question(items.exit)}"
+        elif items.exit_open is not None:
+            head += f" — {_open_question(items.exit_open)}"
+        elif book := _book_question(prep, n):
+            head += f" — {book}"
     else:
         head = f"{title}: تلخيص أفكار الحصة"
     return _activity(head, strategy)

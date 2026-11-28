@@ -15,7 +15,7 @@ from apps.papers.domain.book_source import book_ref
 from apps.papers.domain.generators import REGISTRY, Problem, skill_example, variant_profile
 from apps.papers.domain.item_bank import Item
 
-from .check_items import PeriodItems, items_seed
+from .check_items import OpenQuestion, PeriodItems, book_exercise, items_seed
 from .prep import PeriodPrep, PrepExample
 
 CLASSWORK, BASIC, ADVANCED, HOMEWORK = "classwork", "basic", "advanced", "homework"
@@ -192,21 +192,32 @@ class _Composer:
                 out.append(found)
         return out
 
+    def _card(self, item: Item | None, question: OpenQuestion | None, n: int) -> Entry | None:
+        if item is not None:
+            return ItemEntry(item)
+        if question is not None:
+            return GeneratedEntry(n, question.problem.variant, question.seed, question.problem)
+        number = book_exercise(self.prep, n)
+        if number is not None and number not in self.blocked:
+            dok = self.by_n[n].dok_of(number)
+            return BookEntry(n, dok, number, self.prep.exercise_pages.get(number))
+        self.note(
+            "no_form",
+            f"{book_ref('المثال', n, self.prep.pages.get(n))}: لا صيغة تعطي سؤالًا لبطاقته",
+        )
+        return None
+
     def cards(self) -> tuple[list[Entry], list[Entry]]:
-        for n in self.prep.formative:
-            if n not in self.items.formative:
-                self.note(
-                    "text_question",
-                    f"{book_ref('المثال', n, self.prep.pages.get(n))}: فحصه سؤال نصّي في التحضير بلا بطاقة",
-                )
-        if self.prep.exit_ticket and not self.items.exit:
-            n = self.prep.exit_ticket.example
-            self.note(
-                "text_question",
-                f"{book_ref('المثال', n, self.prep.pages.get(n))}: سؤال خروجه نصّي في التحضير بلا بطاقة",
-            )
-        formative: list[Entry] = [ItemEntry(self.items.formative[n]) for n in sorted(self.items.formative)]
-        return formative, [ItemEntry(self.items.exit)] if self.items.exit else []
+        """بطاقتا التقييم البنائي والخروج: بند التحضير، وإلا سؤاله المقالي نفسه الذي على الشريحة."""
+        formative = [
+            card
+            for n in sorted(self.prep.formative)
+            if (card := self._card(self.items.formative.get(n), self.items.open.get(n), n))
+        ]
+        ticket = None
+        if self.prep.exit_ticket:
+            ticket = self._card(self.items.exit, self.items.exit_open, self.prep.exit_ticket.example)
+        return formative, [ticket] if ticket else []
 
 
 def compose_package(
