@@ -645,6 +645,7 @@ class PackagePrintOut(Schema):
     grade: str
     k: int
     sheets: list[PackageSheetOut]
+    part: Literal["all", "sheets", "key"] = "all"  # أوراق بلا مفتاح، أو المفتاح وحده
 
 
 class PrintPayload(PdfIn):

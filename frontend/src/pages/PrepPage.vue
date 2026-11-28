@@ -6,6 +6,7 @@ import CourseSelect from "@/components/CourseSelect.vue";
 import EmptyState from "@/components/EmptyState.vue";
 import ObjectiveEditor from "@/components/ObjectiveEditor.vue";
 import PrepOverridePanel from "@/components/PrepOverridePanel.vue";
+import LessonPackagePanel from "@/components/LessonPackagePanel.vue";
 import {
   usePrepObjectives,
   type ObjectiveDraft,
@@ -415,6 +416,14 @@ watch(selected, (value, previous) => {
         </tbody>
       </table>
     </div>
+
+    <LessonPackagePanel
+      v-if="isLesson"
+      :course="sheet.course"
+      :lesson="sheet.lesson"
+      :k="sheet.k"
+      :version="sheet"
+    />
 
     <PrepOverridePanel
       v-if="sheet.edit"

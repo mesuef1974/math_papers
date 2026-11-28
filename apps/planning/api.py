@@ -7,6 +7,9 @@
 - GET  /preps/<مقرر>                 حصص الدروس بترتيب الخطة وحالة معاييرها
 - GET  /preps/<مقرر>/<درس>/<k>       تحضير الحصة بنصوصه ومعاييره
 - GET  /preps/<مقرر>/<درس>/<k>/word  التحضير في Word بنموذج الوزارة (بنسخة المعلم من أهدافه)
+- GET  /preps/<مقرر>/<درس>/<k>/package         فهرس باقة الحصة وحالتها: idle | pending | ready | stale | failed
+- POST /preps/<مقرر>/<درس>/<k>/package         يطلب بناء ملفها المضغوط (مهمة خلفية)؛ 503 بلا وسيط في الإنتاج
+- GET  /preps/<مقرر>/<درس>/<k>/package/download  الملف المضغوط
 - PUT  /preps/<مقرر>/<درس>/<k>/objectives/<مثال>  نسخة المعلم من شرط الهدف ومعياره، واقتراحها اختياريًا
 - DELETE /preps/<مقرر>/<درس>/<k>/objectives/<مثال>  استرجاع النص المعتمد
 - POST /preps/<مقرر>/<درس>/<k>/review  علامة «راجعتُ أهداف الحصة»
@@ -40,14 +43,14 @@ from apps.core.services import record_audit
 from apps.papers.access import TeacherAuth
 from apps.papers.domain.item_bank import OPTION_COUNT
 
-from . import selectors, services
+from . import package_build, selectors, services
 from .domain.calendar_engine import PlanningError
 from .domain.deck import DeckError
 from .domain.item_results import MAX_ENTRIES, MAX_EXAMPLE, MAX_SEED, Entry, ResultsError
 from .domain.objective_text import ObjectiveLockedError, ObjectiveNotFoundError, ObjectiveTextError
 from .domain.prep_override import OverrideError
 from .prep_word import DOCX_CONTENT_TYPE, prep_docx, prep_filename
-from .tasks import build_class_pack_task, build_period_deck_task
+from .tasks import build_class_pack_task, build_lesson_package_task, build_period_deck_task
 
 logger = logging.getLogger(__name__)
 router = Router(tags=["العروض"], auth=TeacherAuth(), throttle=[UserRateThrottle()])
@@ -689,6 +692,88 @@ def download_class_pack(request: HttpRequest, course: str, lesson: str, section:
     )
     response = HttpResponse(data, content_type=services.PDF_CONTENT_TYPE)
     response["Content-Disposition"] = f'attachment; filename="remedial-{course}-{lesson}.pdf"'
+    response["Cache-Control"] = "private, no-store"
+    response["X-Content-Type-Options"] = "nosniff"
+    return response
+
+
+# ───── باقة الحصة (المرحلة 3) ─────
+
+PACKAGE_UNAVAILABLE = "باقة الحصة غير متاحة الآن: خدمة المهام الخلفية (Redis) غير مفعّلة على الخادم"
+
+
+class LessonPackageOut(Schema):
+    status: str
+    detail: str = ""
+    sheets: list[str]
+    notes: list[str]
+
+
+def _require_package_worker() -> None:
+    if not services.class_pack_available():
+        raise HttpError(503, PACKAGE_UNAVAILABLE)
+
+
+def _package_view(request: HttpRequest, course: str, lesson: str, k: int) -> package_build.PackageView:
+    try:
+        return package_build.view(request.user, course, lesson, k)
+    except selectors.PrepNotFoundError as error:
+        raise HttpError(404, str(error)) from error
+
+
+def _package_out(scope: package_build.Scope, view: package_build.PackageView) -> dict:
+    status, detail = package_build.state(scope, view.signature)
+    return {
+        "status": status,
+        "detail": detail,
+        "sheets": [sheet.title for sheet in view.package.sheets],
+        "notes": [note.message for note in view.package.notes],
+    }
+
+
+@router.get("preps/{course}/{lesson}/{k}/package", response=LessonPackageOut)
+def lesson_package_status(request: HttpRequest, course: str, lesson: str, k: int):
+    view = _package_view(request, course, lesson, k)
+    _require_package_worker()
+    return _package_out(package_build.Scope(request.user.pk, course, lesson, k), view)
+
+
+@router.post("preps/{course}/{lesson}/{k}/package", response=LessonPackageOut)
+def request_lesson_package(request: HttpRequest, course: str, lesson: str, k: int):
+    view = _package_view(request, course, lesson, k)
+    _require_package_worker()
+    scope = package_build.Scope(request.user.pk, course, lesson, k)
+    record_audit(
+        action="package.request", actor=request.user, target=scope.target, request_id=request_id_of(request)
+    )
+    package_build.clear_failure(scope)
+    if package_build.state(scope, view.signature)[0] != "ready" and package_build.start(scope):
+        try:
+            build_lesson_package_task.delay(scope.owner_id, course, lesson, k)
+        except package_build.PackageBusyError:  # الوضع الفوري: بناء آخر يمسك القفل
+            pass
+        except Exception:  # الوضع الفوري يرفع هنا، أو الوسيط لا يُبلغ
+            logger.exception("فشل بناء باقة الحصة %s", scope.target)
+            if package_build.state(scope, view.signature)[0] == "pending":
+                package_build.fail(scope)
+    return _package_out(scope, view)
+
+
+@router.get("preps/{course}/{lesson}/{k}/package/download")
+def download_lesson_package(request: HttpRequest, course: str, lesson: str, k: int):
+    _package_view(request, course, lesson, k)
+    scope = package_build.Scope(request.user.pk, course, lesson, k)
+    try:
+        data = package_build.file(scope)
+    except StorageError as error:
+        raise HttpError(404, "تعذّرت قراءة الباقة: أعد طلبها") from error
+    if data is None:
+        raise HttpError(404, "الباقة غير جاهزة: اطلبها أولًا")
+    record_audit(
+        action="package.download", actor=request.user, target=scope.target, request_id=request_id_of(request)
+    )
+    response = HttpResponse(data, content_type=package_build.ZIP_CONTENT_TYPE)
+    response["Content-Disposition"] = f'attachment; filename="package-{course}-{lesson}-k{k}.zip"'
     response["Cache-Control"] = "private, no-store"
     response["X-Content-Type-Options"] = "nosniff"
     return response
