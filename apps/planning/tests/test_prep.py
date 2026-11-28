@@ -472,11 +472,11 @@ def test_derived_paths_are_empty_without_practice_rows():
 
 
 def test_grade10_preps_are_untouched_by_the_practice_field(preps):
-    """العاشر بدليل مهام وبلا صفوف practice ولا صفحات تمارين: الحقلان فارغان وتجزئة التحضير كما كانت قبله (لا عرض يُعلَّم قديمًا)."""
+    """العاشر بدليل مهام وبلا صفوف practice: الحقل فارغ وتجزئة التحضير كما كانت قبله (لا عرض يُعلَّم قديمًا)."""
     for row in preps:
         prep = row.prep
         assert all(not e.practice for e in (*prep.examples, *prep.review))
-        assert not prep.exercise_pages
+        prep = replace(prep, exercise_pages={})  # صفحات التمارين تدخل التجزئة حين تُعرف
         assert prep.task_guide[0] and prep.task_guide[1]
         old = asdict(replace(prep, earlier_lessons=()))  # حقل الاسترجاع لاحق: خارج التجزئة حين يفرغ
         for example in (*old["examples"], *old["review"]):

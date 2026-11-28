@@ -10,7 +10,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
-from apps.papers.domain.book_source import numbers_with_pages
+from apps.papers.domain.book_source import book_ref, numbers_with_pages
 
 from .check_items import period_items
 from .non_lesson import NonLessonPrep, PaperLink
@@ -132,7 +132,11 @@ def split_minutes(total: int, parts: int) -> list[int]:
 
 
 def _example_ref(example: PrepExample) -> str:
-    return f"مثال {example.n} (ص {example.page})" if example.page else f"مثال {example.n}"
+    return book_ref("مثال", example.n, example.page)
+
+
+def _the_ref(example: PrepExample) -> str:
+    return book_ref("المثال", example.n, example.page)
 
 
 def recall_label(recall: Recall) -> str:
@@ -148,9 +152,8 @@ def recall_label(recall: Recall) -> str:
 def _objective_text(prep: PeriodPrep, objective, example: PrepExample) -> tuple[str, bool]:
     if prep.unit_status == "approved" and all(objective.parts):
         return " ".join(p for p in (objective.behavior, objective.condition, objective.criterion) if p), False
-    page = f"ص {example.page}، " if example.page else ""
     return (
-        f"مثال {example.n} ({page}عمق {objective.dok}، الفعل: {objective.verb}) — "
+        f"{book_ref('مثال', example.n, example.page)} — عمق {objective.dok}، الفعل: {objective.verb} — "
         f"نص الهدف {PENDING_MARK} حتى اعتماد الوحدة",
         True,
     )
@@ -165,10 +168,10 @@ def _assessment(prep: PeriodPrep, example: PrepExample) -> str:
     if example.conceptual:
         return "أسئلة شفهية عن الاشتقاق (مثال مفاهيمي بلا سؤال خروج)"
     if not example.has_generator:
-        return f"سؤال الخروج {PENDING_MARK}: لا صيغة لمهارة المثال {example.n} بعد"
+        return f"سؤال الخروج {PENDING_MARK}: لا صيغة لمهارة {_the_ref(example)} بعد"
     if prep.exit_ticket and prep.exit_ticket.example == example.n:
-        return f"بطاقة خروج من مهارة المثال {example.n} (عمق {prep.exit_ticket.dok})"
-    return f"فحص تكويني: سؤال مولَّد من مهارة المثال {example.n}"
+        return f"بطاقة خروج من مهارة {_the_ref(example)}، عمق {prep.exit_ticket.dok}"
+    return f"فحص تكويني: سؤال مولَّد من مهارة {_the_ref(example)}"
 
 
 def _activity(head: str, strategy: Strategy | None) -> str:
@@ -221,7 +224,7 @@ def _objective_rows(prep: PeriodPrep, library: Mapping[str, Strategy]) -> tuple[
                 text=text,
                 pending=pending,
                 teach_activity=_activity(f"{_example_ref(example)}: {direct}", chosen["direct"]),
-                teach_assessment=_activity(f"«جرّب» على المثال {example.n}: {guided}", chosen["guided"]),
+                teach_assessment=_activity(f"«جرّب» على {_the_ref(example)}: {guided}", chosen["guided"]),
                 teach_minutes=teach[i],
                 check_activity=_activity(
                     f"تدريب صفي {numbers_with_pages(list(work.exercises), prep.exercise_pages)}: {independent}"
@@ -247,7 +250,8 @@ def _closing(prep: PeriodPrep, strategy: Strategy | None) -> str:
     if prep.is_last and prep.quiz:
         head = f"{title}: اختبار الدرس وتلخيص أفكاره"
     elif prep.exit_ticket:
-        head = f"{title}: بطاقة خروج من مهارة المثال {prep.exit_ticket.example}"
+        n = prep.exit_ticket.example
+        head = f"{title}: بطاقة خروج من مهارة {book_ref('المثال', n, prep.pages.get(n))}"
         item = period_items(prep).exit
         if item is not None:  # بند البنك نفسه الذي في شريحة الخروج، ومفتاحه عند المعلم في ملاحظات العرض
             head += f" — {plain_math(item.stem)}"

@@ -17,7 +17,7 @@ from typing import Any
 
 from apps.knowledge.domain.exercise_pages import compress
 
-from . import student_examples
+from . import stamps, student_examples
 from .config import Book
 from .exercise_badges import exercise_anchors
 from .fields import field
@@ -85,15 +85,20 @@ def lesson_exercises(
     cap: int,
     jump: int,
     second: Callable[[int, Boxes, int], set[int]] | None = None,
+    after: tuple[int, int] | None = None,
 ) -> dict[int, int]:
-    """رقم التمرين → صفحته المطبوعة. `pages` أزواج (صفحة ملف الطالب، المطبوع)؛ ما قبل علامة التمارين لا يُقرأ."""
+    """رقم التمرين → صفحته المطبوعة. `pages` أزواج (صفحة ملف الطالب، المطبوع)؛ ما قبل علامة التمارين لا يُقرأ.
+    `after` (صفحة ملف، y): نهاية آخر مثال، بداية القسم في كتاب بلا علامة تمارين."""
     started = False
     seen: list[tuple[int, set[int]]] = []
     for page, printed in pages:
         boxes = boxes_of(page) or []
         top = 0
         if not started:
-            bottom = marker_bottom(boxes, stops)
+            if after is None:
+                bottom = marker_bottom(boxes, stops)
+            else:
+                bottom = None if page < after[0] else (after[1] if page == after[0] else 0)
             if bottom is None:
                 continue
             started, top = True, bottom
@@ -179,6 +184,19 @@ def totals(book: Book, lessons: Sequence[str]) -> dict[str, int]:
     return out
 
 
+def examples_end(book: Book) -> dict[str, tuple[int, int]]:
+    """درس → (صفحة ملف الطالب، أسفل) آخر مقطع لآخر أمثلته من مخرج `student_examples`، للدروس المقبولة وحدها."""
+    path = stamps.output_path(book, "student_examples")
+    if not path.is_file():
+        return {}
+    out = {}
+    for code, record in json.loads(path.read_text(encoding="utf-8"))["lessons"].items():
+        segments = [s for e in record.get("examples") or [] for s in e["segments"]]
+        if record.get("status") == "ok" and segments:
+            out[code] = max((s["page"], s["box"][3]) for s in segments)
+    return out
+
+
 def build(
     book: Book,
     layout: dict[str, Any],
@@ -192,9 +210,10 @@ def build(
     cfg = student_examples.settings(book)
     fusion = fusion_settings(book)
     stops = student_examples.end_patterns(book, cfg)
-    if not stops:
+    ends = {} if stops else examples_end(book)
+    if not stops and not ends:
         raise student_examples.StudentExamplesError(
-            "لا علامة تمارين: markers.exercises أو student_examples.end_patterns"
+            "لا علامة تمارين (markers.exercises أو student_examples.end_patterns) ولا مخرج student_examples"
         )
     inverse = {printed: page for page, printed in student_table.items()}
     known = totals(book, [r["id"] for r in layout["lessons"]])
@@ -212,7 +231,12 @@ def build(
             image = image_of(page) if image_of else None
             return reread(image, boxes, read, cap, top) if image is not None and read else set()
 
-        found = lesson_exercises(pages, boxes_of, stops, cap, GAP * fusion["jump"]["exercises"], second)
+        after = ends.get(r["id"])
+        found = (
+            lesson_exercises(pages, boxes_of, stops, cap, GAP * fusion["jump"]["exercises"], second, after)
+            if stops or after
+            else {}
+        )
         result["lessons"][r["id"]] = field(
             compress(found),
             "derived",

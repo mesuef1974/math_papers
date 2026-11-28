@@ -877,6 +877,7 @@ def save_lesson_package(owner: AbstractBaseUser, course: str, lesson: str, k: in
                 "title": sheet.title,
                 "per_page": sheet.per_page,
                 "objectives": [list(pair) for pair in sheet.objectives],
+                "example_pages": dict(sheet.example_pages),
             },
         )
         AssignmentItem.objects.bulk_create(
@@ -911,6 +912,7 @@ def lesson_package_payload(
                     "title": a.recipe["title"],
                     "per_page": a.recipe["per_page"],
                     "objectives": a.recipe["objectives"],
+                    "example_pages": a.recipe.get("example_pages", {}),
                     "entries": [i.snapshot for i in a.items.order_by("order")],
                 }
                 for a in sheets

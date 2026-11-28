@@ -187,6 +187,11 @@ class PeriodPrep:
     lesson_title: str = field(default="", metadata=DIGEST_OMITS_DEFAULT)
 
     @property
+    def pages(self) -> dict[int, int | None]:
+        """رقم المثال → صفحته المطبوعة، لأمثلة الحصة (وأمثلة الدرس كلها في الأخيرة)."""
+        return {e.n: e.page for e in (*self.examples, *self.review)}
+
+    @property
     def practice_examples(self) -> tuple[PrepExample, ...]:
         """الأمثلة التي تُستمد منها تدريبات الحصة: أمثلتها، وفي الأخيرة أمثلة الدرس كلها."""
         return self.examples or self.review

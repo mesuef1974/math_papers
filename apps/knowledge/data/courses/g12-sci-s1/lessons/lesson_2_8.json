@@ -419,6 +419,13 @@
    "kind": "practice"
   }
  ],
+ "exercise_pages": [
+  {
+   "first": 1,
+   "last": 19,
+   "page": 127
+  }
+ ],
  "examples": [
   {
    "number": 1,

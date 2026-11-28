@@ -136,7 +136,12 @@ def _book_source(course: str, lesson: str, name: str) -> dict | None:
     if number is None:
         return None
     page = knowledge_selectors.example_page(course, lesson, number)
-    return book_source(number, page, exercises=knowledge_selectors.example_exercises(course, lesson, number))
+    return book_source(
+        number,
+        page,
+        exercises=knowledge_selectors.example_exercises(course, lesson, number),
+        exercise_pages=knowledge_selectors.lesson_exercise_pages(course, lesson),
+    )
 
 
 def render_part(problem: Problem, slot: PartSlot, rng: random.Random) -> dict:

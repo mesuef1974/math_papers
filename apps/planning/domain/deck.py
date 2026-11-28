@@ -14,7 +14,7 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, replace
 
 from apps.papers.domain.bidi import isolate_number_ranges
-from apps.papers.domain.book_source import number_list, numbers_with_pages
+from apps.papers.domain.book_source import book_ref, number_list, numbers_with_pages
 
 from .calendar_engine import PlanningError
 from .check_items import OPTION_LETTERS, PeriodItems, period_items
@@ -104,25 +104,21 @@ PERIOD_TEXT = {
     "book_pages": "كتاب الطالب: ص {pages}",
     "recall_title": "تذكّر",
     "objectives_title": "أهداف الحصة",
-    "objective_pending": "مثال {n}: نص الهدف معلَّق",
-    "objective_note": "مثال {n}: الشرط: {condition} · المعيار: {criterion}",
-    "example_title": "مثال {n}",
-    "continued_title": "تابع المثال {n}",
-    "example_title_page": "مثال {n}، ص {page}",
-    "continued_title_page": "تابع المثال {n} (من ص {page})",
-    "try_title": "حاول أن تحل: مثال {n}",
-    "alt": "مثال {n} من كتاب الطالب",
-    "alt_page": "مثال {n} من كتاب الطالب، ص {page}",
-    "try_continued_title": "تابع حاول أن تحل: مثال {n}",
-    "try_alt": "حاول أن تحل: مثال {n} من كتاب الطالب",
-    "try_alt_page": "حاول أن تحل: مثال {n} من كتاب الطالب، ص {page}",
-    "classwork_title": "تدريب صفي: مثال {n}",
+    "objective_pending": "{ref}: نص الهدف معلَّق",
+    "objective_note": "{ref}: الشرط: {condition} · المعيار: {criterion}",
+    "example_title": "{ref}",
+    "continued_title": "تابع {ref}",
+    "try_title": "حاول أن تحل: {ref}",
+    "alt": "{ref} من كتاب الطالب",
+    "try_continued_title": "تابع حاول أن تحل: {ref}",
+    "try_alt": "حاول أن تحل: {ref} من كتاب الطالب",
+    "classwork_title": "تدريب صفي: {ref}",
     "exercises": "حلّ تمارين الكتاب: {numbers}",
     "independent_title": "الممارسة المستقلة",
     "basic": "المسار الأساسي: تمارين الكتاب {numbers}",
     "advanced": "المسار المتقدم: تمارين الكتاب {numbers}",
     "check_title": "تحقّق من فهمك",
-    "skill_question": "سؤال من مهارة المثال {n}",
+    "skill_question": "سؤال من مهارة {ref}",
     "exit_title": "بطاقة الخروج",
     "option_letters": "أ ب ج د",
     "answer_note": "الإجابة الصحيحة: {letter}",
@@ -135,7 +131,7 @@ PERIOD_TEXT = {
     "minutes_note": "الدقائق: {minutes}",
     "representations_note": "التمثيلات: {labels}",
     "depth_note": "عمق التمارين: {depths}",
-    "exercise_depth_note": "التمرين {exercise}: DOK {dok}",
+    "exercise_depth_note": "{ref}: DOK {dok}",
     "differentiation_note": "الدعم بالمسار الأساسي لمن يحتاجه، والإثراء بالمسار المتقدم",
     "conceptual_note": "مثال مفاهيمي: أسئلة شفهية عن الاشتقاق بلا تدريب",
     "quiz_note": "أعماق الاختبار: {depths}",
@@ -219,19 +215,18 @@ def objective_bullet(prep: PeriodPrep, index: int) -> str:
     objective = prep.objectives[index]
     if prep.unit_status == "approved" and objective.behavior:
         return isolate_number_ranges(objective.behavior)
-    return _t("objective_pending", n=objective.example)
+    n = objective.example
+    return _t("objective_pending", ref=book_ref("مثال", n, prep.pages.get(n)))
 
 
 def example_title(kind: str, example: PrepExample) -> str:
-    """عنوان شريحة المثال برقم صفحته في كتاب الطالب حين تُعرف (قرار المالك 2026-11-20)؛ التتمة «من ص» صفحة بدء
-    المثال، فقد تقع في الصفحة التالية."""
-    if example.page:
-        return _t(f"{kind}_title_page", n=example.n, page=example.page)
-    return _t(f"{kind}_title", n=example.n)
+    """عنوان شريحة المثال برقم صفحته في كتاب الطالب حين تُعرف (قرار المالك 2026-11-20)؛ صفحة التتمة صفحة بدء المثال."""
+    word = "المثال" if kind == "continued" else "مثال"
+    return _t(f"{kind}_title", ref=book_ref(word, example.n, example.page))
 
 
 def example_alt(example: PrepExample) -> str:
-    return _t("alt_page", n=example.n, page=example.page) if example.page else _t("alt", n=example.n)
+    return _t("alt", ref=book_ref("مثال", example.n, example.page))
 
 
 def _clip_groups(prep: PeriodPrep, clips: Sequence[ExampleClip]) -> dict[int, tuple[ExampleClip, ...]]:
@@ -273,7 +268,7 @@ def _practice_groups(prep: PeriodPrep, clips: Sequence[ExampleClip]) -> dict[int
 
 
 def try_alt(example: PrepExample) -> str:
-    return _t("try_alt_page", n=example.n, page=example.page) if example.page else _t("try_alt", n=example.n)
+    return _t("try_alt", ref=book_ref("مثال", example.n, example.page))
 
 
 def _period_example_notes(example: PrepExample) -> tuple[str, ...]:
@@ -293,7 +288,8 @@ def _exercise_notes(prep: PeriodPrep, exercises: Sequence[int]) -> tuple[str, ..
     for x in exercises:
         dok = next((d for e in prep.practice_examples if (d := e.dok_of(x)) is not None), None)
         if dok is not None:
-            out.append(_t("exercise_depth_note", exercise=x, dok=dok))
+            ref = book_ref("التمرين", x, prep.exercise_pages.get(x))
+            out.append(_t("exercise_depth_note", ref=ref, dok=dok))
     return tuple(out)
 
 
@@ -364,7 +360,12 @@ def _draft_slides(
     slides = [_slide("title", _t("title", lesson=prep.lesson), bullets=tuple(bullets)), recall]
     if prep.objectives:
         notes = tuple(
-            _t("objective_note", n=o.example, condition=o.condition, criterion=o.criterion)
+            _t(
+                "objective_note",
+                ref=book_ref("مثال", o.example, prep.pages.get(o.example)),
+                condition=o.condition,
+                criterion=o.criterion,
+            )
             for o in prep.objectives
             if o.condition and o.criterion
         )
@@ -385,14 +386,15 @@ def _draft_slides(
             notes = _period_example_notes(e) if clip.part == 1 else ()
             slides.append(_slide("example", title, refs=(e.n,), clip=clip, alt=example_alt(e), notes=notes))
         for clip in (practice or {}).get(e.n, ()):
-            title = _t("try_title" if clip.part == 1 else "try_continued_title", n=e.n)
+            name = "try_title" if clip.part == 1 else "try_continued_title"
+            title = _t(name, ref=book_ref("مثال", e.n, e.page))
             slides.append(_slide("try", title, refs=(e.n,), clip=clip, alt=try_alt(e)))
         if e.n in classwork:
             exercises = classwork[e.n].exercises
             slides.append(
                 _slide(
                     "classwork",
-                    _t("classwork_title", n=e.n),
+                    _t("classwork_title", ref=book_ref("مثال", e.n, e.page)),
                     bullets=(
                         _t("exercises", numbers=numbers_with_pages(list(exercises), prep.exercise_pages)),
                     ),
@@ -420,7 +422,7 @@ def _draft_slides(
             )
         )
     if as_text:
-        questions = tuple(_t("skill_question", n=n) for n in as_text)
+        questions = tuple(_t("skill_question", ref=book_ref("المثال", n, prep.pages.get(n))) for n in as_text)
         slides.append(_slide("check", _t("check_title"), bullets=questions, refs=as_text))
     if prep.exit_ticket:
         n, dok = prep.exit_ticket.example, prep.exit_ticket.dok
@@ -428,7 +430,11 @@ def _draft_slides(
         if items.exit is None:
             slides.append(
                 _slide(
-                    "exit", _t("exit_title"), bullets=(_t("skill_question", n=n),), refs=(n,), notes=(depth,)
+                    "exit",
+                    _t("exit_title"),
+                    bullets=(_t("skill_question", ref=book_ref("المثال", n, prep.pages.get(n))),),
+                    refs=(n,),
+                    notes=(depth,),
                 )
             )
         else:

@@ -11,6 +11,7 @@ import random
 from collections.abc import Collection, Mapping
 from dataclasses import dataclass, replace
 
+from apps.papers.domain.book_source import book_ref
 from apps.papers.domain.generators import REGISTRY, Problem, skill_example, variant_profile
 from apps.papers.domain.item_bank import Item
 
@@ -73,6 +74,7 @@ class Sheet:
     entries: tuple[Entry, ...]
     objectives: tuple[tuple[int, str], ...]  # (المثال، نص هدفه) لأمثلة بنود الورقة
     per_page: int = 1
+    example_pages: tuple[tuple[int, int], ...] = ()  # (المثال، صفحته) المعروفة
 
 
 @dataclass(frozen=True)
@@ -113,7 +115,10 @@ class _Composer:
         out = []
         for number in numbers:
             if number in self.blocked:
-                self.note("blocked", f"{TITLES[kind]}: التمرين {number} ربطه لم يُعتمد")
+                self.note(
+                    "blocked",
+                    f"{TITLES[kind]}: {book_ref('التمرين', number, self.prep.exercise_pages.get(number))} ربطه لم يُعتمد",
+                )
                 continue
             for example in self.prep.practice_examples:
                 dok = example.dok_of(number)
@@ -142,7 +147,10 @@ class _Composer:
                     best = rank, GeneratedEntry(example.n, fn.__name__, seed, problem)
         if best is None:
             if not example.conceptual:
-                self.note("no_form", f"المثال {example.n}: لا صيغة تعطي مسألة لـ{TITLES[kind]}")
+                self.note(
+                    "no_form",
+                    f"{book_ref('المثال', example.n, example.page)}: لا صيغة تعطي مسألة لـ{TITLES[kind]}",
+                )
             return None
         self.used.add(best[1].problem.fingerprint)
         return best[1]
@@ -187,10 +195,16 @@ class _Composer:
     def cards(self) -> tuple[list[Entry], list[Entry]]:
         for n in self.prep.formative:
             if n not in self.items.formative:
-                self.note("text_question", f"المثال {n}: فحصه سؤال نصّي في التحضير بلا بطاقة")
+                self.note(
+                    "text_question",
+                    f"{book_ref('المثال', n, self.prep.pages.get(n))}: فحصه سؤال نصّي في التحضير بلا بطاقة",
+                )
         if self.prep.exit_ticket and not self.items.exit:
             n = self.prep.exit_ticket.example
-            self.note("text_question", f"المثال {n}: سؤال خروجه نصّي في التحضير بلا بطاقة")
+            self.note(
+                "text_question",
+                f"{book_ref('المثال', n, self.prep.pages.get(n))}: سؤال خروجه نصّي في التحضير بلا بطاقة",
+            )
         formative: list[Entry] = [ItemEntry(self.items.formative[n]) for n in sorted(self.items.formative)]
         return formative, [ItemEntry(self.items.exit)] if self.items.exit else []
 
@@ -227,6 +241,7 @@ def compose_package(
                 tuple(entries),
                 tuple((n, objectives[n]) for n in numbers if n in objectives),
                 CARDS_PER_PAGE.get(kind, 1),
+                tuple((n, page) for n in numbers if (page := prep.pages.get(n))),
             )
         )
     return LessonPackage(prep.course, prep.lesson, prep.k, tuple(sheets), tuple(composer.notes))

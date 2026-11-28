@@ -96,6 +96,7 @@ class BookSourceOut(Schema):
     number: int = Field(ge=1, le=99)
     page: int | None = Field(None, ge=1, le=999)
     exercises: list[int] = Field(default_factory=list, max_length=60)  # تدريبات الكتاب على المثال
+    exercise_pages: dict[int, int] = Field(default_factory=dict, max_length=60)
 
 
 class SpottingOut(Schema):
@@ -634,6 +635,7 @@ class PackageSheetOut(Schema):
     title: str
     per_page: int
     objectives: list[tuple[int, str]]
+    example_pages: dict[int, int] = {}
     entries: list[PackageEntryOut]
 
 

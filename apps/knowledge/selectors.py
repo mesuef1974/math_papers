@@ -10,6 +10,7 @@ from apps.curriculum.courses import GRADE12_SLUG
 
 from .domain.contract import SCHEMA_VERSION, source_hash, source_slugs
 from .domain.course_index import CourseIndex, LessonIndex
+from .domain.exercise_pages import page_map
 from .domain.schemas import lesson_sort_key
 from .models import BookExerciseLink, ExerciseGroup, ExerciseTemplate, LessonProfile, WorkedExample
 
@@ -78,6 +79,16 @@ def example_page(course: str, lesson: str, number: int) -> int | None:
         .values_list("page", flat=True)
         .first()
     )
+
+
+def lesson_exercise_pages(course: str, lesson: str) -> dict[int, int]:
+    """رقم التمرين → صفحته المطبوعة في كتاب الطالب؛ فارغ إن لم تُحمَّل."""
+    ranges = (
+        LessonProfile.objects.filter(lesson__course__slug=course, lesson__code=lesson)
+        .values_list("exercise_pages", flat=True)
+        .first()
+    )
+    return page_map(ranges or [])
 
 
 def example_numbers(course: str) -> dict[str, list[int]]:

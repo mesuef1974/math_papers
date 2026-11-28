@@ -156,10 +156,8 @@ class Command(BaseCommand):
             if witness and numbers.get("exercises_total", witness) != witness:
                 contradicted.append(f"{code} ({numbers.pop('exercises_total')}≠{witness})")
             paged = exercise_paged.get(code)
-            if paged and paged.get("status") == "review" and not include_review:
-                held.append(f"{code} (exercise_pages)")
             updated = with_exercise_pages(
-                annotate(lesson, known, rows, numbers, practice), accepted_ranges(paged, accepted)
+                annotate(lesson, known, rows, numbers, practice), accepted_ranges(paged)
             )
             if _without_owned(updated) != _without_owned(lesson):  # حارس: لا حقل غير المملوكين يتغير
                 raise CommandError(f"تغيّر حقل غير {OWNED} في {path.name}")

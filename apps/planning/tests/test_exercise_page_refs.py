@@ -25,9 +25,10 @@ def paged(loaded_courses):
 
 def test_empty_pages_keep_digest_and_text(paged):
     row, prep = paged
-    assert row.prep.exercise_pages == {}  # الفهرس المودَع بلا صفحات تمارين بعد
-    assert prep_digest(replace(prep, exercise_pages={})) == prep_digest(row.prep)
-    assert prep_digest(prep) != prep_digest(row.prep)
+    assert row.prep.exercise_pages  # الفهرس المودَع فيه صفحات التمارين
+    bare = replace(row.prep, exercise_pages={})
+    assert prep_digest(replace(prep, exercise_pages={})) == prep_digest(bare)
+    assert prep_digest(prep) != prep_digest(bare)
 
 
 def test_prep_sheet_shows_exercise_pages(paged):

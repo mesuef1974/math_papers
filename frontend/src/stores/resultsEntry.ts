@@ -8,6 +8,7 @@ export interface EntryItem {
   k: number;
   n: number;
   example: number;
+  page?: number | null;
   seed: number;
   stem: string;
   options: string[];

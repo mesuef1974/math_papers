@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { bookRef } from "@/utils/bookRef";
 import GraphPlot from "@/components/GraphPlot.vue";
 import MathText from "@/components/MathText.vue";
 import PaperHeader from "@/components/PaperHeader.vue";
@@ -30,7 +31,7 @@ function header(sheet: PackageSheet): PaperHeaderData {
 }
 
 function bookText(entry: PackageEntry): string {
-  return entry.page ? `تمرين ${entry.number} من كتاب الطالب، صفحة ${entry.page}` : `تمرين ${entry.number} من كتاب الطالب`;
+  return `${bookRef("تمرين", entry.number!, entry.page)} من كتاب الطالب`;
 }
 </script>
 
@@ -44,7 +45,9 @@ function bookText(entry: PackageEntry): string {
         <span>الاسم: {{ DOTS }} الشعبة: {{ section || DOTS }}</span>
       </p>
       <ul v-if="sheet.per_page === 1" class="objectives">
-        <li v-for="[example, text] in sheet.objectives" :key="example">هدف المثال {{ example }}: {{ text }}</li>
+        <li v-for="[example, text] in sheet.objectives" :key="example">
+          هدف {{ bookRef("المثال", example, sheet.example_pages?.[example]) }}: {{ text }}
+        </li>
       </ul>
       <p v-if="sheet.entries.some((e) => e.source === 'book')" class="note">تُحل تمارين كتاب الطالب في الدفتر.</p>
       <ol class="entries">
@@ -52,7 +55,9 @@ function bookText(entry: PackageEntry): string {
           <p class="stem">
             <span v-if="entry.source === 'book'">{{ bookText(entry) }}</span>
             <MathText v-else :text="entry.stem" />
-            <span v-if="sheet.per_page === 1" class="tag">(مثال {{ entry.example }})</span>
+            <span v-if="sheet.per_page === 1 && entry.example" class="tag">
+              — {{ bookRef("مثال", entry.example, sheet.example_pages?.[entry.example]) }}
+            </span>
           </p>
           <GraphPlot v-if="entry.graph" :graph="entry.graph" compact />
           <ol v-if="entry.options.length" class="options">
