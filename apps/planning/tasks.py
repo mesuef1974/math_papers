@@ -5,6 +5,7 @@ from __future__ import annotations
 from celery import shared_task
 from django.contrib.auth import get_user_model
 
+from . import package_build
 from .services import build_period_deck_file, run_class_pack
 
 
@@ -23,3 +24,9 @@ def build_class_pack_task(owner_id: int, course: str, lesson: str, section: str,
     تطبع في العامل صفحة الطباعة التي يقدّمها الويب، فيلزم للعامل `PDF_RENDER_BASE_URL` و`REDIS_URL`
     و`SECRET_KEY` و`ASSETS_*` كالويب."""
     return run_class_pack(owner_id, course, lesson, section, date)
+
+
+@shared_task(name="planning.build_lesson_package")
+def build_lesson_package_task(owner_id: int, course: str, lesson: str, k: int) -> str:
+    """يبني الملف المضغوط لباقة الحصة (يستدعيها مسار `preps/…/package`). إعدادات العامل كالحزمة العلاجية."""
+    return package_build.run(package_build.Scope(owner_id, course, lesson, k))

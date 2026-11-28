@@ -36,7 +36,7 @@ function bookText(entry: PackageEntry): string {
 </script>
 
 <template>
-  <article v-for="sheet in pack.sheets" :key="sheet.kind" class="sheet pack-sheet" :data-kind="sheet.kind">
+  <article v-for="sheet in pack.part === 'key' ? [] : pack.sheets" :key="sheet.kind" class="sheet pack-sheet" :data-kind="sheet.kind">
     <!-- بطاقة الخروج تتكرر في الصفحة بعدد طلابها، وغيرها نسخة واحدة -->
     <section v-for="copy in sheet.per_page" :key="copy" class="copy" :class="{ card: sheet.per_page > 1 }">
       <PaperHeader v-if="sheet.per_page === 1" :header="header(sheet)" />
@@ -72,7 +72,7 @@ function bookText(entry: PackageEntry): string {
     </section>
   </article>
 
-  <article class="sheet pack-sheet pack-key" data-kind="key">
+  <article v-if="pack.part !== 'sheets'" class="sheet pack-sheet pack-key" data-kind="key">
     <PaperHeader compact :header="{ ...header(pack.sheets[0]), title: `مفتاح الإجابة — الدرس ${pack.lesson} (الحصة ${pack.k})` }" />
     <section v-for="sheet in pack.sheets" :key="sheet.kind">
       <h3>{{ sheet.title }}</h3>

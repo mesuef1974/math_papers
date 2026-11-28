@@ -71,11 +71,13 @@ def render_pdf(url: str) -> bytes:
             page = context.new_page()
             page.emulate_media(media="print")
             page.goto(url, wait_until="networkidle", timeout=RENDER_TIMEOUT_MS)
-            page.wait_for_function(
-                "['1', 'error'].includes(document.documentElement.dataset.printReady ?? '')",
+            # بمحدِّد لا بنص JavaScript: `wait_for_function` يستعمل eval فتمنعه سياسة CSP وتفشل الطباعة
+            page.wait_for_selector(
+                'html[data-print-ready="1"], html[data-print-ready="error"]',
+                state="attached",
                 timeout=RENDER_TIMEOUT_MS,
             )
-            if page.evaluate("document.documentElement.dataset.printReady") == "error":
+            if page.get_attribute("html", "data-print-ready") == "error":
                 raise RuntimeError("print page reported an error")
             return page.pdf(format="A4", print_background=True, prefer_css_page_size=True)
         finally:

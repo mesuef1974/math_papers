@@ -30,4 +30,5 @@ export interface LessonPackage {
   grade: string;
   k: number;
   sheets: PackageSheet[];
+  part?: "all" | "sheets" | "key";
 }
