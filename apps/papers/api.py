@@ -615,12 +615,45 @@ class PdfIn(Schema):
         return MAX_FORMS if self.bundle is None else MAX_BUNDLE_PAPERS
 
 
+class PackageEntryOut(Schema):
+    source: Literal["book", "generated", "item"]
+    example: int | None = None
+    number: int | None = None
+    page: int | None = None
+    dok: int | None = None
+    stem: str = ""
+    graph: GraphOut | None = None
+    options: list[str] = []
+    answer: str = ""
+    answer_index: int = -1
+    steps: list[str] = []
+
+
+class PackageSheetOut(Schema):
+    kind: str
+    title: str
+    per_page: int
+    objectives: list[tuple[int, str]]
+    entries: list[PackageEntryOut]
+
+
+class PackagePrintOut(Schema):
+    lesson: str
+    lesson_title: str
+    grade: str
+    k: int
+    sheets: list[PackageSheetOut]
+
+
 class PrintPayload(PdfIn):
     """ما تقرؤه صفحة الطباعة: `PdfIn` ومعه أسماء حزمة الشعبة العلاجية التي يبنيها الخادم وحده. مسارا `/pdf` و`/docx`
     يقبلان `PdfIn`، فلا يرسل العميل أسماء ولا يتجاوز بها حد النماذج."""
 
     # اسم صاحب كل ورقة بترتيب `papers` (في ترويسة ورقته ومفتاحها)؛ فارغة لغير الحزمة العلاجية
     students: list[Annotated[str, Field(max_length=120)]] = Field([], max_length=MAX_BUNDLE_PAPERS)
+    # باقة الحصة (يبنيها الخادم من لقطاتها المحفوظة): بلا أوراق `papers`
+    papers: list[PaperOut] = Field([], max_length=MAX_BUNDLE_PAPERS)
+    package: PackagePrintOut | None = None
 
     def max_papers(self) -> int:
         if not self.students:

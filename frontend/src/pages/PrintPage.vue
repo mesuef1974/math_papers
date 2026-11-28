@@ -2,11 +2,14 @@
 import { nextTick, onMounted, ref } from "vue";
 import { useRoute } from "vue-router";
 import { api } from "@/api/client";
+import LessonPackageSheets from "@/components/LessonPackageSheets.vue";
 import PaperBundle from "@/components/PaperBundle.vue";
 import PaperSet from "@/components/PaperSet.vue";
+import PrintFrame from "@/components/PrintFrame.vue";
 import type { BundleEntry, Paper } from "@/stores/papers";
 import type { PdfRequest } from "@/stores/pdf";
 import { usePrintStore } from "@/stores/print";
+import type { LessonPackage } from "@/types/lessonPackage";
 import { ensurePrintFonts } from "@/utils/printFonts";
 
 // صفحة الطباعة للمتصفح الخادمي: تقرأ الحمولة برمز موقّع قصير العمر (بلا جلسة) وتعرض الأوراق بالمكونات
@@ -17,6 +20,7 @@ const papers = ref<Paper[]>([]);
 const bundle = ref<{ plan: BundleEntry[]; seed: number } | null>(null);
 const students = ref<string[]>([]);
 const error = ref("");
+const pack = ref<LessonPackage | null>(null);
 
 function signal(state: "1" | "error") {
   document.documentElement.dataset.printReady = state;
@@ -25,7 +29,7 @@ function signal(state: "1" | "error") {
 onMounted(async () => {
   try {
     const token = String(route.params.token ?? "");
-    const payload = await api.get<PdfRequest & { students?: string[] }>(`/pdf/print/${encodeURIComponent(token)}`);
+    const payload = await api.get<PdfRequest & { students?: string[]; package?: LessonPackage | null }>(`/pdf/print/${encodeURIComponent(token)}`);
     print.profile = payload.profile;
     print.date = payload.date;
     print.section = payload.section;
@@ -33,6 +37,7 @@ onMounted(async () => {
     print.bubble = payload.bubble;
     bundle.value = payload.bundle ?? null;
     students.value = payload.students ?? [];
+    pack.value = payload.package ?? null;
     papers.value = payload.papers;
     await nextTick();
     await ensurePrintFonts();
@@ -48,6 +53,9 @@ const hasMcq = () => papers.value.some((paper) => paper.questions.some((q) => q.
 
 <template>
   <p v-if="error" class="alert alert-error" role="alert">{{ error }}</p>
+  <PrintFrame v-else-if="pack">
+    <LessonPackageSheets :pack="pack" :profile="print.profile" :date="print.date" :section="print.section" />
+  </PrintFrame>
   <PaperBundle
     v-else-if="papers.length && bundle"
     :papers="papers"
