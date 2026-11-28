@@ -17,7 +17,16 @@
   34,
   38
  ],
- "terms": [],
+ "terms": [
+  {
+   "ar": "مشتقات الدوال المثلثية",
+   "en": "derivatives of trigonometric functions"
+  },
+  {
+   "ar": "قياس الزاوية بالراديان",
+   "en": "radian measure"
+  }
+ ],
  "items": [
   {
    "kind": "learning_goal",

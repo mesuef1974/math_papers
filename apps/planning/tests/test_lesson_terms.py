@@ -22,6 +22,7 @@ def test_lesson_terms_reach_every_period_deck(course, loaded_courses):
         assert all(ar in bullet for (ar, _), bullet in zip(prep.terms, shown, strict=True))
 
 
-def test_every_grade10_lesson_has_terms(loaded_courses):
-    terms = lesson_terms("g10-s1")
-    assert {row.prep.lesson for row in lesson_preps("g10-s1")} <= set(terms)
+@pytest.mark.parametrize("course", ["g10-s1", "g12-sci-s1"])
+def test_every_lesson_has_terms(course, loaded_courses):
+    terms = lesson_terms(course)
+    assert {row.prep.lesson for row in lesson_preps(course)} <= set(terms)

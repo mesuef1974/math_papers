@@ -12,7 +12,20 @@
   2,
   13
  ],
- "terms": [],
+ "terms": [
+  {
+   "ar": "رسم المنحنى",
+   "en": "curve sketching"
+  },
+  {
+   "ar": "السلوك الطرفي",
+   "en": "end behavior"
+  },
+  {
+   "ar": "جدول ملخص الرسم",
+   "en": "sketch summary table"
+  }
+ ],
  "items": [
   {
    "kind": "learning_goal",

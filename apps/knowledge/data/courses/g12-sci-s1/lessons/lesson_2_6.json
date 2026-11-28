@@ -17,7 +17,16 @@
   35,
   38
  ],
- "terms": [],
+ "terms": [
+  {
+   "ar": "الدالة الأسية الطبيعية",
+   "en": "natural exponential function"
+  },
+  {
+   "ar": "الدالة اللوغاريتمية الطبيعية",
+   "en": "natural logarithmic function"
+  }
+ ],
  "items": [
   {
    "kind": "learning_goal",
