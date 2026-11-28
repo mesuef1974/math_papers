@@ -198,16 +198,16 @@ def t6_time(prep: PeriodPrep, library: Mapping[str, Strategy]) -> CheckResult:
 
 
 def t7_assessment(prep: PeriodPrep) -> CheckResult:
-    """فحص تكويني يقيس مهارة مثال من الحصة بصيغته، وبطاقة خروج عمقها ضمن أعماق تدريبات الحصة الصفية وصفوفها (`rows`
+    """تقييم بنائي يقيس مهارة مثال من الحصة بصيغته، وبطاقة خروج عمقها ضمن أعماق تدريبات الحصة الصفية وصفوفها (`rows`
     وحدها، لا صفوف `practice`)، والأخيرة باختبار الدرس."""
     problems = []
     practice = {e.n: e for e in prep.practice_examples}
     if not prep.formative:
-        problems.append("لا فحص تكويني: لا مثال في الحصة بصيغة")
+        problems.append("لا تقييم بنائي: لا مثال في الحصة بصيغة")
     for n in prep.formative:
         e = practice.get(n)
         if e is None or not e.has_generator:
-            problems.append(f"فحص تكويني على مثال ليس في الحصة أو بلا صيغة: {n}")
+            problems.append(f"تقييم بنائي على مثال ليس في الحصة أو بلا صيغة: {n}")
     if not prep.is_last:
         ticket = prep.exit_ticket
         depths = {c.dok for c in prep.classwork} | {d for e in practice.values() for d, _ in e.rows}

@@ -174,7 +174,7 @@ class PeriodPrep:
     basic: tuple[int, ...]
     advanced: tuple[int, ...]
     homework: tuple[int, ...]
-    formative: tuple[int, ...]  # أمثلة يقيس الفحص التكويني مهاراتها (لها مولّد)
+    formative: tuple[int, ...]  # أمثلة يقيس التقييم البنائي مهاراتها (لها مولّد)
     exit_ticket: ExitTicket | None
     quiz: tuple[int, ...]  # أعماق اختبار الدرس في الحصة الأخيرة
     recall: Recall

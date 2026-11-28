@@ -39,7 +39,7 @@ CHECK_TITLES = {
     "T4": "التدريب الصفي",
     "T5": "التدرج في العمق",
     "T6": "الزمن والمراحل",
-    "T7": "التقويم التكويني",
+    "T7": "التقييم البنائي",
     "T8": "التمايز",
     "T9": "الواجب",
     "T10": "الربط بما قبلها",
@@ -171,7 +171,7 @@ def _assessment(prep: PeriodPrep, example: PrepExample) -> str:
         return f"سؤال الخروج {PENDING_MARK}: لا صيغة لمهارة {_the_ref(example)} بعد"
     if prep.exit_ticket and prep.exit_ticket.example == example.n:
         return f"بطاقة خروج من مهارة {_the_ref(example)}، عمق {prep.exit_ticket.dok}"
-    return f"فحص تكويني: سؤال مولَّد من مهارة {_the_ref(example)}"
+    return f"تقييم بنائي: سؤال مولَّد من مهارة {_the_ref(example)}"
 
 
 def _activity(head: str, strategy: Strategy | None) -> str:
