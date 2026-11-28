@@ -19,6 +19,7 @@ export interface LinkExample {
 export interface LinkExercise {
   kind: LinkKind;
   number: number;
+  page?: number | null;
   examples: number[];
   provenance: string;
   reviewed: boolean;

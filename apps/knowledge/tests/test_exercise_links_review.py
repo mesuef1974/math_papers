@@ -106,6 +106,7 @@ def test_only_the_superuser_reviews(loaded_courses, client, django_user_model):
     client.force_login(django_user_model.objects.create_superuser("owner", password="x"))
     body = client.get(url).json()
     assert body["examples"] and body["exercises"]
+    assert any(row["page"] for row in body["exercises"])
 
     def pending():
         rows = client.get(f"{BASE}/g12-sci-s1").json()

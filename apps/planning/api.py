@@ -235,6 +235,7 @@ class PrepEditOut(Schema):
     example_pages: dict[int, int] = {}
     stages: list[StageEditOut]
     exercises: list[int]
+    exercise_pages: dict[int, int] = {}
     removed: list[int]
 
 

@@ -131,10 +131,10 @@ function approveAll() {
           </thead>
           <tbody>
             <tr v-for="row in rows" :key="key(row)" :data-exercise="key(row)">
-              <th scope="row">{{ row.number }}</th>
+              <th scope="row">{{ bookRef('التمرين', row.number, row.page) }}</th>
               <td>{{ KIND[row.kind] }}</td>
               <td>
-                <div class="picks" role="group" :aria-label="`أمثلة ${bookRef('التمرين', row.number)}`">
+                <div class="picks" role="group" :aria-label="`أمثلة ${bookRef('التمرين', row.number, row.page)}`">
                   <label v-for="e in store.links.examples" :key="e.number" class="check">
                     <input v-model="picked[key(row)]" type="checkbox" :value="e.number" />
                     {{ e.number }}

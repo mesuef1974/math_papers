@@ -12,7 +12,7 @@ const links = {
     { number: 1, page: 10, skill: "" },
     { number: 2, page: 11, skill: "" },
   ],
-  exercises: [{ kind: "practice", number: 8, examples: [1], provenance: "ai_unreviewed", reviewed: false }],
+  exercises: [{ kind: "practice", number: 8, page: 12, examples: [1], provenance: "ai_unreviewed", reviewed: false }],
 };
 
 beforeEach(() => setActivePinia(createPinia()));
@@ -36,6 +36,7 @@ describe("صفحة ربط التمارين", () => {
     expect(row.text()).toContain("آلي لم يُراجَع");
     const boxes = row.findAll('input[type="checkbox"]');
     await boxes[0].setValue(false);
+    expect(wrapper.find("tbody th").text()).toBe("التمرين 8 (ص 12)");
     await boxes[1].setValue(true);
     await row.find("button").trigger("click");
     await flushPromises();
