@@ -94,7 +94,8 @@ def test_grade10_enters_with_no_guide_text():
     load_course(GRADE10_SLUG)
     for profile in km.LessonProfile.objects.filter(lesson__course__slug=GRADE10_SLUG):
         assert not (profile.objective or profile.rationale or profile.motivation or profile.title_en)
-        assert not profile.items.exists() and not profile.terms.exists() and not profile.templates.exists()
+        # أسماء المصطلحات وحدها تدخل من terms.json (قرار المالك 2026-11-28)
+        assert not profile.items.exists() and not profile.templates.exists()
         assert all(o.text == "" for o in profile.objectives.all())
         assert all(e.skill == "" for e in profile.examples.all())
         assert (

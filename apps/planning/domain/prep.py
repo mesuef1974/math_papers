@@ -188,6 +188,8 @@ class PeriodPrep:
     earlier_lessons: tuple[str, ...] = field(default=(), metadata=DIGEST_OMITS_DEFAULT)
     # أمثلة الحصة السابقة المقيسة في هذا الدرس: مصدر سؤال التهيئة الأول؛ الفارغ خارج التجزئة
     previous_examples: tuple[int, ...] = field(default=(), metadata=DIGEST_OMITS_DEFAULT)
+    # مصطلحات الدرس (العربية، الإنجليزية) للتحضير والعرض؛ الفارغ خارج التجزئة
+    terms: tuple[tuple[str, str], ...] = field(default=(), metadata=DIGEST_OMITS_DEFAULT)
     # اسم الدرس من مقرره لغلاف العرض؛ الفارغ خارج التجزئة
     lesson_title: str = field(default="", metadata=DIGEST_OMITS_DEFAULT)
 

@@ -70,7 +70,7 @@ class ExampleClip:
 # ---- عرض الحصة من تحضيرها ----
 
 # الإعداد: أرقام التصميم في مكان واحد (افتراضات تُراجع بعد أول تجربة في الصف)
-PERIOD_DECK_FORMAT = 14  # 14: سؤال محدد في التقييم البنائي والخروج؛ 13: سؤالا تهيئة بشريحتين؛ 12: المقطع الطويل يُقص عند فراغ أبيض؛ 11: سؤال التحقق من صيغة غير صيغة بطاقة الخروج؛ 10: اسم الدرس على الغلاف وبلا شريحة «حل المثال»؛ 9: صيغ الشرائح معادلات PowerPoint أصلية؛ 8: لا يُعزل المدى داخل تعبير رياضي؛ 7:صيغ LaTeX رموزًا مقروءة في البنود (6: شريط المراحل ودقائق المرحلة على الشريحة (5: بند الاسترجاع المتباعد في شريحة التذكّر؛ 4: بنود البنك في التحقق والخروج؛ 3: تخطيطات الماستر ورقم الشريحة)
+PERIOD_DECK_FORMAT = 15  # 15: شريحة المصطلحات؛ 14: سؤال محدد في التقييم البنائي والخروج؛ 13: سؤالا تهيئة بشريحتين؛ 12: المقطع الطويل يُقص عند فراغ أبيض؛ 11: سؤال التحقق من صيغة غير صيغة بطاقة الخروج؛ 10: اسم الدرس على الغلاف وبلا شريحة «حل المثال»؛ 9: صيغ الشرائح معادلات PowerPoint أصلية؛ 8: لا يُعزل المدى داخل تعبير رياضي؛ 7:صيغ LaTeX رموزًا مقروءة في البنود (6: شريط المراحل ودقائق المرحلة على الشريحة (5: بند الاسترجاع المتباعد في شريحة التذكّر؛ 4: بنود البنك في التحقق والخروج؛ 3: تخطيطات الماستر ورقم الشريحة)
 MINUTES_PER_SLIDE = 2
 TITLE_PT, BODY_PT = 36, 28
 MIN_TITLE_PT, MIN_BODY_PT = 32, 24
@@ -83,6 +83,7 @@ SLIDE_PHASE = {
     "title": "warmup",
     "recall": "warmup",
     "objectives": "objectives",
+    "terms": "objectives",
     "example": "direct",
     "try": "guided",
     "classwork": "guided",
@@ -113,6 +114,8 @@ PERIOD_TEXT = {
     "book_pages": "كتاب الطالب: ص {pages}",
     "recall_title": "تذكّر",
     "objectives_title": "أهداف الحصة",
+    "terms_title": "المصطلحات",
+    "term": "{ar} ({en})",
     "objective_pending": "{ref}: نص الهدف معلَّق",
     "objective_note": "{ref}: الشرط: {condition} · المعيار: {criterion}",
     "example_title": "{ref}",
@@ -371,6 +374,7 @@ def _draft_slides(
     if prep.lesson_title:
         bullets.insert(0, isolate_number_ranges(prep.lesson_title))
     slides = [_slide("title", _t("title", lesson=prep.lesson), bullets=tuple(bullets)), *recalls]
+    terms = [_t("term", ar=ar, en=en) if en else ar for ar, en in prep.terms]
     if prep.objectives:
         notes = tuple(
             _t(
@@ -391,6 +395,9 @@ def _draft_slides(
                 notes=notes,
             )
         )
+    for start in range(0, len(terms), MAX_BULLETS):
+        chunk = tuple(terms[start : start + MAX_BULLETS])
+        slides.append(_slide("terms", _t("terms_title"), bullets=chunk))
     classwork = {c.example: c for c in prep.classwork}
     for e in prep.examples:
         clips = groups[e.n]

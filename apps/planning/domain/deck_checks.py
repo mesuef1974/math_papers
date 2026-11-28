@@ -44,6 +44,7 @@ KEY_PATTERN = re.compile(r"^decks/[\w-]+/[\w.]+-k\d+of\d+-p\d+-[0-9a-f]{16}\.ppt
 KIND_CODE = {
     "title": "T",
     "recall": "R",
+    "terms": "V",
     "objectives": "O",
     "example": "E",
     "try": "Y",
@@ -54,7 +55,7 @@ KIND_CODE = {
     "quiz": "Q",
     "homework": "H",
 }
-ORDER = re.compile(r"^TR{1,2}O?(E+Y*C?)*D?K*X?Q?H?$")
+ORDER = re.compile(r"^TR{1,2}O?V?(E+Y*C?)*D?K*X?Q?H?$")
 TEACHER_MARKERS = ("DOK", "الطور", "الدقائق")
 WORD = re.compile(r"[^\W\d_]+")
 
@@ -321,6 +322,7 @@ def allowed_words(prep: PeriodPrep) -> frozenset[str]:
                 *recalls,
                 *prep.standards,
                 prep.lesson_title,
+                *(text for term in prep.terms for text in term),
                 *authored,
                 *bank_texts,
             ]

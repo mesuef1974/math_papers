@@ -16,7 +16,16 @@
   27,
   28
  ],
- "terms": [],
+ "terms": [
+  {
+   "ar": "قاعدة الضرب",
+   "en": "product rule"
+  },
+  {
+   "ar": "قاعدة القسمة",
+   "en": "quotient rule"
+  }
+ ],
  "items": [
   {
    "kind": "learning_goal",

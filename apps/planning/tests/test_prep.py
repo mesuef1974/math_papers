@@ -478,13 +478,14 @@ def test_grade10_preps_are_untouched_by_the_practice_field(preps):
         assert all(not e.practice for e in (*prep.examples, *prep.review))
         prep = replace(prep, exercise_pages={})  # صفحات التمارين تدخل التجزئة حين تُعرف
         assert prep.task_guide[0] and prep.task_guide[1]
-        prep = replace(prep, previous_examples=())  # حقلا التهيئة لاحقان: خارج التجزئة حين يفرغان
+        prep = replace(prep, previous_examples=(), terms=())  # حقلا التهيئة لاحقان: خارج التجزئة حين يفرغان
         old = asdict(replace(prep, earlier_lessons=()))
         for example in (*old["examples"], *old["review"]):
             del example["practice"]
         del old["exercise_pages"]
         del old["earlier_lessons"]
         del old["previous_examples"]
+        del old["terms"]
         text = json.dumps(
             old,
             default=sorted,
@@ -504,12 +505,13 @@ def test_grade10_preps_are_untouched_by_the_practice_field(preps):
 def _digest_before_145(prep):
     """بصمة التحضير كما كانت تُحسب قبل دخول حقلي `practice` (#145) و`exercise_pages` (#148): كل الحقول الأخرى، ومنها
     ما يساوي قيمته الافتراضية."""
-    old = asdict(replace(prep, previous_examples=()))
+    old = asdict(replace(prep, previous_examples=(), terms=()))
     for example in (*old["examples"], *old["review"]):
         del example["practice"]
     assert not old.pop("exercise_pages")
     assert not old.pop("earlier_lessons")
     assert not old.pop("previous_examples")
+    assert not old.pop("terms")
     assert not old.pop("lesson_title")
     text = json.dumps(old, default=sorted, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
@@ -519,7 +521,7 @@ def test_digest_without_practice_rows_equals_the_digest_before_the_field():
     _, _, plain = _unguided(practice=False)
     _, _, with_rows = _unguided()
     for prep, other in zip(plain, with_rows, strict=True):
-        assert prep_digest(replace(prep, previous_examples=())) == _digest_before_145(prep)
+        assert prep_digest(replace(prep, previous_examples=(), terms=())) == _digest_before_145(prep)
         assert prep_digest(other) != prep_digest(prep)  # صف practice يغيّر البصمة
 
 
@@ -551,6 +553,7 @@ def test_digest_drops_marked_fields_at_their_default_by_one_rule():
         "earlier_lessons",
         "previous_examples",
         "lesson_title",
+        "terms",
     }
 
 

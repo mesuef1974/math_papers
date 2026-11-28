@@ -23,7 +23,7 @@ from apps.knowledge.domain.course_index import LessonIndex
 from apps.knowledge.domain.exercise_pages import page_map
 from apps.knowledge.domain.unit_prep import approved_standards, unit_prep
 from apps.knowledge.models import BookExerciseLink
-from apps.knowledge.selectors import course_index, example_numbers, lesson_index
+from apps.knowledge.selectors import course_index, example_numbers, lesson_index, lesson_terms
 from apps.papers.domain.generators import ERROR_KINDS
 
 from .domain.calendar_engine import Closure, Plan, Slot, Term, allocate, parse_terms, sessions
@@ -454,6 +454,7 @@ def lesson_preps(
     library = load_library()
     by_slug = {s.slug: s for s in library}
     clips = _example_clips(course)
+    terms = lesson_terms(course)
     generators: dict[str, set[int]] = {}
     for (c, code, _), number in SKILL_EXAMPLES.items():
         if c == course:
@@ -510,7 +511,7 @@ def lesson_preps(
                 audience=None if unit is None else unit.audience,
                 teacher=edit.edit_for(period.k, default_groups),
             )
-            prep = replace(prep, lesson_title=titles.get(code, ""))
+            prep = replace(prep, lesson_title=titles.get(code, ""), terms=terms.get(code, ()))
             if position:
                 prep = replace(prep, earlier_lessons=tuple(order[:position]))
             checks = check_prep(

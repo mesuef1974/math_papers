@@ -15,7 +15,20 @@
   30,
   31
  ],
- "terms": [],
+ "terms": [
+  {
+   "ar": "النهاية المثلثية الأساسية",
+   "en": "fundamental trigonometric limit"
+  },
+  {
+   "ar": "التعويض المباشر",
+   "en": "direct substitution"
+  },
+  {
+   "ar": "المرافق",
+   "en": "conjugate"
+  }
+ ],
  "items": [
   {
    "kind": "guide_step",

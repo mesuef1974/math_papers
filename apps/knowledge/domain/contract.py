@@ -37,6 +37,7 @@ from .schemas import (
     LessonData,
     ObjectiveData,
     PedagogyData,
+    TermData,
     UnitData,
 )
 from .sources import (
@@ -57,6 +58,8 @@ COURSES_DIR = Path(__file__).resolve().parents[1] / "data" / "courses"
 CALENDARS_DIR = Path(__file__).resolve().parents[1] / "data" / "calendars"
 MANIFEST = "course.json"
 INDEX = "index.json"
+# أسماء مصطلحات دروس مقرر الفهرس المشتق (قرار المالك 2026-11-28): الاسم بالعربية والإنجليزية وحده، بلا تعريف ولا نص دليل
+TERMS = "terms.json"
 BLUEPRINTS = "blueprints.json"
 SOURCES = "sources.json"
 TERM_PLAN = "term_plan.json"
@@ -279,7 +282,7 @@ def _read(path: Path):
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def profile_from_index(lesson: LessonIndex) -> LessonData:
+def profile_from_index(lesson: LessonIndex, terms: list[dict] | None = None) -> LessonData:
     """سجل فهرس مشتق → ملف معرفة الدرس. لا نص: الأهداف بلوم فقط وحقول النص فارغة."""
     return LessonData(
         lesson=lesson.lesson,
@@ -303,12 +306,18 @@ def profile_from_index(lesson: LessonIndex) -> LessonData:
         vocab_new=lesson.vocabulary.new,
         vocab_review=lesson.vocabulary.review,
         exercise_pages=list(lesson.exercise_pages),
+        terms=[TermData(**t) for t in terms or []],
     )
 
 
 def read_index(directory: Path) -> CourseIndex | None:
     path = directory / INDEX
     return CourseIndex(**_read(path)) if path.is_file() else None
+
+
+def read_terms(directory: Path) -> dict[str, list[dict]]:
+    path = directory / TERMS
+    return _read(path)["lessons"] if path.is_file() else {}
 
 
 def _read_targets(directory: Path) -> list[ExampleTargetData]:
@@ -333,7 +342,11 @@ def read_course_dir(directory: Path) -> CourseKnowledge:
     profiles = [LessonData(**_read(p)) for p in sorted((directory / "lessons").glob("lesson_*.json"))]
     index = read_index(directory)
     if index is not None:
-        profiles += [profile_from_index(lesson) for lesson in index.lessons]
+        terms = read_terms(directory)
+        unknown = sorted(set(terms) - {lesson.lesson for lesson in index.lessons})
+        if unknown:
+            raise ValueError(f"مصطلحات لدرس خارج الفهرس: {', '.join(unknown)}")
+        profiles += [profile_from_index(lesson, terms.get(lesson.lesson)) for lesson in index.lessons]
     units = directory / "units.json"
     pedagogy = directory / "pedagogy.json"
     blueprints = directory / BLUEPRINTS

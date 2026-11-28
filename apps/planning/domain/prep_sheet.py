@@ -123,6 +123,7 @@ class PrepSheet:
     quiz: str
     stages: tuple[StageRow, ...]
     checks: tuple[CheckRow, ...]
+    terms: tuple[tuple[str, str], ...] = ()  # مصطلحات الدرس (العربية، الإنجليزية)
     kind: str = "lesson"  # أو نوع حصة غير الدرس (`non_lesson.KINDS`)
     papers: tuple[PaperLink, ...] = ()  # أوراق «أوراق» المرتبطة بحصة غير الدرس
     scope: tuple[str, ...] = ()  # دروس نطاق حصة غير الدرس
@@ -341,6 +342,7 @@ def prep_sheet(
         course=prep.course,
         lesson=prep.lesson,
         lesson_title=lesson_title,
+        terms=prep.terms,
         unit=prep.unit,
         k=prep.k,
         n=prep.n,
