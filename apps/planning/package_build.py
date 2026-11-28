@@ -33,6 +33,7 @@ BUSY = "الباقة قيد البناء"
 FAILED = "تعذّر بناء الباقة"
 INDEX_NAME = "فهرس الباقة.txt"
 KEY_NAME = "مفتاح الإجابة.pdf"
+ZIP_LAYOUT = 2  # يُرفع حين يتغير شكل الملف المضغوط فتصير الباقات المبنية سابقًا «قديمة»
 
 
 class PackageBusyError(PlanningError):
@@ -88,7 +89,14 @@ def view(owner: AbstractBaseUser, course: str, lesson: str, k: int) -> PackageVi
     )
 
 
+def _entry_name(name: str) -> str:
+    """اسم ملف داخل المضغوط يقبله ويندوز: عناوين الأوراق فيها «:» فيتعذر فكها."""
+    stem, _, extension = name.rpartition(".")
+    return pdf.safe_filename(stem, extension)
+
+
 def _signature(parts: list) -> str:
+    parts = [ZIP_LAYOUT, *parts]
     raw = json.dumps(parts, sort_keys=True, ensure_ascii=False, default=str)
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
@@ -160,7 +168,7 @@ def build(scope: Scope, *, storage: Storage | None = None) -> str:
         else:  # لا عرض لحصة غير الدرس
             payloads, missing = non_lesson_package.print_payloads(current.other, print_profile(owner))
             more = [(f"{name}.pdf", pdf.render_payload(payload)) for name, payload in payloads]
-        files += more
+        files = [(_entry_name(name), data) for name, data in files + more]
         index = [name for name, _ in files] + list(current.notes) + missing
         buffer = io.BytesIO()
         with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
