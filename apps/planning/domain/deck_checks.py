@@ -55,7 +55,7 @@ KIND_CODE = {
     "quiz": "Q",
     "homework": "H",
 }
-ORDER = re.compile(r"^TR{1,2}O?V?(E+Y*C?)*D?K*X?Q?H?$")
+ORDER = re.compile(r"^TR{1,2}O?V*(E+Y*C?)*D?K*X?Q?H?$")
 TEACHER_MARKERS = ("DOK", "الطور", "الدقائق")
 WORD = re.compile(r"[^\W\d_]+")
 
