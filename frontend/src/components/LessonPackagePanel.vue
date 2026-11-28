@@ -24,7 +24,8 @@ onBeforeUnmount(() => pack.reset());
   <section class="lesson-package" aria-labelledby="package-title">
     <h3 id="package-title">باقة الحصة</h3>
     <p class="hint">
-      ملف مضغوط واحد: التحضير والعرض وأوراق الحصة ومفتاح الإجابة.
+      ملف مضغوط واحد: التحضير وأوراق الحصة ومفاتيحها، ومعها العرض في حصص
+      الدروس.
     </p>
     <ul v-if="pack.sheets.length" data-test="package-sheets">
       <li v-for="title in pack.sheets" :key="title">{{ title }}</li>

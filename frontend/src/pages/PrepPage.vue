@@ -418,7 +418,6 @@ watch(selected, (value, previous) => {
     </div>
 
     <LessonPackagePanel
-      v-if="isLesson"
       :course="sheet.course"
       :lesson="sheet.lesson"
       :k="sheet.k"
