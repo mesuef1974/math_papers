@@ -7,7 +7,7 @@ import hashlib
 import io
 import json
 import zipfile
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import AbstractBaseUser
@@ -16,11 +16,12 @@ from django.core.cache import cache
 from apps.assets.storage import Storage, StorageError, get_storage
 from apps.core.services import record_audit
 from apps.papers import pdf
+from apps.papers.domain.generators import generator_version
 from apps.papers.selectors import print_profile
 
-from . import selectors, services
+from . import non_lesson_package, selectors, services
 from .domain.calendar_engine import PlanningError
-from .domain.lesson_package import LessonPackage
+from .domain.non_lesson import NonLessonPrep
 from .domain.prep import prep_digest
 from .prep_word import prep_docx, prep_filename
 
@@ -42,8 +43,10 @@ class PackageBusyError(PlanningError):
 class PackageView:
     """ما يعرضه التطبيق قبل التنزيل: الأوراق وملاحظات الفهرس، وبصمة ما تُبنى منه."""
 
-    package: LessonPackage
+    sheets: tuple[str, ...]
+    notes: tuple[str, ...]
     signature: str
+    other: NonLessonPrep | None = None  # حصة غير الدرس: أوراقها المربوطة
 
 
 @dataclass(frozen=True)
@@ -68,18 +71,39 @@ class Scope:
 
 
 def view(owner: AbstractBaseUser, course: str, lesson: str, k: int) -> PackageView:
-    """باقة الحصة من تحضير المعلم دون كتابة؛ `PrepNotFoundError` لحصة مجهولة أو لغير درس."""
+    """باقة الحصة دون كتابة: من تحضير المعلم، أو من أوراق حصة غير الدرس. `PrepNotFoundError` لمجهولة."""
+    if selectors.non_lesson_sheet_of(course, lesson, k) is not None:
+        return _non_lesson_view(owner, course, lesson, k)
     item = selectors.period_item(course, lesson, k, owner)
     siblings = [p for p in selectors.owner_preps(course, owner) if p.prep.lesson == lesson]
     try:
         deck = services.prepare_deck(course, lesson, k, owner)
     except PlanningError:
         deck = ""  # العرض لا يُبنى بعد (مقاطع غير منشورة): نشرها لاحقًا يجعل الباقة قديمة
-    raw = json.dumps(
-        [prep_digest(item.prep), print_profile(owner), deck], sort_keys=True, ensure_ascii=False, default=str
-    )
+    package = selectors.period_package(item, siblings)
     return PackageView(
-        selectors.period_package(item, siblings), hashlib.sha256(raw.encode("utf-8")).hexdigest()
+        tuple(sheet.title for sheet in package.sheets),
+        tuple(note.message for note in package.notes),
+        _signature([prep_digest(item.prep), print_profile(owner), deck]),
+    )
+
+
+def _signature(parts: list) -> str:
+    raw = json.dumps(parts, sort_keys=True, ensure_ascii=False, default=str)
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def _non_lesson_view(owner: AbstractBaseUser, course: str, slug: str, k: int) -> PackageView:
+    items = selectors.non_lesson_preps(course)
+    prep = next(p.prep for p in items if p.prep.slug == slug and p.prep.k == k)
+    notes = (prep.missing_paper,) if prep.missing_paper else ()
+    if not prep.papers and not notes:
+        notes = ("حصة بلا ورقة مولَّدة: الباقة تحضيرها وحده",)
+    return PackageView(
+        tuple(link.label for link in prep.papers),
+        notes,
+        _signature([asdict(prep), print_profile(owner), generator_version(course)]),
+        prep,
     )
 
 
@@ -105,6 +129,16 @@ def _pdfs(payload: dict) -> list[tuple[str, bytes]]:
     return out
 
 
+def _lesson_files(
+    owner: AbstractBaseUser, scope: Scope, storage: Storage
+) -> tuple[list[tuple[str, bytes]], list[str]]:
+    """عرض حصة الدرس وأوراقها ومفتاحها، وسبب غياب العرض إن غاب."""
+    payload = services.lesson_package_payload(owner, scope.course, scope.lesson, scope.k)
+    deck, missing = _deck_file(owner, scope, storage)
+    files = [] if deck is None else [(f"العرض {scope.lesson} الحصة {scope.k}.pptx", deck)]
+    return files + _pdfs(payload), [missing] if missing else []
+
+
 def build(scope: Scope, *, storage: Storage | None = None) -> str:
     """يبني الملف المضغوط ويضعه في التخزين ويعيد مفتاحه. idempotent: البصمة نفسها لا تعيد بناءه."""
     storage = storage or get_storage()
@@ -117,18 +151,17 @@ def build(scope: Scope, *, storage: Storage | None = None) -> str:
         key, stamp = f"{scope.folder}/{ZIP_FILE}", f"{scope.folder}/{ZIP_STAMP}"
         if _stamp(storage, scope) == current.signature and storage.exists(key):
             return key
-        payload = services.lesson_package_payload(owner, scope.course, scope.lesson, scope.k)
         sheet = selectors.teacher_sheet(scope.course, scope.lesson, scope.k, owner).sheet
         files = [
             (prep_filename(sheet), prep_docx(sheet, teacher=owner.get_full_name() or owner.get_username()))
         ]
-        deck, missing = _deck_file(owner, scope, storage)
-        if deck is not None:
-            files.append((f"العرض {scope.lesson} الحصة {scope.k}.pptx", deck))
-        files += _pdfs(payload)
-        index = [name for name, _ in files] + [note.message for note in current.package.notes]
-        if missing:
-            index.append(missing)
+        if current.other is None:
+            more, missing = _lesson_files(owner, scope, storage)
+        else:  # لا عرض لحصة غير الدرس
+            payloads, missing = non_lesson_package.print_payloads(current.other, print_profile(owner))
+            more = [(f"{name}.pdf", pdf.render_payload(payload)) for name, payload in payloads]
+        files += more
+        index = [name for name, _ in files] + list(current.notes) + missing
         buffer = io.BytesIO()
         with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
             for name, data in files:

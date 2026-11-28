@@ -726,8 +726,8 @@ def _package_out(scope: package_build.Scope, view: package_build.PackageView) ->
     return {
         "status": status,
         "detail": detail,
-        "sheets": [sheet.title for sheet in view.package.sheets],
-        "notes": [note.message for note in view.package.notes],
+        "sheets": list(view.sheets),
+        "notes": list(view.notes),
     }
 
 
