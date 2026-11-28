@@ -17,7 +17,16 @@ from apps.papers.domain.bidi import isolate_number_ranges
 from apps.papers.domain.book_source import book_ref, number_list, numbers_with_pages
 
 from .calendar_engine import PlanningError
-from .check_items import OPTION_LETTERS, PeriodItems, period_items
+from .check_items import (
+    OPTION_LETTERS,
+    OpenQuestion,
+    PeriodItems,
+    book_exercise,
+    period_items,
+    split_check_questions,
+    split_stem,
+)
+from .plain_math import plain_math
 from .prep import PeriodPrep, PrepExample, prep_digest
 from .prep_sheet import STAGE_LABELS, recall_label, split_minutes
 from .slide_math import display, isolate_outside_math
@@ -61,7 +70,7 @@ class ExampleClip:
 # ---- عرض الحصة من تحضيرها ----
 
 # الإعداد: أرقام التصميم في مكان واحد (افتراضات تُراجع بعد أول تجربة في الصف)
-PERIOD_DECK_FORMAT = 13  # 13: سؤالا تهيئة بشريحتين؛ 12: المقطع الطويل يُقص عند فراغ أبيض؛ 11: سؤال التحقق من صيغة غير صيغة بطاقة الخروج؛ 10: اسم الدرس على الغلاف وبلا شريحة «حل المثال»؛ 9: صيغ الشرائح معادلات PowerPoint أصلية؛ 8: لا يُعزل المدى داخل تعبير رياضي؛ 7:صيغ LaTeX رموزًا مقروءة في البنود (6: شريط المراحل ودقائق المرحلة على الشريحة (5: بند الاسترجاع المتباعد في شريحة التذكّر؛ 4: بنود البنك في التحقق والخروج؛ 3: تخطيطات الماستر ورقم الشريحة)
+PERIOD_DECK_FORMAT = 14  # 14: سؤال محدد في التقييم البنائي والخروج؛ 13: سؤالا تهيئة بشريحتين؛ 12: المقطع الطويل يُقص عند فراغ أبيض؛ 11: سؤال التحقق من صيغة غير صيغة بطاقة الخروج؛ 10: اسم الدرس على الغلاف وبلا شريحة «حل المثال»؛ 9: صيغ الشرائح معادلات PowerPoint أصلية؛ 8: لا يُعزل المدى داخل تعبير رياضي؛ 7:صيغ LaTeX رموزًا مقروءة في البنود (6: شريط المراحل ودقائق المرحلة على الشريحة (5: بند الاسترجاع المتباعد في شريحة التذكّر؛ 4: بنود البنك في التحقق والخروج؛ 3: تخطيطات الماستر ورقم الشريحة)
 MINUTES_PER_SLIDE = 2
 TITLE_PT, BODY_PT = 36, 28
 MIN_TITLE_PT, MIN_BODY_PT = 32, 24
@@ -119,6 +128,9 @@ PERIOD_TEXT = {
     "advanced": "المسار المتقدم: تمارين الكتاب {numbers}",
     "check_title": "تحقّق من فهمك",
     "skill_question": "سؤال من مهارة {ref}",
+    "open_note": "{ref}: الإجابة: {answer}",
+    "book_question": "حلّ {exercise} من كتاب الطالب (مهارة {ref})",
+    "book_note": "{exercise}: راجع إجابته في دليل المعلم",
     "exit_title": "بطاقة الخروج",
     "option_letters": "أ ب ج د",
     "answer_note": "الإجابة الصحيحة: {letter}",
@@ -311,19 +323,20 @@ def item_notes(item) -> tuple[str, ...]:
     return tuple(notes)
 
 
-def _split_check_questions(prep: PeriodPrep, items: PeriodItems) -> tuple[list[int], tuple[int, ...]]:
-    """أمثلة الفحص بشريحة بند لكل منها، والباقي (بلا بند أو فوق ما تتسع له دقائق الغلق، شريحة بدقيقة على الأقل) سؤالًا
-    نصيًّا في شريحة واحدة."""
-    closing = next((st.minutes for st in prep.stages if st.name == "closing"), 0)
-    others = bool(prep.exit_ticket) + bool(prep.quiz) + bool(prep.homework)
-    budget = max(closing - others, 0)
-    with_item = [n for n in prep.formative if n in items.formative]
-    as_text = [n for n in prep.formative if n not in items.formative]
-    if len(with_item) + bool(as_text) > budget:
-        keep = max(budget - 1, 0)
-        as_text = [n for n in prep.formative if n not in with_item[:keep]]
-        with_item = with_item[:keep]
-    return with_item, tuple(as_text)
+def _open_texts(
+    prep: PeriodPrep, n: int, question: OpenQuestion | None
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """(بنود السؤال على الشريحة، ملاحظاته): سؤال مقالي بإجابته، وإلا تمرين الكتاب برقمه وصفحته، وإلا مرجع المثال."""
+    ref = book_ref("المثال", n, prep.pages.get(n))
+    if question is not None:
+        parts = tuple(isolate_outside_math(part) for part in split_stem(question.problem.stem))
+        answer = isolate_number_ranges(plain_math(question.problem.answer))
+        return parts, (_t("open_note", ref=ref, answer=answer),)
+    number = book_exercise(prep, n)
+    if number is None:
+        return (_t("skill_question", ref=ref),), ()
+    exercise = book_ref("التمرين", number, prep.exercise_pages.get(number))
+    return (_t("book_question", exercise=exercise, ref=ref),), (_t("book_note", exercise=exercise),)
 
 
 def _slide(kind: str, title: str, **fields) -> PeriodSlide:
@@ -410,7 +423,7 @@ def _draft_slides(
             paths.append(_t("advanced", numbers=numbers_with_pages(list(prep.advanced), prep.exercise_pages)))
         notes = (_t("differentiation_note"), *_exercise_notes(prep, [*prep.basic, *prep.advanced]))
         slides.append(_slide("differentiation", _t("independent_title"), bullets=tuple(paths), notes=notes))
-    with_item, as_text = _split_check_questions(prep, items)
+    with_item, as_open = split_check_questions(prep, items)
     for n in with_item:
         slides.append(
             _slide(
@@ -421,22 +434,21 @@ def _draft_slides(
                 notes=item_notes(items.formative[n]),
             )
         )
-    if as_text:
-        questions = tuple(_t("skill_question", ref=book_ref("المثال", n, prep.pages.get(n))) for n in as_text)
-        slides.append(_slide("check", _t("check_title"), bullets=questions, refs=as_text))
+    if as_open:
+        questions, notes = [], []
+        for n in as_open:
+            parts, note = _open_texts(prep, n, items.open.get(n))
+            questions.extend(parts)
+            notes.extend(note)
+        slides.append(
+            _slide("check", _t("check_title"), bullets=tuple(questions), refs=as_open, notes=tuple(notes))
+        )
     if prep.exit_ticket:
         n, dok = prep.exit_ticket.example, prep.exit_ticket.dok
         depth = _t("depth_note", depths=f"DOK {dok}")
         if items.exit is None:
-            slides.append(
-                _slide(
-                    "exit",
-                    _t("exit_title"),
-                    bullets=(_t("skill_question", ref=book_ref("المثال", n, prep.pages.get(n))),),
-                    refs=(n,),
-                    notes=(depth,),
-                )
-            )
+            parts, note = _open_texts(prep, n, items.exit_open)
+            slides.append(_slide("exit", _t("exit_title"), bullets=parts, refs=(n,), notes=(depth, *note)))
         else:
             slides.append(
                 _slide(

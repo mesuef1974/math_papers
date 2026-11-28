@@ -173,6 +173,21 @@ def prerequisite(course: str, index: int, *, seed: int = 0) -> Item:
     return build_item(problem, course=course, example=None, position=rng.randrange(OPTION_COUNT), rng=rng)
 
 
+def open_problems(course: str, lesson: str, example: int, *, seed: str, attempts: int = 24):
+    """مسائل مقالية بلا رسم لمهارة المثال بالترتيب: (المسألة، بذرتها النصية). سؤال يُجاب بلا خيارات، حتمي بالبذرة."""
+    pool = [
+        fn
+        for fn in REGISTRY.get((course, lesson), [])
+        if skill_example(course, lesson, fn.__name__) == example and variant_profile(fn)[2]
+    ]
+    for attempt in range(attempts):
+        for fn in pool:
+            used = f"{seed}|{fn.__name__}|{attempt}"
+            problem = replace(fn(random.Random(used)), variant=fn.__name__)  # noqa: S311 — بذرة ثابتة
+            if problem.graph is None and not problem.option_graphs:
+                yield problem, used
+
+
 def retrieval(course: str, earlier: Sequence[str], *, count: int = 3, seed: int = 0) -> list[Item]:
     """استرجاع متباعد متناوب من دروس سابقة: بند من كل درس بالتناوب، والدرس نفسه لا يتكرر متتاليًا ما أمكن.
 
