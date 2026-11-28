@@ -6,7 +6,10 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import re
 import zipfile
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 
 from django.contrib.auth import get_user_model
@@ -34,6 +37,27 @@ FAILED = "تعذّر بناء الباقة"
 INDEX_NAME = "فهرس الباقة.txt"
 KEY_NAME = "مفتاح الإجابة.pdf"
 ZIP_LAYOUT = 2  # يُرفع حين يتغير شكل الملف المضغوط فتصير الباقات المبنية سابقًا «قديمة»
+_NET_CODE = re.compile(r"net::ERR_[A-Z_]+")
+
+
+@contextmanager
+def _stage(name: str) -> Iterator[None]:
+    """يَسِم الاستثناء بمرحلة البناء التي وقع فيها (الأعمق تغلب)."""
+    try:
+        yield
+    except Exception as error:
+        if not hasattr(error, "package_stage"):
+            error.package_stage = name
+        raise
+
+
+def failure_detail(error: Exception) -> str:
+    """المرحلة ونوع الخطأ ورمز الشبكة وحدها: نص الاستثناء قد يحمل رابط الطباعة برمزه الموقّع."""
+    cause = type(error).__name__
+    code = _NET_CODE.search(str(error))
+    if code:
+        cause = f"{cause} {code.group()}"
+    return f"{FAILED} في مرحلة {getattr(error, 'package_stage', 'التجهيز')} ({cause})"
 
 
 class PackageBusyError(PlanningError):
@@ -141,10 +165,13 @@ def _lesson_files(
     owner: AbstractBaseUser, scope: Scope, storage: Storage
 ) -> tuple[list[tuple[str, bytes]], list[str]]:
     """عرض حصة الدرس وأوراقها ومفتاحها، وسبب غياب العرض إن غاب."""
-    payload = services.lesson_package_payload(owner, scope.course, scope.lesson, scope.k)
-    deck, missing = _deck_file(owner, scope, storage)
+    with _stage("تجهيز الأوراق"):
+        payload = services.lesson_package_payload(owner, scope.course, scope.lesson, scope.k)
+    with _stage("العرض"):
+        deck, missing = _deck_file(owner, scope, storage)
     files = [] if deck is None else [(f"العرض {scope.lesson} الحصة {scope.k}.pptx", deck)]
-    return files + _pdfs(payload), [missing] if missing else []
+    with _stage("طباعة PDF"):
+        return files + _pdfs(payload), [missing] if missing else []
 
 
 def build(scope: Scope, *, storage: Storage | None = None) -> str:
@@ -159,15 +186,17 @@ def build(scope: Scope, *, storage: Storage | None = None) -> str:
         key, stamp = f"{scope.folder}/{ZIP_FILE}", f"{scope.folder}/{ZIP_STAMP}"
         if _stamp(storage, scope) == current.signature and storage.exists(key):
             return key
-        sheet = selectors.teacher_sheet(scope.course, scope.lesson, scope.k, owner).sheet
-        files = [
-            (prep_filename(sheet), prep_docx(sheet, teacher=owner.get_full_name() or owner.get_username()))
-        ]
+        with _stage("ملف التحضير"):
+            sheet = selectors.teacher_sheet(scope.course, scope.lesson, scope.k, owner).sheet
+            teacher = owner.get_full_name() or owner.get_username()
+            files = [(prep_filename(sheet), prep_docx(sheet, teacher=teacher))]
         if current.other is None:
             more, missing = _lesson_files(owner, scope, storage)
         else:  # لا عرض لحصة غير الدرس
-            payloads, missing = non_lesson_package.print_payloads(current.other, print_profile(owner))
-            more = [(f"{name}.pdf", pdf.render_payload(payload)) for name, payload in payloads]
+            with _stage("تجهيز الأوراق"):
+                payloads, missing = non_lesson_package.print_payloads(current.other, print_profile(owner))
+            with _stage("طباعة PDF"):
+                more = [(f"{name}.pdf", pdf.render_payload(payload)) for name, payload in payloads]
         files = [(_entry_name(name), data) for name, data in files + more]
         index = [name for name, _ in files] + list(current.notes) + missing
         buffer = io.BytesIO()
@@ -176,9 +205,10 @@ def build(scope: Scope, *, storage: Storage | None = None) -> str:
                 archive.writestr(name, data)
             archive.writestr(INDEX_NAME, "\r\n".join(index).encode("utf-8-sig"))
         # البصمة تُزال قبل الملف وتُكتب بعده: موت العامل بينهما يعيد البناء
-        storage.delete(stamp)
-        storage.put(key, buffer.getvalue(), ZIP_CONTENT_TYPE)
-        storage.put(stamp, current.signature.encode("ascii"), "text/plain")
+        with _stage("حفظ الملف"):
+            storage.delete(stamp)
+            storage.put(key, buffer.getvalue(), ZIP_CONTENT_TYPE)
+            storage.put(stamp, current.signature.encode("ascii"), "text/plain")
     finally:
         cache.delete(lock)
     record_audit(action="package.build", actor=owner, target=scope.target, payload={"files": len(files)})
@@ -219,7 +249,7 @@ def fail(scope: Scope, detail: str = FAILED) -> None:
 
 
 def run(scope: Scope) -> str:
-    """`build` وتسجيل نتيجته: رسالة `PlanningError` تصل المعلم كما هي، وغيرها رسالة عامة."""
+    """`build` وتسجيل نتيجته: رسالة `PlanningError` تصل المعلم كما هي، وغيرها مرحلتها ونوعها."""
     try:
         key = build(scope)
     except PackageBusyError:
@@ -227,8 +257,8 @@ def run(scope: Scope) -> str:
     except PlanningError as error:
         fail(scope, str(error))
         raise
-    except Exception:
-        fail(scope)
+    except Exception as error:
+        fail(scope, failure_detail(error))
         raise
     cache.delete(scope.state_key)
     return key

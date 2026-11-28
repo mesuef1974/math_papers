@@ -62,10 +62,12 @@ def test_teacher_builds_and_downloads_the_package(teacher_client, rendered, monk
 
 def test_build_failure_reaches_the_teacher_and_a_retry_works(teacher_client, monkeypatch):
     def broken(payload):
-        raise RuntimeError("boom")
+        raise RuntimeError("net::ERR_CONNECTION_REFUSED at http://localhost:8000/print/secret-token")
 
     monkeypatch.setattr(pdf, "render_payload", broken)
-    assert teacher_client.post(URL).json()["detail"] == package_build.FAILED
+    detail = teacher_client.post(URL).json()["detail"]
+    assert detail == f"{package_build.FAILED} في مرحلة طباعة PDF (RuntimeError net::ERR_CONNECTION_REFUSED)"
+    assert "secret-token" not in detail
     monkeypatch.setattr(pdf, "render_payload", lambda payload: b"%PDF-1.7")
     assert teacher_client.post(URL).json()["status"] == "ready"
 
